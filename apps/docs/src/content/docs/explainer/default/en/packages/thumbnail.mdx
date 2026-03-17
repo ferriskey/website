@@ -1,0 +1,89 @@
+---
+title: "@explainer/thumbnail"
+description: OG thumbnail generation using Satori and Resvg.
+icon: image
+order: 3
+---
+
+# @explainer/thumbnail
+
+The `@explainer/thumbnail` package generates Open Graph thumbnail images for documentation pages. It uses **Satori** for SVG rendering and **Resvg** for PNG conversion.
+
+## API
+
+### generateThumbnail
+
+Generates an SVG string from the given options:
+
+```ts
+import { generateThumbnail } from '@explainer/thumbnail'
+
+const svg = await generateThumbnail({
+  headline: 'Explainer',
+  title: 'Getting Started',
+  description: 'Set up Explainer v2 and start building.',
+  primaryColor: '#7c3aed',
+})
+```
+
+### renderThumbnail
+
+Converts an SVG string to a PNG buffer:
+
+```ts
+import { renderThumbnail } from '@explainer/thumbnail'
+
+const pngBuffer = await renderThumbnail(svg)
+```
+
+### renderThumbnailToFile
+
+Renders an SVG to a PNG file on disk:
+
+```ts
+import { renderThumbnailToFile } from '@explainer/thumbnail'
+
+await renderThumbnailToFile(svg, 'dist/thumbnail.png')
+```
+
+## Astro integration
+
+The package exports an Astro integration for automatic thumbnail generation:
+
+```ts [astro.config.ts]
+import { thumbnail } from '@explainer/thumbnail'
+
+export default defineConfig({
+  integrations: [
+    thumbnail({
+      appName: 'Explainer',
+      primaryColor: '#7c3aed',
+      content: {
+        type: 'collection',
+        directory: 'src/content/docs',
+      },
+    }),
+  ],
+})
+```
+
+See [OG Thumbnails](/en/explainer/features/thumbnails) for integration details and modes.
+
+## Architecture
+
+```text
+Frontmatter → generateThumbnail() → SVG (Satori) → PNG (Resvg) → thumbnail.png
+```
+
+1. **Satori** renders a React-like JSX layout into an SVG string
+2. **Resvg** converts the SVG to a 960×540 px PNG image
+3. The integration places the PNG alongside each page's build output
+
+## Color utilities
+
+| Function | Description |
+|----------|-------------|
+| `resolveColor(color?)` | Parses a color string and returns a valid CSS color. Falls back to the default purple |
+| `resolveTailwindColor(value)` | Resolves a Tailwind color class name (e.g., `violet-500`) to its CSS value |
+
+The default primary color is `oklch(0.707 0.217 293)`.

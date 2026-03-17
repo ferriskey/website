@@ -1,0 +1,51 @@
+---
+title: Recherche
+description: Recherche plein texte propulsée par Pagefind, sans aucune configuration.
+icon: search
+order: 4
+---
+
+# Recherche
+
+Explainer inclut une recherche plein texte propulsée par [Pagefind](https://pagefind.app/), une bibliothèque de recherche statique qui indexe votre site compilé.
+
+## Fonctionnement
+
+Pagefind s'exécute au moment du **build** et crée un index de recherche à partir de votre sortie HTML statique. La boîte de dialogue de recherche est accessible via le raccourci clavier `Cmd+K` (macOS) ou `Ctrl+K` (Windows/Linux).
+
+## Zéro configuration
+
+La recherche fonctionne directement — aucune clé API, service externe ou configuration nécessaire. Pagefind est intégré automatiquement dans le pipeline de build.
+
+## Utilisation
+
+::::step-group
+:::step{title="Compiler le site"}
+La recherche ne fonctionne que sur le site compilé, pas en mode développement :
+
+```bash
+pnpm build --filter @explainer/docs
+```
+:::
+
+:::step{title="Prévisualiser le site compilé"}
+```bash
+pnpm preview --filter @explainer/docs
+```
+:::
+
+:::step{title="Essayer la recherche"}
+Appuyez sur `Cmd+K` pour ouvrir la boîte de dialogue de recherche et commencez à taper.
+:::
+::::
+
+:::callout{variant="warning"}
+La recherche n'est **pas disponible en mode développement**. Vous devez d'abord compiler le site avec `pnpm build` pour générer l'index de recherche.
+:::
+
+## Fonctionnalités
+
+- **Résultats instantanés** — La recherche s'effectue côté client sans aucune requête réseau
+- **Navigation au clavier** — Parcourez les résultats avec les touches fléchées, ouvrez avec Entrée
+- **Correspondances surlignées** — Les termes recherchés sont mis en évidence dans les résultats
+- **Léger** — L'index de recherche n'est chargé que lorsque la boîte de dialogue est ouverte

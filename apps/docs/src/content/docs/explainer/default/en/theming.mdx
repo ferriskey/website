@@ -1,0 +1,76 @@
+---
+title: Theming
+description: Customize the look and feel of your Explainer documentation site.
+icon: palette
+order: 8
+---
+
+# Theming
+
+Explainer uses **Tailwind CSS 4** for styling with built-in dark/light mode support.
+
+## Dark/Light mode
+
+A theme toggle is available in the navbar via the `ThemeToggle` component from `@explainer/ui`. It supports three modes:
+
+- **Light** — Light color scheme
+- **Dark** — Dark color scheme
+- **System** — Follows the user's OS preference
+
+The selected theme is persisted in `localStorage` and applied immediately without a flash of unstyled content.
+
+## Tailwind CSS 4
+
+Explainer uses Tailwind CSS 4 with the new CSS-first configuration. Global styles are defined in each app's CSS entry point:
+
+```text
+apps/docs/src/styles/globals.css
+apps/blog/src/styles/globals.css
+apps/website/src/styles/globals.css
+```
+
+## Customizing colors
+
+To customize the color scheme, modify the CSS custom properties in your app's `globals.css`. Tailwind CSS 4 uses `@theme` to define design tokens:
+
+```css [globals.css]
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: oklch(0.707 0.217 293);
+  --color-accent: oklch(0.637 0.237 25);
+}
+```
+
+## Code block themes
+
+Syntax highlighting uses Shiki with dual themes:
+
+| Mode | Theme |
+|------|-------|
+| Light | `github-light` |
+| Dark | `github-dark` |
+
+To change the code block themes, edit the Shiki configuration in `packages/mdx/src/shiki.ts`:
+
+```ts [shiki.ts]
+export const shikiConfig: ShikiConfig = {
+  themes: {
+    light: 'github-light',
+    dark: 'github-dark',
+  },
+  // ...
+}
+```
+
+See the [Shiki themes gallery](https://shiki.style/themes) for available themes.
+
+## Where to modify styles
+
+| What | Where |
+|------|-------|
+| Global styles | `apps/{app}/src/styles/globals.css` |
+| Component styles | Tailwind classes in component files |
+| Code block themes | `packages/mdx/src/shiki.ts` |
+| UI component variants | `packages/ui/src/components/` |
+| Layout structure | `apps/docs/src/layouts/` |

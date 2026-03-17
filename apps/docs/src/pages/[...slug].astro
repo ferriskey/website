@@ -1,0 +1,122 @@
+---
+import { getCollection, render } from 'astro:content'
+import DocsLayout from '../layouts/docs.astro'
+import {
+  parsePath,
+  buildHref,
+  buildNavTree,
+  getFlatEntries,
+  getPagination,
+  loadMetaFiles,
+  buildDocsContext,
+  buildSwitchHref,
+  getBreadcrumb,
+} from '../lib/docs'
+import Callout from '@explainer/mdx/components/callout.astro'
+import CardGroup from '@explainer/mdx/components/card-group.astro'
+import Card from '@explainer/mdx/components/card.astro'
+import Tabs from '@explainer/mdx/components/tabs.astro'
+import Tab from '@explainer/mdx/components/tab.astro'
+import Steps from '@explainer/mdx/components/steps.astro'
+import Step from '@explainer/mdx/components/step.astro'
+import CodeGroup from '@explainer/mdx/components/code-group.astro'
+import Preview from '@explainer/mdx/components/preview.astro'
+import PreviewDemo from '@explainer/mdx/components/preview-demo.astro'
+import PreviewCode from '@explainer/mdx/components/preview-code.astro'
+import MathBlock from '@explainer/mdx/components/math.astro'
+import MermaidBlock from '@explainer/mdx/components/mermaid.astro'
+import Pre from '@explainer/mdx/overrides/pre.astro'
+import Blockquote from '@explainer/mdx/overrides/blockquote.astro'
+import { Code } from '@explainer/mdx'
+import { H1, H2, H3, H4, H5, H6, Link, Paragraph, UnorderedList, OrderedList } from '@explainer/mdx'
+
+export async function getStaticPaths() {
+  const allDocs = await getCollection('docs')
+
+  return allDocs.map((entry) => {
+    const href = buildHref(entry)
+    return {
+      params: { slug: href.replace(/^\//, '') },
+      props: { entry },
+    }
+  })
+}
+
+const { entry } = Astro.props
+const allDocs = await getCollection('docs')
+const { project, version, locale, segments } = parsePath(entry.id)
+
+const metaGlobs = import.meta.glob('../content/docs/**/_meta.json', { eager: true })
+const metaFiles = loadMetaFiles(metaGlobs)
+
+const context = buildDocsContext(allDocs, entry, metaFiles)
+const navItems = buildNavTree(allDocs, metaFiles, project, version, locale)
+const flatEntries = getFlatEntries(allDocs, project, version, locale)
+const currentHref = buildHref(entry)
+const { prev, next } = getPagination(currentHref, flatEntries)
+const breadcrumb = getBreadcrumb(navItems, currentHref)
+
+// Build switch URLs for project/version/locale switchers
+const current = { project, version, locale, segments }
+
+const projectSwitchUrls: Record<string, string> = {}
+for (const p of context.projects) {
+  const targetVersion = p.versions.includes('default') ? 'default' : p.versions[0]
+  projectSwitchUrls[p.name] = buildSwitchHref(allDocs, current, {
+    project: p.name,
+    version: targetVersion,
+  })
+}
+
+const versionSwitchUrls: Record<string, string> = {}
+const currentProjectInfo = context.projects.find((p) => p.name === project)
+if (currentProjectInfo) {
+  for (const v of currentProjectInfo.versions) {
+    versionSwitchUrls[v] = buildSwitchHref(allDocs, current, { version: v })
+  }
+}
+
+// Only include locales that have content for the current project/version
+const projectLocales = context.locales.filter((l) =>
+  allDocs.some((e) => {
+    const parsed = parsePath(e.id)
+    return parsed.project === project && parsed.version === version && parsed.locale === l
+  }),
+)
+
+const localeSwitchUrls: Record<string, string> = {}
+for (const l of projectLocales) {
+  localeSwitchUrls[l] = buildSwitchHref(allDocs, current, { locale: l })
+}
+
+const { Content, headings } = await render(entry)
+---
+
+<DocsLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  headings={headings}
+  navItems={navItems}
+  currentPath={currentHref}
+  prev={prev}
+  next={next}
+  projects={context.projects}
+  currentProject={project}
+  currentVersion={version}
+  currentLocale={locale}
+  locales={projectLocales}
+  projectSwitchUrls={projectSwitchUrls}
+  versionSwitchUrls={versionSwitchUrls}
+  localeSwitchUrls={localeSwitchUrls}
+  breadcrumb={breadcrumb}
+  thumbnail={`${currentHref}/thumbnail.png`}
+>
+  <Content components={{
+    h1: H1, h2: H2, h3: H3, h4: H4, h5: H5, h6: H6,
+    a: Link, p: Paragraph, ul: UnorderedList, ol: OrderedList,
+    pre: Pre, code: Code, blockquote: Blockquote,
+    Callout, Tabs, Tab, Steps, Step, CodeGroup,
+    CardGroup, Card, Preview, PreviewDemo, PreviewCode,
+    MathBlock, MermaidBlock,
+  }} />
+</DocsLayout>

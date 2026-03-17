@@ -1,0 +1,70 @@
+---
+title: Versionnement
+description: Maintenez plusieurs versions de votre documentation côte à côte.
+icon: git-branch
+order: 2
+---
+
+# Versionnement
+
+Explainer prend en charge la maintenance de plusieurs versions de documentation pour chaque projet. Chaque version est un répertoire à l'intérieur du dossier du projet.
+
+## Répertoires de version
+
+```text
+my-api/
+├── _meta.json
+├── default/           # "latest" (pas de version dans l'URL)
+│   └── en/
+│       └── getting-started.mdx
+├── v1/                # Version 1
+│   └── en/
+│       └── getting-started.mdx
+└── v2/                # Version 2
+    └── en/
+        └── getting-started.mdx
+```
+
+## La version `default`
+
+Le répertoire `default` est spécial :
+
+- Il représente la documentation **la plus récente** (sans version)
+- Le nom de la version est **omis de l'URL** : `/en/my-api/getting-started`
+- Il apparaît comme "latest" dans le sélecteur de version
+
+Les versions nommées incluent la version dans l'URL : `/en/my-api/v2/getting-started`.
+
+## Ajouter une version
+
+::::step-group
+:::step{title="Créer le répertoire de la version"}
+```bash
+mkdir -p apps/docs/src/content/docs/my-api/v2/en
+```
+:::
+
+:::step{title="Ajouter du contenu"}
+Copiez ou créez de nouveaux fichiers MDX dans le répertoire de la version. Chaque version est complètement indépendante — vous pouvez avoir des pages, une structure et un contenu différents.
+
+```bash
+cp -r apps/docs/src/content/docs/my-api/default/en/* apps/docs/src/content/docs/my-api/v2/en/
+```
+:::
+
+:::step{title="Vérifier"}
+Le **sélecteur de version** apparaît automatiquement dans la navigation lorsque plusieurs versions existent pour un projet. Accédez à votre projet et utilisez le menu déroulant pour basculer entre les versions.
+:::
+::::
+
+## Structure des URL
+
+| Version | URL |
+|---------|-----|
+| `default` | `/en/my-api/getting-started` |
+| `v1` | `/en/my-api/v1/getting-started` |
+| `v2` | `/en/my-api/v2/getting-started` |
+
+:::callout{variant="info"}
+Chaque version dispose de sa propre navigation dans la barre latérale. Les pages, l'ordre et la structure peuvent différer d'une version à l'autre.
+:::

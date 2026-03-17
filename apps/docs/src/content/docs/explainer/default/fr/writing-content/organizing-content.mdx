@@ -1,0 +1,85 @@
+---
+title: Organiser le contenu
+description: Bonnes pratiques pour structurer vos fichiers et répertoires de documentation.
+icon: folder-open
+order: 3
+---
+
+# Organiser le contenu
+
+Un répertoire de contenu bien organisé rend votre documentation plus facile à maintenir et à parcourir. Voici quelques recommandations.
+
+## Structures plates vs imbriquées
+
+Utilisez des **structures plates** pour les petites sections avec quelques pages :
+
+```text
+getting-started.mdx
+project-structure.mdx
+```
+
+Utilisez des **répertoires imbriqués** lorsqu'une section contient trois pages liées ou plus :
+
+```text
+features/
+  _meta.json
+  multi-project.mdx
+  versioning.mdx
+  internationalization.mdx
+  search.mdx
+  thumbnails.mdx
+```
+
+## Conventions de nommage
+
+- Utilisez le **kebab-case** pour les noms de fichiers et de répertoires : `getting-started.mdx`, `card-group.mdx`
+- Utilisez le champ frontmatter `title` pour les noms d'affichage — le nom de fichier n'affecte que l'URL
+- Gardez les noms de fichiers courts mais descriptifs
+
+## Utiliser l'ordonnancement efficacement
+
+Attribuez des valeurs `order` explicites pour contrôler l'ordre dans la barre latérale :
+
+```mdx
+---
+title: Getting Started
+order: 1
+---
+```
+
+:::callout{variant="success"}
+**Astuce :** Laissez des écarts dans votre ordonnancement (1, 2, 3 → 10, 20, 30) pour pouvoir insérer des pages ultérieurement sans tout renuméroter.
+:::
+
+## Exemple : projet bien organisé
+
+```text
+explainer/
+  _meta.json                          # Métadonnées du projet
+  default/
+    en/
+      getting-started.mdx             # order: 1
+      project-structure.mdx           # order: 2
+      writing-content/                # order: 3 (group)
+        _meta.json
+        pages-and-frontmatter.mdx     # order: 1
+        meta-json-and-sidebar.mdx     # order: 2
+        organizing-content.mdx        # order: 3
+      mdx-components/                 # order: 4 (group)
+        _meta.json
+        callout.mdx                   # order: 1
+        card-group.mdx                # order: 2
+        tabs.mdx                      # order: 3
+        steps.mdx                     # order: 4
+        code-group.mdx                # order: 5
+        preview.mdx                   # order: 6
+```
+
+Cette structure produit une barre latérale claire et logiquement ordonnée avec des sections regroupées.
+
+## Conseils
+
+- Regroupez les pages liées dans un répertoire partagé avec un `_meta.json`
+- Utilisez `type: "group"` pour les sections où tous les enfants doivent toujours être visibles (ex. listes de fonctionnalités)
+- Utilisez les catégories (type par défaut) pour les sections qui gagnent à être réduites (ex. référence API)
+- Placez les pages les plus importantes en premier (valeurs `order` plus basses)

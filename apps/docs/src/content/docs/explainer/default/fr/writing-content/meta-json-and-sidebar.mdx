@@ -1,0 +1,88 @@
+---
+title: Meta JSON et barre latérale
+description: Configurez la navigation de la barre latérale avec les fichiers _meta.json pour des titres, icônes et regroupements personnalisés.
+icon: sidebar
+order: 2
+---
+
+# Meta JSON et barre latérale
+
+La barre latérale est **générée automatiquement** à partir de la structure de vos fichiers et répertoires. Vous pouvez la personnaliser à l'aide de fichiers `_meta.json` placés dans n'importe quel répertoire.
+
+## Schéma _meta.json
+
+```json [_meta.json]
+{
+  "title": "My Section",
+  "icon": "book-open",
+  "order": 2,
+  "type": "group"
+}
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `title` | `string` | Nom d'affichage dans la barre latérale (remplace le nom du répertoire) |
+| `icon` | `string` | Identifiant d'icône Iconify affiché à côté du titre |
+| `order` | `number` | Position dans la barre latérale parmi les éléments frères. Les nombres inférieurs apparaissent en premier |
+| `type` | `"group"` \| `"category"` | Contrôle le rendu de la section dans la barre latérale |
+
+## _meta.json au niveau du projet
+
+Chaque répertoire de projet possède son propre `_meta.json` qui définit le nom et l'icône du projet pour le sélecteur de projet :
+
+```json [explainer/_meta.json]
+{
+  "icon": "book-open",
+  "title": "Explainer"
+}
+```
+
+## Groupe vs Catégorie
+
+Le champ `type` contrôle le rendu d'un répertoire dans la barre latérale :
+
+### Groupe
+
+Un **groupe** est un séparateur de section visuel. Ses enfants sont toujours visibles — il n'y a pas de bouton de réduction.
+
+```json [features/_meta.json]
+{
+  "title": "Features",
+  "icon": "sparkles",
+  "order": 6,
+  "type": "group"
+}
+```
+
+### Catégorie
+
+Une **catégorie** est une section réductible. Cliquer sur le titre développe ou réduit les pages enfants.
+
+```json [packages/_meta.json]
+{
+  "title": "Packages",
+  "icon": "package",
+  "order": 9
+}
+```
+
+:::callout{variant="info"}
+Lorsque le `type` est omis, la section se comporte comme une **catégorie** (réductible) par défaut.
+:::
+
+## Comportement de l'ordonnancement
+
+Les éléments de la barre latérale sont triés par le champ `order`. Les éléments sans `order` sont triés alphabétiquement après les éléments ordonnés.
+
+Pour les pages, `order` est défini dans le frontmatter. Pour les répertoires, `order` est défini dans `_meta.json`.
+
+```text
+features/
+  _meta.json          → order: 6
+  multi-project.mdx   → order: 1  (frontmatter)
+  versioning.mdx      → order: 2  (frontmatter)
+  search.mdx          → order: 4  (frontmatter)
+```
+
+Cela produit une barre latérale avec « Features » à la position 6, contenant des pages triées 1 → 2 → 4.

@@ -1,0 +1,71 @@
+---
+title: GitHub Pages
+description: Déployer les applications Explainer sur GitHub Pages avec le support natif des Actions.
+icon: github
+order: 4
+---
+
+# GitHub Pages
+
+Déployez les applications Explainer sur GitHub Pages en utilisant l'action native `actions/deploy-pages`.
+
+## Configuration
+
+::::step-group
+:::step{title="Définir la cible de déploiement"}
+Ajoutez une variable de dépôt dans GitHub Settings → Variables :
+
+```text
+DEPLOY_TARGET=github-pages
+```
+:::
+
+:::step{title="Activer GitHub Pages"}
+Dans les paramètres de votre dépôt, allez dans **Pages** → **Source** et sélectionnez **GitHub Actions**.
+:::
+
+:::step{title="Configurer les permissions"}
+Le workflow nécessite les permissions suivantes :
+
+```yaml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+```
+:::
+::::
+
+## Workflow GitHub Actions
+
+Lorsque `DEPLOY_TARGET` est défini sur `github-pages`, le workflow utilise les actions Pages natives :
+
+```yaml
+- uses: actions/upload-pages-artifact@v3
+  with:
+    path: apps/docs/dist
+
+- uses: actions/deploy-pages@v4
+  id: deployment
+  with:
+    environment: github-pages
+```
+
+## Considérations sur le chemin de base
+
+:::callout{variant="warning"}
+Si votre dépôt n'est pas un site utilisateur/organisation (c'est-à-dire qu'il se trouve à `username.github.io/repo-name`), vous devez configurer le chemin `base` d'Astro :
+
+```ts [astro.config.ts]
+export default defineConfig({
+  base: '/repo-name',
+  // ...
+})
+```
+
+Cela garantit que tous les liens et ressources utilisent le bon préfixe de chemin.
+:::
+
+## Nommage de l'environnement
+
+Les déploiements GitHub Pages utilisent un environnement nommé `github-pages`. C'est le nom d'environnement par défaut attendu par l'action `actions/deploy-pages`.

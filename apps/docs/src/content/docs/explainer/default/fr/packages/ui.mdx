@@ -1,0 +1,54 @@
+---
+title: "@explainer/ui"
+description: Composants React UI partagés utilisés dans toutes les applications Explainer.
+icon: component
+order: 1
+---
+
+# @explainer/ui
+
+Le paquet `@explainer/ui` fournit des composants React UI partagés utilisés dans les applications docs, blog et site web. Il est construit sur **Radix UI**, **CVA** (Class Variance Authority) et **Tailwind CSS**.
+
+## Composants
+
+| Composant | Description |
+|-----------|-------------|
+| `Button` | Bouton stylisé avec variantes (default, outline, ghost, link) et tailles |
+| `Card` | Conteneur de contenu avec les sous-composants `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter` |
+| `DropdownMenu` | Menu déroulant accessible construit sur Radix UI avec déclencheur, contenu, éléments, séparateurs |
+| `ThemeToggle` | Sélecteur de thème sombre/clair/système persisté dans localStorage |
+| `Navbar` | Barre de navigation supérieure avec liens d'application, sélecteurs de projet/version et menu mobile |
+| `MobileMenu` | Menu latéral responsive pour les écrans mobiles |
+| `LocaleSwitcher` | Menu déroulant de langue pour basculer entre les langues disponibles |
+| `MobileNavLinks` | Liens de navigation adaptés pour la disposition mobile |
+
+## Installation
+
+Le paquet est déjà inclus dans l'espace de travail du monorepo. Importez les composants directement :
+
+```ts
+import { Button, Card, ThemeToggle, Navbar } from '@explainer/ui'
+```
+
+## Utilitaires
+
+| Export | Description |
+|--------|-------------|
+| `cn(...classes)` | Fusionne les noms de classes avec `clsx` + `tailwind-merge` |
+| `buttonVariants` | Configuration des variantes CVA pour le composant Button |
+| `getAppLinks(env)` | Résout les liens de navigation d'application à partir des variables d'environnement |
+| `defaultAppLinks` | Liens d'application par défaut (Accueil, Docs, Blog) |
+
+## Liens d'application
+
+La barre de navigation utilise `getAppLinks()` pour résoudre les URL de navigation inter-applications à partir des variables d'environnement :
+
+```ts
+import { getAppLinks } from '@explainer/ui'
+
+const links = getAppLinks({
+  PUBLIC_WEBSITE_URL: 'https://explainer.dev',
+  PUBLIC_DOCS_URL: 'https://docs.explainer.dev',
+  PUBLIC_BLOG_URL: 'https://blog.explainer.dev',
+})
+```

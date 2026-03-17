@@ -1,0 +1,105 @@
+---
+title: Callout
+description: Highlight important information with colored callout boxes.
+icon: message-square
+order: 1
+---
+
+# Callout
+
+Callouts draw attention to important information using colored containers with icons.
+
+## Variants
+
+Four variants are available: `info`, `success`, `warning`, and `danger`.
+
+::::::preview
+:::::code-preview
+:::callout{variant="info"}
+This is an **info** callout for general tips and notes.
+:::
+:::::
+
+:::::content-preview
+```mdx
+:::callout{variant="info"}
+This is an **info** callout for general tips and notes.
+:::
+```
+:::::
+::::::
+
+::::::preview
+:::::code-preview
+:::callout{variant="success"}
+This is a **success** callout for positive outcomes or confirmations.
+:::
+:::::
+
+:::::content-preview
+```mdx
+:::callout{variant="success"}
+This is a **success** callout for positive outcomes or confirmations.
+:::
+```
+:::::
+::::::
+
+::::::preview
+:::::code-preview
+:::callout{variant="warning"}
+This is a **warning** callout for things to be cautious about.
+:::
+:::::
+
+:::::content-preview
+```mdx
+:::callout{variant="warning"}
+This is a **warning** callout for things to be cautious about.
+:::
+```
+:::::
+::::::
+
+::::::preview
+:::::code-preview
+:::callout{variant="danger"}
+This is a **danger** callout for critical warnings or breaking changes.
+:::
+:::::
+
+:::::content-preview
+```mdx
+:::callout{variant="danger"}
+This is a **danger** callout for critical warnings or breaking changes.
+:::
+```
+:::::
+::::::
+
+## Syntax
+
+Use the directive syntax with three colons:
+
+```mdx
+:::callout{variant="info"}
+Your content here. Supports **Markdown** formatting.
+:::
+```
+
+### JSX alternative
+
+You can also use the JSX component syntax:
+
+```mdx
+<Callout variant="info" title="Optional Title">
+  Content with **Markdown** support.
+</Callout>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `"info"` \| `"success"` \| `"warning"` \| `"danger"` | `"info"` | Visual style and icon of the callout |
+| `title` | `string` | — | Optional title displayed above the content (JSX syntax only) |

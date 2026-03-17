@@ -1,0 +1,193 @@
+---
+import { Icon } from "@iconify/react"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+
+interface BlogPost {
+  title: string
+  description: string
+  date: Date
+  tags: string[]
+  slug: string
+  cover?: string
+}
+
+function parseFrontmatter(content: string): Record<string, any> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return {}
+
+  const yaml = match[1]
+  const data: Record<string, any> = {}
+
+  for (const line of yaml.split('\n')) {
+    const kv = line.match(/^(\w[\w.]*)\s*:\s*(.+)$/)
+    if (!kv) continue
+    const [, key, rawValue] = kv
+    let value: any = rawValue.trim()
+
+    // Parse arrays like [tag1, tag2]
+    if (value.startsWith('[') && value.endsWith(']')) {
+      value = value.slice(1, -1).split(',').map((s: string) => s.trim().replace(/^['"]|['"]$/g, ''))
+    }
+    // Strip quotes
+    else if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+
+    data[key] = value
+  }
+
+  return data
+}
+
+function loadBlogPosts(locale: string): BlogPost[] {
+  const postsDir = join(process.cwd(), '..', 'blog', 'src', 'content', 'posts', locale)
+  try {
+    const files = readdirSync(postsDir).filter((f) => f.endsWith('.mdx') || f.endsWith('.md'))
+    const posts: BlogPost[] = []
+
+    for (const file of files) {
+      const content = readFileSync(join(postsDir, file), 'utf-8')
+      const data = parseFrontmatter(content)
+      if (data.status !== 'published') continue
+
+      posts.push({
+        title: data.title ?? '',
+        description: data.short_description ?? data.description ?? '',
+        date: new Date(data.date),
+        tags: Array.isArray(data.tags) ? data.tags : [],
+        slug: file.replace(/\.mdx?$/, ''),
+        cover: data.cover,
+      })
+    }
+
+    return posts.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 3)
+  } catch {
+    return []
+  }
+}
+
+const blogUrl = import.meta.env.PUBLIC_BLOG_URL || ''
+const enPosts = loadBlogPosts('en')
+const frPosts = loadBlogPosts('fr')
+
+function formatDate(date: Date, locale: string) {
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+---
+
+{enPosts.length > 0 && (
+  <div class="w-full max-w-6xl mx-auto px-5 py-16 sm:py-24 lg:py-32">
+    <div class="text-center mb-16">
+      <p
+        class="text-sm font-semibold text-primary uppercase tracking-wide mb-3"
+        data-t="articles.label"
+      >
+        Blog
+      </p>
+      <h2
+        class="text-3xl font-semibold text-foreground sm:text-4xl"
+        data-t="articles.title"
+      >
+        Latest articles
+      </h2>
+      <p
+        class="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto text-balance"
+        data-t="articles.description"
+      >
+        Stay up to date with the latest news and updates.
+      </p>
+    </div>
+
+    <!-- EN articles -->
+    <div data-locale-articles="en" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {enPosts.map((post) => (
+        <a
+          href={`${blogUrl}/en/${post.slug}`}
+          class="group block rounded-xl border bg-background overflow-hidden transition-colors hover:border-primary/20"
+        >
+          <div class="aspect-16/10 bg-muted overflow-hidden">
+            <img src={post.cover ?? `${blogUrl}/en/${post.slug}/thumbnail.png`} alt={post.title} class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+          </div>
+          <div class="p-5">
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              {post.tags.slice(0, 2).map((tag) => (
+                <span class="rounded border border-primary/30 bg-primary/10 text-primary px-2 py-px text-[9px] font-semibold uppercase tracking-wider">
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <time class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {formatDate(post.date, 'en')}
+            </time>
+            <h3 class="font-bold text-lg leading-snug mt-1.5 line-clamp-2 group-hover:text-primary transition-colors">
+              {post.title}
+            </h3>
+            <p class="text-sm text-muted-foreground mt-2 line-clamp-2">
+              {post.description}
+            </p>
+          </div>
+        </a>
+      ))}
+    </div>
+
+    <!-- FR articles -->
+    <div data-locale-articles="fr" class="grid grid-cols-1 md:grid-cols-3 gap-6" style="display: none;">
+      {frPosts.map((post) => (
+        <a
+          href={`${blogUrl}/fr/${post.slug}`}
+          class="group block rounded-xl border bg-background overflow-hidden transition-colors hover:border-primary/20"
+        >
+          <div class="aspect-16/10 bg-muted overflow-hidden">
+            <img src={post.cover ?? `${blogUrl}/fr/${post.slug}/thumbnail.png`} alt={post.title} class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+          </div>
+          <div class="p-5">
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              {post.tags.slice(0, 2).map((tag) => (
+                <span class="rounded border border-primary/30 bg-primary/10 text-primary px-2 py-px text-[9px] font-semibold uppercase tracking-wider">
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <time class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {formatDate(post.date, 'fr')}
+            </time>
+            <h3 class="font-bold text-lg leading-snug mt-1.5 line-clamp-2 group-hover:text-primary transition-colors">
+              {post.title}
+            </h3>
+            <p class="text-sm text-muted-foreground mt-2 line-clamp-2">
+              {post.description}
+            </p>
+          </div>
+        </a>
+      ))}
+    </div>
+
+    <div class="mt-10 text-center">
+      <a
+        href={blogUrl}
+        class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline transition-colors"
+      >
+        <span data-t="articles.viewAll">View all articles</span>
+        <Icon icon="mdi:arrow-right" className="size-4" client:load />
+      </a>
+    </div>
+  </div>
+)}
+
+<script>
+  function showLocaleArticles() {
+    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
+    const cookie = match ? match[1] : null
+    const browser = (navigator.language || '').split('-')[0]
+    const locale = (cookie === 'en' || cookie === 'fr') ? cookie
+      : (browser === 'en' || browser === 'fr') ? browser : 'en'
+
+    document.querySelectorAll('[data-locale-articles]').forEach(function (el) {
+      ;(el as HTMLElement).style.display = el.getAttribute('data-locale-articles') === locale ? '' : 'none'
+    })
+  }
+
+  showLocaleArticles()
+  document.addEventListener('astro:after-swap', showLocaleArticles)
+</script>

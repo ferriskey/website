@@ -1,0 +1,99 @@
+---
+title: Docker
+description: Build and deploy Explainer apps using Docker with multi-stage builds.
+icon: container
+order: 1
+---
+
+# Docker
+
+Explainer includes a multi-stage `Dockerfile` that can build any of the three apps into a lightweight nginx-based container.
+
+## Dockerfile stages
+
+The build process has three stages:
+
+| Stage | Base Image | Purpose |
+|-------|-----------|---------|
+| `deps` | `node:20-alpine` | Install all monorepo dependencies |
+| `builder` | `node:20-alpine` | Build the target app |
+| `runtime` | `nginx:1.28.0-alpine3.21` | Serve the static output |
+
+## Building an app
+
+Use the `APP` build argument to specify which app to build:
+
+```bash
+docker build --build-arg APP=docs -t explainer-docs .
+```
+
+```bash
+docker build --build-arg APP=blog -t explainer-blog .
+```
+
+```bash
+docker build --build-arg APP=website -t explainer-website .
+```
+
+## Running
+
+```bash
+docker run -p 8080:8080 explainer-docs
+```
+
+The container serves on port **8080** by default, configured in `nginx.conf`.
+
+## Nginx configuration
+
+The included `nginx.conf` provides:
+
+- **gzip compression** for text, CSS, JS, JSON, and SVG
+- **SPA routing** with `try_files $uri $uri/index.html =404`
+- **No-cache headers** for `404.html` to prevent stale error pages
+
+```nginx [nginx.conf]
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml image/svg+xml;
+
+    location / {
+        try_files $uri $uri/index.html =404;
+    }
+
+    location = /404.html {
+        add_header Cache-Control "no-cache";
+    }
+}
+```
+
+## Docker Compose example
+
+```yaml [docker-compose.yml]
+services:
+  docs:
+    build:
+      context: .
+      args:
+        APP: docs
+    ports:
+      - "4321:8080"
+
+  blog:
+    build:
+      context: .
+      args:
+        APP: blog
+    ports:
+      - "4322:8080"
+
+  website:
+    build:
+      context: .
+      args:
+        APP: website
+    ports:
+      - "4323:8080"
+```

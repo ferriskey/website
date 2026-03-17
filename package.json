@@ -1,0 +1,18 @@
+{
+  "name": "explainer-v2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "turbo": "^2.8.0",
+    "prettier": "^3.5.0",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "pnpm@10.6.2"
+}

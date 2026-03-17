@@ -1,0 +1,196 @@
+---
+title: "Déployer Explainer en production : le guide complet"
+description: Du développement local au déploiement en production — apprenez à publier votre documentation Explainer sur Cloudflare Pages, Vercel ou tout hébergeur de sites statiques avec automatisation CI/CD.
+short_description: "Publiez votre documentation avec Cloudflare, Vercel ou Docker."
+date: 2026-03-16
+tags: [guide, deployment, ci-cd, cloudflare]
+status: published
+author: leadcode_dev
+---
+
+Vous avez rédigé votre documentation, personnalisé le thème, et tout est parfait en local. Il est temps de partager avec le monde. Dans ce guide, nous couvrons toute l'histoire du déploiement — de la configuration de build aux pipelines CI/CD.
+
+## Comprendre la sortie de build
+
+Les applications Explainer sont des **sites statiques Astro** standards. L'exécution de `pnpm build` produit un répertoire `dist/` contenant des fichiers HTML, CSS et JavaScript. Aucun runtime serveur requis — vous pouvez héberger la sortie partout où des fichiers statiques sont servis.
+
+```bash
+# Compiler les trois applications
+pnpm build
+
+# Ou compiler individuellement
+pnpm --filter @explainer/docs build
+pnpm --filter @explainer/blog build
+pnpm --filter @explainer/website build
+```
+
+:::callout{variant="info" title="Applications indépendantes"}
+Chaque application se compile indépendamment avec sa propre sortie `dist/`. Vous pouvez les déployer chez différents fournisseurs ou sur différents sous-domaines — elles n'ont pas besoin d'être sur le même serveur.
+:::
+
+## Variables d'environnement
+
+Avant de compiler pour la production, configurez vos URLs inter-applications. Elles assurent que les liens de la navbar pointent vers les bons domaines :
+
+```bash title=".env"
+PUBLIC_WEBSITE_URL=https://explainer.dev
+PUBLIC_DOCS_URL=https://docs.explainer.dev
+PUBLIC_BLOG_URL=https://blog.explainer.dev
+```
+
+Pour la section contributeurs, vous pouvez optionnellement fournir un token GitHub pour des limites d'API plus élevées :
+
+```bash title=".env"
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+:::callout{variant="success"}
+Sans token, l'API GitHub autorise 60 requêtes par heure — largement suffisant pour un build. Le token est surtout utile en développement actif quand vous recompilez fréquemment.
+:::
+
+## Déployer sur Cloudflare Pages
+
+Cloudflare Pages est notre cible de déploiement recommandée. Il offre un palier gratuit généreux, un CDN mondial et des déploiements de prévisualisation automatiques.
+
+::::step-group
+:::step{title="Créer les projets Cloudflare Pages"}
+Créez trois projets dans votre tableau de bord Cloudflare — un pour chaque application :
+- `explainer-docs`
+- `explainer-blog`
+- `explainer-website`
+
+Aucune configuration de build nécessaire côté Cloudflare — nous gérons les builds dans GitHub Actions.
+:::
+
+:::step{title="Configurer les secrets"}
+Dans les paramètres de votre dépôt GitHub, ajoutez ces secrets :
+- `CLOUDFLARE_API_TOKEN` — votre token API Cloudflare avec permission d'édition Pages
+- `CLOUDFLARE_ACCOUNT_ID` — votre identifiant de compte Cloudflare
+
+Et ces variables :
+- `PUBLIC_DOCS_URL`, `PUBLIC_BLOG_URL`, `PUBLIC_WEBSITE_URL` — vos URLs de production
+- `DEPLOY_TARGET` — à définir sur `cloudflare`
+:::
+
+:::step{title="Pousser sur main"}
+Le workflow GitHub Actions inclus gère tout automatiquement. À chaque push sur `main`, il :
+1. Détecte quelles applications ont changé (filtrage par chemin)
+2. Compile uniquement les applications affectées
+3. Déploie sur Cloudflare Pages
+
+```yaml title=".github/workflows/deploy.yml"
+- run: pnpm --filter @explainer/docs build
+  env:
+    PUBLIC_DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
+    PUBLIC_BLOG_URL: ${{ vars.PUBLIC_BLOG_URL }}
+    PUBLIC_WEBSITE_URL: ${{ vars.PUBLIC_WEBSITE_URL }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+:::
+::::
+
+## Déployer sur Vercel
+
+L'approche zéro-config de Vercel fonctionne parfaitement avec Explainer. Chaque application peut être importée comme un projet Vercel séparé.
+
+::::step-group
+:::step{title="Importer le dépôt"}
+Dans le tableau de bord Vercel, importez votre dépôt trois fois — une par application. Pour chaque projet, configurez :
+
+- **Répertoire racine** : `apps/docs`, `apps/blog` ou `apps/website`
+- **Commande de build** : `cd ../.. && pnpm build --filter @explainer/docs`
+- **Répertoire de sortie** : `dist`
+:::
+
+:::step{title="Définir les variables d'environnement"}
+Ajoutez `PUBLIC_DOCS_URL`, `PUBLIC_BLOG_URL`, `PUBLIC_WEBSITE_URL` et optionnellement `GITHUB_TOKEN` dans les paramètres d'environnement de chaque projet.
+:::
+
+:::step{title="Configurer les domaines personnalisés"}
+Assignez vos sous-domaines à chaque projet Vercel : `docs.explainer.dev`, `blog.explainer.dev` et `explainer.dev`.
+:::
+::::
+
+## CI/CD intelligent avec filtrage par chemin
+
+Le workflow monorepo inclut un filtrage intelligent par chemin — seules les applications avec des changements réels sont recompilées et déployées :
+
+```yaml
+- uses: dorny/paths-filter@v4
+  with:
+    filters: |
+      docs:
+        - 'apps/docs/**'
+        - 'packages/**'
+        - 'pnpm-lock.yaml'
+      blog:
+        - 'apps/blog/**'
+        - 'packages/**'
+        - 'pnpm-lock.yaml'
+```
+
+:::callout{variant="warning" title="Les packages partagés déclenchent tous les builds"}
+Les modifications dans `packages/**` déclenchent la recompilation de toutes les applications, car les changements d'UI ou de MDX partagés peuvent affecter n'importe quelle application. C'est intentionnel — cela garantit la cohérence dans votre écosystème de documentation.
+:::
+
+## Domaines personnalisés et DNS
+
+Une configuration typique utilise des sous-domaines :
+
+| Application | Domaine | Enregistrement DNS |
+|-------------|---------|-------------------|
+| Website | `explainer.dev` | `CNAME` vers le fournisseur |
+| Docs | `docs.explainer.dev` | `CNAME` vers le fournisseur |
+| Blog | `blog.explainer.dev` | `CNAME` vers le fournisseur |
+
+Cloudflare Pages comme Vercel gèrent les certificats SSL automatiquement.
+
+## Déploiement Docker
+
+Pour les environnements auto-hébergés, Explainer supporte le déploiement Docker avec un build multi-stage :
+
+```dockerfile title="Dockerfile"
+FROM node:22-alpine AS build
+RUN corepack enable
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @explainer/docs build
+
+FROM nginx:alpine
+COPY --from=build /app/apps/docs/dist /usr/share/nginx/html
+```
+
+Vous pouvez servir les trois applications derrière un reverse proxy (nginx, Caddy, Traefik) avec un routage par chemin ou par sous-domaine.
+
+## Checklist performance
+
+Avant la mise en ligne, vérifiez que ces optimisations sont en place :
+
+::::card-group{cols=2}
+:::card{label="Recherche Pagefind" icon="lucide:search"}
+Les index de recherche sont générés au moment du build. Vérifiez que le répertoire `dist/pagefind/` existe après la compilation des docs.
+:::
+
+:::card{label="Miniatures OG" icon="lucide:image"}
+Chaque page obtient une image Open Graph auto-générée. Testez avec le [Twitter Card Validator](https://cards-dev.twitter.com/validator).
+:::
+
+:::card{label="Flux RSS" icon="lucide:rss"}
+Le blog génère des flux RSS par locale à `/{locale}/rss.xml`. Testez avec un lecteur de flux.
+:::
+
+:::card{label="Sitemap" icon="lucide:map"}
+Astro génère un sitemap automatiquement. Vérifiez qu'il est accessible à `/sitemap-index.xml`.
+:::
+::::
+
+## Et ensuite
+
+Avec votre documentation déployée, vous pouvez vous concentrer sur l'essentiel — écrire du contenu de qualité. Le pipeline CI/CD garantit que chaque push sur `main` met vos changements en ligne en quelques minutes.
+
+:::callout{variant="note" title="Besoin d'aide ?"}
+Consultez la [documentation de déploiement](/fr/explainer/deployment/docker) pour des guides détaillés par fournisseur, ou ouvrez une issue sur GitHub si vous rencontrez des problèmes.
+:::
+
+Bon déploiement !

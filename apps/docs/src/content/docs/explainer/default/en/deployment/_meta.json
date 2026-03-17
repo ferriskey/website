@@ -1,0 +1,6 @@
+{
+  "title": "Deployment",
+  "icon": "rocket",
+  "order": 10,
+  "type": "group"
+}

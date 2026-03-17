@@ -1,0 +1,89 @@
+---
+title: "@explainer/thumbnail"
+description: Génération de miniatures OG avec Satori et Resvg.
+icon: image
+order: 3
+---
+
+# @explainer/thumbnail
+
+Le paquet `@explainer/thumbnail` génère des images miniatures Open Graph pour les pages de documentation. Il utilise **Satori** pour le rendu SVG et **Resvg** pour la conversion en PNG.
+
+## API
+
+### generateThumbnail
+
+Génère une chaîne SVG à partir des options fournies :
+
+```ts
+import { generateThumbnail } from '@explainer/thumbnail'
+
+const svg = await generateThumbnail({
+  headline: 'Explainer',
+  title: 'Getting Started',
+  description: 'Set up Explainer v2 and start building.',
+  primaryColor: '#7c3aed',
+})
+```
+
+### renderThumbnail
+
+Convertit une chaîne SVG en un tampon PNG :
+
+```ts
+import { renderThumbnail } from '@explainer/thumbnail'
+
+const pngBuffer = await renderThumbnail(svg)
+```
+
+### renderThumbnailToFile
+
+Effectue le rendu d'un SVG vers un fichier PNG sur le disque :
+
+```ts
+import { renderThumbnailToFile } from '@explainer/thumbnail'
+
+await renderThumbnailToFile(svg, 'dist/thumbnail.png')
+```
+
+## Intégration Astro
+
+Le paquet exporte une intégration Astro pour la génération automatique de miniatures :
+
+```ts [astro.config.ts]
+import { thumbnail } from '@explainer/thumbnail'
+
+export default defineConfig({
+  integrations: [
+    thumbnail({
+      appName: 'Explainer',
+      primaryColor: '#7c3aed',
+      content: {
+        type: 'collection',
+        directory: 'src/content/docs',
+      },
+    }),
+  ],
+})
+```
+
+Consultez [Miniatures OG](/fr/explainer/features/thumbnails) pour les détails d'intégration et les modes.
+
+## Architecture
+
+```text
+Frontmatter → generateThumbnail() → SVG (Satori) → PNG (Resvg) → thumbnail.png
+```
+
+1. **Satori** effectue le rendu d'une disposition JSX de type React en chaîne SVG
+2. **Resvg** convertit le SVG en image PNG de 960×540 px
+3. L'intégration place le PNG à côté de la sortie de build de chaque page
+
+## Utilitaires de couleur
+
+| Fonction | Description |
+|----------|-------------|
+| `resolveColor(color?)` | Analyse une chaîne de couleur et retourne une couleur CSS valide. Retombe sur le violet par défaut |
+| `resolveTailwindColor(value)` | Résout un nom de classe de couleur Tailwind (ex. `violet-500`) vers sa valeur CSS |
+
+La couleur primaire par défaut est `oklch(0.707 0.217 293)`.

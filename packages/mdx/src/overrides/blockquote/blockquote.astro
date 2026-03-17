@@ -1,0 +1,48 @@
+---
+
+---
+
+<figure class="relative my-8 rounded-lg border bg-muted/30 px-8 py-6">
+  <div
+    class="absolute -top-4 left-4 flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground"
+    aria-hidden="true"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983z" />
+    </svg>
+  </div>
+  <blockquote class="relative pt-2">
+    <div class="blockquote-content text-base leading-relaxed text-foreground">
+      <slot />
+    </div>
+  </blockquote>
+</figure>
+
+<style is:global>
+  figure:has(> blockquote) p {
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    hyphens: none;
+  }
+
+  .blockquote-author {
+    margin-top: 0.75rem !important;
+    padding-top: 0.75rem;
+    font-style: normal;
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--color-muted-foreground);
+  }
+</style>
+
+<script>
+  document
+    .querySelectorAll('figure:has(> blockquote) .blockquote-content > p')
+    .forEach((p) => {
+      const text = p.textContent?.trim() ?? ''
+      if (text.startsWith('—') || text.startsWith('--')) {
+        p.classList.add('blockquote-author')
+      }
+    })
+</script>

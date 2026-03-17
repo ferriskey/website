@@ -1,0 +1,84 @@
+---
+title: LaTeX Math
+description: Render mathematical equations using LaTeX syntax in fenced code blocks.
+icon: sigma
+order: 5
+---
+
+# LaTeX Math
+
+Write mathematical equations using standard LaTeX syntax inside `math` or `latex` fenced code blocks. Equations are rendered at build time with [KaTeX](https://katex.org/) — no client-side JavaScript required.
+
+## Basic usage
+
+````mdx
+```math
+E = mc^2
+```
+````
+
+Renders as:
+
+```math
+E = mc^2
+```
+
+## Examples
+
+### Fractions and integrals
+
+````mdx
+```math
+\int_{-\infty}^{\infty} e^{-x^2} \, dx = \sqrt{\pi}
+```
+````
+
+```math
+\int_{-\infty}^{\infty} e^{-x^2} \, dx = \sqrt{\pi}
+```
+
+### Matrices
+
+````mdx
+```math
+\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}
+```
+````
+
+```math
+\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}
+```
+
+### Summation
+
+````mdx
+```math
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+```
+````
+
+```math
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+```
+
+## Language aliases
+
+Both `math` and `latex` are supported as language identifiers:
+
+````mdx
+```latex
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
+```
+````
+
+```latex
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
+```
+
+## How it works
+
+The `remarkCodeBlocks` remark plugin intercepts code blocks with `math` or `latex` as the language before Shiki processes them. The LaTeX string is passed to a `MathBlock` Astro component that calls `katex.renderToString()` at build time, producing static HTML and CSS with zero client-side JavaScript.
+
+:::callout{variant="info"}
+KaTeX supports a large subset of LaTeX math commands. See the [KaTeX supported functions](https://katex.org/docs/supported) for a full reference.
+:::

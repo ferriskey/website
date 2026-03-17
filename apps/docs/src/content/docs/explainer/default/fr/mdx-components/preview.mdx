@@ -1,0 +1,76 @@
+---
+title: Preview
+description: Affichez des aperçus de composants en direct avec leur code source.
+icon: eye
+order: 6
+---
+
+# Preview
+
+Le composant Preview affiche un aperçu rendu en direct accompagné de son code source. Il est idéal pour documenter les composants MDX et les motifs visuels.
+
+## Structure
+
+Un aperçu se compose de trois directives imbriquées :
+
+1. `::::::preview` — conteneur externe
+2. `:::::code-preview` — le rendu en direct
+3. `:::::content-preview` — le code source affiché sous forme de bloc de code
+
+## Utilisation basique
+
+::::::preview
+  :::::code-preview
+    :::callout{variant="success"}
+      Ceci est un aperçu en direct d'un composant callout.
+    :::
+  :::::
+
+  :::::content-preview
+  ```mdx
+  :::callout{variant="success"}
+    Ceci est un aperçu en direct d'un composant callout.
+  :::
+  ```
+  :::::
+::::::
+
+## Syntaxe
+
+L'aperçu utilise des directives profondément imbriquées. Notez comment le nombre de deux-points augmente à chaque niveau d'imbrication :
+
+````mdx
+::::::preview
+  :::::code-preview
+      :::callout{variant="success"}
+        Votre contenu en direct ici.
+      :::
+    :::::
+
+  :::::content-preview
+  ```mdx
+    :::callout{variant="success"}
+      Votre contenu en direct ici.
+    :::
+  ```
+  :::::
+::::::
+````
+
+:::callout{variant="warning"}
+Faites attention au nombre de deux-points : `::::::` (6) pour preview, `:::::` (5) pour code-preview et content-preview, `:::` (3) pour les composants internes. Chaque niveau d'imbrication nécessite plus de deux-points que le niveau qu'il contient.
+:::
+
+## Quand l'utiliser
+
+- **Documenter des composants** — Montrez à la fois le résultat rendu et le code pour le produire
+- **Exemples de styles** — Affichez les variations visuelles côte à côte avec leur balisage
+- **Démos interactives** — Combinez avec Tabs ou Steps pour montrer différentes configurations
+
+## Composants
+
+| Directive | Composant | Objectif |
+|-----------|-----------|----------|
+| `::::::preview` | `Preview` | Conteneur externe avec disposition en deux panneaux |
+| `:::::code-preview` | `PreviewDemo` | Panneau gauche — affiche le contenu en direct |
+| `:::::content-preview` | `PreviewCode` | Panneau droit — affiche le code source |

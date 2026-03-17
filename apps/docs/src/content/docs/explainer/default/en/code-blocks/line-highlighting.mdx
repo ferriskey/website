@@ -1,0 +1,96 @@
+---
+title: Line Highlighting
+description: Highlight specific lines or words in code blocks for emphasis.
+icon: highlighter
+order: 3
+---
+
+# Line Highlighting
+
+Draw attention to specific lines or words in your code blocks using inline comments or meta range syntax.
+
+## Inline comment syntax
+
+Add `// [!code highlight]` at the end of a line to highlight it:
+
+````mdx
+```ts
+function setup() {
+  const config = loadConfig() // [!code highlight]
+  return config
+}
+```
+````
+
+Renders as:
+
+```ts
+function setup() {
+  const config = loadConfig() // [!code highlight]
+  return config
+}
+```
+
+## Meta range syntax
+
+Use `{line numbers}` in the code block meta to highlight specific lines:
+
+````mdx
+```ts {1,3-4}
+import { defineConfig } from 'astro/config'
+import react from '@astrojs/react'
+import mdx from '@astrojs/mdx'
+import tailwind from '@astrojs/tailwindcss'
+
+export default defineConfig({
+  integrations: [react(), mdx(), tailwind()]
+})
+```
+````
+
+Renders as:
+
+```ts {1,3-4}
+import { defineConfig } from 'astro/config'
+import react from '@astrojs/react'
+import mdx from '@astrojs/mdx'
+import tailwind from '@astrojs/tailwindcss'
+
+export default defineConfig({
+  integrations: [react(), mdx(), tailwind()]
+})
+```
+
+### Range formats
+
+| Syntax | Meaning |
+|--------|---------|
+| `{3}` | Highlight line 3 |
+| `{1,4}` | Highlight lines 1 and 4 |
+| `{1-3}` | Highlight lines 1 through 3 |
+| `{1,3-5,8}` | Highlight line 1, lines 3–5, and line 8 |
+
+## Word highlighting
+
+Highlight all occurrences of a specific word with
+`// [!code word:name]`:
+
+````mdx
+```ts
+// [!code word:config]
+const config = loadConfig()
+validateConfig(config)
+applyConfig(config)
+```
+````
+
+Renders as:
+
+```ts
+// [!code word:config]
+const config = loadConfig()
+validateConfig(config)
+applyConfig(config)
+```
+
+The comment itself is hidden from the output, and every occurrence of the specified word is highlighted.

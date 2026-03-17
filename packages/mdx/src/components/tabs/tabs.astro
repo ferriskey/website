@@ -1,0 +1,14 @@
+---
+import { Tabs as TabsReact } from './tabs.tsx'
+
+interface Props {
+  items: string[]
+  className?: string
+}
+
+const { items, className } = Astro.props
+---
+
+<TabsReact client:load items={items} className={className}>
+  <slot />
+</TabsReact>

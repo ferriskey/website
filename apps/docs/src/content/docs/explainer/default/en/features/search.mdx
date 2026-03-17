@@ -1,0 +1,51 @@
+---
+title: Search
+description: Full-text search powered by Pagefind with zero configuration.
+icon: search
+order: 4
+---
+
+# Search
+
+Explainer includes full-text search powered by [Pagefind](https://pagefind.app/), a static search library that indexes your built site.
+
+## How it works
+
+Pagefind runs at **build time** and creates a search index from your static HTML output. The search dialog is accessible via the `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) keyboard shortcut.
+
+## Zero configuration
+
+Search works out of the box — no API keys, external services, or configuration needed. Pagefind is integrated into the build pipeline automatically.
+
+## Usage
+
+::::step-group
+:::step{title="Build the site"}
+Search only works on the built site, not during development:
+
+```bash
+pnpm build --filter @explainer/docs
+```
+:::
+
+:::step{title="Preview the built site"}
+```bash
+pnpm preview --filter @explainer/docs
+```
+:::
+
+:::step{title="Try the search"}
+Press `Cmd+K` to open the search dialog and start typing.
+:::
+::::
+
+:::callout{variant="warning"}
+Search is **not available in development mode**. You must build the site first with `pnpm build` to generate the search index.
+:::
+
+## Features
+
+- **Instant results** — Search happens client-side with no network requests
+- **Keyboard navigation** — Navigate results with arrow keys, open with Enter
+- **Highlighted matches** — Search terms are highlighted in results
+- **Lightweight** — Only loads the search index when the dialog is opened

@@ -1,0 +1,89 @@
+---
+import Base from './base.astro'
+import { formatDate } from '../lib/posts'
+import { TableOfContents } from '../components/TableOfContents'
+import { ShareButtons } from '../components/ShareButtons'
+import { useTranslations } from '../i18n/utils'
+
+interface Heading {
+  depth: number
+  slug: string
+  text: string
+}
+
+interface Props {
+  title: string
+  description: string
+  date: Date
+  tags: string[]
+  cover?: string
+  thumbnail?: string
+  readingTime: number
+  headings: Heading[]
+  url: string
+  author?: { name: string; title: string; avatar: string; href?: string }
+  locale?: string
+  locales?: string[]
+  localeSwitchUrls?: Record<string, string>
+}
+
+const { title, description, date, tags, cover, thumbnail, readingTime, headings, url, author, locale = 'en', locales, localeSwitchUrls } = Astro.props
+const t = useTranslations(locale)
+---
+
+<Base title={title} description={description} thumbnail={thumbnail} locale={locale} locales={locales} localeSwitchUrls={localeSwitchUrls}>
+  <div class="mb-8">
+    <a href="/" class="text-sm font-medium text-primary hover:underline transition-colors">
+      &larr; {t('post.back')}
+    </a>
+  </div>
+
+  <div class="flex gap-8 relative">
+    <!-- Left column: Share buttons (sticky) -->
+    <aside class="hidden lg:block w-12 shrink-0">
+      <ShareButtons url={url} title={title} locale={locale} client:load />
+    </aside>
+
+    <!-- Center column: Article -->
+    <article class="min-w-0 flex-1 max-w-3xl">
+      <header class="mb-8">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight mb-4">{title}</h1>
+        <p class="text-lg text-muted-foreground mb-4">{description}</p>
+        <p class="text-sm text-muted-foreground">
+          {t('post.published')} {formatDate(date, locale)}
+        </p>
+      </header>
+      {tags.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-10">
+          {tags.map((tag) => (
+            <a
+              href={`/?tags=${encodeURIComponent(tag)}`}
+              class="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+            >
+              {tag}
+            </a>
+          ))}
+        </div>
+      )}
+      {cover && (
+        <img
+          src={cover}
+          alt={title}
+          class="w-full aspect-2/1 object-cover rounded-xl mb-10"
+        />
+      )}
+      <div class="prose prose-neutral dark:prose-invert max-w-none">
+        <slot />
+      </div>
+      <!-- Share buttons mobile (bottom of article) -->
+      <div class="lg:hidden mt-10">
+        <ShareButtons url={url} title={title} locale={locale} horizontal client:load />
+      </div>
+    </article>
+
+    <!-- Right column: Table of Contents (sticky) -->
+    <aside class="hidden xl:block w-56 shrink-0">
+      <TableOfContents headings={headings} locale={locale} author={author} client:load />
+    </aside>
+  </div>
+</Base>

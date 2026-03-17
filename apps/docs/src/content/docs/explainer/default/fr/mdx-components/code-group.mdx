@@ -1,0 +1,94 @@
+---
+title: Code Group
+description: Affichez plusieurs blocs de code sous forme de panneaux à onglets.
+icon: code
+order: 5
+---
+
+# Code Group
+
+Les groupes de code affichent plusieurs blocs de code sous forme d'onglets interchangeables. Chaque onglet est automatiquement nommé à partir des métadonnées `[label]` du bloc de code.
+
+## Utilisation basique
+
+::::::preview
+  :::::code-preview
+    :::codegroup
+      ```ts [index.ts]
+      import { createApp } from './app'
+
+      const app = createApp()
+      app.listen(3000)
+      ```
+
+      ```ts [app.ts]
+      export function createApp() {
+        return {
+          listen(port: number) {
+            console.log(`Listening on port ${port}`)
+          }
+        }
+      }
+      ```
+    :::
+  :::::
+
+  :::::content-preview
+    ````mdx
+    :::codegroup
+      ```ts [index.ts]
+      import { createApp } from './app'
+
+      const app = createApp()
+      app.listen(3000)
+      ```
+
+      ```ts [app.ts]
+      export function createApp() {
+        return {
+          listen(port: number) {
+            console.log(`Listening on port ${port}`)
+          }
+        }
+      }
+      ```
+    :::
+    ````
+  :::::
+::::::
+
+## Syntaxe
+
+Encapsulez plusieurs blocs de code délimités dans une directive `:::codegroup`. Utilisez la syntaxe `[label]` sur chaque bloc de code pour définir le nom de l'onglet :
+
+````mdx
+:::codegroup
+  ```language [Libellé de l'onglet]
+  code ici
+  ```
+
+  ```language [Autre onglet]
+  code ici
+  ```
+:::
+````
+
+:::callout{variant="info"}
+Le `[label]` dans la chaîne meta du bloc de code est utilisé à la fois comme titre de l'onglet et comme libellé de fichier affiché dans l'en-tête du bloc de code.
+:::
+
+## Exemple multi-langages
+
+:::codegroup
+  ```bash [pnpm]
+  pnpm add @explainer/ui
+  ```
+
+  ```bash [npm]
+  npm install @explainer/ui
+  ```
+
+  ```bash [yarn]
+  yarn add @explainer/ui
+  ```
+:::

@@ -1,0 +1,85 @@
+---
+title: Organizing Content
+description: Best practices for structuring your documentation files and directories.
+icon: folder-open
+order: 3
+---
+
+# Organizing Content
+
+A well-organized content directory makes your documentation easier to maintain and navigate. Here are some guidelines.
+
+## Flat vs nested structures
+
+Use **flat structures** for small sections with a few pages:
+
+```text
+getting-started.mdx
+project-structure.mdx
+```
+
+Use **nested directories** when a section has three or more related pages:
+
+```text
+features/
+  _meta.json
+  multi-project.mdx
+  versioning.mdx
+  internationalization.mdx
+  search.mdx
+  thumbnails.mdx
+```
+
+## Naming conventions
+
+- Use **kebab-case** for file and directory names: `getting-started.mdx`, `card-group.mdx`
+- Use the `title` frontmatter field for display names — the filename only affects the URL
+- Keep filenames short but descriptive
+
+## Using order effectively
+
+Assign explicit `order` values to control the sidebar sequence:
+
+```mdx
+---
+title: Getting Started
+order: 1
+---
+```
+
+:::callout{variant="success"}
+**Tip:** Leave gaps in your ordering (1, 2, 3 → 10, 20, 30) so you can insert pages later without renumbering everything.
+:::
+
+## Example: well-organized project
+
+```text
+explainer/
+  _meta.json                          # Project metadata
+  default/
+    en/
+      getting-started.mdx             # order: 1
+      project-structure.mdx           # order: 2
+      writing-content/                # order: 3 (group)
+        _meta.json
+        pages-and-frontmatter.mdx     # order: 1
+        meta-json-and-sidebar.mdx     # order: 2
+        organizing-content.mdx        # order: 3
+      mdx-components/                 # order: 4 (group)
+        _meta.json
+        callout.mdx                   # order: 1
+        card-group.mdx                # order: 2
+        tabs.mdx                      # order: 3
+        steps.mdx                     # order: 4
+        code-group.mdx                # order: 5
+        preview.mdx                   # order: 6
+```
+
+This structure produces a clean, logically ordered sidebar with grouped sections.
+
+## Tips
+
+- Group related pages under a shared directory with a `_meta.json`
+- Use `type: "group"` for sections where all children should always be visible (e.g., feature lists)
+- Use categories (default type) for sections that benefit from being collapsed (e.g., API reference)
+- Place the most important pages first (lower `order` values)

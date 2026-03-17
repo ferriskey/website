@@ -1,0 +1,138 @@
+---
+title: Mermaid Diagrams
+description: Create diagrams and flowcharts using Mermaid syntax in fenced code blocks.
+icon: workflow
+order: 6
+---
+
+# Mermaid Diagrams
+
+Create diagrams directly in your documentation using `mermaid` fenced code blocks. Diagrams are rendered client-side with [Mermaid](https://mermaid.js.org/) and automatically adapt to light and dark mode.
+
+## Basic usage
+
+````mdx
+```mermaid
+graph LR
+  A[Start] --> B{Decision}
+  B -->|Yes| C[Action]
+  B -->|No| D[End]
+```
+````
+
+Renders as:
+
+```mermaid
+graph LR
+  A[Start] --> B{Decision}
+  B -->|Yes| C[Action]
+  B -->|No| D[End]
+```
+
+## Examples
+
+### Sequence diagram
+
+````mdx
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Server
+  participant Database
+  Client->>Server: HTTP Request
+  Server->>Database: Query
+  Database-->>Server: Result
+  Server-->>Client: JSON Response
+```
+````
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Server
+  participant Database
+  Client->>Server: HTTP Request
+  Server->>Database: Query
+  Database-->>Server: Result
+  Server-->>Client: JSON Response
+```
+
+### Class diagram
+
+````mdx
+```mermaid
+classDiagram
+  class Animal {
+    +String name
+    +int age
+    +makeSound()
+  }
+  class Dog {
+    +fetch()
+  }
+  class Cat {
+    +purr()
+  }
+  Animal <|-- Dog
+  Animal <|-- Cat
+```
+````
+
+```mermaid
+classDiagram
+  class Animal {
+    +String name
+    +int age
+    +makeSound()
+  }
+  class Dog {
+    +fetch()
+  }
+  class Cat {
+    +purr()
+  }
+  Animal <|-- Dog
+  Animal <|-- Cat
+```
+
+### Git graph
+
+````mdx
+```mermaid
+gitGraph
+  commit
+  commit
+  branch feature
+  checkout feature
+  commit
+  commit
+  checkout main
+  merge feature
+  commit
+```
+````
+
+```mermaid
+gitGraph
+  commit
+  commit
+  branch feature
+  checkout feature
+  commit
+  commit
+  checkout main
+  merge feature
+  commit
+```
+
+## Dark mode
+
+Mermaid diagrams automatically switch between `default` and `dark` themes based on the current color mode. No additional configuration is needed.
+
+## How it works
+
+The `remarkCodeBlocks` remark plugin intercepts code blocks with `mermaid` as the language before Shiki processes them. The diagram definition is passed to a `MermaidBlock` React component hydrated with `client:load`. On mount, it dynamically imports the Mermaid library, renders the diagram to SVG, and displays it. A `<pre>` placeholder is shown before hydration.
+
+:::callout{variant="info"}
+Mermaid supports many diagram types including flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, Gantt charts, and more. See the [Mermaid documentation](https://mermaid.js.org/intro/) for a full reference.
+:::

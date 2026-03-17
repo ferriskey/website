@@ -1,0 +1,75 @@
+---
+title: Pages & Frontmatter
+description: Learn how to create documentation pages and configure frontmatter metadata.
+icon: file-text
+order: 1
+---
+
+# Pages & Frontmatter
+
+Every documentation page is an `.mdx` file inside the `apps/docs/src/content/docs/` directory.
+
+## Content path
+
+Files follow this structure:
+
+```text
+apps/docs/src/content/docs/{project}/{version}/{locale}/{path}.mdx
+```
+
+For example:
+
+```text
+apps/docs/src/content/docs/explainer/default/en/getting-started.mdx
+```
+
+- **project** — Top-level directory name (e.g., `explainer`)
+- **version** — `default` for unversioned, or a version name like `v1`, `v2`
+- **locale** — Language code (e.g., `en`, `fr`)
+- **path** — File path that becomes the URL segments
+
+## URL pattern
+
+The generated URL follows this pattern:
+
+```text
+/{locale}/{project}/{path}
+```
+
+The `default` version is omitted from the URL. Versioned docs include the version:
+
+| File path | URL |
+|-----------|-----|
+| `explainer/default/en/getting-started.mdx` | `/en/explainer/getting-started` |
+| `explainer/default/en/guides/installation.mdx` | `/en/explainer/guides/installation` |
+| `my-lib/v2/en/migration.mdx` | `/en/my-lib/v2/migration` |
+
+## Frontmatter schema
+
+Every MDX file starts with a YAML frontmatter block:
+
+```mdx [example-page.mdx]
+---
+title: My Page Title
+description: A brief description of this page.
+icon: book-open
+order: 2
+permalink: /custom-url
+---
+
+Page content starts here...
+```
+
+### Available fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | `string` | Yes | Page title displayed in the sidebar, breadcrumbs, and `<title>` tag |
+| `description` | `string` | No | Short description for SEO meta tags and OG thumbnails |
+| `icon` | `string` | No | Icon identifier (from [Iconify](https://icon-sets.iconify.design/)) displayed next to the title in the sidebar |
+| `order` | `number` | No | Controls the position in the sidebar. Lower numbers appear first |
+| `permalink` | `string` | No | Override the auto-generated URL with a custom path |
+
+:::callout{variant="info"}
+If `order` is not specified, pages are sorted alphabetically by filename.
+:::

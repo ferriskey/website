@@ -1,0 +1,96 @@
+---
+import { Icon } from "@iconify/react";
+
+const highlights = [
+  { icon: "mdi:rocket-launch", titleKey: "highlights.ship.title", descKey: "highlights.ship.description", title: "Ship docs in minutes, not days", description: "Clone the repo, write your Markdown, deploy. No complex setup, no build pipeline to configure. Your documentation is live before your coffee gets cold.", span: 4 },
+  { icon: "mdi:palette-swatch-variant", titleKey: "highlights.brand.title", descKey: "highlights.brand.description", title: "Your brand, your way", description: "Tailwind CSS design tokens let you match your documentation to your product identity with a few CSS variable changes.", span: 2 },
+  { icon: "mdi:puzzle-outline", titleKey: "highlights.extensible.title", descKey: "highlights.extensible.description", title: "Extensible by design", description: "Drop in React, Vue, or Svelte components directly in your Markdown. Build interactive examples, live demos, and API playgrounds.", span: 2 },
+  { icon: "mdi:chart-line", titleKey: "highlights.growth.title", descKey: "highlights.growth.description", title: "Built for growth", description: "From a single getting-started guide to hundreds of pages — the architecture scales with your project. Multi-collection docs, versioning-ready structure, and automatic navigation.", span: 4 },
+];
+---
+
+<div class="relative w-full py-16 sm:py-24 lg:py-32">
+  <!-- Decorative circles -->
+  <div
+    class="absolute inset-0 -z-10 pointer-events-none"
+    style="clip-path: inset(0 -100vw -100vh -100vw);"
+    aria-hidden="true"
+  >
+    <div
+      class="absolute top-[22%] left-[12%] w-80 h-80 rounded-full border-2 border-primary/10"
+    >
+      <div
+        class="absolute inset-0 m-auto w-56 h-56 rounded-full border border-primary/[0.07]"
+      >
+      </div>
+    </div>
+
+    <div
+      class="absolute -bottom-16 -right-24 w-80 h-80 rounded-full border-2 border-primary/9"
+    >
+    </div>
+
+    <div class="absolute top-8 right-1/3 size-2.5 rounded-full bg-primary/10">
+    </div>
+    <div
+      class="absolute bottom-1/4 left-[20%] size-2 rounded-full bg-primary/8"
+    >
+    </div>
+    <div
+      class="absolute top-[60%] right-[8%] size-1.5 rounded-full bg-primary/9"
+    >
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="relative w-full max-w-6xl mx-auto px-5">
+    <div class="text-center mb-16">
+      <p
+        class="text-sm font-semibold text-primary uppercase tracking-wide mb-3"
+        data-t="highlights.label"
+      >
+        Highlights
+      </p>
+      <h2 class="text-3xl font-semibold text-foreground sm:text-4xl" data-t="highlights.title">
+        Why Explainer?
+      </h2>
+      <p
+        class="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto text-balance"
+        data-t="highlights.description"
+      >
+        Built for developers who care about their users' experience.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-6 gap-5">
+      {
+        highlights.map((item) => (
+          <div
+            class:list={[
+              "border rounded-xl bg-background",
+              item.span === 4 ? "sm:col-span-4" : "sm:col-span-2",
+            ]}
+          >
+            <div class="bg-primary/5 p-8 flex flex-col gap-5 h-full">
+              <div class="flex items-center justify-center size-12 rounded-xl bg-primary/10">
+                <Icon
+                  icon={item.icon}
+                  className="size-6 text-primary"
+                  client:load
+                />
+              </div>
+              <div>
+                <h3 class="text-xl font-semibold text-foreground" data-t={item.titleKey}>
+                  {item.title}
+                </h3>
+                <p class="text-sm text-muted-foreground mt-2 leading-relaxed" data-t={item.descKey}>
+                  {item.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</div>

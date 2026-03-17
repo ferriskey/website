@@ -1,0 +1,11 @@
+---
+import { Mermaid } from './mermaid.tsx'
+
+interface Props {
+  code: string
+}
+
+const { code } = Astro.props
+---
+
+<Mermaid client:load code={code} />

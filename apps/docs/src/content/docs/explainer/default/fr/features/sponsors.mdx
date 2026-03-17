@@ -1,0 +1,118 @@
+---
+title: Sponsors
+description: Afficher des cartes sponsors sous la table des matières dans la documentation et le blog.
+icon: heart
+order: 6
+---
+
+# Sponsors
+
+Explainer inclut une section sponsors intégrée qui s'affiche sous la table des matières dans la colonne droite. La configuration est centralisée dans le package `@explainer/ui` et partagée entre les apps docs et blog.
+
+## Fonctionnement
+
+Les cartes sponsors apparaissent automatiquement sous le TOC sur toute page disposant d'une table des matières. Elles ne sont visibles qu'à partir du breakpoint `xl`, comme le TOC.
+
+Chaque sponsor affiche :
+- Un **logo** (petit, arrondi)
+- Un **nom**
+- Un **badge de tier** (gold, silver ou bronze) avec un style visuel distinct
+
+## Configuration
+
+### Ajouter des sponsors
+
+Éditez `packages/ui/src/lib/sponsors.ts` et ajoutez des entrées au tableau `defaultSponsors` :
+
+```ts title="packages/ui/src/lib/sponsors.ts"
+import type { Sponsor } from '@explainer/ui'
+
+export const defaultSponsors: Sponsor[] = [
+  {
+    id: 'acme',
+    name: 'Acme Corp',
+    href: 'https://acme.example.com',
+    logoUrl: 'https://acme.example.com/logo.svg',
+    tier: 'gold',
+  },
+  {
+    id: 'widgets',
+    name: 'Widgets Inc',
+    href: 'https://widgets.example.com',
+    logoUrl: 'https://widgets.example.com/logo.png',
+    tier: 'silver',
+  },
+]
+```
+
+### Type Sponsor
+
+```ts
+interface Sponsor {
+  id: string        // Identifiant unique
+  name: string      // Nom affiché
+  href: string      // URL du lien (ouvre un nouvel onglet)
+  logoUrl: string   // URL du logo
+  tier: 'gold' | 'silver' | 'bronze'
+}
+```
+
+### Style par tier
+
+Les tiers par défaut et leurs couleurs sont définis dans `packages/ui/src/lib/sponsors.ts` via deux objets : `sponsorTierStyles` (bordure et fond de la carte) et `sponsorBadgeStyles` (couleurs du badge). Vous pouvez les personnaliser directement :
+
+```ts title="packages/ui/src/lib/sponsors.ts"
+export const sponsorTierStyles: Record<Sponsor['tier'], string> = {
+  gold: 'border-yellow-500/50 bg-yellow-500/5',
+  silver: 'border-zinc-400/50 bg-zinc-400/5',
+  bronze: 'border-orange-700/50 bg-orange-700/5',
+}
+
+export const sponsorBadgeStyles: Record<Sponsor['tier'], string> = {
+  gold: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
+  silver: 'bg-zinc-400/15 text-zinc-600 dark:text-zinc-400',
+  bronze: 'bg-orange-700/15 text-orange-800 dark:text-orange-400',
+}
+```
+
+Pour ajouter un nouveau palier ou modifier les couleurs, mettez à jour les deux objets ainsi que le type union `Sponsor['tier']`.
+
+| Tier | Bordure et fond | Couleur du badge |
+|------|----------------|-----------------|
+| **Gold** | Accent jaune | Jaune |
+| **Silver** | Accent zinc/gris | Gris |
+| **Bronze** | Accent orange | Orange |
+
+## Personnalisation
+
+### Utiliser le composant directement
+
+Vous pouvez utiliser le composant `SponsorCards` n'importe où dans votre layout :
+
+```tsx
+import { SponsorCards, defaultSponsors } from '@explainer/ui'
+
+<SponsorCards
+  sponsors={defaultSponsors}
+  title="Nos Sponsors"    // optionnel, "Sponsors" par défaut
+  className="mt-8"        // classes CSS additionnelles optionnelles
+/>
+```
+
+### Liste de sponsors personnalisée
+
+Utilisez le helper `getSponsors` pour surcharger des sponsors individuels :
+
+```ts
+import { getSponsors } from '@explainer/ui'
+
+const sponsors = getSponsors({
+  acme: { name: 'Acme Corp (Premium)' },
+})
+```
+
+## Visibilité
+
+- Les sponsors n'apparaissent que sur les pages ayant une table des matières
+- La section est masquée lorsque le tableau `defaultSponsors` est vide
+- Sur les écrans plus petits (`< xl`), toute la colonne droite (TOC + sponsors) est masquée

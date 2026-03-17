@@ -1,0 +1,50 @@
+---
+import { Icon } from '@iconify/react'
+import { cn } from '@explainer/ui'
+
+type CalloutVariant = 'info' | 'warning' | 'danger' | 'success' | 'note'
+
+interface Props {
+  variant?: CalloutVariant
+  title?: string
+  className?: string
+}
+
+const { variant = 'info' as CalloutVariant, title, className } = Astro.props
+
+const variantStyles: Record<CalloutVariant, string> = {
+  info: 'bg-blue-50/50 dark:bg-blue-400/20 border-blue-200 dark:border-blue-400/20 !text-blue-400 dark:text-blue-200/75',
+  warning: 'bg-orange-50 dark:bg-yellow-400/20 border-orange-200 dark:border-yellow-400/30 !text-yellow-700 dark:text-yellow-300/50',
+  danger: 'bg-red-50 dark:bg-red-400/20 border-red-300 dark:border-red-400/20 !text-red-500 dark:text-red-300/75',
+  success: 'bg-green-50 dark:bg-green-400/20 border-green-300 dark:border-green-400/20 !text-green-600 dark:text-green-300/75',
+  note: 'bg-purple-50 dark:bg-purple-400/10 border-purple-300 dark:border-purple-400/20 !text-purple-500 !dark:text-purple-500/75',
+}
+
+const variantIcons: Record<CalloutVariant, string> = {
+  info: 'lucide:info',
+  warning: 'lucide:triangle-alert',
+  danger: 'lucide:circle-alert',
+  success: 'lucide:circle-check',
+  note: 'lucide:flame',
+}
+---
+
+<div class={cn('callout my-4 rounded-lg border p-4', variantStyles[variant as CalloutVariant], className)}>
+  <div class="flex items-start gap-3">
+    <Icon client:load icon={variantIcons[variant as CalloutVariant]} className="mt-1 size-5 shrink-0" />
+    <div class="min-w-0">
+      {title && <p class="mb-1 font-semibold">{title}</p>}
+      <div class="text-sm [&_p]:mt-0">
+        <slot />
+      </div>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  div.callout {
+    * {
+      color: inherit;
+    }
+  }
+</style>

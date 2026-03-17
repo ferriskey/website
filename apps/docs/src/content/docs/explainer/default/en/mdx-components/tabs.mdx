@@ -1,0 +1,86 @@
+---
+title: Tabs
+description: Organize content into switchable tab panels.
+icon: columns
+order: 3
+---
+
+# Tabs
+
+Tabs let you organize related content into switchable panels. They are commonly used for showing commands across different package managers or code in different languages.
+
+## Basic usage
+
+<Tabs items={["pnpm", "npm", "yarn"]} client:load>
+  <Tab label="pnpm">
+    ```bash
+    pnpm install
+    ```
+  </Tab>
+  <Tab label="npm">
+    ```bash
+    npm install
+    ```
+  </Tab>
+  <Tab label="yarn">
+    ```bash
+    yarn install
+    ```
+  </Tab>
+</Tabs>
+
+## Syntax
+
+Tabs use JSX syntax because they are interactive React components. Here is the general pattern:
+
+````mdx
+<Tabs items={["Tab 1", "Tab 2"]} client:load>
+  <Tab label="Tab 1">
+    First tab content.
+  </Tab>
+  <Tab label="Tab 2">
+    Second tab content.
+  </Tab>
+</Tabs>
+````
+
+:::callout{variant="info"}
+The `client:load` directive is required for interactivity. Without it, the tabs will not switch on click.
+:::
+
+## Package manager example
+
+````mdx
+<Tabs items={["pnpm", "npm", "yarn"]} client:load>
+  <Tab label="pnpm">
+    ```bash
+    pnpm install @explainer/ui
+    ```
+  </Tab>
+  <Tab label="npm">
+    ```bash
+    npm install @explainer/ui
+    ```
+  </Tab>
+  <Tab label="yarn">
+    ```bash
+    yarn add @explainer/ui
+    ```
+  </Tab>
+</Tabs>
+````
+
+## Props
+
+### Tabs
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `items` | `string[]` | Array of tab labels that appear as tab headers |
+| `client:load` | — | Astro directive to hydrate the component on the client |
+
+### Tab
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `label` | `string` | Must match one of the `items` values exactly |

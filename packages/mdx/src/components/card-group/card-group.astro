@@ -1,0 +1,17 @@
+---
+import { cn } from '@explainer/ui'
+
+interface Props {
+  cols?: 1 | 2 | 3 | 4
+  className?: string
+}
+
+const { cols = 2, className } = Astro.props
+---
+
+<div
+  class={cn('my-4 grid gap-5', className)}
+  style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+>
+  <slot />
+</div>

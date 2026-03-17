@@ -1,0 +1,17 @@
+---
+import katex from 'katex'
+
+interface Props {
+  code: string
+}
+
+const { code } = Astro.props
+
+const html = katex.renderToString(code, {
+  displayMode: true,
+  throwOnError: false,
+})
+---
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" />
+<div class="math-block my-4 overflow-x-auto" set:html={html} />

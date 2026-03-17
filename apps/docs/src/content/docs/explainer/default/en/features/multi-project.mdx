@@ -1,0 +1,92 @@
+---
+title: Multi-Project Docs
+description: Host documentation for multiple projects in a single Explainer instance.
+icon: layers
+order: 1
+---
+
+# Multi-Project Docs
+
+Explainer supports documenting multiple projects within a single documentation site. Each top-level directory under `apps/docs/src/content/docs/` is treated as a separate project.
+
+## How it works
+
+```text
+apps/docs/src/content/docs/
+├── explainer/           # Project 1
+│   ├── _meta.json
+│   └── default/en/...
+├── my-api/              # Project 2
+│   ├── _meta.json
+│   └── default/en/...
+└── cli-tool/            # Project 3
+    ├── _meta.json
+    └── default/en/...
+```
+
+Each project gets its own sidebar, versioning, and locale support. A **project switcher** appears in the navigation bar, allowing users to switch between projects.
+
+## Project _meta.json
+
+Every project directory must include a `_meta.json` file:
+
+```json [my-api/_meta.json]
+{
+  "icon": "lucide:server",
+  "title": "My API"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `string` | Display name in the project switcher |
+| `icon` | `string` | Icon shown next to the project name |
+
+## Adding a new project
+
+::::step-group
+:::step{title="Create the project directory"}
+```bash
+mkdir -p apps/docs/src/content/docs/my-api/default/en
+```
+:::
+
+:::step{title="Add the project _meta.json"}
+```json [my-api/_meta.json]
+{
+  "icon": "lucide:server",
+  "title": "My API"
+}
+```
+:::
+
+:::step{title="Create your first page"}
+```mdx [my-api/default/en/getting-started.mdx]
+---
+title: Getting Started
+description: Get started with My API.
+order: 1
+---
+
+# Getting Started
+
+Welcome to My API documentation.
+```
+:::
+
+:::step{title="Verify"}
+Start the dev server and navigate to `/en/my-api/getting-started`. The project switcher should now list both projects.
+:::
+::::
+
+## URL structure
+
+Each project has its own URL namespace:
+
+| Project | URL |
+|---------|-----|
+| `explainer` | `/en/explainer/getting-started` |
+| `my-api` | `/en/my-api/getting-started` |
+| `cli-tool` | `/en/cli-tool/installation` |
+
+The home page (`/`) redirects to the first project's first page.

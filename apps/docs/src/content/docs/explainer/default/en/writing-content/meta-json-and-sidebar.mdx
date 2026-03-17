@@ -1,0 +1,88 @@
+---
+title: Meta JSON & Sidebar
+description: Configure sidebar navigation with _meta.json files for custom titles, icons, and grouping.
+icon: sidebar
+order: 2
+---
+
+# Meta JSON & Sidebar
+
+The sidebar is **auto-generated** from your file and directory structure. You can customize it using `_meta.json` files placed in any directory.
+
+## _meta.json schema
+
+```json [_meta.json]
+{
+  "title": "My Section",
+  "icon": "book-open",
+  "order": 2,
+  "type": "group"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `string` | Display name in the sidebar (overrides the directory name) |
+| `icon` | `string` | Iconify icon identifier shown next to the title |
+| `order` | `number` | Position in the sidebar among siblings. Lower numbers appear first |
+| `type` | `"group"` \| `"category"` | Controls how the section renders in the sidebar |
+
+## Project-level _meta.json
+
+Each project directory has its own `_meta.json` that defines the project name and icon for the project switcher:
+
+```json [explainer/_meta.json]
+{
+  "icon": "book-open",
+  "title": "Explainer"
+}
+```
+
+## Group vs Category
+
+The `type` field controls how a directory renders in the sidebar:
+
+### Group
+
+A **group** is a visual section separator. Its children are always visible — there is no collapsible toggle.
+
+```json [features/_meta.json]
+{
+  "title": "Features",
+  "icon": "sparkles",
+  "order": 6,
+  "type": "group"
+}
+```
+
+### Category
+
+A **category** is a collapsible section. Clicking the title expands or collapses the child pages.
+
+```json [packages/_meta.json]
+{
+  "title": "Packages",
+  "icon": "package",
+  "order": 9
+}
+```
+
+:::callout{variant="info"}
+When `type` is omitted, the section behaves as a **category** (collapsible) by default.
+:::
+
+## Ordering behavior
+
+Sidebar items are sorted by the `order` field. Items without an `order` are sorted alphabetically after ordered items.
+
+For pages, `order` is set in frontmatter. For directories, `order` is set in `_meta.json`.
+
+```text
+features/
+  _meta.json          → order: 6
+  multi-project.mdx   → order: 1  (frontmatter)
+  versioning.mdx      → order: 2  (frontmatter)
+  search.mdx          → order: 4  (frontmatter)
+```
+
+This produces a sidebar with "Features" at position 6, containing pages sorted 1 → 2 → 4.

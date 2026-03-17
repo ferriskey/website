@@ -1,0 +1,14 @@
+---
+import { CodeGroup as CodeGroupReact } from './code-group'
+
+interface Props {
+  titles?: string[]
+  className?: string
+}
+
+const { titles, className } = Astro.props
+---
+
+<CodeGroupReact client:load titles={titles} className={className}>
+  <slot />
+</CodeGroupReact>

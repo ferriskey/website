@@ -1,0 +1,148 @@
+---
+title: Introducing Explainer v2
+description: Explainer v2 is a monorepo documentation boilerplate built with Astro, React, and Tailwind — giving you docs, blog, and website apps ready to go with multi-project support, versioning, i18n, and more.
+short_description: "A monorepo documentation boilerplate with Astro, React, and Tailwind."
+date: 2026-03-10
+tags: [announcement, release, documentation, open-source]
+status: published
+author: leadcode_dev
+---
+
+We're excited to announce **Explainer v2** — a complete rewrite of our documentation boilerplate, now built as a **monorepo** powered by [Astro](https://astro.build), React, Tailwind CSS 4, and pnpm. It ships three independent apps — **docs**, **blog**, and **website** — that share common packages for MDX rendering, UI components, and configuration.
+
+Whether you're documenting a single library or an entire ecosystem of projects, Explainer v2 gives you everything you need out of the box.
+
+## Why Explainer?
+
+:::callout{variant="info" title="The problem"}
+Documentation tooling is fragmented. You need one tool for docs, another for your blog, another for your landing page — each with its own configuration, build pipeline, and deployment story. Keeping them consistent is a maintenance burden.
+:::
+
+Explainer solves this by giving you a **single, ready-to-use monorepo** where docs, blog, and website live side by side. Shared packages ensure consistent styling and MDX components across all three apps, while each app remains independently deployable.
+
+## Key Features
+
+Explainer v2 comes packed with features designed for real-world documentation needs:
+
+::::card-group{cols=2}
+:::card{label="Multi-Project Docs" icon="lucide:layers" href="/en/explainer/features/multi-project"}
+Host documentation for multiple projects in a single instance. Each project gets its own sidebar, versioning, and navigation — accessible via a dropdown switcher.
+:::
+
+:::card{label="Versioning" icon="lucide:git-branch" href="/en/explainer/features/versioning"}
+Ship docs for multiple versions of your project. Use `default` for unversioned docs, or add named versions like `v1`, `v2` — readers switch between them seamlessly.
+:::
+
+:::card{label="Internationalization" icon="lucide:globe" href="/en/explainer/features/internationalization"}
+Full i18n support with URL prefix routing (`/fr/...`, `/en/...`), automatic browser language detection, and per-locale navigation.
+:::
+
+:::card{label="Full-Text Search" icon="lucide:search" href="/en/explainer/features/search"}
+Built-in search powered by Pagefind. Your docs are indexed at build time — no external service required, fully static and blazing fast.
+:::
+
+:::card{label="OG Thumbnails" icon="lucide:image" href="/en/explainer/features/thumbnails"}
+Automatically generate Open Graph images for every documentation page, giving your content rich previews when shared on social media.
+:::
+::::
+
+## Rich MDX Components
+
+Explainer v2 ships with a library of custom MDX components that are **auto-imported** into every content file — no import statements needed. Here's a taste:
+
+:::callout{variant="success"}
+This callout was written with a single directive — no imports, no boilerplate. Explainer's MDX pipeline handles everything for you.
+:::
+
+::::card-group{cols=3}
+:::card{label="Callouts" icon="lucide:message-circle" href="/en/explainer/mdx-components/callout"}
+Info, success, warning, danger, and note variants for highlighting important content.
+:::
+
+:::card{label="Cards & Card Groups" icon="lucide:layout-grid" href="/en/explainer/mdx-components/card"}
+Visual cards with icons and links, arranged in responsive grid layouts.
+:::
+
+:::card{label="Code Blocks" icon="lucide:code" href="/en/explainer/code-blocks/syntax-highlighting"}
+Syntax highlighting, line numbers, line highlighting, code groups with tabs, and more.
+:::
+::::
+
+You also get **Tabs**, **Steps**, **Code Groups**, and **Preview** components — all documented in the [components reference](/en/explainer/mdx-components/callout).
+
+## Three Apps, One Monorepo
+
+| App | Purpose | Port | Package |
+|-----|---------|------|---------|
+| **Docs** | Technical documentation with sidebar navigation, versioning, and search | `4321` | `@explainer/docs` |
+| **Blog** | Content-driven blog with tags, authors, and RSS | `4322` | `@explainer/blog` |
+| **Website** | Marketing landing page | `4323` | `@explainer/website` |
+
+All three apps share common packages for MDX processing, UI components, and Tailwind configuration. Learn more about the [project structure](/en/explainer/project-structure).
+
+## Getting Started
+
+::::step-group
+:::step{title="Clone the repository"}
+```bash
+git clone https://github.com/explainer/explainer-v2
+cd explainer-v2
+```
+:::
+
+:::step{title="Install dependencies"}
+Explainer uses pnpm workspaces. Install everything with a single command:
+
+```bash
+pnpm install
+```
+:::
+
+:::step{title="Start developing"}
+Launch all three apps in development mode:
+
+```bash
+pnpm dev
+```
+
+Or start a single app:
+
+```bash
+pnpm dev --filter @explainer/docs
+```
+:::
+::::
+
+For the full setup guide, including prerequisites and configuration, head to the [Getting Started](/en/explainer/getting-started) page.
+
+## Deploy Anywhere
+
+Explainer v2 apps are standard Astro projects — deploy them wherever you like:
+
+::::card-group{cols=2}
+:::card{label="Docker" icon="lucide:container" href="/en/explainer/deployment/docker"}
+Containerize each app independently with the included Dockerfiles and docker-compose setup.
+:::
+
+:::card{label="Vercel" icon="lucide:triangle" href="/en/explainer/deployment/vercel"}
+Zero-config deployment with automatic builds and preview environments.
+:::
+
+:::card{label="Cloudflare Pages" icon="lucide:cloud" href="/en/explainer/deployment/cloudflare"}
+Deploy to Cloudflare's edge network for global performance.
+:::
+
+:::card{label="GitHub Pages" icon="lucide:github" href="/en/explainer/deployment/github-pages"}
+Free hosting with GitHub Actions for automated builds on every push.
+:::
+::::
+
+## What's Next
+
+Explainer v2 is ready for you to use today. We're actively working on expanding the feature set — but the foundation is solid and production-ready.
+
+:::callout{variant="note" title="Explore the docs"}
+Head over to the [documentation](/en/explainer/getting-started) to get started, or browse the [feature pages](/en/explainer/features/multi-project) to see everything Explainer v2 has to offer.
+:::
+
+If you find Explainer useful, give us a star on GitHub and share it with your team. We'd love to hear what you build with it!

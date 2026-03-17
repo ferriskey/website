@@ -1,0 +1,37 @@
+---
+import { getCollection } from 'astro:content'
+import { parsePath, buildHref, getLocales } from '../lib/docs'
+
+const allDocs = await getCollection('docs')
+const locales = getLocales(allDocs)
+
+// Find the first entry per locale for the redirect map
+const localeRedirects: Record<string, string> = {}
+for (const locale of locales) {
+  const first = allDocs
+    .filter((e) => parsePath(e.id).locale === locale)
+    .sort((a, b) => (a.data.order ?? Infinity) - (b.data.order ?? Infinity))[0]
+  if (first) {
+    localeRedirects[locale] = buildHref(first)
+  }
+}
+
+const defaultRedirect = localeRedirects['en'] ?? Object.values(localeRedirects)[0] ?? '/'
+---
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Redirecting...</title>
+    <meta http-equiv="refresh" content={`0;url=${defaultRedirect}`} />
+  </head>
+  <body>
+    <script is:inline define:vars={{ localeRedirects, defaultRedirect }}>
+      const lang = navigator.language?.split('-')[0]?.toLowerCase()
+      const target = localeRedirects[lang] || defaultRedirect
+      window.location.replace(target)
+    </script>
+    <p>Redirecting to <a href={defaultRedirect}>documentation</a>...</p>
+  </body>
+</html>

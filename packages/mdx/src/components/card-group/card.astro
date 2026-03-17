@@ -1,0 +1,28 @@
+---
+import { Icon } from '@iconify/react'
+import { cn } from '@explainer/ui'
+
+interface Props {
+  label: string
+  icon?: string
+  href?: string
+}
+
+const { label, icon, href } = Astro.props
+const baseClass = 'group flex w-full flex-col rounded-md border p-6 hover:bg-secondary'
+const Tag = href ? 'a' : 'div'
+---
+
+<Tag href={href} class={cn(baseClass, href && 'no-underline')}>
+  {icon && (
+    <div class="flex size-8 items-center justify-center rounded-full border bg-secondary duration-150 group-hover:border-primary/60 group-hover:bg-primary/10">
+      <Icon client:load icon={icon} className="size-4 duration-150 group-hover:text-primary" />
+    </div>
+  )}
+  <div class={cn(icon && 'mt-4')}>
+    <p class="!mt-0 !p-0 font-semibold text-muted-foreground">{label}</p>
+    <p class="!mt-0 !p-0 text-sm text-gray-500">
+      <slot />
+    </p>
+  </div>
+</Tag>

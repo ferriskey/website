@@ -1,0 +1,80 @@
+---
+title: Syntax Highlighting
+description: Automatic syntax highlighting with Shiki dual themes.
+icon: paintbrush
+order: 1
+---
+
+# Syntax Highlighting
+
+Explainer uses [Shiki](https://shiki.style/) for syntax highlighting with dual theme support — automatically switching between light and dark themes.
+
+## Themes
+
+Two themes are configured out of the box:
+
+| Mode | Theme |
+|------|-------|
+| Light | `github-light` |
+| Dark | `github-dark` |
+
+The active theme follows the user's system preference or manual toggle.
+
+## Usage
+
+Use standard Markdown fenced code blocks with a language identifier:
+
+````mdx
+```ts
+function greet(name: string): string {
+  return `Hello, ${name}!`
+}
+```
+````
+
+Renders as:
+
+```ts
+function greet(name: string): string {
+  return `Hello, ${name}!`
+}
+```
+
+## Supported languages
+
+Shiki supports [200+ languages](https://shiki.style/languages). Common examples:
+
+```bash
+echo "Shell scripts"
+```
+
+```python
+def hello():
+    print("Python")
+```
+
+```rust
+fn main() {
+    println!("Rust");
+}
+```
+
+```json
+{
+  "key": "JSON"
+}
+```
+
+## Active transformers
+
+Explainer enables several Shiki transformers for enhanced code block features:
+
+| Transformer | Purpose | Docs |
+|-------------|---------|------|
+| `transformerNotationDiff` | `[!code ++]` / `[!code --]` diff markers | [Diffs & Focus](/en/explainer/code-blocks/diffs-and-focus) |
+| `transformerNotationHighlight` | `[!code highlight]` line emphasis | [Line Highlighting](/en/explainer/code-blocks/line-highlighting) |
+| `transformerNotationWordHighlight` | `[!code word:name]` word emphasis | [Line Highlighting](/en/explainer/code-blocks/line-highlighting) |
+| `transformerNotationFocus` | `[!code focus]` focus mode | [Diffs & Focus](/en/explainer/code-blocks/diffs-and-focus) |
+| `transformerNotationErrorLevel` | `[!code error]` error markers | [Diffs & Focus](/en/explainer/code-blocks/diffs-and-focus) |
+| `transformerMetaHighlight` | `{1,3-4}` line range highlighting | [Line Highlighting](/en/explainer/code-blocks/line-highlighting) |
+| `transformerMetaLabel` | `[label]` code block labels | [Labels & Icons](/en/explainer/code-blocks/labels-and-icons) |

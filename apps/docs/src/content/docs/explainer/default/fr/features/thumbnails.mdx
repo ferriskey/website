@@ -1,0 +1,81 @@
+---
+title: Miniatures OG
+description: Génération automatique de miniatures Open Graph pour chaque page.
+icon: image
+order: 5
+---
+
+# Miniatures OG
+
+Explainer génère automatiquement des images miniatures Open Graph (OG) pour chaque page de documentation en utilisant le package `@explainer/thumbnail`.
+
+## Fonctionnement
+
+Le système de miniatures utilise [Satori](https://github.com/vercel/satori) pour rendre une mise en page SVG et [Resvg](https://github.com/nicedaycode/resvg-js) pour la convertir en image PNG. Chaque page obtient un `thumbnail.png` unique basé sur son titre et sa description.
+
+## Deux modes
+
+### Mode collection (Docs, Blog)
+
+Parcourt un répertoire de contenu à la recherche de fichiers `.mdx` et génère des miniatures pour chaque page :
+
+```ts [astro.config.ts]
+import { thumbnail } from '@explainer/thumbnail'
+
+export default defineConfig({
+  integrations: [
+    thumbnail({
+      appName: 'Explainer',
+      content: {
+        type: 'collection',
+        directory: 'src/content/docs',
+      },
+    }),
+  ],
+})
+```
+
+### Mode statique (Website)
+
+Génère des miniatures pour une liste prédéfinie de pages :
+
+```ts [astro.config.ts]
+thumbnail({
+  appName: 'Explainer',
+  content: {
+    type: 'static',
+    pages: [
+      {
+        path: '/',
+        title: 'Explainer v2',
+        description: 'Documentation boilerplate for developers.',
+      },
+    ],
+  },
+})
+```
+
+## Développement vs Build
+
+| Mode | Comportement |
+|------|--------------|
+| **Dev** | Les miniatures sont générées à la volée lorsqu'elles sont demandées, avec mise en cache |
+| **Build** | Toutes les miniatures sont générées par lot lors du hook `astro:build:done` |
+
+## Personnaliser la couleur principale
+
+Vous pouvez personnaliser la couleur d'accentuation utilisée dans l'arrière-plan de la miniature :
+
+```ts
+thumbnail({
+  appName: 'Explainer',
+  primaryColor: '#7c3aed',
+  content: { ... },
+})
+```
+
+La couleur est résolue à l'aide de [culori](https://culorijs.org/) et prend en charge les formats RGB, hex et oklch. La couleur par défaut est `oklch(0.707 0.217 293)`.
+
+## Sortie
+
+Les miniatures générées sont des images PNG de 960x540 px placées à côté du répertoire de sortie de chaque page. Elles sont automatiquement référencées dans les balises `<meta>` de la page pour les aperçus sur les réseaux sociaux.

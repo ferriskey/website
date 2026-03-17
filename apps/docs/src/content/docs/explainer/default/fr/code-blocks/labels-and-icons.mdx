@@ -1,0 +1,120 @@
+---
+title: Labels et icônes
+description: Ajoutez des labels de fichier et des icônes de langage automatiques aux blocs de code.
+icon: tag
+order: 2
+---
+
+# Labels et icônes
+
+Les blocs de code peuvent afficher un label de chemin de fichier et une icône de langage automatiquement détectée dans l'en-tête.
+
+## Labels de fichier
+
+Ajoutez un label en utilisant la syntaxe `[path/to/file]` dans les métadonnées du bloc de code :
+
+````mdx
+```ts [src/index.ts]
+import { createApp } from './app'
+```
+````
+
+Rendu :
+
+```ts [src/index.ts]
+import { createApp } from './app'
+```
+
+Le label apparaît dans le coin supérieur droit du bloc de code, donnant aux lecteurs le contexte sur le fichier auquel le code appartient.
+
+## Plus d'exemples
+
+```rust [src/main.rs]
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+```python [app/main.py]
+from fastapi import FastAPI
+
+app = FastAPI()
+```
+
+```json [package.json]
+{
+  "name": "@explainer/docs",
+  "version": "1.0.0"
+}
+```
+
+```yaml [docker-compose.yml]
+services:
+  docs:
+    build:
+      context: .
+      args:
+        APP: docs
+    ports:
+      - "8080:8080"
+```
+
+## Icônes de langage
+
+Les icônes de langage sont automatiquement détectées à partir de l'identifiant de langage du bloc de code. Plus de 60 langages sont pris en charge avec leurs icônes reconnaissables, notamment :
+
+- TypeScript, JavaScript, JSX, TSX
+- Python, Rust, Go, Java, C#
+- HTML, CSS, SCSS, Tailwind
+- JSON, YAML, TOML
+- Bash, Shell, Dockerfile
+- Markdown, MDX
+- SQL, GraphQL
+- Et bien d'autres
+
+Aucune configuration n'est nécessaire — les icônes apparaissent automatiquement lorsqu'un langage est spécifié.
+
+### Détection intelligente
+
+Pour les blocs de code shell (`bash`, `sh`, `shell`), l'icône est automatiquement déterminée à partir de la première commande du snippet. Par exemple, un bloc commençant par `pnpm install` affichera l'icône pnpm au lieu de l'icône bash générique.
+
+## Ajouter des icônes personnalisées
+
+Toutes les icônes de langage, les identifiants de langage shell et les commandes de terminal sont définis dans un seul fichier partagé situé à `packages/mdx/src/language-icons.ts`. Pour ajouter la prise en charge d'un nouveau langage ou outil, ajoutez une entrée dans l'objet `languageIcons` :
+
+```ts [packages/mdx/src/language-icons.ts]
+export const languageIcons: Record<string, string> = {
+  // ...existing icons
+  ruby: 'devicon:ruby',
+  rb: 'devicon:ruby',
+  php: 'devicon:php',
+  swift: 'devicon:swift',
+  kotlin: 'devicon:kotlin',
+}
+```
+
+:::callout{variant="info"}
+Les icônes utilisent les identifiants [Iconify](https://icon-sets.iconify.design) au format `{set}:{name}`. Les ensembles couramment utilisés dans Explainer :
+- `devicon:` — logos de technologies et de langages
+- `catppuccin:` — variantes d'icônes esthétiques
+- `mdi:` — Material Design Icons (utilisé comme solution de repli)
+
+Parcourez les icônes disponibles sur [icon-sets.iconify.design](https://icon-sets.iconify.design).
+:::
+
+Ce fichier est importé à la fois par le composant React (`pre/code.tsx`) et le composant Astro (`pre/pre.astro`), ainsi que par les onglets de groupes de code (`code-group.tsx`). Une seule modification s'applique partout.
+
+### Commandes de terminal
+
+Pour ajouter la détection d'icône pour un nouvel outil CLI dans les blocs de code shell, ajoutez-le à la fois dans la map `languageIcons` et dans le tableau `terminalCommands` du même fichier :
+
+```ts [packages/mdx/src/language-icons.ts]
+export const languageIcons: Record<string, string> = {
+  // ...existing icons
+  deno: 'devicon:denojs',
+}
+
+export const terminalCommands = ['npm', 'npx', 'pnpm', 'yarn', 'bun', 'cargo', 'deno']
+```
+
+De cette façon, un bloc de code `bash` commençant par `deno run` affichera automatiquement l'icône Deno.

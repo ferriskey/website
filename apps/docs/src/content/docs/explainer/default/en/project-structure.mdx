@@ -1,0 +1,86 @@
+---
+title: Project Structure
+description: Understand the Explainer v2 monorepo layout, apps, packages, and configuration.
+icon: folder-tree
+order: 2
+---
+
+# Project Structure
+
+Explainer v2 is organized as a **pnpm workspace** managed by **Turborepo**. Here is the top-level layout:
+
+```text
+explainer-v2/
+├── apps/
+│   ├── docs/          # Documentation site (Astro)
+│   ├── blog/          # Blog (Astro)
+│   └── website/       # Landing page (Astro)
+├── packages/
+│   ├── ui/            # Shared React UI components
+│   ├── mdx/           # MDX components & remark plugins
+│   └── thumbnail/     # OG thumbnail generation
+├── .github/workflows/ # CI/CD deploy workflows
+├── Dockerfile         # Multi-stage Docker build
+├── nginx.conf         # Nginx configuration
+├── turbo.json         # Turborepo pipeline config
+├── pnpm-workspace.yaml
+└── .env               # Environment variables
+```
+
+## Apps
+
+| App | Port | Package Name | Purpose |
+|-----|------|-------------|---------|
+| `apps/docs` | 4321 | `@explainer/docs` | Main documentation site with multi-project, versioning, and i18n support |
+| `apps/blog` | 4322 | `@explainer/blog` | Blog with posts, tags, RSS feed, and reading time |
+| `apps/website` | 4323 | `@explainer/website` | Marketing landing page |
+
+Each app is an independent Astro project that can be built and deployed separately.
+
+## Packages
+
+| Package | Name | Purpose | Used by |
+|---------|------|---------|---------|
+| `packages/ui` | `@explainer/ui` | Button, Card, Navbar, ThemeToggle, Dropdown, MobileMenu, LocaleSwitcher | All apps |
+| `packages/mdx` | `@explainer/mdx` | MDX component overrides, Callout, Steps, Tabs, CodeGroup, Preview, remark plugins, Shiki config | Docs, Blog |
+| `packages/thumbnail` | `@explainer/thumbnail` | OG image generation using Satori + Resvg | Docs, Blog, Website |
+
+## Workspaces
+
+The monorepo is defined in `pnpm-workspace.yaml`:
+
+```yaml [pnpm-workspace.yaml]
+packages:
+  - 'apps/*'
+  - 'packages/*'
+```
+
+Turborepo handles task orchestration. The `turbo.json` configuration ensures packages are built before the apps that depend on them:
+
+```json [turbo.json]
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {}
+  }
+}
+```
+
+## Environment variables
+
+The `.env` file at the root configures cross-app navigation URLs:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PUBLIC_WEBSITE_URL` | `http://localhost:4323` | Website app URL |
+| `PUBLIC_DOCS_URL` | `http://localhost:4321` | Docs app URL |
+| `PUBLIC_BLOG_URL` | `http://localhost:4322` | Blog app URL |
+
+These variables are used by the shared navbar to link between apps. In production, set them to your deployed domains (e.g., `https://explainer.dev`, `https://docs.explainer.dev`).

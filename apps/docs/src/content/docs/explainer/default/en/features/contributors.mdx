@@ -1,0 +1,93 @@
+---
+title: Contributors
+description: Display GitHub repository contributors below the table of contents in your documentation and blog.
+icon: users
+order: 7
+---
+
+# Contributors
+
+Explainer includes a built-in contributors section that displays GitHub repository contributors below the sponsors in the right sidebar. The data is fetched from the GitHub API at build time (SSG) and cached in memory during development.
+
+## How it works
+
+Contributors are fetched from the GitHub API (`/repos/{owner}/{repo}/contributors`) during the Astro build step. The fetch happens in the `.astro` layout frontmatter (server-side), and the resulting data is passed as props to the React `ContributorCards` component.
+
+Each contributor displays:
+- A **circular avatar** linking to their GitHub profile
+- A **tooltip** showing their username and contribution count
+
+The section is hidden automatically when no contributors are found or if the API call fails.
+
+## Configuration
+
+### GitHub token
+
+The fetch works without authentication (60 requests/hour), but you can provide a `GITHUB_TOKEN` for higher rate limits (5,000 requests/hour).
+
+**Local development** — add to your `.env` file:
+
+```bash title=".env"
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+**CI/CD (GitHub Actions)** — the built-in `secrets.GITHUB_TOKEN` is automatically available and already configured in the deploy workflow. No manual setup required.
+
+### Sort strategies
+
+Three sorting strategies are available:
+
+| Strategy | Description |
+|----------|-------------|
+| `contributions` | Most contributions first (default) |
+| `alphabetical` | Alphabetical by username |
+| `random` | Random order (shuffled at build time) |
+
+To change the strategy, edit the `sortContributors` call in the layout frontmatter:
+
+```astro
+---
+import { fetchContributors, sortContributors } from '@explainer/ui'
+
+const contributors = sortContributors(
+  await fetchContributors({ token: import.meta.env.GITHUB_TOKEN }),
+  'alphabetical' // or 'contributions' or 'random'
+)
+---
+```
+
+## Customization
+
+### Using the component directly
+
+You can use the `ContributorCards` component anywhere in your layout:
+
+```tsx
+import { ContributorCards } from '@explainer/ui'
+
+<ContributorCards
+  contributors={contributors}
+  title="Contributors"  // optional, defaults to "Contributors"
+  max={20}              // optional, limit displayed avatars
+  className="mt-8"      // optional additional classes
+/>
+```
+
+### Contributor type
+
+```ts
+interface Contributor {
+  id: number          // GitHub user ID
+  login: string       // GitHub username
+  avatarUrl: string   // Avatar image URL
+  profileUrl: string  // GitHub profile URL
+  contributions: number
+}
+```
+
+## Visibility
+
+- Contributors only appear on pages that have a table of contents
+- The section is hidden when the contributors array is empty (API error or no contributors)
+- On smaller screens (`< xl`), the entire right sidebar (TOC + sponsors + contributors) is hidden
+- Bot accounts are automatically filtered out

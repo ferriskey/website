@@ -1,0 +1,71 @@
+---
+title: GitHub Pages
+description: Deploy Explainer apps to GitHub Pages with native Actions support.
+icon: github
+order: 4
+---
+
+# GitHub Pages
+
+Deploy Explainer apps to GitHub Pages using the native `actions/deploy-pages` action.
+
+## Setup
+
+::::step-group
+:::step{title="Set the deploy target"}
+Add a repository variable in GitHub Settings → Variables:
+
+```text
+DEPLOY_TARGET=github-pages
+```
+:::
+
+:::step{title="Enable GitHub Pages"}
+In your repository settings, go to **Pages** → **Source** and select **GitHub Actions**.
+:::
+
+:::step{title="Configure permissions"}
+The workflow needs the following permissions:
+
+```yaml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+```
+:::
+::::
+
+## GitHub Actions workflow
+
+When `DEPLOY_TARGET` is set to `github-pages`, the workflow uses the native Pages actions:
+
+```yaml
+- uses: actions/upload-pages-artifact@v3
+  with:
+    path: apps/docs/dist
+
+- uses: actions/deploy-pages@v4
+  id: deployment
+  with:
+    environment: github-pages
+```
+
+## Base path considerations
+
+:::callout{variant="warning"}
+If your repository is not a user/organization site (i.e., it's at `username.github.io/repo-name`), you need to configure the Astro `base` path:
+
+```ts [astro.config.ts]
+export default defineConfig({
+  base: '/repo-name',
+  // ...
+})
+```
+
+This ensures all links and assets use the correct path prefix.
+:::
+
+## Environment naming
+
+GitHub Pages deployments use an environment named `github-pages`. This is the default environment name expected by the `actions/deploy-pages` action.

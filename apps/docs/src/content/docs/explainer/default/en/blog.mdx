@@ -1,0 +1,76 @@
+---
+title: Blog
+description: Learn about the Explainer blog app, its content structure, and features.
+icon: newspaper
+order: 7
+---
+
+# Blog
+
+The blog is a standalone Astro app at `apps/blog/` running on port **4322**. It supports posts with tags, authors, cover images, drafts, and an RSS feed.
+
+## Content location
+
+Blog posts are MDX files in:
+
+```text
+apps/blog/src/content/posts/*.mdx
+```
+
+## Frontmatter schema
+
+```mdx [my-post.mdx]
+---
+title: Introducing Explainer v2
+description: A new documentation boilerplate built with Astro, React, and Tailwind CSS 4.
+date: 2026-03-10
+tags: [announcement, release]
+cover: /images/cover.png
+draft: false
+author: leadcode_dev
+---
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | `string` | Yes | Post title |
+| `description` | `string` | Yes | Short description for cards and SEO |
+| `date` | `date` | Yes | Publication date (future dates are hidden) |
+| `tags` | `string[]` | No | Tags for filtering (default: `[]`) |
+| `cover` | `string` | No | Cover image path |
+| `draft` | `boolean` | No | Draft posts are hidden from listing (default: `false`) |
+| `author` | `string` | No | Author key matching the authors map |
+
+## Features
+
+- **Draft mode** — Set `draft: true` to hide a post from listings while still accessible by direct URL during development
+- **Tag filtering** — Posts can be filtered by tag on the blog index page
+- **RSS feed** — An RSS feed is automatically generated at `/rss.xml`
+- **Reading time** — Estimated reading time is calculated at 200 words per minute
+- **Featured posts** — The first posts are displayed in a larger card layout on the index
+- **Pagination** — Posts are paginated at 10 per page
+
+## Authors
+
+Authors are defined in `apps/blog/src/lib/authors.ts`:
+
+```ts [authors.ts]
+export const authors: Record<string, Author> = {
+  leadcode_dev: {
+    name: 'Baptiste Parmantier',
+    title: 'Creator of Explainer',
+    avatar: 'https://avatars.githubusercontent.com/u/8946317?v=4',
+    href: 'https://github.com/LeadcodeDev',
+  },
+}
+```
+
+Reference an author by their key in the post frontmatter: `author: leadcode_dev`.
+
+## Development
+
+```bash
+pnpm dev --filter @explainer/blog
+```
+
+The blog runs on `http://localhost:4322`.

@@ -1,0 +1,93 @@
+---
+title: Contributeurs
+description: Afficher les contributeurs du dépôt GitHub sous la table des matières dans la documentation et le blog.
+icon: users
+order: 7
+---
+
+# Contributeurs
+
+Explainer inclut une section contributeurs intégrée qui affiche les contributeurs du dépôt GitHub sous les sponsors dans la colonne droite. Les données sont récupérées depuis l'API GitHub au moment du build (SSG) et mises en cache mémoire pendant le développement.
+
+## Fonctionnement
+
+Les contributeurs sont récupérés via l'API GitHub (`/repos/{owner}/{repo}/contributors`) lors du build Astro. Le fetch se fait dans le frontmatter des layouts `.astro` (côté serveur), et les données sont passées en props au composant React `ContributorCards`.
+
+Chaque contributeur affiche :
+- Un **avatar circulaire** avec un lien vers son profil GitHub
+- Un **tooltip** montrant son nom d'utilisateur et son nombre de contributions
+
+La section est automatiquement masquée si aucun contributeur n'est trouvé ou si l'appel API échoue.
+
+## Configuration
+
+### Token GitHub
+
+Le fetch fonctionne sans authentification (60 requêtes/heure), mais vous pouvez fournir un `GITHUB_TOKEN` pour des limites plus élevées (5 000 requêtes/heure).
+
+**Développement local** — ajoutez à votre fichier `.env` :
+
+```bash title=".env"
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+**CI/CD (GitHub Actions)** — le `secrets.GITHUB_TOKEN` intégré est automatiquement disponible et déjà configuré dans le workflow de déploiement. Aucune configuration manuelle nécessaire.
+
+### Stratégies de tri
+
+Trois stratégies de tri sont disponibles :
+
+| Stratégie | Description |
+|-----------|-------------|
+| `contributions` | Plus de contributions en premier (par défaut) |
+| `alphabetical` | Ordre alphabétique par nom d'utilisateur |
+| `random` | Ordre aléatoire (mélangé au moment du build) |
+
+Pour changer la stratégie, modifiez l'appel `sortContributors` dans le frontmatter du layout :
+
+```astro
+---
+import { fetchContributors, sortContributors } from '@explainer/ui'
+
+const contributors = sortContributors(
+  await fetchContributors({ token: import.meta.env.GITHUB_TOKEN }),
+  'alphabetical' // ou 'contributions' ou 'random'
+)
+---
+```
+
+## Personnalisation
+
+### Utiliser le composant directement
+
+Vous pouvez utiliser le composant `ContributorCards` n'importe où dans votre layout :
+
+```tsx
+import { ContributorCards } from '@explainer/ui'
+
+<ContributorCards
+  contributors={contributors}
+  title="Contributeurs"  // optionnel, "Contributors" par défaut
+  max={20}               // optionnel, limiter les avatars affichés
+  className="mt-8"       // classes CSS additionnelles optionnelles
+/>
+```
+
+### Type Contributor
+
+```ts
+interface Contributor {
+  id: number          // ID utilisateur GitHub
+  login: string       // Nom d'utilisateur GitHub
+  avatarUrl: string   // URL de l'avatar
+  profileUrl: string  // URL du profil GitHub
+  contributions: number
+}
+```
+
+## Visibilité
+
+- Les contributeurs n'apparaissent que sur les pages ayant une table des matières
+- La section est masquée lorsque le tableau de contributeurs est vide (erreur API ou aucun contributeur)
+- Sur les écrans plus petits (`< xl`), toute la colonne droite (TOC + sponsors + contributeurs) est masquée
+- Les comptes bots sont automatiquement filtrés

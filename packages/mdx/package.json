@@ -1,0 +1,51 @@
+{
+  "name": "@explainer/mdx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/callout.astro": "./src/components/callout/callout.astro",
+    "./components/card-group.astro": "./src/components/card-group/card-group.astro",
+    "./components/card.astro": "./src/components/card-group/card.astro",
+    "./components/tabs": "./src/components/tabs/tabs.tsx",
+    "./components/tabs.astro": "./src/components/tabs/tabs.astro",
+    "./components/tab.astro": "./src/components/tabs/tab.astro",
+    "./components/steps.astro": "./src/components/steps/steps.astro",
+    "./components/step.astro": "./src/components/steps/step.astro",
+    "./components/code-group.astro": "./src/components/code-group/code-group.astro",
+    "./components/preview.astro": "./src/components/preview/preview.astro",
+    "./components/preview-demo.astro": "./src/components/preview/preview-demo.astro",
+    "./components/preview-code.astro": "./src/components/preview/preview-code.astro",
+    "./overrides/pre.astro": "./src/overrides/pre/pre.astro",
+    "./overrides/blockquote.astro": "./src/overrides/blockquote/blockquote.astro",
+    "./shiki": "./src/shiki.ts",
+    "./remark-auto-import": "./src/remark-auto-import.ts",
+    "./remark-directive-handler": "./src/remark-directive-handler.ts",
+    "./remark-code-blocks": "./src/remark-code-blocks.ts",
+    "./components/math.astro": "./src/components/math/math.astro",
+    "./components/mermaid.astro": "./src/components/mermaid/mermaid.astro"
+  },
+  "dependencies": {
+    "@explainer/ui": "workspace:*",
+    "@iconify/react": "^5.2.0",
+    "@shikijs/transformers": "^4.0.2",
+    "acorn": "^8.14.0",
+    "katex": "^0.16.38",
+    "mermaid": "^11.13.0",
+    "remark-directive": "^4.0.0",
+    "unist-util-visit": "^5.1.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/katex": "^0.16.8",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.0"
+  }
+}

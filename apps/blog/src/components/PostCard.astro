@@ -1,0 +1,113 @@
+---
+import { formatDate } from '../lib/posts'
+import type { Author } from '../lib/authors'
+
+interface Props {
+  title: string
+  description?: string
+  date: Date
+  tags: string[]
+  cover?: string
+  href: string
+  locale?: string
+  readingTime: number
+  author?: Author
+  class?: string
+}
+
+const { title, description, date, tags, cover, href, locale, readingTime, author, class: className } = Astro.props
+---
+
+<article class:list={['post-card group', className]}>
+  <a href={href} class="post-card-link block rounded-xl overflow-hidden relative border border-transparent hover:border-primary/20 transition-colors duration-400">
+    <div class="pointer-events-none absolute inset-0 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-linear-to-b from-primary/20 via-primary/10 to-transparent" />
+    <div class="post-card-inner transition-transform duration-300 ease-out">
+      <!-- Image -->
+      <div class="post-card-img rounded-t-xl bg-muted aspect-16/10 shrink-0 rounded-xl">
+        {cover ? (
+          <img src={cover} alt={title} class="w-full h-full rounded-xl object-cover" />
+        ) : (
+          <div class="w-full h-full rounded-xl bg-linear-to-br from-primary/20 to-primary/5" />
+        )}
+      </div>
+      <!-- Body -->
+      <div class="post-card-body relative z-30 p-3 flex flex-col">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          {tags.slice(0, 3).map((tag) => (
+            <span class="rounded border border-primary/30 bg-primary/10 text-primary group-hover:border-border group-hover:bg-background group-hover:text-foreground px-2 py-px text-[9px] font-semibold uppercase tracking-wider transition-colors duration-300">
+              {tag}
+            </span>
+          ))}
+
+        </div>
+        <time datetime={date.toISOString()} class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {formatDate(date, locale)}
+        </time>
+        <h2 class="font-bold text-lg leading-snug mt-1.5 line-clamp-2">
+          {title}
+        </h2>
+        {description && <p class="post-card-desc text-sm text-muted-foreground mt-3 line-clamp-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">{description}</p>}
+        {author && (
+          <div class="post-card-author flex items-center gap-3 mt-auto pt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-150">
+            <img src={author.avatar} alt={author.name} class="size-9 rounded-full object-cover" />
+            <div>
+              <p class="text-sm font-semibold leading-tight">{author.name}</p>
+              <p class="text-xs text-muted-foreground">{author.title}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </a>
+</article>
+
+<style>
+  .post-card:hover .post-card-inner {
+    transform: translateY(var(--slide));
+  }
+</style>
+
+<script>
+  function initPostCards() {
+    const cards = document.querySelectorAll('.post-card')
+    const measurements: { card: HTMLElement; link: HTMLElement; body: HTMLElement; imgHeight: number; bodyNoHidden: number }[] = []
+
+    // First pass: reset and measure
+    cards.forEach((card) => {
+      const link = card.querySelector('.post-card-link') as HTMLElement | null
+      const img = card.querySelector('.post-card-img') as HTMLElement | null
+      const body = card.querySelector('.post-card-body') as HTMLElement | null
+      if (!link || !img || !body) return
+
+      link.style.height = ''
+      body.style.minHeight = ''
+
+      const imgHeight = img.offsetHeight
+      const desc = card.querySelector('.post-card-desc') as HTMLElement | null
+      const author = card.querySelector('.post-card-author') as HTMLElement | null
+
+      if (desc) desc.style.display = 'none'
+      if (author) author.style.display = 'none'
+      const bodyNoHidden = body.offsetHeight
+      if (desc) desc.style.display = ''
+      if (author) author.style.display = ''
+
+      measurements.push({ card: card as HTMLElement, link, body, imgHeight, bodyNoHidden })
+    })
+
+    // Find max card height
+    const maxCardHeight = Math.max(...measurements.map((m) => m.imgHeight + m.bodyNoHidden))
+
+    // Second pass: apply uniform height
+    measurements.forEach(({ card, link, body, imgHeight }) => {
+      link.style.height = `${maxCardHeight}px`
+      body.style.minHeight = `${maxCardHeight}px`
+      card.style.setProperty('--slide', `-${imgHeight}px`)
+    })
+  }
+
+  initPostCards()
+  window.addEventListener('resize', initPostCards)
+  document.addEventListener('astro:after-swap', initPostCards)
+  document.addEventListener('tags:filter', initPostCards)
+</script>

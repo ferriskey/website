@@ -1,0 +1,136 @@
+---
+import type { Post } from '../lib/posts'
+import { formatDate, getPostHref, getReadingTime } from '../lib/posts'
+import { useTranslations } from '../i18n/utils'
+
+interface Props {
+  posts: Post[]
+  locale?: string
+}
+
+const { posts, locale = 'en' } = Astro.props
+const t = useTranslations(locale)
+const [first, second, third] = posts
+---
+
+{posts.length > 0 && (
+  <section class="mb-12">
+    {posts.length === 1 ? (
+      <article class="group rounded-xl border bg-card overflow-hidden">
+        <a href={{getPostHref(first)}} class="block">
+          {first.data.cover && (
+            <div class="overflow-hidden">
+              <img
+                src={first.data.cover}
+                alt={first.data.title}
+                class="w-full aspect-[16/10] object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
+            </div>
+          )}
+          <div class="p-6">
+            {first.data.tags.length > 0 && (
+              <div class="flex flex-wrap gap-2 mb-3">
+                {first.data.tags.map((tag) => (
+                  <span class="text-xs font-medium text-primary">{tag}</span>
+                ))}
+              </div>
+            )}
+            <h2 class="text-2xl font-bold group-hover:text-primary transition-colors">{first.data.title}</h2>
+            <p class="text-muted-foreground mt-2">{first.data.description}</p>
+            <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-3">
+              <time datetime={first.data.date.toISOString()}>{formatDate(first.data.date, locale)}</time>
+              <span>·</span>
+              <span>{getReadingTime(first.body ?? '')} {t('hero.minRead')}</span>
+            </div>
+          </div>
+        </a>
+      </article>
+    ) : posts.length === 2 ? (
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[first, second].map((post) => (
+          <article class="group rounded-xl border bg-card overflow-hidden">
+            <a href={{getPostHref(post)}} class="block">
+              {post.data.cover && (
+                <div class="overflow-hidden">
+                  <img
+                    src={post.data.cover}
+                    alt={post.data.title}
+                    class="w-full aspect-[16/10] object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
+                </div>
+              )}
+              <div class="p-6">
+                {post.data.tags.length > 0 && (
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    {post.data.tags.map((tag) => (
+                      <span class="text-xs font-medium text-primary">{tag}</span>
+                    ))}
+                  </div>
+                )}
+                <h2 class="text-2xl font-bold group-hover:text-primary transition-colors">{post.data.title}</h2>
+                <p class="text-muted-foreground mt-2">{post.data.description}</p>
+                <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-3">
+                  <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date, locale)}</time>
+                  <span>·</span>
+                  <span>{getReadingTime(post.body ?? '')} {t('hero.minRead')}</span>
+                </div>
+              </div>
+            </a>
+          </article>
+        ))}
+      </div>
+    ) : (
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <article class="group rounded-xl border bg-card overflow-hidden lg:row-span-2">
+          <a href={{getPostHref(first)}} class="block h-full">
+            {first.data.cover && (
+              <div class="overflow-hidden">
+                <img
+                  src={first.data.cover}
+                  alt={first.data.title}
+                  class="w-full aspect-[16/10] object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                />
+              </div>
+            )}
+            <div class="p-6">
+              {first.data.tags.length > 0 && (
+                <div class="flex flex-wrap gap-2 mb-3">
+                  {first.data.tags.map((tag) => (
+                    <span class="text-xs font-medium text-primary">{tag}</span>
+                  ))}
+                </div>
+              )}
+              <h2 class="text-2xl font-bold group-hover:text-primary transition-colors">{first.data.title}</h2>
+              <p class="text-muted-foreground mt-2">{first.data.description}</p>
+              <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-3">
+                <time datetime={first.data.date.toISOString()}>{formatDate(first.data.date, locale)}</time>
+                <span>·</span>
+                <span>{getReadingTime(first.body ?? '')} {t('hero.minRead')}</span>
+              </div>
+            </div>
+          </a>
+        </article>
+        {[second, third].filter(Boolean).map((post) => (
+          <article class="group rounded-xl border bg-card overflow-hidden">
+            <a href={{getPostHref(post)}} class="block p-6">
+              {post.data.tags.length > 0 && (
+                <div class="flex flex-wrap gap-2 mb-3">
+                  {post.data.tags.map((tag) => (
+                    <span class="text-xs font-medium text-primary">{tag}</span>
+                  ))}
+                </div>
+              )}
+              <h2 class="text-xl font-bold group-hover:text-primary transition-colors">{post.data.title}</h2>
+              <p class="text-muted-foreground text-sm mt-2">{post.data.description}</p>
+              <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-3">
+                <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date, locale)}</time>
+                <span>·</span>
+                <span>{getReadingTime(post.body ?? '')} {t('hero.minRead')}</span>
+              </div>
+            </a>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+)}

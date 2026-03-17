@@ -1,0 +1,153 @@
+---
+import '../styles/globals.css'
+import { ClientRouter, ViewTransitions } from 'astro:transitions'
+import { Header } from '../components/header'
+import { Sidebar } from '../components/sidebar'
+import { TableOfContents, type TocHeading } from '../components/toc'
+import { fetchContributors, sortContributors } from '@explainer/ui'
+import { Pagination } from '../components/pagination'
+import type { NavItem, ProjectInfo, BreadcrumbItem } from '../lib/docs'
+
+interface Props {
+  title: string
+  description?: string
+  headings: TocHeading[]
+  navItems: NavItem[]
+  currentPath: string
+  prev: { title: string; href: string } | null
+  next: { title: string; href: string } | null
+  projects: ProjectInfo[]
+  currentProject: string
+  currentVersion: string
+  currentLocale: string
+  locales: string[]
+  projectSwitchUrls: Record<string, string>
+  versionSwitchUrls: Record<string, string>
+  localeSwitchUrls: Record<string, string>
+  breadcrumb: BreadcrumbItem[]
+  thumbnail?: string
+}
+
+const {
+  title,
+  description,
+  headings,
+  navItems,
+  currentPath,
+  prev,
+  next,
+  projects,
+  currentProject,
+  currentVersion,
+  currentLocale,
+  locales,
+  projectSwitchUrls,
+  versionSwitchUrls,
+  localeSwitchUrls,
+  breadcrumb,
+  thumbnail,
+} = Astro.props
+
+const contributors = sortContributors(
+  await fetchContributors({ token: import.meta.env.GITHUB_TOKEN }),
+  'contributions'
+)
+
+const showTabs = projects.length > 1
+const thumbnailUrl = '/assets' + (thumbnail ?? `${Astro.url.pathname.replace(/\/$/, '')}/thumbnail.png`)
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+---
+
+<!doctype html>
+<html lang={currentLocale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {description && <meta name="description" content={description} />}
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:image" content={thumbnailUrl} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    {description && <meta name="twitter:description" content={description} />}
+    <meta name="twitter:image" content={thumbnailUrl} />
+    <title>{title} — Explainer</title>
+
+    <ClientRouter />
+    <script is:inline>
+      (() => {
+        const theme = localStorage.getItem('theme') || 'system'
+        const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', isDark)
+      })()
+    </script>
+    <script is:inline>
+      document.addEventListener('astro:after-swap', function () {
+        if (!window.location.hash) {
+          window.scrollTo({ top: 0 })
+        }
+        var theme = localStorage.getItem('theme') || 'system'
+        var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', isDark)
+      })
+    </script>
+    <style define:vars={{ headerHeight: showTabs ? '6rem' : '3.5rem' }}>
+      :root {
+        --header-height: var(--headerHeight);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen antialiased">
+    <Header
+      projects={projects}
+      currentProject={currentProject}
+      currentVersion={currentVersion}
+      currentLocale={currentLocale}
+      locales={locales}
+      projectSwitchUrls={projectSwitchUrls}
+      versionSwitchUrls={versionSwitchUrls}
+      localeSwitchUrls={localeSwitchUrls}
+      navItems={navItems}
+      currentPath={currentPath}
+      appUrlOverrides={appUrlOverrides}
+      client:load
+      transition:persist
+      transition:animate="none"
+    />
+    <div class="flex max-w-350 mx-auto">
+      <div class="hidden lg:block w-64 shrink-0 border-r h-[calc(100vh-var(--header-height))] overflow-y-auto sticky top-(--header-height) py-6 pl-3 pr-3" transition:animate="none">
+        <Sidebar items={navItems} currentPath={currentPath} client:load />
+      </div>
+      <main class="flex-1 min-w-0 px-4 sm:px-8 py-6" transition:animate="none">
+        {breadcrumb.length > 1 && (
+          <nav class="flex items-center gap-1.5 text-sm text-primary mb-4">
+            {breadcrumb.slice(0, -1).map((item, i) => (
+              <>
+                {i > 0 && <span class="text-muted-foreground">/</span>}
+                {item.href ? (
+                  <a href={item.href} class="hover:underline">{item.title}</a>
+                ) : (
+                  <span>{item.title}</span>
+                )}
+              </>
+            ))}
+          </nav>
+        )}
+        <article class="prose prose-neutral dark:prose-invert max-w-none" data-pagefind-body>
+          <slot />
+        </article>
+        <Pagination prev={prev} next={next} client:load />
+      </main>
+      <div transition:animate="none">
+        <TableOfContents headings={headings} contributors={contributors} client:load />
+      </div>
+    </div>
+  </body>
+</html>

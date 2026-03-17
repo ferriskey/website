@@ -1,0 +1,167 @@
+name: Deploy explainer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      docs:
+        description: 'Deploy Docs'
+        type: boolean
+        default: true
+      blog:
+        description: 'Deploy Blog'
+        type: boolean
+        default: true
+      website:
+        description: 'Deploy Website'
+        type: boolean
+        default: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      blog: ${{ steps.filter.outputs.blog }}
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            docs:
+              - 'apps/docs/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+            blog:
+              - 'apps/blog/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+            website:
+              - 'apps/website/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+
+  build-docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || (github.event_name == 'workflow_dispatch' && inputs.docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @explainer/docs build
+        env:
+          PUBLIC_DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
+          PUBLIC_BLOG_URL: ${{ vars.PUBLIC_BLOG_URL }}
+          PUBLIC_WEBSITE_URL: ${{ vars.PUBLIC_WEBSITE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: docs-dist
+          path: apps/docs/dist/
+
+  build-blog:
+    needs: changes
+    if: needs.changes.outputs.blog == 'true' || (github.event_name == 'workflow_dispatch' && inputs.blog) || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @explainer/blog build
+        env:
+          PUBLIC_BLOG_URL: ${{ vars.PUBLIC_BLOG_URL }}
+          PUBLIC_DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
+          PUBLIC_WEBSITE_URL: ${{ vars.PUBLIC_WEBSITE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: blog-dist
+          path: apps/blog/dist/
+
+  build-website:
+    needs: changes
+    if: needs.changes.outputs.website == 'true' || (github.event_name == 'workflow_dispatch' && inputs.website)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @explainer/website build
+        env:
+          PUBLIC_WEBSITE_URL: ${{ vars.PUBLIC_WEBSITE_URL }}
+          PUBLIC_DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
+          PUBLIC_BLOG_URL: ${{ vars.PUBLIC_BLOG_URL }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: website-dist
+          path: apps/website/dist/
+
+  deploy-docs:
+    needs: build-docs
+    if: vars.DEPLOY_TARGET == 'cloudflare'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: docs-dist
+          path: dist
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=explainer-docs
+
+  deploy-blog:
+    needs: build-blog
+    if: vars.DEPLOY_TARGET == 'cloudflare'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: blog-dist
+          path: dist
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=explainer-blog
+
+  deploy-website:
+    needs: build-website
+    if: vars.DEPLOY_TARGET == 'cloudflare'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: website-dist
+          path: dist
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=explainer-website

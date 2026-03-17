@@ -1,0 +1,86 @@
+---
+title: Tabs
+description: Organisez le contenu en panneaux à onglets interchangeables.
+icon: columns
+order: 3
+---
+
+# Tabs
+
+Les Tabs vous permettent d'organiser du contenu associé en panneaux interchangeables. Ils sont couramment utilisés pour afficher des commandes selon différents gestionnaires de paquets ou du code dans différents langages.
+
+## Utilisation basique
+
+<Tabs items={["pnpm", "npm", "yarn"]} client:load>
+  <Tab label="pnpm">
+    ```bash
+    pnpm install
+    ```
+  </Tab>
+  <Tab label="npm">
+    ```bash
+    npm install
+    ```
+  </Tab>
+  <Tab label="yarn">
+    ```bash
+    yarn install
+    ```
+  </Tab>
+</Tabs>
+
+## Syntaxe
+
+Les Tabs utilisent la syntaxe JSX car ce sont des composants React interactifs. Voici le schéma général :
+
+````mdx
+<Tabs items={["Onglet 1", "Onglet 2"]} client:load>
+  <Tab label="Onglet 1">
+    Contenu du premier onglet.
+  </Tab>
+  <Tab label="Onglet 2">
+    Contenu du deuxième onglet.
+  </Tab>
+</Tabs>
+````
+
+:::callout{variant="info"}
+La directive `client:load` est requise pour l'interactivité. Sans elle, les onglets ne changeront pas au clic.
+:::
+
+## Exemple avec gestionnaire de paquets
+
+````mdx
+<Tabs items={["pnpm", "npm", "yarn"]} client:load>
+  <Tab label="pnpm">
+    ```bash
+    pnpm install @explainer/ui
+    ```
+  </Tab>
+  <Tab label="npm">
+    ```bash
+    npm install @explainer/ui
+    ```
+  </Tab>
+  <Tab label="yarn">
+    ```bash
+    yarn add @explainer/ui
+    ```
+  </Tab>
+</Tabs>
+````
+
+## Props
+
+### Tabs
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `items` | `string[]` | Tableau de libellés d'onglets affichés comme en-têtes |
+| `client:load` | — | Directive Astro pour hydrater le composant côté client |
+
+### Tab
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `label` | `string` | Doit correspondre exactement à l'une des valeurs de `items` |

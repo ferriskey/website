@@ -1,0 +1,61 @@
+---
+title: Vercel
+description: Déployer les applications Explainer sur Vercel avec GitHub Actions.
+icon: triangle
+order: 2
+---
+
+# Vercel
+
+Déployez les applications Explainer sur Vercel avec GitHub Actions en utilisant `amondnet/vercel-action`.
+
+## Configuration
+
+::::step-group
+:::step{title="Définir la cible de déploiement"}
+Ajoutez une variable de dépôt dans GitHub Settings → Variables :
+
+```text
+DEPLOY_TARGET=vercel
+```
+:::
+
+:::step{title="Ajouter les secrets requis"}
+Ajoutez les secrets suivants dans GitHub Settings → Secrets :
+
+| Secret | Description |
+|--------|-------------|
+| `VERCEL_TOKEN` | Jeton API Vercel |
+| `VERCEL_ORG_ID` | Identifiant de votre organisation Vercel |
+| `VERCEL_DOCS_PROJECT_ID` | Identifiant du projet Vercel pour l'application docs |
+:::
+
+:::step{title="Configurer vercel.json"}
+Chaque application peut avoir son propre `vercel.json` pour la personnalisation :
+
+```json [apps/docs/vercel.json]
+{
+  "buildCommand": "pnpm --filter @explainer/docs build",
+  "outputDirectory": "apps/docs/dist"
+}
+```
+:::
+::::
+
+## Workflow GitHub Actions
+
+Le workflow unifié situé dans `.github/workflows/deploy.yml` gère les trois applications. Lorsque `DEPLOY_TARGET` est défini sur `vercel`, le job de déploiement utilise :
+
+```yaml
+- uses: amondnet/vercel-action@v25
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+    vercel-project-id: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
+    working-directory: apps/docs/dist
+    vercel-args: '--prod'
+```
+
+:::callout{variant="info"}
+Chaque application possède ses propres jobs de compilation et de déploiement au sein du même workflow. Consultez la page [CI/CD](/explainer/deployment/ci-cd) pour la structure complète du workflow.
+:::

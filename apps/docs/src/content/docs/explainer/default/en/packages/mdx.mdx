@@ -1,0 +1,83 @@
+---
+title: "@explainer/mdx"
+description: MDX components, heading overrides, and remark plugins for Explainer.
+icon: file-code
+order: 2
+---
+
+# @explainer/mdx
+
+The `@explainer/mdx` package provides MDX component overrides, custom components, and remark plugins used by the docs and blog apps.
+
+## Heading overrides
+
+The package exports heading components (H1–H6) that automatically add anchor links to headings:
+
+```ts
+import { H1, H2, H3, H4, H5, H6 } from '@explainer/mdx'
+```
+
+Each heading renders with a clickable `#` anchor that links to the heading's ID.
+
+## Other overrides
+
+| Export | Purpose |
+|--------|---------|
+| `Link` | Enhanced link component with external link handling |
+| `Code` | Inline code styling |
+| `Paragraph` | Paragraph with proper spacing |
+| `UnorderedList` | Styled unordered list |
+| `OrderedList` | Styled ordered list |
+
+## Components
+
+The package includes custom MDX components accessible via directive syntax or JSX:
+
+| Component | Directive | Description |
+|-----------|-----------|-------------|
+| `Callout` | `:::callout` | Alert boxes with variants |
+| `CardGroup` | `::::card-group` | Grid card layouts |
+| `Card` | `:::card` | Individual card in a group |
+| `Steps` | `::::step-group` | Numbered step container |
+| `Step` | `:::step` | Individual step |
+| `CodeGroup` | `:::codegroup` | Tabbed code blocks |
+| `Preview` | `::::::preview` | Live preview with source |
+| `PreviewDemo` | `:::::code-preview` | Preview render panel |
+| `PreviewCode` | `:::::content-preview` | Preview source panel |
+| `Tabs` | JSX only | Switchable tab panels |
+| `Tab` | JSX only | Individual tab panel |
+
+## Remark plugins
+
+### remarkAutoImport
+
+Automatically adds import statements for MDX components used in a file. You do not need to manually import Callout, Steps, Tabs, etc. — they are injected automatically.
+
+### remarkDirectiveHandler
+
+Transforms directive syntax (`:::callout`, `::::card-group`, etc.) into JSX component calls. The mapping is defined in the `componentMap`:
+
+```ts [remark-directive-handler.ts]
+const componentMap = {
+  'card-group': 'CardGroup',
+  'card': 'Card',
+  'callout': 'Callout',
+  'step-group': 'Steps',
+  'step': 'Step',
+  'preview': 'Preview',
+  'code-preview': 'PreviewDemo',
+  'content-preview': 'PreviewCode',
+  'codegroup': 'CodeGroup',
+  'code-group': 'CodeGroup',
+}
+```
+
+## Shiki configuration
+
+The package exports the shared Shiki configuration used for code block syntax highlighting:
+
+```ts
+import { shikiConfig } from '@explainer/mdx/shiki'
+```
+
+See [Syntax Highlighting](/en/explainer/code-blocks/syntax-highlighting) for details on themes and transformers.

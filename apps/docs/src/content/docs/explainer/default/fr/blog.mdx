@@ -1,0 +1,76 @@
+---
+title: Blog
+description: Découvrez l'application blog d'Explainer, sa structure de contenu et ses fonctionnalités.
+icon: newspaper
+order: 7
+---
+
+# Blog
+
+Le blog est une application Astro autonome située dans `apps/blog/` et fonctionnant sur le port **4322**. Il prend en charge les articles avec tags, auteurs, images de couverture, brouillons et flux RSS.
+
+## Emplacement du contenu
+
+Les articles de blog sont des fichiers MDX situés dans :
+
+```text
+apps/blog/src/content/posts/*.mdx
+```
+
+## Schéma du frontmatter
+
+```mdx [my-post.mdx]
+---
+title: Introducing Explainer v2
+description: A new documentation boilerplate built with Astro, React, and Tailwind CSS 4.
+date: 2026-03-10
+tags: [announcement, release]
+cover: /images/cover.png
+draft: false
+author: leadcode_dev
+---
+```
+
+| Champ | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `title` | `string` | Oui | Titre de l'article |
+| `description` | `string` | Oui | Courte description pour les cartes et le SEO |
+| `date` | `date` | Oui | Date de publication (les dates futures sont masquées) |
+| `tags` | `string[]` | Non | Tags pour le filtrage (par défaut : `[]`) |
+| `cover` | `string` | Non | Chemin de l'image de couverture |
+| `draft` | `boolean` | Non | Les brouillons sont masqués de la liste (par défaut : `false`) |
+| `author` | `string` | Non | Clé de l'auteur correspondant à la liste des auteurs |
+
+## Fonctionnalités
+
+- **Mode brouillon** — Définissez `draft: true` pour masquer un article des listes tout en le gardant accessible par URL directe pendant le développement
+- **Filtrage par tag** — Les articles peuvent être filtrés par tag sur la page d'index du blog
+- **Flux RSS** — Un flux RSS est automatiquement généré à `/rss.xml`
+- **Temps de lecture** — Le temps de lecture estimé est calculé à 200 mots par minute
+- **Articles mis en avant** — Les premiers articles sont affichés dans une mise en page de carte plus grande sur la page d'index
+- **Pagination** — Les articles sont paginés à raison de 10 par page
+
+## Auteurs
+
+Les auteurs sont définis dans `apps/blog/src/lib/authors.ts` :
+
+```ts [authors.ts]
+export const authors: Record<string, Author> = {
+  leadcode_dev: {
+    name: 'Baptiste Parmantier',
+    title: 'Creator of Explainer',
+    avatar: 'https://avatars.githubusercontent.com/u/8946317?v=4',
+    href: 'https://github.com/LeadcodeDev',
+  },
+}
+```
+
+Référencez un auteur par sa clé dans le frontmatter de l'article : `author: leadcode_dev`.
+
+## Développement
+
+```bash
+pnpm dev --filter @explainer/blog
+```
+
+Le blog est accessible sur `http://localhost:4322`.

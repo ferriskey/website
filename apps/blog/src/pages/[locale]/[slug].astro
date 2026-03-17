@@ -1,0 +1,54 @@
+---
+import { getCollection, render } from 'astro:content'
+import PostLayout from '../../layouts/post.astro'
+import { getPublishedPosts, getPostSlug, getPostLocale, getPostHref, getLocales, getReadingTime, buildLocaleSwitchUrls } from '../../lib/posts'
+import { getAuthor } from '../../lib/authors'
+import Pre from '@explainer/mdx/overrides/pre.astro'
+import Blockquote from '@explainer/mdx/overrides/blockquote.astro'
+import MathBlock from '@explainer/mdx/components/math.astro'
+import MermaidBlock from '@explainer/mdx/components/mermaid.astro'
+import { Code, H1, H2, H3, H4, H5, H6, Link, Paragraph, UnorderedList, OrderedList } from '@explainer/mdx'
+
+export async function getStaticPaths() {
+  const allPosts = await getCollection('posts')
+  const posts = getPublishedPosts(allPosts)
+  const locales = getLocales(allPosts)
+
+  return posts.map((post) => ({
+    params: { locale: getPostLocale(post), slug: getPostSlug(post) },
+    props: { post, locales },
+  }))
+}
+
+const { post, locales } = Astro.props
+const allPosts = await getCollection('posts')
+const locale = getPostLocale(post)
+const { Content, headings } = await render(post)
+const readingTime = getReadingTime(post.body ?? '')
+const articleUrl = new URL(getPostHref(post), Astro.site ?? Astro.url.origin).href
+const localeSwitchUrls = buildLocaleSwitchUrls(allPosts, post, locales)
+const author = post.data.author ? getAuthor(post.data.author) : undefined
+---
+
+<PostLayout
+  title={post.data.title}
+  description={post.data.description}
+  date={post.data.date}
+  tags={post.data.tags}
+  cover={post.data.cover}
+  thumbnail={`${getPostHref(post)}/thumbnail.png`}
+  readingTime={readingTime}
+  headings={headings}
+  url={articleUrl}
+  author={author}
+  locale={locale}
+  locales={locales}
+  localeSwitchUrls={localeSwitchUrls}
+>
+  <Content components={{
+    h1: H1, h2: H2, h3: H3, h4: H4, h5: H5, h6: H6,
+    a: Link, p: Paragraph, ul: UnorderedList, ol: OrderedList,
+    pre: Pre, code: Code, blockquote: Blockquote,
+    MathBlock, MermaidBlock,
+  }} />
+</PostLayout>
