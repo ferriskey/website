@@ -64,7 +64,7 @@ export function Navbar({
         <div className="flex items-center gap-3">
           {leftSlot}
           <a href={brandHref} className="flex items-center gap-2 font-semibold text-lg">
-            {brandIcon && <img src={brandIcon} alt="" className="size-5 dark:invert" />}
+            {brandIcon && <img src={brandIcon} alt="" className="size-10 dark:invert" />}
             {brand}
           </a>
           {appLinks.length > 0 && (
