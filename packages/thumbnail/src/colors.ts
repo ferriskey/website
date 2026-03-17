@@ -1,6 +1,6 @@
 import * as culori from 'culori'
 
-const DEFAULT_PRIMARY_COLOR = 'oklch(0.707 0.217 293)'
+const DEFAULT_PRIMARY_COLOR = 'oklch(70.5% 0.213 47.604)'
 
 export function resolveTailwindColor(value: string): string {
   if (/^\d+\s+\d+\s+\d+$/.test(value)) {

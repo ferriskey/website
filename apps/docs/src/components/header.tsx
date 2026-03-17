@@ -21,7 +21,7 @@ interface HeaderProps {
 }
 
 export function Header({
-  title = 'Explainer',
+  title,
   projects,
   currentProject,
   currentVersion,

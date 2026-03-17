@@ -35,7 +35,7 @@ export interface NavbarProps {
 }
 
 export function Navbar({
-  brand = 'Explainer',
+  brand = 'Ferriskey',
   brandHref = '/',
   brandIcon = '/logo.svg',
   links = [],
