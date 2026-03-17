@@ -1,0 +1,133 @@
+---
+title: Installation
+description: Get started with FerrisKey IAM solution.
+icon: download
+order: 2
+---
+
+# Installation
+
+FerrisKey is designed to be easy to deploy and easy to operate.
+
+Behind the scenes, it runs as a service that your applications can rely on.
+Once installed, FerrisKey becomes the central identity provider for your ecosystem.
+
+For non-technical users, the important thing to understand is this:
+
+::note
+Installation is a one-time step that enables FerrisKey to act as the gatekeeper for all authentication and user access.
+::
+
+After that, everything is managed from the dashboard.
+
+
+## System Requirements
+
+Before installing FerrisKey, ensure your system meets these minimum requirements:
+
+- **CPU**: 1+ cores (2+ recommended for production)
+- **Memory**: 512MB RAM minimum (2GB+ recommended for production)
+- **Storage**: 1GB available disk space
+- **Operating System**: Linux, macOS, or Windows
+- **Database**: PostgreSQL 15+
+
+
+## Quick Start with Docker
+
+The fastest way to get FerrisKey running is using Docker Compose:
+
+
+::::step-group
+  :::step{title="Create Docker Compose file"}
+
+Create a `docker-compose.yml` file:
+
+```yaml [docker-compose.yml]
+version: '3.8'
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ferriskey
+      POSTGRES_PASSWORD: ferriskey
+      POSTGRES_USER: ferriskey
+    ports:
+      - 5432:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready
+        - -U
+        - ferriskey
+        - -d
+        - ferriskey
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+
+  db-migrations:
+    image: ghcr.io/ferriskey/ferriskey-api:latest
+    entrypoint:
+      - sqlx
+    command:
+      - migrate
+      - run
+      - --source
+      - /usr/local/src/ferriskey/migrations
+    environment:
+      DATABASE_URL: postgresql://ferriskey:ferriskey@db/ferriskey
+    restart: no
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/ferriskey/ferriskey-api:latest
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5556
+      WEBAPP_URL: http://localhost:5556
+      DATABASE_HOST: db
+      DATABASE_NAME: ferriskey
+      DATABASE_PASSWORD: ferriskey
+      DATABASE_USER: ferriskey
+    ports:
+      - 3334:3333
+    depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+
+  webapp:
+    image: ghcr.io/ferriskey/ferriskey-webapp:latest
+    environment:
+      API_URL: http://localhost:3334
+    ports:
+      - 5556:80
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+```
+:::
+
+:::step{title="Start FerrisKey"}
+
+```
+docker compose up -d
+```
+:::
+
+
+:::step{title="Access FerrisKey"}
+Open your browser and navigate to `http://localhost:5556`. The FerrisKey web interface will be available for configuration and user management.
+The API will be accessible at `http://localhost:3334` for direct integration.
+
+::note
+The first startup may take a few minutes as the database migrations are applied.
+::
+:::
+::::
