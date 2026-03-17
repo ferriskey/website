@@ -1,0 +1,72 @@
+---
+title: Overview
+description: Abyss is FerrisKey's identity provider federation module — connect external OAuth2, OIDC, and enterprise providers.
+icon: link
+order: 1
+---
+
+# Abyss — Identity Provider Federation
+
+Abyss connects FerrisKey to external identity providers. Users can authenticate through Google, GitHub, Discord, or any custom OAuth2/OIDC provider — and FerrisKey handles the token exchange, user provisioning, account linking, and attribute mapping.
+
+## Why Federation?
+
+Federation lets you meet users where they already have an identity. Instead of forcing users to create yet another account, let them sign in with their existing Google or corporate credentials. FerrisKey becomes the identity broker — normalizing different provider formats into a consistent internal model.
+
+## Supported Provider Types
+
+| Type | Status | Examples |
+|---|---|---|
+| **OAuth2** | Supported | Google, GitHub, Discord, any OAuth2 provider |
+| **OIDC** | Supported | Any OpenID Connect compliant provider |
+| **SAML** | Planned | Enterprise IdPs (Okta, Azure AD via SAML) |
+| **LDAP** | Planned | Active Directory, OpenLDAP |
+
+## Provider Configuration
+
+Each provider is registered per realm with full OAuth2/OIDC configuration:
+
+| Field | Description |
+|---|---|
+| `name` | Display name shown on the login page |
+| `provider_type` | `oauth2` or `oidc` |
+| `client_id` | OAuth2 client ID from the external provider |
+| `client_secret` | OAuth2 client secret (encrypted in storage) |
+| `authorization_url` | Provider's authorization endpoint |
+| `token_url` | Provider's token endpoint |
+| `userinfo_url` | Provider's UserInfo endpoint (optional) |
+| `scopes` | OAuth2 scopes to request (e.g., `openid`, `email`, `profile`) |
+| `enabled` | Toggle the provider on/off without deleting it |
+| `configuration` | Provider-specific JSON config (e.g., tenant ID for Azure AD) |
+
+:::callout{variant="info" title="Secret encryption"}
+Client secrets are encrypted before storage. They are never exposed through the admin API in plaintext.
+:::
+
+## Provider Mappings
+
+Provider mappings define how external attributes map to internal FerrisKey user fields:
+
+| External Field | Internal Field | Required |
+|---|---|---|
+| `email` | `email` | Yes |
+| `sub` | — (used for linking) | Yes |
+| `preferred_username` | `username` | No |
+| `given_name` | `firstname` | No |
+| `family_name` | `lastname` | No |
+
+Each mapping specifies whether it's required — if a required mapping is missing from the provider's response, the federation flow fails.
+
+## Real-World Patterns
+
+### "Sign in with Google" for a SaaS Product
+Configure a Google OAuth2 provider with scopes `openid email profile`. Users click "Sign in with Google", authenticate at Google, and are redirected back to your app with FerrisKey tokens. New users are automatically provisioned.
+
+### Corporate SSO with Azure AD
+Configure an OIDC provider pointing to your Azure AD tenant's endpoints. Employees authenticate through their corporate identity and get FerrisKey tokens scoped to the correct realm.
+
+### Multi-Provider Login
+Configure Google, GitHub, and Discord as providers on the same realm. Users choose their preferred provider on the login page. All three paths converge into the same FerrisKey user model with unified roles and permissions.
+
+### Account Linking
+A user who first authenticated with Google can later link their GitHub account. Both external identities map to the same FerrisKey user, each tracked by a separate federated credential.

@@ -1,0 +1,119 @@
+---
+title: Payload Format
+description: Webhook payload structure in FerrisKey — fields, examples, and handling best practices.
+icon: braces
+order: 3
+---
+
+# Payload Format
+
+When a webhook fires, FerrisKey sends an HTTP POST to the registered endpoint with a JSON payload. The payload follows a consistent structure across all event types.
+
+## Payload Structure
+
+```json title="Webhook payload"
+{
+  "event": "user.created",
+  "timestamp": "2026-03-17T14:30:00.000Z",
+  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "data": {
+    "username": "alice",
+    "email": "alice@example.com",
+    "firstname": "Alice",
+    "lastname": "Smith",
+    "enabled": true
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `string` | The trigger event name (e.g., `user.created`) |
+| `timestamp` | `string` | ISO 8601 timestamp of when the event occurred |
+| `resource_id` | `UUID` | ID of the affected resource |
+| `data` | `object \| null` | Event-specific payload (resource data at the time of the event) |
+
+## Payload Examples
+
+### `user.created`
+
+```json
+{
+  "event": "user.created",
+  "timestamp": "2026-03-17T14:30:00.000Z",
+  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "data": {
+    "username": "alice",
+    "email": "alice@example.com",
+    "firstname": "Alice",
+    "lastname": "Smith",
+    "enabled": true,
+    "email_verified": false
+  }
+}
+```
+
+### `role.permission.updated`
+
+```json
+{
+  "event": "role.permission.updated",
+  "timestamp": "2026-03-17T15:00:00.000Z",
+  "resource_id": "01914b3c-9abc-7f5a-b456-000000000010",
+  "data": {
+    "name": "editor",
+    "permissions": 1234
+  }
+}
+```
+
+### `client.deleted`
+
+```json
+{
+  "event": "client.deleted",
+  "timestamp": "2026-03-17T15:30:00.000Z",
+  "resource_id": "01914b3c-def0-7f5a-b456-000000000020",
+  "data": null
+}
+```
+
+:::callout{variant="info" title="Data may be null"}
+For deletion events, `data` may be `null` since the resource no longer exists. The `resource_id` identifies what was deleted.
+:::
+
+## Custom Headers
+
+Webhooks support custom HTTP headers. Use them to authenticate requests to your endpoint:
+
+```json title="Webhook with custom headers"
+{
+  "endpoint": "https://api.yourapp.com/webhooks/ferriskey",
+  "headers": {
+    "Authorization": "Bearer your-secret-token",
+    "X-Webhook-Source": "ferriskey"
+  }
+}
+```
+
+Common patterns:
+- **Bearer token** — Authenticate with a static secret
+- **HMAC signature** — Compute a signature over the payload for verification (implement in your handler)
+- **Custom identifiers** — Tag the source for routing in multi-webhook architectures
+
+## Handling Best Practices
+
+### Respond Quickly
+Return a `2xx` status code as fast as possible. Process the payload asynchronously — enqueue it for background processing rather than doing heavy work in the request handler.
+
+### Be Idempotent
+Your handler may receive the same event more than once (retries, network issues). Use the `resource_id` and `timestamp` combination to deduplicate.
+
+### Validate the Source
+Check custom headers (e.g., a shared secret in `Authorization`) to verify the request comes from FerrisKey. Don't process payloads from unknown sources.
+
+### Handle Missing Data
+The `data` field may be `null` for deletion events. Always check before accessing nested fields.
+
+### Log Everything
+Log incoming payloads for debugging. When a webhook handler fails silently, logs are the only way to diagnose the issue.

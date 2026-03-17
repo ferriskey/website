@@ -1,0 +1,64 @@
+---
+title: What is FerrisKey?
+description: A modern, open-source Identity & Access Management system built in Rust.
+icon: shield
+order: 1
+---
+
+# What is FerrisKey?
+
+FerrisKey is a modern, open-source Identity & Access Management (IAM) system built in Rust. It gives your applications authentication, authorization, and user management — without the complexity of legacy solutions.
+
+## What is IAM?
+
+Identity & Access Management answers two questions for every request your system receives:
+
+- **Authentication** — _Who are you?_ Verifying identity through passwords, multi-factor authentication, passkeys, or federated providers.
+- **Authorization** — _What can you do?_ Determining which resources and actions an authenticated identity is permitted to access.
+
+Beyond these fundamentals, a modern IAM system handles token issuance (JWT), single sign-on (SSO), session management, audit logging, and integration with external identity providers.
+
+## Why FerrisKey?
+
+FerrisKey was built from scratch in Rust to address the shortcomings of existing IAM solutions:
+
+- **Performance & Safety** — Rust's memory safety guarantees and zero-cost abstractions deliver an IAM server that is fast, reliable, and free from entire classes of security vulnerabilities.
+- **Multi-Tenancy** — Realms provide complete tenant isolation. Users, clients, roles, credentials, and configuration are fully scoped — one deployment serves many organizations.
+- **Modular Architecture** — A hexagonal architecture with clearly separated domain modules. Enable only what you need.
+- **Open Source** — MIT-licensed, community-driven, and designed for transparency.
+
+## Modules
+
+FerrisKey is organized into purpose-built modules, each handling a specific aspect of identity management:
+
+::::card-group{cols=3}
+:::card{label="Trident" icon="lucide:shield-check" href="/modules/default/en/trident"}
+Multi-factor authentication — TOTP, WebAuthn passkeys, magic links, and recovery codes.
+:::
+:::card{label="SeaWatch" icon="lucide:eye" href="/modules/default/en/seawatch"}
+Audit & security events — track every critical action across your realms.
+:::
+:::card{label="Compass" icon="lucide:compass" href="/modules/default/en/compass"}
+Authentication flow engine — orchestrate and customize authentication steps.
+:::
+:::card{label="Abyss" icon="lucide:link" href="/modules/default/en/abyss"}
+Identity provider federation — Google, GitHub, Discord, and custom OIDC providers.
+:::
+:::card{label="Aegis" icon="lucide:lock" href="/modules/default/en/aegis"}
+Scopes & protocol mappers — control exactly what goes into your tokens.
+:::
+:::card{label="Webhooks" icon="lucide:webhook" href="/modules/default/en/webhooks"}
+Event-driven extensibility — subscribe to lifecycle events and notify external systems.
+:::
+::::
+
+## Next Steps
+
+::::card-group{cols=2}
+:::card{label="Getting Started" icon="lucide:rocket" href="/discover/default/en/getting-started"}
+Deploy FerrisKey in minutes with Docker and create your first realm.
+:::
+:::card{label="Core Concepts" icon="lucide:layers" href="/discover/default/en/core-concepts/realms"}
+Understand realms, clients, users, roles, and the authentication model.
+:::
+::::

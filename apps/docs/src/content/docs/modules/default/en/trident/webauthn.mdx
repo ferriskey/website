@@ -1,0 +1,78 @@
+---
+title: WebAuthn
+description: FIDO2 passkeys in FerrisKey — hardware keys, biometrics, and passwordless authentication.
+icon: fingerprint
+order: 3
+---
+
+# WebAuthn (FIDO2 Passkeys)
+
+WebAuthn enables passwordless authentication using hardware security keys, platform biometrics (Touch ID, Face ID, Windows Hello), or synced passkeys (iCloud Keychain, Google Password Manager). The private key never leaves the user's device — FerrisKey only stores the public key.
+
+## How It Works
+
+WebAuthn uses public-key cryptography. During registration, the user's device creates a key pair. The public key is sent to FerrisKey; the private key stays on the device. During authentication, the device signs a challenge with the private key, and FerrisKey verifies the signature with the stored public key.
+
+This means:
+- **No shared secrets** — nothing to phish or leak from the server
+- **Cryptographic proof** — the device proves possession of the private key
+- **User verification** — biometric or PIN verification happens locally on the device
+
+## Registration Flow
+
+::::step-group
+:::step{title="Start registration"}
+FerrisKey generates a WebAuthn registration challenge containing the realm's relying party information and a random challenge value. The challenge is stored on the auth session.
+:::
+
+:::step{title="Browser prompts user"}
+The browser's WebAuthn API (`navigator.credentials.create()`) prompts the user to create a credential — typically a Touch ID scan, Face ID, or a tap on a hardware key.
+:::
+
+:::step{title="Credential created"}
+The authenticator generates a new key pair and returns the public key, credential ID, and attestation data to the browser.
+:::
+
+:::step{title="Server verification"}
+FerrisKey validates the attestation, stores the public key and credential metadata as a `WebAuthnPublicKeyCredential`, and links it to the user.
+:::
+::::
+
+## Authentication Flow
+
+::::step-group
+:::step{title="Challenge issued"}
+FerrisKey generates an authentication challenge and includes the list of registered credential IDs for the user.
+:::
+
+:::step{title="User authenticates"}
+The browser calls `navigator.credentials.get()`. The authenticator prompts the user (biometric, PIN, or button press) and signs the challenge with the private key.
+:::
+
+:::step{title="Signature verified"}
+FerrisKey verifies the signed assertion against the stored public key. If valid, the MFA challenge is satisfied.
+:::
+::::
+
+## Supported Authenticators
+
+| Type | Examples | Cross-Device |
+|---|---|---|
+| **Platform** | Touch ID, Face ID, Windows Hello, Android biometrics | No |
+| **Roaming** | YubiKey, SoloKeys, Titan Security Key | Yes |
+| **Synced Passkeys** | iCloud Keychain, Google Password Manager | Yes |
+
+## Real-World Patterns
+
+### Passwordless Login
+Combine WebAuthn with the authorization code flow. The user clicks "Sign in with passkey", authenticates with their device, and receives tokens — no password involved. This is the most phishing-resistant flow available.
+
+### Second Factor with Hardware Keys
+For high-security environments (finance, healthcare, government), require a hardware security key as the second factor after password authentication. Users carry a YubiKey and tap it when prompted.
+
+### Progressive Enhancement
+Register WebAuthn as an optional authenticator. Users who have compatible devices get the smooth passkey experience; others fall back to TOTP. Both paths lead to the same token endpoint.
+
+:::callout{variant="info" title="Multiple passkeys"}
+Users can register multiple WebAuthn credentials — for example, a Touch ID on their laptop and a YubiKey as a backup. Each credential is stored independently and any one can satisfy the MFA challenge.
+:::

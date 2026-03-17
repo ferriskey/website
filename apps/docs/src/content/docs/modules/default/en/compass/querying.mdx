@@ -1,0 +1,238 @@
+---
+title: Querying & Analytics
+description: Query Compass flows, filter by criteria, aggregate statistics, and build authentication dashboards.
+icon: bar-chart-3
+order: 3
+---
+
+# Querying & Analytics
+
+Compass stores every authentication flow in PostgreSQL, making them queryable through the admin API. Use this data to build dashboards, debug failures, and understand authentication patterns across your realms.
+
+## Flow Statistics
+
+The stats endpoint returns aggregate metrics for a realm at a glance:
+
+```json title="GET /admin/realms/{realm}/compass/stats"
+{
+  "total": 15234,
+  "success_count": 14102,
+  "failure_count": 987,
+  "pending_count": 145,
+  "avg_duration_ms": 142.5
+}
+```
+
+| Metric | Description |
+|---|---|
+| `total` | Total number of recorded flows |
+| `success_count` | Flows that completed with `success` status |
+| `failure_count` | Flows that ended in `failure` |
+| `pending_count` | Flows still in `pending` state (likely expired or abandoned) |
+| `avg_duration_ms` | Average flow duration across all completed flows |
+
+These metrics give you a quick health check: if `failure_count` is climbing or `avg_duration_ms` is spiking, something changed in your authentication pipeline.
+
+## Filtering Flows
+
+The flows endpoint supports rich filtering to narrow down to exactly the flows you need:
+
+| Filter | Type | Description |
+|---|---|---|
+| `client_id` | `String` | Flows for a specific client |
+| `user_id` | `UUID` | Flows for a specific user |
+| `grant_type` | `String` | Filter by grant type (`password`, `authorization_code`, etc.) |
+| `status` | `String` | Filter by outcome (`success`, `failure`, `pending`, `expired`) |
+| `from_timestamp` | `DateTime` | Flows started after this time |
+| `to_timestamp` | `DateTime` | Flows started before this time |
+| `limit` | `u32` | Maximum results (default: 50) |
+| `offset` | `u32` | Pagination offset (default: 0) |
+
+### Example Queries
+
+**All failed flows in the last hour:**
+```bash
+curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+status=failure&\
+from_timestamp=2026-03-17T13:30:00Z" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+**All flows for a specific user:**
+```bash
+curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+user_id=01914b3c-5678-7f5a-b456-000000000002" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+**Password grant flows for a specific client:**
+```bash
+curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+client_id=my-frontend&\
+grant_type=password&\
+limit=10" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+## Flow Detail
+
+Fetch a single flow by ID to see all its steps:
+
+```json title="GET /admin/realms/{realm}/compass/flows/{flow_id}"
+{
+  "id": "01914b3c-7e8a-7f5a-b456-789012345678",
+  "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "client_id": "my-frontend",
+  "user_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "grant_type": "password",
+  "status": "failure",
+  "ip_address": "203.0.113.42",
+  "user_agent": "Mozilla/5.0 ...",
+  "started_at": "2026-03-17T14:30:00.000Z",
+  "completed_at": "2026-03-17T14:30:00.097Z",
+  "duration_ms": 97,
+  "steps": [
+    {
+      "step_name": "credential_validation",
+      "status": "success",
+      "duration_ms": 85,
+      "error_code": null,
+      "error_message": null,
+      "started_at": "2026-03-17T14:30:00.000Z"
+    },
+    {
+      "step_name": "mfa_challenge",
+      "status": "failure",
+      "duration_ms": 12,
+      "error_code": "invalid_otp",
+      "error_message": "The provided TOTP code is invalid",
+      "started_at": "2026-03-17T14:30:00.085Z"
+    }
+  ]
+}
+```
+
+This tells the complete story: the user's password was correct (85ms for Argon2 verification), but the TOTP code was wrong.
+
+## Real-World Analytics Patterns
+
+### Authentication Latency Dashboard
+
+Build a Grafana or custom dashboard that queries Compass stats periodically:
+
+```ts title="app/tasks/compass_metrics.ts"
+import { BaseTask } from '@adonisjs/core/tasks'
+
+export default class CompassMetrics extends BaseTask {
+  static readonly schedule = '*/5 * * * *' // Every 5 minutes
+
+  async run() {
+    const stats = await ferriskey.getCompassStats('my-app')
+
+    await prometheus.gauge('ferriskey_auth_avg_duration_ms', stats.avg_duration_ms)
+    await prometheus.counter('ferriskey_auth_total', stats.total)
+    await prometheus.counter('ferriskey_auth_failures', stats.failure_count)
+  }
+}
+```
+
+### Top Failure Reasons
+
+Query failed flows and group by `error_code` to find the most common failure patterns:
+
+```ts title="app/services/compass_analytics.ts"
+async function getTopFailureReasons(realmName: string) {
+  const flows = await ferriskey.getCompassFlows(realmName, {
+    status: 'failure',
+    from_timestamp: subDays(new Date(), 7).toISOString(),
+    limit: 500,
+  })
+
+  const reasons = new Map<string, number>()
+
+  for (const flow of flows) {
+    const failedStep = flow.steps.find((s) => s.status === 'failure')
+    if (failedStep?.error_code) {
+      reasons.set(failedStep.error_code, (reasons.get(failedStep.error_code) ?? 0) + 1)
+    }
+  }
+
+  return [...reasons.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, count]) => ({ code, count }))
+}
+```
+
+Common findings:
+- `invalid_credentials` — Wrong password (most common)
+- `invalid_otp` — Wrong TOTP code (clock skew? user confusion?)
+- `expired_session` — User took too long to complete the flow
+- `invalid_redirect_uri` — Client misconfiguration
+- `idp_error` — External provider returned an error
+
+### Slow Flow Detection
+
+Find flows where a specific step took unusually long:
+
+```bash
+# Find flows where credential_validation took > 500ms
+# (might indicate database performance issues)
+curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+status=success&\
+from_timestamp=2026-03-17T00:00:00Z&\
+limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '.[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
+```
+
+### IdP Performance Monitoring
+
+When using [Abyss](/modules/default/en/abyss/overview) for external IdP federation, Compass tracks `idp_redirect` and `idp_callback` steps. These are particularly valuable because they involve network calls to third-party services:
+
+- **`idp_redirect`** — Should be < 5ms (just building a URL). If slow, check network/DNS.
+- **`idp_callback`** — Involves token exchange with the external provider. Typical: 100-500ms. If >1s, the external provider may be degraded.
+
+### User-Level Flow History
+
+Investigate a specific user's authentication patterns:
+
+```bash
+curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+user_id=USER_UUID&\
+limit=20" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+This shows their recent login attempts — useful for support tickets ("I can't log in") or security investigations ("was this account compromised?").
+
+## Data Maintenance
+
+### Purging Old Flows
+
+Compass does not auto-delete flows. Over time, flow data grows. Use the `purge_old_flows` capability to clean up:
+
+:::callout{variant="warning" title="Set up periodic purging"}
+For a realm with 10,000 logins/day, Compass generates ~250 MB/month of flow data. Set up a scheduled purge to keep only the last 30-90 days, depending on your compliance requirements.
+:::
+
+### Archival Strategy
+
+For compliance, you may need to retain flow data longer than you want it in PostgreSQL. A good pattern:
+
+1. **Export** — Periodically query flows and export to cold storage (S3, GCS)
+2. **Purge** — Delete flows older than your hot retention window (30-90 days)
+3. **Query cold storage** — For historical investigations, query the archived data
+
+## Compass + SeaWatch
+
+Compass and SeaWatch serve complementary purposes:
+
+| Aspect | SeaWatch | Compass |
+|---|---|---|
+| **What it records** | Security events (login, user CRUD, config changes) | Authentication flow steps with timing |
+| **Granularity** | One event per action | Multiple steps per flow |
+| **Timing data** | Timestamp only | Duration per step + total |
+| **Error detail** | Event status (success/failure) | Error code + message per step |
+| **Best for** | Compliance audit trail, "what happened" | Performance debugging, "how it happened" |
+
+Use SeaWatch when you need to know *what* happened. Use Compass when you need to know *why* and *where* things went wrong.

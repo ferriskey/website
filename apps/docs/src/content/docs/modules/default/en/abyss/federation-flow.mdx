@@ -1,0 +1,97 @@
+---
+title: Federation Flow
+description: How the Abyss federation flow works — redirect, callback, token exchange, and account linking.
+icon: git-branch
+order: 2
+---
+
+# Federation Flow
+
+When a user authenticates through an external provider, Abyss orchestrates a multi-step flow that transforms an external identity into a FerrisKey session with full tokens.
+
+## Step-by-Step Flow
+
+::::step-group
+:::step{title="1. User selects a provider"}
+On the login page, the user clicks "Sign in with Google" (or another configured provider). The client sends the selected provider ID to FerrisKey.
+:::
+
+:::step{title="2. FerrisKey builds the authorization URL"}
+FerrisKey constructs the OAuth2 authorization URL with:
+- The provider's `authorization_url`
+- The configured `client_id`
+- The requested `scopes`
+- A `redirect_uri` pointing back to FerrisKey
+- A CSRF `state` parameter
+- A `nonce` for OIDC flows
+:::
+
+:::step{title="3. User is redirected"}
+The browser redirects the user to the external provider's login page. FerrisKey records this as an `idp_redirect` step in Compass (if enabled).
+:::
+
+:::step{title="4. User authenticates externally"}
+The user authenticates with the external provider using their existing credentials (Google account, GitHub account, etc.). FerrisKey is not involved in this step.
+:::
+
+:::step{title="5. Callback to FerrisKey"}
+The external provider redirects the user back to FerrisKey with an authorization code. FerrisKey records this as an `idp_callback` step in Compass.
+:::
+
+:::step{title="6. Token exchange"}
+FerrisKey exchanges the authorization code for tokens at the provider's `token_url`, using the configured `client_id` and `client_secret`.
+:::
+
+:::step{title="7. Fetch user information"}
+If a `userinfo_url` is configured, FerrisKey calls it with the provider's access token to get the user's profile (email, name, etc.). For OIDC providers, claims may already be in the ID token.
+:::
+
+:::step{title="8. Account resolution"}
+FerrisKey resolves the external identity to a local user:
+- **Existing link found** — The user has a federated credential for this provider. Log them in.
+- **Email match** — A local user with the same email exists. Link the external identity and log them in.
+- **New user** — No match found. Create a new local user from the provider's attributes and store a federated credential.
+:::
+
+:::step{title="9. FerrisKey tokens issued"}
+FerrisKey generates its own access, refresh, and ID tokens for the now-authenticated user. The provider's tokens are not forwarded to the client.
+:::
+::::
+
+## Federated Credentials
+
+When a user authenticates through an external provider, FerrisKey stores a **federated credential** on the user:
+
+```json
+{
+  "credential_type": "Federated",
+  "credential_data": {
+    "provider_id": "google-oauth2",
+    "provider_type": "oauth2"
+  }
+}
+```
+
+This links the local user to their external identity. A user can have federated credentials from multiple providers simultaneously — allowing them to sign in with Google one day and GitHub the next, both resolving to the same account.
+
+## Federation Types (Advanced)
+
+Abyss also supports directory-based federation for enterprise use cases:
+
+| Type | Description | Sync Mode |
+|---|---|---|
+| **LDAP** | Active Directory / OpenLDAP | Import, Force, or LinkOnly |
+| **Kerberos** | Kerberos/SPNEGO authentication | LinkOnly |
+| **Custom** | Custom federation provider | Configurable |
+
+### Sync Modes
+
+| Mode | Behavior |
+|---|---|
+| **Import** | Import users from the external directory into FerrisKey on first login |
+| **Force** | Sync user attributes from the directory on every login (overwrite local data) |
+| **LinkOnly** | Authenticate against the directory but don't sync attributes |
+
+:::callout{variant="warning" title="SAML and LDAP are planned"}
+SAML and LDAP federation are on the roadmap. OAuth2 and OIDC providers are fully supported today.
+:::

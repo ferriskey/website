@@ -1,0 +1,113 @@
+---
+title: Helm Chart
+description: Install FerrisKey on Kubernetes using the official Helm chart.
+icon: package
+order: 2
+---
+
+# Helm Chart
+
+The official FerrisKey Helm chart is published as an OCI artifact. It deploys the API server, web UI, database migrations, and optionally an embedded PostgreSQL instance.
+
+## Installation
+
+::::step-group
+:::step{title="Install the chart"}
+The chart is available as an OCI artifact — no `helm repo add` needed:
+
+```bash
+helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey \
+  --create-namespace
+```
+:::
+
+:::step{title="Verify the deployment"}
+```bash
+kubectl get pods -n ferriskey
+```
+
+Wait for all pods to reach `Running` status and the migration job to complete.
+:::
+
+:::step{title="Access the UI"}
+Port-forward to the web UI:
+
+```bash
+kubectl port-forward -n ferriskey svc/ferriskey-webapp 5555:5555
+```
+
+Open `http://localhost:5555` and log in with the default admin credentials.
+:::
+::::
+
+## Configuration
+
+Override default values by creating a `values.yaml` file:
+
+```yaml title="values.yaml"
+database:
+  host: "postgres.database.svc.cluster.local"
+  port: 5432
+  name: "ferriskey"
+  user: "ferriskey"
+  passwordSecret:
+    name: "ferriskey-db-credentials"
+    key: "password"
+
+common:
+  env:
+    - name: ADMIN_USERNAME
+      value: "admin"
+    - name: ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: ferriskey-admin
+          key: password
+    - name: ADMIN_EMAIL
+      value: "admin@yourorg.com"
+    - name: ALLOWED_ORIGINS
+      value: "https://iam.yourorg.com"
+```
+
+Then install with your values:
+
+```bash
+helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey \
+  --create-namespace \
+  -f values.yaml
+```
+
+## Values Reference
+
+### Database
+
+| Key | Default | Description |
+|---|---|---|
+| `database.host` | — | PostgreSQL host |
+| `database.port` | `5432` | PostgreSQL port |
+| `database.name` | `ferriskey` | Database name |
+| `database.user` | `ferriskey` | Database user |
+| `database.passwordSecret.name` | — | Kubernetes Secret name containing the password |
+| `database.passwordSecret.key` | — | Key within the Secret |
+
+### Common Settings
+
+| Key | Default | Description |
+|---|---|---|
+| `common.image.tag` | Chart appVersion | Container image tag |
+| `common.image.pullPolicy` | `IfNotPresent` | Image pull policy |
+| `common.env` | `[]` | Environment variables for all workloads |
+| `common.envFrom` | `[]` | Environment sources (ConfigMaps, Secrets) |
+| `common.volumeMounts` | `[]` | Volume mounts for all containers |
+| `common.volumes` | `[]` | Volumes for all pods |
+| `common.serviceAccount.create` | `true` | Create a ServiceAccount |
+| `common.serviceAccount.name` | — | ServiceAccount name override |
+| `common.affinity` | `{}` | Pod affinity rules |
+| `common.tolerations` | `[]` | Pod tolerations |
+| `common.topologySpreadConstraints` | `[]` | Topology spread |
+
+:::callout{variant="info" title="External PostgreSQL recommended"}
+For production, use a managed PostgreSQL service (RDS, Cloud SQL, Azure Database) rather than running PostgreSQL inside the cluster.
+:::

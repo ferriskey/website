@@ -1,0 +1,87 @@
+---
+title: Querying & Integration
+description: Query, filter, and export SeaWatch events — SIEM integration and compliance workflows.
+icon: search
+order: 3
+---
+
+# Querying & Integration
+
+SeaWatch events are stored in PostgreSQL and queryable through the FerrisKey admin API. You can filter, paginate, and export events for compliance reporting, incident investigation, or SIEM integration.
+
+## Querying Events
+
+The admin API exposes endpoints to list and filter security events within a realm:
+
+### Available Filters
+
+| Filter | Description |
+|---|---|
+| `event_type` | Filter by specific event type (e.g., `login_failure`) |
+| `status` | Filter by `success` or `failure` |
+| `actor_id` | Events triggered by a specific user |
+| `actor_type` | Events by actor classification (`user`, `admin`, `system`, `service_account`) |
+| `target_type` | Events affecting a specific resource type |
+| `target_id` | Events affecting a specific resource |
+| `ip_address` | Events from a specific IP |
+| Time range | Events within a date/time window |
+
+### Example: Find All Login Failures for a User
+
+```bash
+curl -X GET "http://localhost:3333/admin/realms/my-app/events?event_type=login_failure&target_id=USER_UUID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### Example: Recent Admin Actions
+
+```bash
+curl -X GET "http://localhost:3333/admin/realms/my-app/events?actor_type=admin" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+## Integration with External Systems
+
+### SIEM Forwarding
+
+For production deployments, forward SeaWatch events to your SIEM for correlation with other security signals:
+
+- **Splunk** — Use a webhook subscriber to forward events to the Splunk HTTP Event Collector (HEC)
+- **Elastic** — Forward events to Elasticsearch via a webhook or Logstash pipeline
+- **Datadog** — Send events to the Datadog Logs API via webhook
+
+### OpenTelemetry Correlation
+
+SeaWatch events include a `trace_id` field when OpenTelemetry is enabled. This allows you to:
+
+1. See an authentication event in your SIEM
+2. Use the `trace_id` to find the corresponding HTTP request trace in Jaeger/Tempo
+3. Follow the request through FerrisKey's internal services
+4. Correlate with downstream API calls made with the issued token
+
+### Webhook Automation
+
+Use [Webhooks](/modules/default/en/webhooks/overview) to react to SeaWatch-tracked events in real time:
+
+- Alert on-call when `client_secret_rotated` happens outside maintenance windows
+- Notify a Slack channel on `user_created` events
+- Lock accounts after N consecutive `login_failure` events (via an external service)
+
+## Compliance Use Cases
+
+### SOC 2 Type II
+SeaWatch provides the audit trail required for the "Security" and "Availability" trust service criteria. Export events by time range to produce evidence for auditors.
+
+### GDPR
+Track when user data is accessed (`login_success`), modified (`user_updated`), or deleted (`user_deleted`). SeaWatch makes it possible to answer data subject access requests with precise records.
+
+### PCI DSS
+For environments handling payment data, SeaWatch captures all authentication and authorization events needed for PCI DSS Requirement 10 (Track and monitor all access to network resources and cardholder data).
+
+## Data Retention
+
+SeaWatch events are stored in PostgreSQL alongside your FerrisKey data. For long-term retention:
+
+- Forward events to a dedicated log storage system (S3, GCS, Azure Blob) via webhooks
+- Set up database-level partitioning and archival for the events table
+- Consider compliance requirements when determining retention periods (SOC 2 typically requires 1 year, HIPAA requires 6 years)

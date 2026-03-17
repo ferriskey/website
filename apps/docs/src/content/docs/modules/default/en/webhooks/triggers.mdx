@@ -1,0 +1,87 @@
+---
+title: Trigger Events
+description: Complete reference of all webhook trigger events in FerrisKey.
+icon: zap
+order: 2
+---
+
+# Trigger Events
+
+Webhook subscribers listen for specific trigger events. FerrisKey supports 26 trigger events organized by resource type.
+
+## User Events
+
+| Trigger | Description |
+|---|---|
+| `user.created` | A new user account was created |
+| `user.updated` | A user's profile was modified |
+| `user.deleted` | A user account was deleted |
+| `user.bulk_deleted` | Multiple users were deleted in a batch operation |
+| `user.credentials.deleted` | A user's credentials were removed |
+| `user.role.assigned` | A role was assigned to a user |
+| `user.role.unassigned` | A role was removed from a user |
+
+## Authentication Events
+
+| Trigger | Description |
+|---|---|
+| `auth.reset_password` | A password reset was performed |
+
+## Client Events
+
+| Trigger | Description |
+|---|---|
+| `client.created` | A new OAuth2 client was registered |
+| `client.updated` | A client's configuration was modified |
+| `client.deleted` | A client was removed |
+| `client.role.created` | A client-specific role was created |
+| `client.role.updated` | A client-specific role was modified |
+
+## Redirect URI Events
+
+| Trigger | Description |
+|---|---|
+| `redirect_uri.created` | A redirect URI was added to a client |
+| `redirect_uri.updated` | A redirect URI was modified |
+| `redirect_uri.deleted` | A redirect URI was removed |
+
+## Role Events
+
+| Trigger | Description |
+|---|---|
+| `role.created` | A new role was created |
+| `role.updated` | A role was modified |
+| `role.deleted` | A role was deleted |
+| `role.permission.updated` | A role's permissions bitmask was changed |
+
+## Realm Events
+
+| Trigger | Description |
+|---|---|
+| `realm.created` | A new realm was created |
+| `realm.updated` | A realm was modified |
+| `realm.deleted` | A realm was deleted |
+| `realm.settings.updated` | Realm settings were changed |
+
+## Webhook Events
+
+| Trigger | Description |
+|---|---|
+| `webhook.created` | A new webhook was registered |
+| `webhook.updated` | A webhook was modified |
+| `webhook.deleted` | A webhook was removed |
+
+:::callout{variant="info" title="Webhook events are meta"}
+Yes, you can subscribe to webhook lifecycle events — useful for auditing changes to your webhook configuration itself.
+:::
+
+## Choosing Which Events to Subscribe To
+
+### Start Narrow
+Subscribe only to the events you need. Each subscription adds a network call on every matching event. Start with the critical ones (`user.created`, `user.deleted`, `client.deleted`) and expand as needed.
+
+### Combine with SeaWatch
+Webhook triggers overlap with [SeaWatch event types](/modules/default/en/seawatch/event-types) but are not identical. SeaWatch tracks security audit events (login success/failure). Webhooks track resource lifecycle events. Use both for complete coverage.
+
+### Event Ordering
+Events are delivered in the order they occur within the realm. However, network delivery is asynchronous — if your endpoint is slow, later events may arrive before earlier ones are acknowledged. Design your handlers to be idempotent.

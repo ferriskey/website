@@ -1,0 +1,85 @@
+---
+title: Roles & Permissions
+description: Bitwise role system in FerrisKey — permission bundles, bitmask operations, and role mappings.
+icon: shield-check
+order: 5
+---
+
+# Roles & Permissions
+
+FerrisKey uses a **bitwise permission system** where each permission is a single bit in a 64-bit integer. Roles are named bundles of permissions. Authorization checks reduce to fast bitwise AND operations.
+
+## How It Works
+
+Each permission maps to a unique power of two:
+
+```
+CreateClient        = 0b0000...0001  (bit 0)
+ManageAuthorization = 0b0000...0010  (bit 1)
+ManageClients       = 0b0000...0100  (bit 2)
+...
+```
+
+A role stores its permissions as a single `u64` bitmask — the OR of all included permission bits. Checking whether a user has a permission is a single AND operation:
+
+```rust title="Permission check"
+fn has_permission(user_permissions: u64, required: u64) -> bool {
+    user_permissions & required == required
+}
+```
+
+## Permissions Reference
+
+### Manage Permissions
+
+| Permission | Description |
+|---|---|
+| `CreateClient` | Create new OAuth2 clients |
+| `ManageAuthorization` | Manage authorization policies |
+| `ManageClients` | Update and delete clients |
+| `ManageEvents` | Manage audit event configuration |
+| `ManageIdentityProviders` | Configure external identity providers |
+| `ManageRealm` | Update realm settings |
+| `ManageUsers` | Create, update, and delete users |
+| `ManageRoles` | Create, update, and delete roles |
+| `ManageWebhooks` | Configure webhook subscriptions |
+| `ManageClientScopes` | Manage client scopes and protocol mappers |
+
+### Query Permissions
+
+| Permission | Description |
+|---|---|
+| `QueryClients` | List and search clients |
+| `QueryGroups` | List and search groups |
+| `QueryRealms` | List and search realms |
+| `QueryUsers` | List and search users |
+| `QueryWebhooks` | List and search webhooks |
+| `QueryClientScopes` | List and search client scopes |
+
+### View Permissions
+
+| Permission | Description |
+|---|---|
+| `ViewAuthorization` | View authorization details |
+| `ViewClients` | View client details |
+| `ViewEvents` | View audit events |
+| `ViewIdentityProviders` | View identity provider details |
+| `ViewRealm` | View realm details |
+| `ViewUsers` | View user details |
+| `ViewRoles` | View role details |
+| `ViewWebhooks` | View webhook details |
+| `ViewClientScopes` | View client scope details |
+
+## Role Mappings
+
+Roles are assigned to users (or service account users) through role mappings. A user's effective permissions are the **union** (bitwise OR) of all assigned role bitmasks.
+
+For example, if a user has two roles:
+- **Viewer** with permissions `ViewUsers | ViewClients` = `0b...10100`
+- **User Manager** with permissions `ManageUsers | QueryUsers` = `0b...01010`
+
+Their effective bitmask is `0b...11110` — they can view and manage users, view clients, and query users.
+
+## Realm-Scoped Roles
+
+Roles are defined within a realm and apply to all clients in that realm. When a user authenticates, their roles are resolved and included in the access token as claims (via protocol mappers), allowing resource servers to make authorization decisions without calling back to FerrisKey.

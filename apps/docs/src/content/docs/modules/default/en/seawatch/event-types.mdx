@@ -1,0 +1,87 @@
+---
+title: Event Types
+description: Complete reference of the 16 SeaWatch security event types in FerrisKey.
+icon: list
+order: 2
+---
+
+# Event Types
+
+SeaWatch tracks 16 security event types organized into five categories. Each event type captures a specific action with its success or failure status.
+
+## Authentication
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `login_success` | User successfully authenticated | User | User |
+| `login_failure` | Authentication attempt failed | — | User (if identified) |
+
+**`login_success` details:**
+```json
+{
+  "client_id": "my-frontend",
+  "grant_type": "password",
+  "ip_address": "203.0.113.42"
+}
+```
+
+**`login_failure` details:**
+```json
+{
+  "reason": "invalid_credentials",
+  "client_id": "my-frontend",
+  "username": "alice"
+}
+```
+
+:::callout{variant="info" title="Failed logins have no actor"}
+When a login fails, the user is not yet authenticated, so `actor_id` is typically null. The `target_id` is set when the user could be identified (valid username, wrong password).
+:::
+
+## Password
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `password_reset` | Password was reset by an admin | Admin | User |
+| `password_reset_requested` | User requested a password reset email | System | User |
+| `password_reset_completed` | User completed the password reset flow | User | User |
+
+These three events trace the full password reset lifecycle. A `password_reset_requested` without a matching `password_reset_completed` might indicate a user who abandoned the flow — or an attacker testing email enumeration.
+
+## User
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `user_created` | New user account created | Admin or System | User |
+| `user_deleted` | User account deleted | Admin | User |
+
+User creation events include whether the user was created by an admin, through self-registration, or as a service account for a client.
+
+## Role
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `role_assigned` | Role assigned to a user | Admin | User |
+| `role_unassigned` | Role removed from a user | Admin | User |
+| `role_created` | New role created | Admin | Role |
+| `role_removed` | Role deleted | Admin | Role |
+
+Role events are critical for access control audits. They answer: "Who granted this user admin permissions, and when?"
+
+## Client
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `client_created` | New OAuth2 client registered | Admin | Client |
+| `client_deleted` | Client removed | Admin | Client |
+| `client_secret_rotated` | Client secret was regenerated | Admin | Client |
+
+**`client_secret_rotated`** is particularly important — it means the old secret is invalidated. If this happens unexpectedly, it could indicate a compromised admin account.
+
+## Configuration
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `realm_config_changed` | Realm settings were modified | Admin | Realm |
+
+Configuration changes can have wide-reaching effects (enabling/disabling registration, changing token lifetimes). SeaWatch captures the full details of what changed.

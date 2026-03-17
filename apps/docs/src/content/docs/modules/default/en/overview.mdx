@@ -1,0 +1,40 @@
+---
+title: Modules Overview
+description: FerrisKey's modular architecture — purpose-built systems for authentication, audit, federation, and more.
+icon: puzzle
+order: 1
+---
+
+# Modules
+
+FerrisKey is built as a collection of purpose-built modules. Each module owns a specific aspect of identity management and can be understood, configured, and extended independently.
+
+::::card-group{cols=2}
+:::card{label="Trident" icon="lucide:shield-check" href="/modules/default/en/trident/overview"}
+**Multi-Factor Authentication** — TOTP, WebAuthn passkeys, magic links, and recovery codes.
+:::
+:::card{label="SeaWatch" icon="lucide:eye" href="/modules/default/en/seawatch/overview"}
+**Audit & Security Events** — Track and query every critical action across your realms.
+:::
+:::card{label="Compass" icon="lucide:compass" href="/modules/default/en/compass/overview"}
+**Authentication Flow Engine** — Orchestrate multi-step authentication with conditional logic.
+:::
+:::card{label="Abyss" icon="lucide:link" href="/modules/default/en/abyss/overview"}
+**Identity Provider Federation** — Connect Google, GitHub, Discord, and custom OIDC providers.
+:::
+:::card{label="Aegis" icon="lucide:lock" href="/modules/default/en/aegis/overview"}
+**Scopes & Protocol Mappers** — Control exactly what data flows into your tokens.
+:::
+:::card{label="Webhooks" icon="lucide:webhook" href="/modules/default/en/webhooks/overview"}
+**Event-Driven Extensibility** — Subscribe to lifecycle events and push notifications to external systems.
+:::
+::::
+
+## Module Architecture
+
+Each module is implemented as either:
+
+- **A domain module** within `core/src/domain/` — tightly integrated with the core domain
+- **A standalone library crate** in `libs/` — reusable and independently testable
+
+All modules follow FerrisKey's hexagonal architecture: business logic is pure, dependencies are injected through ports (traits), and infrastructure concerns are handled at the boundary.

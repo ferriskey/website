@@ -1,0 +1,114 @@
+---
+title: Configuration
+description: Environment variables, SMTP setup, and deployment options for FerrisKey.
+icon: settings
+order: 1
+---
+
+# Configuration
+
+FerrisKey is configured through environment variables. Every setting has a sensible default for local development — override only what you need.
+
+## Environment Variables
+
+### Admin
+
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_USERNAME` | `admin` | Initial admin username |
+| `ADMIN_PASSWORD` | `admin` | Initial admin password |
+| `ADMIN_EMAIL` | `admin@local` | Initial admin email |
+
+### Database
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_HOST` | `localhost` | PostgreSQL host |
+| `DATABASE_PORT` | `5432` | PostgreSQL port |
+| `DATABASE_NAME` | `ferriskey` | Database name |
+| `DATABASE_USER` | `ferriskey` | Database user |
+| `DATABASE_PASSWORD` | `ferriskey` | Database password |
+| `DATABASE_SCHEMA` | `public` | Database schema |
+
+### Server
+
+| Variable | Default | Description |
+|---|---|---|
+| `SERVER_HOST` | `0.0.0.0` | Bind address |
+| `SERVER_PORT` | `3333` | HTTP port |
+| `SERVER_ROOT_PATH` | — | URL path prefix (for reverse proxies) |
+| `ALLOWED_ORIGINS` | — | Comma-separated CORS origins |
+| `WEBAPP_URL` | — | Frontend URL (used for redirects) |
+
+### TLS
+
+| Variable | Default | Description |
+|---|---|---|
+| `TLS_CERT_PATH` | — | Path to TLS certificate |
+| `TLS_KEY_PATH` | — | Path to TLS private key |
+
+### Logging
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOG_FILTER` | `info` | Log level filter (trace, debug, info, warn, error) |
+| `LOG_JSON` | `false` | Output logs in JSON format |
+
+## Deployment Examples
+
+### Docker Compose
+
+Configure FerrisKey by setting environment variables in your `docker-compose.yaml`:
+
+```yaml title="docker-compose.override.yaml"
+services:
+  api:
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=ferriskey
+      - DATABASE_USER=ferriskey
+      - DATABASE_PASSWORD=a-strong-password
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=a-strong-admin-password
+      - ADMIN_EMAIL=admin@yourorg.com
+      - ALLOWED_ORIGINS=https://iam.yourorg.com
+      - LOG_FILTER=info
+```
+
+### Bare Metal
+
+Set environment variables directly or use a `.env` file alongside the binary:
+
+```bash title=".env"
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=ferriskey
+DATABASE_USER=ferriskey
+DATABASE_PASSWORD=a-strong-password
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=a-strong-admin-password
+ADMIN_EMAIL=admin@yourorg.com
+ALLOWED_ORIGINS=https://iam.yourorg.com
+SERVER_PORT=3333
+LOG_FILTER=info
+```
+
+Then run the API server:
+
+```bash
+./ferriskey-api
+```
+
+## SMTP Configuration
+
+Email delivery (magic links, password reset, email verification) is configured per-realm through the admin console. Navigate to **Realm Settings → Email** and configure:
+
+- **SMTP Host** and **Port**
+- **From address**
+- **Authentication credentials** (if required)
+- **TLS/STARTTLS** settings
+
+:::callout{variant="info" title="No global SMTP"}
+SMTP is configured at the realm level, not globally. Each realm can use a different mail provider.
+:::

@@ -1,0 +1,72 @@
+---
+title: Magic Links
+description: Passwordless email login in FerrisKey — generate, deliver, and verify magic links.
+icon: mail
+order: 4
+---
+
+# Magic Links
+
+Magic links provide passwordless login via email. Instead of typing a password, the user receives an email with a unique link. Clicking the link authenticates them immediately.
+
+## How It Works
+
+::::step-group
+:::step{title="User requests a magic link"}
+The user enters their email address on the login page and requests a magic link.
+:::
+
+:::step{title="Token generated"}
+FerrisKey generates a unique token (UUID), hashes it for storage, and creates a `MagicLink` record with an expiration time.
+:::
+
+:::step{title="Email sent"}
+FerrisKey sends an email to the user containing a link with the raw (unhashed) token as a URL parameter.
+:::
+
+:::step{title="User clicks the link"}
+The user clicks the link in their email. The client sends the token to FerrisKey.
+:::
+
+:::step{title="Token verified"}
+FerrisKey hashes the received token and compares it against the stored hash. If it matches and hasn't expired, the user is authenticated and receives full tokens.
+:::
+::::
+
+## Configuration
+
+Magic links require two realm settings:
+
+| Setting | Default | Description |
+|---|---|---|
+| `magic_link_enabled` | `false` | Enable magic link authentication |
+| `magic_link_ttl` | `15` minutes | How long a magic link remains valid |
+
+:::callout{variant="warning" title="SMTP required"}
+Magic links require a configured SMTP provider on the realm. Without email delivery, magic links cannot be sent. Configure SMTP in **Realm Settings → Email**.
+:::
+
+## Security Considerations
+
+### Token Hashing
+The magic link token is never stored in plaintext. FerrisKey stores only the hash — even if the database is compromised, the tokens cannot be used.
+
+### Single Use
+Each magic link can be used exactly once. After the token is verified and the user is authenticated, the magic link record is consumed.
+
+### Expiration
+Magic links expire after `magic_link_ttl` minutes (default: 15). Expired links return an error. Keep this window short to limit the exposure of an unread email.
+
+### Email Security
+The security of magic links depends on the security of the user's email inbox. If an attacker has access to the inbox, they can use the magic link. For higher-security environments, combine magic links with a second factor or prefer WebAuthn instead.
+
+## Real-World Patterns
+
+### Consumer Onboarding
+Send a magic link as part of the registration flow. The user signs up with their email, receives a link, clicks it — and they're authenticated with a verified email in one step. No password to create, no email verification step needed separately.
+
+### Low-Friction Internal Tools
+For internal dashboards where users already have corporate email, magic links eliminate password management entirely. Users click "Send me a link", check their inbox, and they're in.
+
+### Passwordless Fallback
+Offer magic links as a fallback for users who forget their password. Instead of going through a password reset flow, they can request a magic link for immediate access.
