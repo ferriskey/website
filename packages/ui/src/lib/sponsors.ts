@@ -3,43 +3,68 @@ export interface Sponsor {
   name: string
   href: string
   logoUrl: string
-  tier: 'gold' | 'silver' | 'bronze'
+  tier: 'platinum' | 'gold' | 'supporters'
 }
 
 export const sponsorTierStyles: Record<Sponsor['tier'], string> = {
+  platinum: 'border-slate-400/50 bg-slate-400/5',
   gold: 'border-yellow-500/50 bg-yellow-500/5',
-  silver: 'border-zinc-400/50 bg-zinc-400/5',
-  bronze: 'border-orange-700/50 bg-orange-700/5',
+  supporters: 'border-blue-500/30 bg-blue-500/5',
 }
 
 export const sponsorBadgeStyles: Record<Sponsor['tier'], string> = {
+  platinum: 'bg-slate-400/15 text-slate-600 dark:text-slate-300',
   gold: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
-  silver: 'bg-zinc-400/15 text-zinc-600 dark:text-zinc-400',
-  bronze: 'bg-orange-700/15 text-orange-800 dark:text-orange-400',
+  supporters: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 }
 
 export const defaultSponsors: Sponsor[] = [
   {
-      id: 'cloudiam',
-      name: 'Cloud IAM',
-      href: "https://eu1.hubs.ly/H0q0Kbb0",
-      logoUrl: '/sponsors/cloudiam.png',
-      tier: 'gold',
+    id: 'cloudiam',
+    name: 'Cloud IAM',
+    href: "https://eu1.hubs.ly/H0q0Kbb0",
+    logoUrl: '/sponsors/cloudiam.png',
+    tier: 'platinum',
   },
   {
-  id: "gilded-health",
+    id: "gilded-health",
     name: "Gilded Health",
     logoUrl: "/sponsors/gilded_health.svg",
     href: "https://www.gilded.ch",
-    tier: "gold",
+    tier: "platinum",
   },
   {
     id: 'nudibranches',
     name: 'Nudibranches',
     href: 'https://nudibranches.tech',
     logoUrl: '/sponsors/nudibranches.png',
-    tier: 'silver',
+    tier: 'gold',
   },
+
+  {
+      id: "natalia",
+      name: "Natalia",
+      logoUrl: "/sponsors/natalia.svg",
+      href: "https://getnatalia.com",
+
+      tier: "gold",
+    },
+
+    // Supporters
+    {
+      id: "mineral",
+      name: "Mineral",
+      logoUrl: "/sponsors/mineral.png",
+      href: "https://mineral-foundation.org/",
+      tier: "supporters",
+    },
+    {
+      id: "polytech-montpellier",
+      name: "Polytech Montpellier",
+      logoUrl: "/sponsors/polytech-montpellier.png",
+      href: "https://www.polytech.umontpellier.fr/",
+      tier: "supporters",
+    },
 ]
 
 export function getSponsors(overrides?: Partial<Record<string, Sponsor>>): Sponsor[] {
