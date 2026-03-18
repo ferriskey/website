@@ -49,7 +49,7 @@ const {
 } = Astro.props
 
 const contributors = sortContributors(
-  await fetchContributors({ token: import.meta.env.GITHUB_TOKEN }),
+  await fetchContributors({ token: import.meta.env.GITHUB_TOKEN, repo: 'ferriskey', owner: 'ferriskey'}),
   'contributions'
 )
 

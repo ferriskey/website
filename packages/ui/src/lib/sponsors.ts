@@ -22,17 +22,24 @@ export const defaultSponsors: Sponsor[] = [
   {
       id: 'cloudiam',
       name: 'Cloud IAM',
-      href: 'https://www.cloud-iam.com/',
-      logoUrl: 'https://cdn.brandfetch.io/idEKeGBP2Y/w/300/h/300/theme/dark/icon.png?c=1bxid64Mup7aczewSAYMX&t=1769852965392',
+      href: "https://eu1.hubs.ly/H0q0Kbb0",
+      logoUrl: '/sponsors/cloudiam.png',
       tier: 'gold',
-    },
-    {
-      id: 'mineral',
-      name: 'Mineral',
-      href: 'https://mineral-dart.dev/',
-      logoUrl: 'https://mineral-dart.dev/logo.svg',
-      tier: 'silver',
-    },
+  },
+  {
+  id: "gilded-health",
+    name: "Gilded Health",
+    logoUrl: "/sponsors/gilded_health.svg",
+    href: "https://www.gilded.ch",
+    tier: "gold",
+  },
+  {
+    id: 'nudibranches',
+    name: 'Nudibranches',
+    href: 'https://nudibranches.tech',
+    logoUrl: '/sponsors/nudibranches.png',
+    tier: 'silver',
+  },
 ]
 
 export function getSponsors(overrides?: Partial<Record<string, Sponsor>>): Sponsor[] {
