@@ -20,6 +20,7 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
   const [locale, setLocale] = useState('en')
   const appLinks = getAppLinks('website', appUrlOverrides)
   const t = useTranslations(locale)
+  const docsHref = appUrlOverrides?.docs ?? '/'
 
   useEffect(() => {
     setLocale(getClientLocale())
@@ -27,7 +28,7 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
 
   const websiteLinks: NavbarLink[] = [
     { label: t('nav.features'), href: '#features' },
-    { label: t('nav.getStarted'), href: '#get-started' },
+    { label: t('nav.getStarted'), href: docsHref },
   ]
 
   return (

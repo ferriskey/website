@@ -103,11 +103,11 @@ Each step within a flow records:
 
 | Step | When It Executes | Typical Duration |
 |---|---|---|
-| `authorize` | OAuth2 authorization request validation — checks redirect URI, scope, response type, CSRF state | <5ms |
+| `authorize` | OAuth2 authorization request validation — checks redirect URI, scope, response type, CSRF state | &lt;5ms |
 | `credential_validation` | Username lookup + password hash verification (Argon2) | 50–200ms |
 | `mfa_challenge` | TOTP code validation or WebAuthn assertion verification | 5–50ms |
 | `token_exchange` | Authorization code → token exchange (code lookup + token generation) | 10–30ms |
-| `idp_redirect` | Building and recording the redirect to an external identity provider | <5ms |
+| `idp_redirect` | Building and recording the redirect to an external identity provider | &lt;5ms |
 | `idp_callback` | Processing the callback from an external IdP (token exchange + user lookup) | 100–500ms |
 | `finalize` | Session creation, SeaWatch event emission, and cleanup | 5–15ms |
 

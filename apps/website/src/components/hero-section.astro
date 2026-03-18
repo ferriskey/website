@@ -74,89 +74,312 @@ import { Button } from "@explainer/ui";
     >
     </div>
 
-    <div class="w-full max-w-6xl mx-auto pb-24 lg:pb-32">
-      <div class="text-center">
-        <div class="mb-6 justify-center">
-          <a
-            href="https://github.com/explainer/explainer"
-            rel="noopener noreferrer"
-            class="rounded-full font-semibold inline-flex items-center gap-2 transition-colors px-4 py-1.5 text-xs ring ring-inset ring-primary/50 text-primary hover:bg-primary/10 active:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <span data-t="hero.badge">Explainer</span>
-            <Icon icon="mdi:arrow-right" className="size-3.5" client:load />
-          </a>
-        </div>
-        <h1
-          class="text-5xl text-pretty tracking-tight text-foreground font-semibold sm:text-7xl max-w-6xl mx-auto"
-          data-t="hero.title"
-        >
-          Explain your ideas
-        </h1>
-        <p
-          class="text-lg sm:text-xl/8 text-muted-foreground text-balance mt-6 max-w-2xl mx-auto"
-          data-t="hero.description"
-        >
-          Quickly design your documentation and optimise it for search engine optimisation to showcase your products.
-        </p>
-      </div>
+    <div class="w-full max-w-7xl mx-auto pb-24 lg:pb-32">
+      <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 
-      <div class="pt-10 flex items-center justify-center">
-        <div class="flex flex-wrap gap-x-4 gap-y-3">
-          <Button size="lg" className="cursor-pointer" client:load>
+        <!-- Left: text + actions -->
+        <div>
+          <div class="mb-6 hero-fade" style="--i:0">
             <a
-              href={`${import.meta.env.PUBLIC_DOCS_URL || ''}/en/explainer/getting-started`}
-              class="flex gap-2"
+              href="https://github.com/ferriskey/ferriskey"
               rel="noopener noreferrer"
+              class="rounded-full font-semibold inline-flex items-center gap-2 transition-colors px-4 py-1.5 text-xs ring ring-inset ring-primary/50 text-primary hover:bg-primary/10 active:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <span data-t="hero.primaryAction">Getting Started</span>
-              <Icon
-                icon="mdi:arrow-right"
-                aria-hidden="true"
-                className="size-5"
-                client:load
-              />
+              <span>FerrisKey</span>
+              <Icon icon="mdi:arrow-right" className="size-3.5" client:load />
             </a>
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="cursor-pointer"
-            client:load
-          >
-            <a
-              href="https://github.com/LeadcodeDev/explainer"
-              class="flex gap-2"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Icon
-                icon="mdi:github"
-                aria-hidden="true"
-                className="size-5"
-                client:load
-              />
-              <span data-t="hero.secondaryAction">View on GitHub</span>
-            </a>
-          </Button>
-        </div>
-      </div>
+          </div>
+          <h1 class="text-5xl tracking-tight text-foreground font-semibold sm:text-6xl leading-tight hero-fade" style="--i:1">
+            A Modern IAM Built<br />for <span class="text-primary">Distributed</span><br />Systems
+          </h1>
+          <p class="text-lg sm:text-xl/8 text-muted-foreground text-balance mt-6 hero-fade" style="--i:2">
+            FerrisKey is an open-source, cloud-native Identity &amp; Access Management platform designed for Kubernetes, multi-tenancy, and modern security architectures.
+          </p>
 
-      <div
-        class="mt-10 flex items-center justify-center gap-x-8 gap-y-3 flex-wrap"
-      >
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Icon icon="mdi:open-source-initiative" className="size-4 text-primary/70" client:load />
-          <span data-t="hero.openSource">Open source</span>
+          <div class="mt-8 flex flex-wrap gap-x-4 gap-y-3 hero-fade" style="--i:3">
+            <Button size="lg" className="cursor-pointer" client:load>
+              <a
+                href={`${import.meta.env.PUBLIC_DOCS_URL || ''}/en/discover/getting-started`}
+                class="flex gap-2"
+                rel="noopener noreferrer"
+              >
+                <span>Getting Started</span>
+                <Icon icon="mdi:arrow-right" aria-hidden="true" className="size-5" client:load />
+              </a>
+            </Button>
+            <Button variant="outline" size="lg" className="cursor-pointer" client:load>
+              <a
+                href="https://github.com/ferriskey/ferriskey"
+                class="flex gap-2"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon icon="mdi:github" aria-hidden="true" className="size-5" client:load />
+                <span>View on GitHub</span>
+              </a>
+            </Button>
+          </div>
+
+          <div class="mt-8 flex items-center gap-x-8 gap-y-3 flex-wrap hero-fade" style="--i:4">
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+              <Icon icon="mdi:open-source-initiative" className="size-4 text-primary/70" client:load />
+              <span>Open source</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+              <Icon icon="mdi:license" className="size-4 text-primary/70" client:load />
+              <span>Apache 2.0</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+              <Icon icon="mdi:tag-outline" className="size-4 text-primary/70" client:load />
+              <span>Early Access · v0.4.2</span>
+            </div>
+          </div>
         </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Icon icon="mdi:license" className="size-4 text-primary/70" client:load />
-          <span data-t="hero.license">MIT License</span>
+
+        <!-- Right: SI diagram — IAM at the center -->
+        <div class="flex justify-center lg:justify-end items-center hero-diagram hero-fade" style="--i:2">
+          <!-- Mobile diagram: vertical 2×2 grid layout -->
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 310 460"
+            class="block md:hidden w-full diagram-svg"
+            role="img"
+            aria-label="FerrisKey IAM architecture diagram"
+          >
+            <defs>
+              <filter id="hub-glow-m" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path class="arrow-tip-left" d="M0,0 L0,6 L8,3 z" fill="rgba(249,115,22,0.55)"/>
+              </marker>
+              <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path class="arrow-tip-right" d="M0,0 L0,6 L8,3 z" fill="rgba(14,165,233,0.55)"/>
+              </marker>
+            </defs>
+            <g class="anim-lines">
+              <path class="line-left-step" d="M79,106 L79,118 Q79,126 87,126 L147,126 Q155,126 155,134 L155,146" fill="none" stroke="rgba(249,115,22,0.55)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-orange)"/>
+              <path class="line-left-step" d="M232,106 L232,118 Q232,126 224,126 L163,126 Q155,126 155,134 L155,146" fill="none" stroke="rgba(249,115,22,0.55)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-orange)"/>
+              <path class="line-right-step" d="M155,248 L155,273 Q155,281 147,281 L87,281 Q79,281 79,289 L79,314" fill="none" stroke="rgba(14,165,233,0.55)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-blue)"/>
+              <path class="line-right-step" d="M155,248 L155,273 Q155,281 163,281 L224,281 Q232,281 232,289 L232,314" fill="none" stroke="rgba(14,165,233,0.55)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-blue)"/>
+            </g>
+            <g class="anim-left">
+              <text x="155" y="16" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#64748b" letter-spacing="1.5">CONSUMERS</text>
+              <rect x="8"   y="22" width="141" height="38" rx="7" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="16" y="33" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <text x="37" y="45" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Web App</text>
+              <rect x="161" y="22" width="141" height="38" rx="7" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="169" y="33" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+              <text x="190" y="45" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Mobile App</text>
+              <rect x="8"   y="68" width="141" height="38" rx="7" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="16" y="79" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <text x="37" y="91" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">API / CLI</text>
+              <rect x="161" y="68" width="141" height="38" rx="7" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="169" y="79" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <text x="190" y="91" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">End Users</text>
+            </g>
+            <g class="anim-hub-mobile">
+              <ellipse cx="155" cy="196" rx="52" ry="52" fill="rgba(249,115,22,0.12)" filter="url(#hub-glow-m)" class="hub-glow-pulse"/>
+              <rect x="95" y="146" width="120" height="100" rx="16" fill="#0f172a" stroke="rgba(249,115,22,0.55)" stroke-width="1.5"/>
+              <image href="/logo.svg" x="115" y="158" width="80" height="70" preserveAspectRatio="xMidYMid meet"/>
+              <text x="155" y="239" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="rgba(249,115,22,0.85)" font-weight="700" letter-spacing="0.5">FerrisKey IAM</text>
+            </g>
+            <g class="anim-right">
+              <text x="155" y="310" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#64748b" letter-spacing="1.5">PLATFORM</text>
+              <rect x="8"   y="316" width="141" height="38" rx="7" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="16" y="327" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+              <text x="37" y="339" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Kubernetes</text>
+              <rect x="161" y="316" width="141" height="38" rx="7" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="169" y="327" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <text x="190" y="339" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">ArgoCD</text>
+              <rect x="8"   y="362" width="141" height="38" rx="7" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="16" y="373" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <text x="37" y="385" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Prometheus</text>
+              <rect x="161" y="362" width="141" height="38" rx="7" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="169" y="373" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <text x="190" y="385" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">OpenTelemetry</text>
+            </g>
+            <text class="anim-caption" text-anchor="middle" font-family="ui-monospace,monospace" font-size="10" fill="#94a3b8" letter-spacing="0.3">
+              <tspan x="155" y="440">IAM as the single identity layer</tspan>
+              <tspan x="155" dy="14">across your entire stack</tspan>
+            </text>
+          </svg>
+
+          <!-- Desktop diagram: 3-column layout -->
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 560 260"
+            class="hidden md:block w-full max-w-xl diagram-svg"
+            role="img"
+            aria-label="FerrisKey IAM architecture diagram"
+          >
+            <defs>
+              <filter id="hub-glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="8" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <marker id="arrow-d-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path class="arrow-tip-left" d="M0,0 L0,6 L8,3 z" fill="rgba(249,115,22,0.5)"/>
+              </marker>
+              <marker id="arrow-d-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path class="arrow-tip-right" d="M0,0 L0,6 L8,3 z" fill="rgba(14,165,233,0.5)"/>
+              </marker>
+            </defs>
+            <g class="anim-lines">
+              <path class="line-left-step" d="M148,58  L170,58  Q180,58  180,68  L180,120 Q180,130 190,130 L212,130" fill="none" stroke="rgba(249,115,22,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-orange)"/>
+              <path class="line-left-step" d="M148,106 L170,106 Q180,106 180,116 L180,120 Q180,130 190,130 L212,130" fill="none" stroke="rgba(249,115,22,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-orange)"/>
+              <path class="line-left-step" d="M148,154 L170,154 Q180,154 180,144 L180,140 Q180,130 190,130 L212,130" fill="none" stroke="rgba(249,115,22,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-orange)"/>
+              <path class="line-left-step" d="M148,202 L170,202 Q180,202 180,192 L180,140 Q180,130 190,130 L212,130" fill="none" stroke="rgba(249,115,22,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-orange)"/>
+              <path class="line-right-step" d="M348,130 L370,130 Q380,130 380,120 L380,68  Q380,58  390,58  L412,58" fill="none" stroke="rgba(14,165,233,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-blue)"/>
+              <path class="line-right-step" d="M348,130 L370,130 Q380,130 380,120 L380,116 Q380,106 390,106 L412,106" fill="none" stroke="rgba(14,165,233,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-blue)"/>
+              <path class="line-right-step" d="M348,130 L370,130 Q380,130 380,140 L380,144 Q380,154 390,154 L412,154" fill="none" stroke="rgba(14,165,233,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-blue)"/>
+              <path class="line-right-step" d="M348,130 L370,130 Q380,130 380,140 L380,192 Q380,202 390,202 L412,202" fill="none" stroke="rgba(14,165,233,0.4)" stroke-width="1.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#arrow-d-blue)"/>
+            </g>
+            <g class="anim-left">
+              <text x="74" y="34" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#64748b" letter-spacing="1.5">CONSUMERS</text>
+              <rect x="0" y="40" width="148" height="36" rx="8" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="10" y="49" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <text x="35" y="63" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Web App</text>
+              <rect x="0" y="88" width="148" height="36" rx="8" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="10" y="97" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+              <text x="35" y="111" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Mobile App</text>
+              <rect x="0" y="136" width="148" height="36" rx="8" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="10" y="145" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <text x="35" y="159" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">API / CLI</text>
+              <rect x="0" y="184" width="148" height="36" rx="8" fill="rgba(249,115,22,0.04)" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+              <svg x="10" y="193" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <text x="35" y="207" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">End Users</text>
+            </g>
+            <g class="anim-hub">
+              <ellipse cx="280" cy="130" rx="58" ry="58" fill="rgba(249,115,22,0.12)" filter="url(#hub-glow)" class="hub-glow-pulse"/>
+              <rect x="212" y="74" width="136" height="112" rx="16" fill="#0f172a" stroke="rgba(249,115,22,0.55)" stroke-width="1.5"/>
+              <image href="/logo.svg" x="240" y="88" width="80" height="80" preserveAspectRatio="xMidYMid meet"/>
+              <text x="280" y="174" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="rgba(249,115,22,0.85)" font-weight="700" letter-spacing="0.5">FerrisKey IAM</text>
+            </g>
+            <g class="anim-right">
+              <text x="486" y="34" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#64748b" letter-spacing="1.5">PLATFORM</text>
+              <rect x="412" y="40" width="148" height="36" rx="8" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="422" y="49" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+              <text x="447" y="63" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Kubernetes</text>
+              <rect x="412" y="88" width="148" height="36" rx="8" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="422" y="97" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <text x="447" y="111" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">ArgoCD</text>
+              <rect x="412" y="136" width="148" height="36" rx="8" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="422" y="145" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <text x="447" y="159" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">Prometheus</text>
+              <rect x="412" y="184" width="148" height="36" rx="8" fill="rgba(14,165,233,0.04)" stroke="rgba(14,165,233,0.2)" stroke-width="1"/>
+              <svg x="422" y="193" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(14,165,233,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <text x="447" y="207" font-family="ui-monospace,monospace" font-size="11" fill="#94a3b8" font-weight="500">OpenTelemetry</text>
+            </g>
+            <text class="anim-caption" x="280" y="248" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#475569" letter-spacing="0.3">
+              IAM as the single identity layer across your entire information system
+            </text>
+          </svg>
         </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Icon icon="mdi:download-outline" className="size-4 text-primary/70" client:load />
-          <span data-t="hero.downloads">1k+ downloads</span>
-        </div>
+
       </div>
     </div>
   </div>
 </div>
+
+<style>
+  /* ── Hero entrance animations ── */
+  @keyframes heroFadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .hero-fade {
+    opacity: 0;
+    animation: heroFadeUp 0.6s ease forwards;
+    animation-delay: calc(var(--i) * 120ms + 100ms);
+  }
+
+  /* ── Arrow tips (hidden until line finishes drawing) ── */
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  .arrow-tip-left {
+    opacity: 0;
+    animation: fadeIn 0.05s forwards;
+    animation-delay: 1.4s; /* 0.5s + 0.9s */
+  }
+
+  .arrow-tip-right {
+    opacity: 0;
+    animation: fadeIn 0.05s forwards;
+    animation-delay: 1.6s; /* 0.7s + 0.9s */
+  }
+
+  /* ── Line draw (stroke-dashoffset 1 → 0) ── */
+  @keyframes drawLine {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .line-left-step {
+    animation: drawLine 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: 0.5s;
+  }
+
+  .line-right-step {
+    animation: drawLine 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: 0.7s;
+  }
+
+  /* ── Fade-in groups ── */
+  @keyframes fadeInLeft {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeInRight {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .anim-left {
+    opacity: 0;
+    animation: fadeInLeft 0.6s ease forwards;
+    animation-delay: 0.1s;
+  }
+
+  .anim-hub,
+  .anim-hub-mobile {
+    opacity: 0;
+    animation: fadeInUp 0.6s ease forwards;
+    animation-delay: 0.3s;
+  }
+
+  .anim-right {
+    opacity: 0;
+    animation: fadeInRight 0.6s ease forwards;
+    animation-delay: 0.5s;
+  }
+
+  .anim-caption {
+    opacity: 0;
+    animation: fadeInUp 0.5s ease forwards;
+    animation-delay: 1s;
+  }
+
+  /* ── Hub glow pulse ── */
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0.7; }
+    50%       { opacity: 1; }
+  }
+
+  .hub-glow-pulse {
+    animation: glowPulse 3s ease-in-out infinite;
+  }
+</style>

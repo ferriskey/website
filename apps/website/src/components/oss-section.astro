@@ -1,0 +1,194 @@
+---
+const GITHUB_REPO = 'ferriskey/ferriskey'
+const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO
+
+type Release = { date: string; title: string; tag: string; url: string }
+type Contributor = { login: string; avatar: string; url: string }
+
+let stars = 0
+let forks = 0
+let contributorCount = 0
+let releaseCount = 0
+let releases: Release[] = []
+let avatars: (Contributor | null)[] = []
+
+try {
+  const [repoRes, releasesRes, contributorsRes] = await Promise.all([
+    fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } }),
+    fetch(`${GITHUB_API}/releases?per_page=6`, { headers: { Accept: 'application/vnd.github.v3+json' } }),
+    fetch(`${GITHUB_API}/contributors?per_page=100`, { headers: { Accept: 'application/vnd.github.v3+json' } }),
+  ])
+
+  if (repoRes.ok) {
+    const repo = await repoRes.json()
+    stars = repo.stargazers_count ?? 0
+    forks = repo.forks_count ?? 0
+  }
+
+  if (releasesRes.ok) {
+    const raw = await releasesRes.json()
+    releaseCount = raw.length
+    releases = raw.slice(0, 6).map((r: any) => {
+      const d = new Date(r.published_at)
+      const month = d.toLocaleString('en-US', { month: 'short' })
+      return {
+        date: `${month} ${d.getDate()}`,
+        title: r.name || r.tag_name,
+        tag: r.tag_name,
+        url: r.html_url,
+      }
+    })
+  }
+
+  if (contributorsRes.ok) {
+    const data: any[] = await contributorsRes.json()
+    // Estimate total count via Link header pagination
+    const link = contributorsRes.headers.get('Link') || ''
+    const match = link.match(/page=(\d+)>; rel="last"/)
+    contributorCount = match ? parseInt(match[1]) * 100 : data.length
+
+    // Build avatar list — pad to exactly 39 for the grid layout
+    // Layout: rows 1-2 corners + 6 middle | rows 3-5 full (27) | rows 6-7 corners + 6 middle
+    const contributors: Contributor[] = data
+      .filter((c: any) => !c.login?.includes('[bot]'))
+      .slice(0, 39)
+      .map((c: any) => ({ login: c.login, avatar: c.avatar_url, url: c.html_url }))
+    avatars = [...contributors, ...Array(Math.max(0, 39 - contributors.length)).fill(null)]
+  }
+} catch (_) {
+  avatars = Array(39).fill(null)
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(n)
+}
+
+const stats = [
+  { value: formatCount(stars),           label: 'github stars',  href: `https://github.com/${GITHUB_REPO}/stargazers`,           gridClass: 'col-start-1 col-span-3 row-start-1 row-span-2' },
+  { value: formatCount(forks),           label: 'forks',         href: `https://github.com/${GITHUB_REPO}/forks`,                gridClass: 'col-start-7 col-span-3 row-start-1 row-span-2' },
+  { value: formatCount(contributorCount),label: 'contributors',  href: `https://github.com/${GITHUB_REPO}/graphs/contributors`,  gridClass: 'col-start-1 col-span-3 row-start-6 row-span-2' },
+  { value: String(releaseCount),         label: 'releases',      href: `https://github.com/${GITHUB_REPO}/releases`,            gridClass: 'col-start-7 col-span-3 row-start-6 row-span-2' },
+]
+
+const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px); background-size: 18px 18px; color: var(--color-primary);'
+---
+
+<div class="w-full py-16 sm:py-24 lg:py-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+    <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_2fr] gap-6 items-end">
+
+      <!-- Left: Releases -->
+      <div data-anim="fade-right" class="flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-foreground" data-t="oss.releases">Releases</h2>
+          <a
+            href={`https://github.com/${GITHUB_REPO}/releases`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-foreground hover:bg-muted transition-colors"
+          >
+            <span data-t="oss.changelog">Changelog</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 17L17 7M7 7h10v10"/>
+            </svg>
+          </a>
+        </div>
+
+        {releases.length > 0 ? (
+          <div class="relative">
+            <div class="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-background to-transparent pointer-events-none z-10" aria-hidden="true"></div>
+            <div class="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-background to-transparent pointer-events-none z-10" aria-hidden="true"></div>
+            <div class="flex flex-col gap-2">
+              {releases.map((r) => (
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-3 px-4 py-3 rounded-xl border bg-background hover:bg-muted/40 transition-colors group"
+                >
+                  <span class="text-xs text-muted-foreground w-12 shrink-0 font-mono">{r.date}</span>
+                  <span class="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">{r.title}</span>
+                  <span class="text-xs border rounded-md px-2 py-0.5 text-muted-foreground shrink-0 font-mono">{r.tag}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div class="border rounded-xl p-6 text-sm text-muted-foreground text-center">
+            No releases yet
+          </div>
+        )}
+      </div>
+
+      <!-- Center: open source card -->
+      <div data-anim="scale" style="transition-delay:150ms" class="border rounded-2xl bg-muted/30 flex flex-col items-center justify-center text-center gap-6 p-8 relative overflow-hidden">
+        <div class="absolute inset-0 pointer-events-none opacity-20" style={DOT_BG} aria-hidden="true"></div>
+        <div class="relative">
+          <h3 class="text-2xl sm:text-3xl font-semibold text-foreground leading-snug text-balance" data-t="oss.card.title">
+            Built in the open.<br/>Secured by design.
+          </h3>
+          <p class="mt-4 text-sm text-muted-foreground max-w-xs mx-auto text-balance leading-relaxed" data-t="oss.card.desc">
+            No lock-in, no black boxes. Audit the code, contribute, or fork it — Ferriskey belongs to the community.
+          </p>
+        </div>
+        <a
+          href={`https://github.com/${GITHUB_REPO}/blob/main/LICENSE`}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="relative border rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
+        >
+          Apache 2.0
+        </a>
+      </div>
+
+      <!-- Right: OSS Stats with contributor mosaic -->
+      <div data-anim="fade-left" style="transition-delay:300ms" class="flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-foreground" data-t="oss.stats">OSS Stats</h2>
+        </div>
+
+        <div class="grid grid-cols-9 gap-1.5 content-start" style="grid-auto-flow: dense;">
+
+          {stats.map((s) => (
+            <a
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              class={`${s.gridClass} rounded-xl border relative overflow-hidden flex flex-col items-center justify-center gap-1 p-3 hover:bg-muted/40 transition-colors group`}
+            >
+              <div class="absolute inset-0 pointer-events-none opacity-20 group-hover:opacity-30 transition-opacity" style={DOT_BG} aria-hidden="true"></div>
+              <span class="relative text-3xl font-bold text-foreground tabular-nums">{s.value}</span>
+              <span class="relative text-[11px] text-muted-foreground font-mono text-center leading-tight">{s.label}</span>
+            </a>
+          ))}
+
+          {avatars.map((c) =>
+            c ? (
+              <a
+                href={c.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={c.login}
+                class="aspect-square rounded-xl overflow-hidden border border-border/50 hover:border-primary/50 transition-colors"
+              >
+                <img
+                  src={`${c.avatar}&s=80`}
+                  alt={c.login}
+                  width="80"
+                  height="80"
+                  loading="lazy"
+                  class="w-full h-full object-cover saturate-50"
+                />
+              </a>
+            ) : (
+              <div class="aspect-square rounded-xl border border-border/20 bg-muted/10" aria-hidden="true" />
+            )
+          )}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

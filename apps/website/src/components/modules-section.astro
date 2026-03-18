@@ -1,0 +1,113 @@
+---
+const modules = [
+  { name: 'Trident',  desc: 'Multi-Factor Authentication',      icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z', href: '/modules/trident' },
+  { name: 'SeaWatch', desc: 'Audit & Security Events',           icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z', href: '/modules/seawatch' },
+  { name: 'Compass',  desc: 'Authentication Flow Engine',        icon: 'M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z', href: '/modules/compass' },
+  { name: 'Abyss',    desc: 'Identity Provider Federation',      icon: 'M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244', href: '/modules/abyss' },
+  { name: 'Aegis',    desc: 'Scopes & Protocol Mappers',         icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z', href: '/modules/aegis' },
+  { name: 'Webhooks', desc: 'Event-Driven Extensibility',        icon: 'M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z', href: '/modules/webhooks' },
+]
+
+const pills = [
+  'TOTP', 'WebAuthn', 'Magic Links', 'Recovery Codes',
+  'Google SSO', 'GitHub SSO', 'Discord SSO', 'Custom OIDC',
+  'Audit Events', 'Event Streaming', 'Conditional Flows', 'Step-Up Auth',
+  'JWT Claims', 'Custom Scopes', 'Protocol Mappers', 'Webhooks',
+  'Passkeys', 'Token Introspection', 'Realm Isolation', 'PKCE',
+]
+---
+
+<div class="w-full py-16 sm:py-24 lg:py-32">
+  <div class="w-full max-w-7xl mx-auto px-5">
+
+    <div class="mb-10" data-anim="fade-up">
+      <p class="text-sm font-semibold text-primary uppercase tracking-wide mb-3" data-t="modules.label">Modules</p>
+      <h2 class="text-3xl font-semibold text-foreground sm:text-4xl" data-t="modules.title">Everything you need to build</h2>
+      <p class="mt-4 text-lg text-muted-foreground max-w-2xl text-balance" data-t="modules.description">
+        Purpose-built systems for authentication, audit, federation, and more. Each module owns a specific aspect of identity — composable, extensible, and production-ready.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
+
+      <!-- Left: scrolling pills + caption -->
+      <div data-anim="fade-right" style="transition-delay:100ms" class="relative rounded-2xl border bg-muted/10 overflow-hidden flex flex-col min-h-[480px]">
+
+        <!-- pill marquee area -->
+        <div class="flex-1 flex flex-col justify-center gap-3 py-10 overflow-hidden select-none">
+          {[pills, [...pills].reverse(), pills].map((row, i) => (
+            <div class={`flex gap-3 ${i % 2 === 0 ? 'animate-marquee-left' : 'animate-marquee-right'}`} aria-hidden={i > 0 ? 'true' : undefined}>
+              {[...row, ...row].map((p) => (
+                <span class="shrink-0 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-4 py-1.5 text-sm text-muted-foreground whitespace-nowrap">
+                  <span class="size-1.5 rounded-full bg-primary/60 shrink-0"></span>
+                  {p}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <!-- fade left & right edges -->
+        <div class="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-background/80 to-transparent pointer-events-none"></div>
+        <div class="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-background/80 to-transparent pointer-events-none"></div>
+
+        <!-- caption -->
+        <div class="relative p-8 pt-0">
+          <h3 class="text-xl font-semibold text-foreground" data-t="modules.left.title">Built for every identity scenario</h3>
+          <p class="mt-2 text-sm text-muted-foreground leading-relaxed max-w-md" data-t="modules.left.desc">
+            From passwordless auth to enterprise federation — the primitives are there, composable by design.
+          </p>
+        </div>
+      </div>
+
+      <!-- Right: CTA + module grid -->
+      <div data-anim="fade-left" style="transition-delay:180ms" class="rounded-2xl border bg-muted/10 p-8 flex flex-col gap-8">
+        <div>
+          <h3 class="text-2xl font-semibold text-foreground" data-t="modules.right.title">Official modules, zero hunting</h3>
+          <p class="mt-3 text-sm text-muted-foreground leading-relaxed" data-t="modules.right.desc">
+            MFA, federation, audit, webhooks — every critical identity concern solved with a dedicated module. No glue code, no compatibility roulette.
+          </p>
+          <a
+            href="/modules"
+            class="inline-flex items-center gap-2 mt-5 border rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
+          >
+            <span data-t="modules.cta">View all modules</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 17L17 7M7 7h10v10"/>
+            </svg>
+          </a>
+        </div>
+
+        <!-- module icon grid -->
+        <div class="grid grid-cols-3 gap-2">
+          {modules.map((m) => (
+            <a
+              href={m.href}
+              title={m.desc}
+              class="group flex flex-col items-center justify-center gap-2 rounded-xl border bg-background/60 hover:bg-muted/40 hover:border-primary/40 transition-colors aspect-square p-3"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-muted-foreground group-hover:text-foreground transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d={m.icon} />
+              </svg>
+              <span class="text-[11px] text-muted-foreground group-hover:text-foreground transition-colors font-medium text-center leading-tight">{m.name}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes marquee-left {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to   { transform: translateX(0); }
+  }
+  .animate-marquee-left  { animation: marquee-left  28s linear infinite; }
+  .animate-marquee-right { animation: marquee-right 28s linear infinite; }
+</style>

@@ -1,0 +1,36 @@
+services:
+  website:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: website
+        PUBLIC_WEBSITE_URL: http://localhost:4323
+        PUBLIC_DOCS_URL: http://localhost:4321
+        PUBLIC_BLOG_URL: http://localhost:4322
+    ports:
+      - "4323:8080"
+
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: docs
+        PUBLIC_WEBSITE_URL: http://localhost:4323
+        PUBLIC_DOCS_URL: http://localhost:4321
+        PUBLIC_BLOG_URL: http://localhost:4322
+    ports:
+      - "4321:8080"
+
+  blog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: blog
+        PUBLIC_WEBSITE_URL: http://localhost:4323
+        PUBLIC_DOCS_URL: http://localhost:4321
+        PUBLIC_BLOG_URL: http://localhost:4322
+    ports:
+      - "4322:8080"

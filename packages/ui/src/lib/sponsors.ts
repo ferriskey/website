@@ -2,7 +2,8 @@ export interface Sponsor {
   id: string
   name: string
   href: string
-  logoUrl: string
+  logoUrlLight: string
+  logoUrlDark: string
   tier: 'platinum' | 'gold' | 'supporters'
 }
 
@@ -22,49 +23,52 @@ export const defaultSponsors: Sponsor[] = [
   {
     id: 'cloudiam',
     name: 'Cloud IAM',
-    href: "https://eu1.hubs.ly/H0q0Kbb0",
-    logoUrl: '/sponsors/cloudiam.png',
+    href: 'https://eu1.hubs.ly/H0q0Kbb0',
+    logoUrlLight: '/sponsors/cloud-iam-light.svg',
+    logoUrlDark: '/sponsors/cloud-iam-dark.svg',
     tier: 'platinum',
   },
   {
-    id: "gilded-health",
-    name: "Gilded Health",
-    logoUrl: "/sponsors/gilded_health.svg",
-    href: "https://www.gilded.ch",
-    tier: "platinum",
+    id: 'gilded-health',
+    name: 'Gilded Health',
+    href: 'https://www.gilded.ch',
+    logoUrlLight: '/sponsors/gilded_health.svg',
+    logoUrlDark: '/sponsors/gilded_health.svg',
+    tier: 'platinum',
   },
   {
     id: 'nudibranches',
     name: 'Nudibranches',
     href: 'https://nudibranches.tech',
-    logoUrl: '/sponsors/nudibranches.png',
+    logoUrlLight: '/sponsors/nudibranches.png',
+    logoUrlDark: '/sponsors/nudibranches.png',
     tier: 'gold',
   },
-
   {
-      id: "natalia",
-      name: "Natalia",
-      logoUrl: "/sponsors/natalia.svg",
-      href: "https://getnatalia.com",
-
-      tier: "gold",
-    },
-
-    // Supporters
-    {
-      id: "mineral",
-      name: "Mineral",
-      logoUrl: "/sponsors/mineral.png",
-      href: "https://mineral-foundation.org/",
-      tier: "supporters",
-    },
-    {
-      id: "polytech-montpellier",
-      name: "Polytech Montpellier",
-      logoUrl: "/sponsors/polytech-montpellier.png",
-      href: "https://www.polytech.umontpellier.fr/",
-      tier: "supporters",
-    },
+    id: 'natalia',
+    name: 'Natalia',
+    href: 'https://getnatalia.com',
+    logoUrlLight: '/sponsors/natalia.svg',
+    logoUrlDark: '/sponsors/natalia.svg',
+    tier: 'gold',
+  },
+  // Supporters
+  {
+    id: 'mineral',
+    name: 'Mineral',
+    href: 'https://mineral-foundation.org/',
+    logoUrlLight: '/sponsors/mineral.png',
+    logoUrlDark: '/sponsors/mineral.png',
+    tier: 'supporters',
+  },
+  {
+    id: 'polytech-montpellier',
+    name: 'Polytech Montpellier',
+    href: 'https://www.polytech.umontpellier.fr/',
+    logoUrlLight: '/sponsors/polytech-montpellier.png',
+    logoUrlDark: '/sponsors/polytech-montpellier.png',
+    tier: 'supporters',
+  },
 ]
 
 export function getSponsors(overrides?: Partial<Record<string, Sponsor>>): Sponsor[] {

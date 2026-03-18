@@ -3,7 +3,11 @@ import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
 import HeroSection from '../components/hero-section.astro'
 import FeaturesSection from '../components/features-section.astro'
-import HighlightsSection from '../components/highlights-section.astro'
+import UiShowcaseSection from '../components/ui-showcase-section.astro'
+import ModulesSection from '../components/modules-section.astro'
+import OssSection from '../components/oss-section.astro'
+import CoreTeamSection from '../components/core-team-section.astro'
+import SponsorsSection from '../components/sponsors-section.astro'
 import TestimonialsSection from '../components/testimonials-section.astro'
 import CtaSection from '../components/cta-section.astro'
 import LatestArticlesSection from '../components/latest-articles-section.astro'
@@ -24,14 +28,18 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
 
   <HeroSection />
   <FeaturesSection />
-  <HighlightsSection />
-  <TestimonialsSection />
+  <UiShowcaseSection />
+  <ModulesSection />
+  <OssSection />
+  <CoreTeamSection />
+  <SponsorsSection />
+  {/* <TestimonialsSection /> */}
   <LatestArticlesSection />
-  <CtaSection />
+  <CtaSection docsHref={appUrlOverrides.docs} />
 
   <footer class="border-t">
-    <div class="mx-auto max-w-6xl px-6 py-8 text-sm text-muted-foreground text-center" data-t="footer.text">
-      Built with Explainer v2
+    <div class="mx-auto max-w-7xl px-6 py-8 text-sm text-muted-foreground text-center" data-t="footer.text">
+      © 2025 Ferriskey — Apache 2.0
     </div>
   </footer>
 </Base>

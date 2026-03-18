@@ -1,0 +1,112 @@
+---
+import { getSponsors } from '@explainer/ui/lib/sponsors'
+
+const allSponsors = getSponsors()
+const platinum   = allSponsors.filter(s => s.tier === 'platinum')
+const gold       = allSponsors.filter(s => s.tier === 'gold')
+const supporters = allSponsors.filter(s => s.tier === 'supporters')
+
+// Per-sponsor logo scale overrides (useful for square PNGs with lots of whitespace)
+const logoScale: Record<string, string> = {
+  cloudiam: 'scale-150',
+}
+
+const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px); background-size: 20px 20px; color: var(--color-primary);'
+
+function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
+  return { light: s.logoUrlLight, dark: s.logoUrlDark, same: s.logoUrlLight === s.logoUrlDark }
+}
+---
+
+<div class="w-full py-16 sm:py-24 lg:py-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+
+    <!-- dot pattern with progressive fade on all edges via mask -->
+    <div
+      class="absolute inset-0 pointer-events-none opacity-[0.06]"
+      style={`${DOT_BG}; mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);`}
+      aria-hidden="true"
+    ></div>
+
+    <!-- Header -->
+    <div data-anim="fade-up" class="relative text-center mb-14 px-8 pt-8">
+      <h2 class="text-3xl sm:text-4xl font-semibold text-foreground text-balance" data-t="sponsors.title">
+        Proudly supported by our partners
+      </h2>
+      <p class="mt-4 text-muted-foreground max-w-xl mx-auto text-balance leading-relaxed" data-t="sponsors.description">
+        These companies and projects keep Ferriskey thriving. Their support funds
+        development, maintenance, and community growth — allowing us to stay
+        independent and focused on building the best IAM we can.
+      </p>
+      <a
+        href="mailto:contact@ferriskey.io"
+        class="inline-flex items-center gap-2 mt-8 border rounded-lg px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
+      >
+        <span data-t="sponsors.cta">Become a partner</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 17L17 7M7 7h10v10"/>
+        </svg>
+      </a>
+    </div>
+
+    <div class="relative flex flex-col gap-10">
+
+      <!-- Platinum + Gold : 3 par ligne -->
+      {(platinum.length > 0 || gold.length > 0) && (
+        <div data-anim="fade-up" style="transition-delay:120ms" class="grid grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
+          {[...platinum, ...gold].map(s => (
+            <a
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center justify-center rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors px-6 py-8 group"
+            >
+              {logoSrcs(s).same ? (
+                <img src={logoSrcs(s).light} alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity ${logoScale[s.id] ?? ''}`} />
+              ) : (
+                <>
+                  <img src={logoSrcs(s).light} alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity dark:hidden ${logoScale[s.id] ?? ''}`} />
+                  <img src={logoSrcs(s).dark}  alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity hidden dark:block ${logoScale[s.id] ?? ''}`} />
+                </>
+              )}
+            </a>
+          ))}
+          <a
+            href="https://github.com/sponsors/ferriskey"
+            target="_blank"
+            class="flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-6 py-8"
+          >
+            <span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/40" data-t="sponsors.placeholder">Your Logo</span>
+          </a>
+        </div>
+      )}
+
+      <!-- Supporters -->
+      {supporters.length > 0 && (
+        <div data-anim="fade-up" style="transition-delay:240ms">
+          <p class="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4 text-center" data-t="sponsors.supporters">Supporters</p>
+          <div class="grid grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
+            {supporters.map(s => (
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 hover:bg-muted/20 transition-colors px-6 py-6 group"
+              >
+                {logoSrcs(s).same ? (
+                  <img src={logoSrcs(s).light} alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity ${logoScale[s.id] ?? ''}`} />
+                ) : (
+                  <>
+                    <img src={logoSrcs(s).light} alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity dark:hidden ${logoScale[s.id] ?? ''}`} />
+                    <img src={logoSrcs(s).dark}  alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity hidden dark:block ${logoScale[s.id] ?? ''}`} />
+                  </>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  </div>
+</div>
