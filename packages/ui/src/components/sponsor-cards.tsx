@@ -14,6 +14,7 @@ function cellBorders(index: number, total: number, cols: number): string {
 }
 
 function SponsorLogo({ sponsor, className }: { sponsor: Sponsor; className?: string }) {
+  const same = sponsor.logoUrlLight === sponsor.logoUrlDark
   return (
     <a
       href={sponsor.href}
@@ -22,8 +23,15 @@ function SponsorLogo({ sponsor, className }: { sponsor: Sponsor; className?: str
       title={sponsor.name}
       className={cn('flex items-center justify-center p-2 transition-opacity hover:opacity-60', className)}
     >
-      <div className="bg-white rounded p-1.5 aspect-square w-full flex items-center justify-center">
-        <img src={sponsor.logoUrl} alt={sponsor.name} className="w-full h-full object-contain" loading="lazy" />
+      <div className="rounded p-1.5 aspect-square w-full flex items-center justify-center">
+        {same ? (
+          <img src={sponsor.logoUrlLight} alt={sponsor.name} className="w-full h-full object-contain" loading="lazy" />
+        ) : (
+          <>
+            <img src={sponsor.logoUrlLight} alt={sponsor.name} className="w-full h-full object-contain dark:hidden" loading="lazy" />
+            <img src={sponsor.logoUrlDark} alt={sponsor.name} className="w-full h-full object-contain hidden dark:block" loading="lazy" />
+          </>
+        )}
       </div>
     </a>
   )
@@ -65,20 +73,30 @@ export function SponsorCards({ sponsors, title = 'Sponsors', className }: Sponso
 
         {supporters.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {supporters.map((sponsor) => (
-              <a
-                key={sponsor.id}
-                href={sponsor.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={sponsor.name}
-                className="transition-opacity hover:opacity-60"
-              >
-                <div className="bg-white rounded-full p-1 h-7 w-7 flex items-center justify-center border border-border">
-                  <img src={sponsor.logoUrl} alt={sponsor.name} className="w-full h-full object-contain" loading="lazy" />
-                </div>
-              </a>
-            ))}
+            {supporters.map((sponsor) => {
+              const same = sponsor.logoUrlLight === sponsor.logoUrlDark
+              return (
+                <a
+                  key={sponsor.id}
+                  href={sponsor.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={sponsor.name}
+                  className="transition-opacity hover:opacity-60"
+                >
+                  <div className="rounded-full p-1 h-7 w-7 flex items-center justify-center border border-border">
+                    {same ? (
+                      <img src={sponsor.logoUrlLight} alt={sponsor.name} className="w-full h-full object-contain" loading="lazy" />
+                    ) : (
+                      <>
+                        <img src={sponsor.logoUrlLight} alt={sponsor.name} className="w-full h-full object-contain dark:hidden" loading="lazy" />
+                        <img src={sponsor.logoUrlDark} alt={sponsor.name} className="w-full h-full object-contain hidden dark:block" loading="lazy" />
+                      </>
+                    )}
+                  </div>
+                </a>
+              )
+            })}
           </div>
         )}
       </div>

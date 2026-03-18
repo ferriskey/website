@@ -1,0 +1,185 @@
+---
+title: "Qui es-tu, et qu'est-ce que tu fais là ?"
+description: "L'IAM (Identity & Access Management) est au cœur de la sécurité de presque toutes les applications modernes. Mais qu'est-ce que c'est vraiment, à quoi ça sert, et pourquoi c'est si difficile à bien faire ? On démêle tout — et on vous présente FerrisKey."
+short_description: "Comprendre l'IAM de zéro, et découvrir FerrisKey."
+date: 2026-03-19
+tags: [iam, identity, access-management, ferriskey, rust, open-source]
+status: published
+author: nathaelb
+---
+
+Il y a une question que tout système informatique doit poser, des millions de fois par jour, à chaque utilisateur, chaque application, chaque service qui tente d'accéder à une ressource.
+
+*Qui es-tu ? Et qu'est-ce que tu as le droit de faire ici ?*
+
+Une question trompeusement simple. Mais derrière elle se cache toute une discipline, qui sous-tend la sécurité, la scalabilité et la fiabilité de presque toutes les applications modernes : **l'Identity & Access Management**, ou IAM.
+
+## Le problème, en clair
+
+Imaginez une grande entreprise. Des centaines d'employés. Des dizaines d'applications — comptabilité, RH, CRM, outils de dev, serveurs de production. Chaque matin, les gens se connectent. Chaque soir, ils se déconnectent. Entre-temps, ils accèdent à des données, déclenchent des processus, lisent des documents.
+
+Quelques questions simples :
+
+- Comment s'assurer que le comptable ne peut pas accéder aux serveurs de production ?
+- Comment garantir qu'un développeur qui quitte l'entreprise perd instantanément tous ses accès ?
+- Comment autoriser un partenaire externe à atteindre une seule API sans toucher au reste ?
+- Comment savoir, six mois plus tard, qui a changé quoi et quand ?
+
+:::callout{variant="warning" title="La réponse naïve ne tient pas à l'échelle"}
+Sans système dédié, la réponse à chacune de ces questions, c'est un patchwork de scripts, des tables d'utilisateurs dupliquées dans chaque appli, des mots de passe partagés sur Slack, et des nuits blanches avant les audits de sécurité.
+:::
+
+L'IAM est la réponse structurée à ce chaos.
+
+---
+
+## Ce que fait concrètement un système IAM
+
+Un système IAM est le gardien centralisé de votre infrastructure. Il joue plusieurs rôles à la fois.
+
+::::card-group{cols=3}
+:::card{label="Annuaire" icon="lucide:users"}
+Il sait qui existe. Chaque utilisateur humain, chaque application, chaque service machine a une identité unique dans le système. Un seul endroit, une seule source de vérité.
+:::
+
+:::card{label="Authentification" icon="lucide:key-round"}
+Il vérifie que vous êtes bien qui vous prétendez être — mot de passe, TOTP, clé matérielle, magic link. Quand vous faites « Se connecter avec Google », Google est l'IAM.
+:::
+
+:::card{label="Autorisation" icon="lucide:shield-check"}
+Une fois votre identité confirmée, il décide ce que vous avez le droit de faire. Lire ? Écrire ? Supprimer ? Administrer ? Des rôles et permissions assignés avec précision.
+:::
+
+:::card{label="Protocoles standards" icon="lucide:globe"}
+Un bon IAM parle OAuth2 et OpenID Connect (OIDC) — les langages universels du web. Les applications peuvent déléguer l'authentification sans jamais toucher aux mots de passe.
+:::
+
+:::card{label="Audit" icon="lucide:scroll-text"}
+Il garde une trace de tout. Qui s'est connecté, depuis où, à quelle heure, avec quel niveau d'accès. Indispensable pour la conformité et la réponse aux incidents.
+:::
+
+:::card{label="En résumé" icon="lucide:zap"}
+L'IAM, c'est ce qui vous évite de réinventer la gestion des identités dans chaque nouvelle application que vous construisez.
+:::
+::::
+
+---
+
+## Pourquoi c'est si difficile à bien faire
+
+L'IAM paraît simple. C'est juste une table `users` avec un `password_hash`, non ?
+
+:::callout{variant="danger" title="Ce n'est jamais juste une table users"}
+Gérer des identités sérieusement, c'est faire face à des dizaines de problèmes qui s'accumulent vite :
+rotation des secrets, révocation de tokens, expiration de sessions, comptes de service, multi-tenancy, stratégies MFA, webhooks, journaux d'audit infalsifiables…
+
+Et tout ça doit tenir sous charge. Un IAM est un **point de passage obligatoire** — chaque requête authentifiée le traverse. S'il est lent ou tombe, toute votre infrastructure s'arrête.
+:::
+
+C'est pourquoi les grandes entreprises paient des fortunes pour des solutions comme Okta, Auth0 ou Azure AD. Côté open source, Keycloak existe depuis longtemps et fait le travail, mais il embarque une complexité de configuration significative et une empreinte JVM qui ne convient pas à tout le monde.
+
+FerrisKey ne prétend pas être la solution définitive. C'est une alternative, avec des compromis différents : Rust plutôt que Java, une architecture hexagonale conçue pour la clarté et la maintenabilité, et l'ambition de rester simple à opérer.
+
+---
+
+## Bienvenue dans FerrisKey
+
+FerrisKey est un système IAM open source, construit en **Rust**, avec une architecture hexagonale.
+
+:::callout{variant="info" title="Pourquoi Rust ?"}
+La performance et la fiabilité ne sont pas négociables pour un composant aussi critique. Rust offre une vitesse comparable au C sans les pièges — pas de garbage collector, pas de data races, pas de surprises mémoire. Pour un service qui gère des millions d'authentifications, c'est exactement ce qu'il faut.
+:::
+
+L'architecture hexagonale garantit que la logique métier reste pure et découplée de l'infrastructure. La base de données peut changer, le framework HTTP peut évoluer — le cœur du domaine reste stable et testable.
+
+Voici à quoi ressemble un ID token OIDC décodé émis par FerrisKey :
+
+```json title="id_token (décodé)"
+{
+  "sub": "user_01HZ93BKGZ7Y3QPFMJ4E5RW0X",
+  "iss": "https://auth.example.com/realms/acme",
+  "aud": "my-app",
+  "exp": 1718100000,
+  "iat": 1718096400,
+  "email": "alice@example.com",
+  "realm_access": {
+    "roles": ["developer", "read:billing"]
+  }
+}
+```
+
+En pratique, FerrisKey vous offre :
+
+::::card-group{cols=2}
+:::card{label="Realms" icon="lucide:layers"}
+Des espaces totalement isolés. Chaque organisation, projet ou environnement dispose de son propre realm — ses propres utilisateurs, rôles et clients. Zéro contamination croisée possible.
+:::
+
+:::card{label="OAuth2 & OIDC" icon="lucide:lock-keyhole"}
+Les standards du web, implémentés correctement, pour que vos applications puissent déléguer l'authentification sans friction.
+:::
+
+:::card{label="Trident — MFA" icon="lucide:shield"}
+Le module MFA de FerrisKey : TOTP, WebAuthn (clés matérielles, passkeys), magic links et codes de récupération.
+:::
+
+:::card{label="SeaWatch — Audit" icon="lucide:eye"}
+Un système d'audit complet, interrogeable depuis la console, traçant chaque événement de sécurité dans vos realms.
+:::
+
+:::card{label="Webhooks" icon="lucide:webhook"}
+Connectez FerrisKey à vos systèmes existants et réagissez aux événements du cycle de vie — création d'utilisateur, révocation d'accès, et plus encore.
+:::
+
+:::card{label="Cloud-native" icon="lucide:cloud"}
+Un chart Helm officiel, un Kubernetes Operator et le support Docker Compose pour un déploiement sans friction à toute échelle.
+:::
+::::
+
+:::callout{variant="success" title="Apache 2.0 — entièrement ouvert"}
+Pas de paywall. Pas de tier « enterprise » qui cache des fonctionnalités critiques derrière un formulaire de contact. Le code est ouvert, la communauté est là.
+:::
+
+---
+
+## Pour qui ?
+
+::::card-group{cols=3}
+:::card{label="Équipes SaaS" icon="lucide:rocket"}
+Vous construisez une plateforme et voulez une auth robuste sans repartir de zéro — ni payer au nombre d'utilisateurs actifs mensuels.
+:::
+
+:::card{label="Ingénieurs plateforme" icon="lucide:server"}
+Vous cherchez à centraliser la gestion des identités entre vos services sans dépendre d'un vendor propriétaire.
+:::
+
+:::card{label="Développeurs curieux" icon="lucide:code-2"}
+Vous voulez comprendre comment l'IAM fonctionne vraiment en lisant du code Rust propre et bien structuré.
+:::
+::::
+
+FerrisKey n'est pas encore Okta. Mais il est sérieux, activement développé, et construit sur les bonnes fondations pour y arriver.
+
+---
+
+## La suite
+
+Dans les prochains articles, on ira plus loin : comment fonctionnent OAuth2 et OIDC sous le capot, comment modéliser les permissions avec un système de rôles, comment déployer FerrisKey sur Kubernetes, et bien plus encore.
+
+::::step-group
+:::step{title="Essayez-le"}
+Le dépôt est sur [GitHub](https://github.com/ferriskey/ferriskey). Mettez une étoile, clonez-le, lancez-le en local.
+:::
+
+:::step{title="Lisez la documentation"}
+Tout ce qu'il faut pour démarrer se trouve sur [docs.ferriskey.io](https://docs.ferriskey.io).
+:::
+
+:::step{title="Rejoignez la communauté"}
+Les discussions sont ouvertes sur GitHub. Contributions, rapports de bugs et idées sont les bienvenus.
+:::
+::::
+
+L'IAM est un problème résolu mille fois, dans mille silos propriétaires. Il était temps de le résoudre correctement, une bonne fois pour toutes, dans l'open source.
+
+*C'est ce que FerrisKey est venu faire.*
