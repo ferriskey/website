@@ -1,0 +1,117 @@
+---
+const screens = [
+  { src: '/console_preview/clients_overview.png',       label: 'Clients'             },
+  { src: '/console_preview/client_scopes_overview.png', label: 'Client Scopes'       },
+  { src: '/console_preview/idp_overview.png',           label: 'Identity Providers'  },
+  { src: '/console_preview/webhook_overview.png',       label: 'Webhooks'            },
+]
+---
+
+<div class="w-full py-16 sm:py-24 lg:py-32 overflow-hidden">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+
+    <div class="mb-12" data-anim="fade-up">
+      <p class="text-sm font-semibold text-primary uppercase tracking-wide mb-3" data-t="ui.label">Interface</p>
+      <h2 class="text-3xl font-semibold text-foreground sm:text-4xl" data-t="ui.title">
+        Built for clarity, designed for speed
+      </h2>
+      <p class="mt-4 text-lg text-muted-foreground max-w-2xl text-balance" data-t="ui.description">
+        A clean admin UI to manage your realms, clients, users and permissions — without getting lost.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {screens.map((s, i) => (
+        <button
+          data-src={s.src}
+          data-label={s.label}
+          data-anim="fade-up"
+          style={`transition-delay: ${i * 100}ms`}
+          class="showcase-open group relative rounded-2xl border overflow-hidden bg-muted/10 hover:border-primary/40 transition-colors cursor-zoom-in text-left"
+        >
+          <!-- browser chrome -->
+          <div class="flex items-center gap-1.5 px-4 py-3 border-b bg-muted/20">
+            <div class="size-2.5 rounded-full bg-muted-foreground/20"></div>
+            <div class="size-2.5 rounded-full bg-muted-foreground/20"></div>
+            <div class="size-2.5 rounded-full bg-muted-foreground/20"></div>
+            <div class="flex-1 max-w-[200px] mx-auto">
+              <div class="rounded-md border bg-muted/30 px-3 py-0.5 text-xs text-muted-foreground/50 text-center font-mono truncate">
+                app.ferriskey.io
+              </div>
+            </div>
+          </div>
+          <img
+            src={s.src}
+            alt={s.label}
+            class="w-full object-cover object-top aspect-video"
+            loading="lazy"
+          />
+          <div class="px-4 py-3 text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+            {s.label}
+          </div>
+        </button>
+      ))}
+    </div>
+
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div
+  id="showcase-lightbox"
+  class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+  role="dialog"
+  aria-modal="true"
+>
+  <button
+    id="showcase-close"
+    class="absolute top-4 right-4 size-10 flex items-center justify-center rounded-full bg-muted/20 hover:bg-muted/40 text-foreground transition-colors"
+    aria-label="Close"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6L6 18M6 6l12 12"/>
+    </svg>
+  </button>
+
+  <div class="relative w-full max-w-6xl rounded-2xl border overflow-hidden shadow-2xl">
+    <div class="flex items-center gap-1.5 px-4 py-3 border-b bg-background/90">
+      <div class="size-2.5 rounded-full bg-muted-foreground/30"></div>
+      <div class="size-2.5 rounded-full bg-muted-foreground/30"></div>
+      <div class="size-2.5 rounded-full bg-muted-foreground/30"></div>
+      <div class="flex-1 max-w-[240px] mx-auto">
+        <div class="rounded-md border bg-muted/30 px-3 py-0.5 text-xs text-muted-foreground/60 text-center font-mono">
+          app.ferriskey.io
+        </div>
+      </div>
+    </div>
+    <img
+      id="showcase-lightbox-img"
+      src=""
+      alt=""
+      class="w-full object-cover object-top"
+    />
+  </div>
+</div>
+
+<script>
+  const lightbox = document.getElementById('showcase-lightbox')!
+  const lightboxImg = document.getElementById('showcase-lightbox-img') as HTMLImageElement
+
+  document.querySelectorAll<HTMLButtonElement>('.showcase-open').forEach(btn => {
+    btn.addEventListener('click', () => {
+      lightboxImg.src = btn.dataset.src!
+      lightboxImg.alt = btn.dataset.label!
+      lightbox.classList.remove('hidden')
+      lightbox.classList.add('flex')
+    })
+  })
+
+  function close() {
+    lightbox.classList.add('hidden')
+    lightbox.classList.remove('flex')
+  }
+
+  document.getElementById('showcase-close')!.addEventListener('click', close)
+  lightbox.addEventListener('click', (e) => { if (e.target === lightbox) close() })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+</script>

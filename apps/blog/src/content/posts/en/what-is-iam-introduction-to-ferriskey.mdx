@@ -1,0 +1,185 @@
+---
+title: "Who are you, and what are you doing here?"
+description: "IAM (Identity & Access Management) underpins the security of almost every modern application. But what is it really, what does it do, and why is it so hard to get right? We break it all down — and introduce FerrisKey."
+short_description: "Understand IAM from scratch, and discover FerrisKey."
+date: 2026-03-19
+tags: [iam, identity, access-management, ferriskey, rust, open-source]
+status: published
+author: nathaelb
+---
+
+There is a question that every computer system must ask, millions of times a day, to every user, every application, every service trying to access a resource.
+
+*Who are you? And what are you allowed to do here?*
+
+A deceptively simple question. But behind it lies an entire discipline, one that underpins the security, scalability, and reliability of almost every modern application: **Identity & Access Management**, or IAM.
+
+## The problem, put simply
+
+Picture a large company. Hundreds of employees. Dozens of applications — accounting, HR, CRM, dev tooling, production servers. Every morning, people log in. Every evening, they log out. In between, they access data, trigger processes, read documents.
+
+Now, a few simple questions:
+
+- How do you make sure the accountant can't access the production servers?
+- How do you ensure a developer who leaves the company instantly loses all their access?
+- How do you let an external partner reach one API without touching anything else?
+- How do you know, six months later, who changed what and when?
+
+:::callout{variant="warning" title="The naive answer doesn't scale"}
+Without a dedicated system, the answer to each of these questions is a patchwork of scripts, user tables duplicated across every app, passwords shared in Slack, and sleepless nights before security audits.
+:::
+
+IAM is the structured answer to that chaos.
+
+---
+
+## What an IAM system actually does
+
+An IAM system is the centralized gatekeeper of your infrastructure. It plays several roles at once.
+
+::::card-group{cols=3}
+:::card{label="Directory" icon="lucide:users"}
+It knows who exists. Every human user, every application, every machine service has a unique identity. One place, one source of truth.
+:::
+
+:::card{label="Authentication" icon="lucide:key-round"}
+It verifies you are who you claim to be — password, TOTP, hardware key, magic link. When you "Sign in with Google", Google is the IAM.
+:::
+
+:::card{label="Authorization" icon="lucide:shield-check"}
+Once your identity is confirmed, it decides what you're allowed to do. Read? Write? Delete? Administer? Roles and permissions, assigned with precision.
+:::
+
+:::card{label="Standard protocols" icon="lucide:globe"}
+A good IAM speaks OAuth2 and OpenID Connect (OIDC) — the universal languages of the web. Apps can delegate authentication without ever touching passwords.
+:::
+
+:::card{label="Audit" icon="lucide:scroll-text"}
+It keeps a record of everything. Who logged in, from where, at what time, with what level of access. Essential for compliance and incident response.
+:::
+
+:::card{label="In short" icon="lucide:zap"}
+IAM is what saves you from reinventing identity management in every new application you build.
+:::
+::::
+
+---
+
+## Why it's hard to get right
+
+IAM sounds simple. It's just a `users` table with a `password_hash`, right?
+
+:::callout{variant="danger" title="It's never just a users table"}
+Managing identities seriously means dealing with dozens of problems that stack up fast:
+secret rotation, token revocation, session expiration, service accounts, multi-tenancy, MFA strategies, webhooks, tamper-proof audit logs…
+
+And all of this has to hold under load. An IAM is a **mandatory chokepoint** — every authenticated request goes through it. If it's slow or goes down, your entire infrastructure stops.
+:::
+
+That's why large enterprises pay fortunes for solutions like Okta, Auth0, or Azure AD. On the open source side, Keycloak has been around for a long time and does the job, but it carries significant configuration complexity and a JVM footprint that doesn't suit everyone.
+
+FerrisKey doesn't claim to be the definitive solution. It's an alternative, with different trade-offs: Rust instead of Java, a hexagonal architecture designed for clarity and maintainability, and an ambition to stay simple to operate.
+
+---
+
+## Welcome to FerrisKey
+
+FerrisKey is an open source IAM system, built in **Rust**, with a hexagonal architecture.
+
+:::callout{variant="info" title="Why Rust?"}
+Performance and reliability are non-negotiable for a component this critical. Rust delivers C-level speed without the pitfalls — no garbage collector, no data races, no memory surprises. For a service handling millions of authentications, that's exactly what you want.
+:::
+
+The hexagonal architecture ensures that business logic stays pure and decoupled from infrastructure. The database can change, the HTTP framework can evolve — the domain core stays stable and testable.
+
+What a decoded OIDC ID token looks like when FerrisKey issues it:
+
+```json title="id_token (decoded)"
+{
+  "sub": "user_01HZ93BKGZ7Y3QPFMJ4E5RW0X",
+  "iss": "https://auth.example.com/realms/acme",
+  "aud": "my-app",
+  "exp": 1718100000,
+  "iat": 1718096400,
+  "email": "alice@example.com",
+  "realm_access": {
+    "roles": ["developer", "read:billing"]
+  }
+}
+```
+
+In practice, FerrisKey gives you:
+
+::::card-group{cols=2}
+:::card{label="Realms" icon="lucide:layers"}
+Fully isolated spaces. Each organization, project, or environment gets its own realm — its own users, roles, and clients. No cross-contamination possible.
+:::
+
+:::card{label="OAuth2 & OIDC" icon="lucide:lock-keyhole"}
+The web's standards, implemented correctly, so your apps can delegate authentication without friction.
+:::
+
+:::card{label="Trident — MFA" icon="lucide:shield"}
+FerrisKey's MFA module: TOTP, WebAuthn (hardware keys, passkeys), magic links, and recovery codes.
+:::
+
+:::card{label="SeaWatch — Audit" icon="lucide:eye"}
+A complete audit system, queryable from the console, tracing every security event across your realms.
+:::
+
+:::card{label="Webhooks" icon="lucide:webhook"}
+Connect FerrisKey to your existing systems and react to lifecycle events — user creation, access revocation, and more.
+:::
+
+:::card{label="Cloud-native" icon="lucide:cloud"}
+An official Helm chart, Kubernetes Operator, and Docker Compose support for frictionless deployment at any scale.
+:::
+::::
+
+:::callout{variant="success" title="Apache 2.0 — fully open"}
+No paywall. No "enterprise" tier hiding critical features behind a contact form. The code is open, the community is here.
+:::
+
+---
+
+## Who is it for?
+
+::::card-group{cols=3}
+:::card{label="SaaS teams" icon="lucide:rocket"}
+Building a platform and want robust auth without starting from scratch — or paying per monthly active user.
+:::
+
+:::card{label="Platform engineers" icon="lucide:server"}
+Looking to centralize identity management across services without depending on a proprietary vendor.
+:::
+
+:::card{label="Curious developers" icon="lucide:code-2"}
+Who want to understand how IAM really works by reading clean, well-structured Rust code.
+:::
+::::
+
+FerrisKey is not Okta yet. But it is serious, actively developed, and built on the right foundations to get there.
+
+---
+
+## What's next
+
+In upcoming posts, we'll go deeper: how OAuth2 and OIDC work under the hood, how to model permissions with a role system, how to deploy FerrisKey on Kubernetes, and much more.
+
+::::step-group
+:::step{title="Try it out"}
+The repo is on [GitHub](https://github.com/ferriskey/ferriskey). Star it, clone it, run it locally.
+:::
+
+:::step{title="Read the docs"}
+Everything you need to get started is at [docs.ferriskey.io](https://docs.ferriskey.io).
+:::
+
+:::step{title="Join the community"}
+Discussions are open on GitHub. Contributions, bug reports, and ideas are all welcome.
+:::
+::::
+
+IAM is a problem that has been solved a thousand times, in a thousand proprietary silos. It was time to solve it properly, once, in the open.
+
+*That's what FerrisKey is here to do.*

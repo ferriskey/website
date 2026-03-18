@@ -1,0 +1,84 @@
+---
+import Base from '../../layouts/base.astro'
+import { WebsiteNavbar } from '../../components/website-navbar'
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+
+const modules = [
+  { slug: 'trident',  name: 'Trident',  tagline: 'Multi-Factor Authentication',   color: 'blue',    iconPath: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',    desc: 'TOTP, WebAuthn passkeys, magic links, and recovery codes.' },
+  { slug: 'seawatch', name: 'SeaWatch', tagline: 'Audit & Security Events',        color: 'emerald', iconPath: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z', desc: 'Track and query every critical action across your realms.' },
+  { slug: 'compass',  name: 'Compass',  tagline: 'Authentication Flow Engine',     color: 'amber',   iconPath: 'M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z', desc: 'Observe multi-step authentication with step timings and error details.' },
+  { slug: 'abyss',    name: 'Abyss',    tagline: 'Identity Provider Federation',   color: 'purple',  iconPath: 'M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244', desc: 'Connect Google, GitHub, Discord, and custom OIDC providers.' },
+  { slug: 'aegis',    name: 'Aegis',    tagline: 'Scopes & Protocol Mappers',      color: 'rose',    iconPath: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z', desc: 'Control exactly what data flows into your tokens.' },
+  { slug: 'webhooks', name: 'Webhooks', tagline: 'Event-Driven Extensibility',     color: 'cyan',    iconPath: 'M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z', desc: 'Subscribe to lifecycle events and push notifications to external systems.' },
+]
+
+const colorMap: Record<string, { bg: string; border: string; text: string }> = {
+  blue:    { bg: 'bg-blue-500/10',    border: 'border-blue-500/30',    text: 'text-blue-400'    },
+  emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+  amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   text: 'text-amber-400'   },
+  purple:  { bg: 'bg-purple-500/10',  border: 'border-purple-500/30',  text: 'text-purple-400'  },
+  rose:    { bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    text: 'text-rose-400'    },
+  cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    text: 'text-cyan-400'    },
+}
+---
+
+<Base title="Modules — Ferriskey" description="Purpose-built systems for authentication, audit, federation, and more.">
+  <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
+
+  <main class="w-full pt-32 pb-24">
+    <div class="max-w-7xl mx-auto px-5">
+
+      <div class="mb-16">
+        <p class="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Modules</p>
+        <h1 class="text-4xl sm:text-5xl font-bold text-foreground">Everything you need to build</h1>
+        <p class="mt-4 text-xl text-muted-foreground max-w-2xl text-balance leading-relaxed">
+          FerrisKey is built as a collection of purpose-built modules. Each owns a specific aspect of identity and can be configured independently.
+        </p>
+        <a
+          href="/docs/modules/default/en/overview"
+          class="inline-flex items-center gap-2 mt-6 border rounded-lg px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+        >
+          Full documentation
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 17L17 7M7 7h10v10"/>
+          </svg>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {modules.map(m => {
+          const c = colorMap[m.color]
+          return (
+            <a
+              href={`/modules/${m.slug}`}
+              class={`group flex flex-col gap-5 rounded-2xl border p-7 bg-muted/5 hover:${c.bg} hover:${c.border} transition-all`}
+            >
+              <div class={`size-11 rounded-xl flex items-center justify-center border ${c.bg} ${c.border}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" class={`size-5 ${c.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d={m.iconPath} />
+                </svg>
+              </div>
+              <div class="flex-1">
+                <p class={`text-xs font-semibold uppercase tracking-wide mb-1 ${c.text}`}>{m.tagline}</p>
+                <h2 class="text-xl font-semibold text-foreground">{m.name}</h2>
+                <p class="mt-2 text-sm text-muted-foreground leading-relaxed">{m.desc}</p>
+              </div>
+              <div class={`flex items-center gap-1 text-xs font-semibold ${c.text}`}>
+                Learn more
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 17L17 7M7 7h10v10"/>
+                </svg>
+              </div>
+            </a>
+          )
+        })}
+      </div>
+
+    </div>
+  </main>
+</Base>

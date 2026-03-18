@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-background: oklch(1 0 0);
   --color-foreground: oklch(0.145 0 0);
@@ -63,6 +65,17 @@
     font-family: var(--font-sans);
   }
 }
+
+/* ── Scroll-triggered animations ── */
+[data-anim] {
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.4,0,0.2,1), transform 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+[data-anim="fade-up"]    { transform: translateY(28px); }
+[data-anim="fade-right"] { transform: translateX(-28px); }
+[data-anim="fade-left"]  { transform: translateX(28px); }
+[data-anim="scale"]      { transform: scale(0.94); }
+[data-anim].in           { opacity: 1; transform: none; }
 
 hr {
   border-color: var(--border-color);

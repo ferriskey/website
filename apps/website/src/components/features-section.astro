@@ -1,87 +1,140 @@
 ---
-import { Icon } from "@iconify/react";
+// Features section — Why FerrisKey, sticky left + scrollable cards right
 
-const features = [
-  { icon: "mdi:language-markdown", titleKey: "features.markdown.title", descKey: "features.markdown.description", title: "Markdown & MDX", description: "Write content in Markdown or MDX with custom components, directives, and JSX support." },
-  { icon: "mdi:flash-outline", titleKey: "features.fast.title", descKey: "features.fast.description", title: "Lightning fast", description: "Static site generation for instant page loads. Zero JavaScript shipped by default." },
-  { icon: "mdi:code-braces", titleKey: "features.code.title", descKey: "features.code.description", title: "Rich code blocks", description: "Dual-theme syntax highlighting, line diffs, focus mode, and 60+ language icons." },
-  { icon: "mdi:magnify", titleKey: "features.search.title", descKey: "features.search.description", title: "Built-in search", description: "Command palette search so your readers find any page instantly." },
-  { icon: "mdi:search-web", titleKey: "features.seo.title", descKey: "features.seo.description", title: "SEO ready", description: "Auto-generated OG thumbnails, sitemap, robots.txt, and RSS feed." },
-  { icon: "mdi:theme-light-dark", titleKey: "features.darkMode.title", descKey: "features.darkMode.description", title: "Dark mode", description: "Full light and dark theme support with system preference detection." },
+const cards = [
+  {
+    key: "perf",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>`,
+    title: "Rust-native performance",
+    description: "Built in Rust from the ground up — not ported or wrapped. A ~10MB binary, sub-10ms auth latency, and a predictable memory footprint that holds under sustained load.",
+    tags: ["~10MB binary", "<10ms latency", "No GC pauses", "Memory safe"],
+  },
+  {
+    key: "deploy",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>`,
+    title: "Deploy & manage your way",
+    description: "FerrisKey ships with first-class tooling for every ops workflow — from local testing to production GitOps pipelines. No custom scripting required.",
+    tags: ["Helm chart", "Kubernetes Operator", "ArgoCD", "Docker Compose"],
+  },
+  {
+    key: "events",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>`,
+    title: "Event-driven extensibility",
+    description: "Every identity event — login, token issuance, policy change, realm update — emits a structured event you can consume to trigger webhooks, sync to your data lake, or drive custom workflows without patching the core.",
+    tags: ["Webhooks", "Kafka / NATS (soon)"],
+  },
+  {
+    key: "cncf",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>`,
+    title: "CNCF ecosystem integration",
+    description: "FerrisKey is designed to fit naturally into cloud-native stacks. Native integrations with the tools your platform team already runs — no adapters, no workarounds.",
+    tags: ["Prometheus", "OpenTelemetry", "OPA (soon)", "AuthZen"],
+  },
 ];
 ---
 
 <div class="relative w-full py-16 sm:py-24 lg:py-32">
   <!-- Decorative circles -->
-  <div
-    class="absolute inset-0 -z-10 pointer-events-none overflow-hidden"
-    aria-hidden="true"
-  >
-    <div
-      class="absolute top-1/2 -left-24 w-72 h-72 rounded-full border-2 border-primary/[0.08] -translate-y-1/2"
-    >
-      <div
-        class="absolute inset-0 m-auto w-52 h-52 rounded-full border border-primary/[0.06]"
-      >
-      </div>
+  <div class="absolute inset-0 -z-10 pointer-events-none overflow-hidden" aria-hidden="true">
+    <div class="absolute top-1/2 -left-24 w-72 h-72 rounded-full border-2 border-primary/[0.08] -translate-y-1/2">
+      <div class="absolute inset-0 m-auto w-52 h-52 rounded-full border border-primary/[0.06]"></div>
     </div>
-
-    <div class="absolute top-16 left-[22%] size-2.5 rounded-full bg-primary/10">
-    </div>
-    <div
-      class="absolute bottom-20 right-[18%] size-2 rounded-full bg-primary/[0.08]"
-    >
-    </div>
-    <div
-      class="absolute top-1/3 right-[10%] size-1.5 rounded-full bg-primary/[0.09]"
-    >
-    </div>
+    <div class="absolute top-16 left-[22%] size-2.5 rounded-full bg-primary/10"></div>
+    <div class="absolute bottom-20 right-[18%] size-2 rounded-full bg-primary/[0.08]"></div>
+    <div class="absolute top-1/3 right-[10%] size-1.5 rounded-full bg-primary/[0.09]"></div>
   </div>
 
-  <!-- Content -->
-  <div class="relative w-full max-w-6xl mx-auto px-5">
-    <div class="text-center mb-16">
-      <p
-        class="text-sm font-semibold text-primary uppercase tracking-wide mb-3"
-        data-t="features.label"
-      >
-        Features
-      </p>
-      <h2 class="text-3xl font-semibold text-foreground sm:text-4xl" data-t="features.title">
-        Everything you need, out of the box
-      </h2>
-      <p
-        class="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto text-balance"
-        data-t="features.description"
-      >
-        Explainer gives you the tools to focus on your content, not your tooling.
-      </p>
-    </div>
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      {
-        features.map((feature) => (
-          <div class="bg-background relative">
-            <div class="flex flex-col gap-4 border rounded-xl p-6 bg-primary/5 h-full">
-              <div class="flex items-center justify-center size-11 rounded-lg bg-primary/10">
-                <Icon
-                  icon={feature.icon}
-                  className="size-5 text-primary"
-                  client:load
-                />
+      <!-- Left: sticky label + title + description -->
+      <div class="lg:sticky lg:top-28 reveal-left">
+        <p class="text-sm font-semibold text-primary uppercase tracking-widest mb-3 font-mono" data-t="features.label">
+          Why FerrisKey
+        </p>
+        <h2 class="text-3xl sm:text-4xl font-semibold text-foreground leading-tight mb-6" data-t="features.title">
+          Identity infrastructure for cloud-native platforms, without legacy IAM complexity.
+        </h2>
+        <p class="text-base text-muted-foreground leading-relaxed mb-4" data-t="features.desc1">
+          Identity &amp; Access Management is the backbone of any secure platform. It controls
+          <span class="text-foreground">who can authenticate</span>,
+          <span class="text-foreground">what they are authorized to do</span>, and
+          <span class="text-foreground">how every access event is tracked</span>
+          across every service, team, and environment in your infrastructure.
+        </p>
+        <p class="text-base text-muted-foreground leading-relaxed" data-t="features.desc2">
+          Without a solid IAM foundation, teams end up with fragmented auth logic scattered across services, no unified audit trail, and security gaps that grow with every new product. FerrisKey addresses this with a
+          <span class="text-foreground">unified, operator-first approach</span>
+          designed for distributed systems from day one.
+        </p>
+      </div>
+
+      <!-- Right: feature cards -->
+      <div class="flex flex-col gap-4">
+        {cards.map((card, i) => (
+          <div
+            class="feature-card flex flex-col gap-4 border rounded-xl p-6 bg-primary/[0.02] hover:bg-primary/[0.04] transition-colors duration-300"
+            style={`--card-index: ${i}`}
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" set:html={card.icon} />
               </div>
-              <div>
-                <h3 class="text-base font-semibold text-foreground" data-t={feature.titleKey}>
-                  {feature.title}
-                </h3>
-                <p class="text-sm text-muted-foreground mt-1.5 leading-relaxed" data-t={feature.descKey}>
-                  {feature.description}
-                </p>
-              </div>
+              <h3 class="text-base font-semibold text-foreground" data-t={`features.card.${card.key}.title`}>{card.title}</h3>
+            </div>
+            <p class="text-sm text-muted-foreground leading-relaxed" data-t={`features.card.${card.key}.desc`}>{card.description}</p>
+            <div class="flex flex-wrap gap-2">
+              {card.tags.map((tag) => (
+                <span class="text-xs font-mono text-primary/70 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded">
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
-        ))
-      }
+        ))}
+      </div>
+
     </div>
   </div>
 </div>
+
+<style>
+  .reveal-left,
+  .feature-card {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .reveal-left {
+    transform: translateX(-16px);
+  }
+
+  .reveal-left.is-visible,
+  .feature-card.is-visible {
+    opacity: 1;
+    transform: translate(0);
+  }
+
+  .feature-card.is-visible {
+    transition-delay: calc(var(--card-index) * 100ms);
+  }
+</style>
+
+<script>
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible')
+          observer.unobserve(entry.target)
+        }
+      })
+    },
+    { threshold: 0.15 }
+  )
+
+  document
+    .querySelectorAll('.reveal-left, .feature-card')
+    .forEach((el) => observer.observe(el))
+</script>
