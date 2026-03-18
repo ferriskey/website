@@ -1,0 +1,140 @@
+---
+title: Production Guide
+description: Production checklist for running FerrisKey on Kubernetes — database, TLS, monitoring, and security.
+icon: shield
+order: 4
+---
+
+# Production Guide
+
+This checklist covers everything you need to harden a FerrisKey deployment for production use.
+
+## Database
+
+:::callout{variant="danger" title="Do not use embedded PostgreSQL in production"}
+Always use a managed PostgreSQL service or a properly operated PostgreSQL cluster.
+:::
+
+- **Use a managed PostgreSQL** — AWS RDS, Google Cloud SQL, Azure Database for PostgreSQL, or a self-managed HA cluster
+- **Enable SSL** — Set `sslMode: require` (or `verify-full` for certificate validation)
+- **Dedicated database** — Run FerrisKey in its own database, not a shared instance
+- **Regular backups** — Configure automated backups with point-in-time recovery
+- **Connection pooling** — Consider PgBouncer for high-traffic deployments
+
+## TLS & Ingress
+
+- **Terminate TLS at the ingress** — Use cert-manager with Let's Encrypt or your organization's CA
+- **Force HTTPS** — Redirect all HTTP traffic to HTTPS
+- **Set `ALLOWED_ORIGINS`** — Restrict CORS to your actual frontend domain(s)
+
+Example ingress configuration:
+
+```yaml title="ingress.yaml"
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ferriskey
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+  rules:
+    - host: iam.yourorg.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ferriskey-api
+                port:
+                  number: 3333
+```
+
+## Admin Credentials
+
+- **Change default credentials immediately** — Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` via Kubernetes Secrets
+- **Use strong passwords** — Minimum 16 characters, generated randomly
+- **Rotate regularly** — Establish a rotation schedule for admin credentials
+
+```yaml title="admin-secret.yaml"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ferriskey-admin
+  namespace: ferriskey
+type: Opaque
+stringData:
+  username: "admin"
+  password: "your-strong-random-password"
+  email: "admin@yourorg.com"
+```
+
+## Resource Limits
+
+Set CPU and memory requests/limits to prevent resource starvation:
+
+```yaml title="values.yaml"
+common:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+```
+
+## Scaling
+
+- **Horizontal scaling** — Increase `replicas` to handle more concurrent requests. FerrisKey API pods are stateless.
+- **Pod disruption budgets** — Ensure availability during cluster maintenance:
+
+```yaml title="pdb.yaml"
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ferriskey-api
+  namespace: ferriskey
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ferriskey-api
+```
+
+## Monitoring
+
+FerrisKey exposes a Prometheus metrics endpoint at `/metrics`:
+
+- **Scrape configuration** — Point your Prometheus instance at the FerrisKey service on port `3333`, path `/metrics`
+- **Key metrics** — Request latency, error rates, active sessions, token issuance rates
+- **Alerting** — Set alerts for error rate spikes, high latency, and database connection failures
+- **Distributed tracing** — Enable OpenTelemetry OTLP export for end-to-end request tracing
+
+## Security Hardening
+
+- **Network policies** — Restrict pod-to-pod traffic. FerrisKey API pods only need to reach PostgreSQL and external IdPs (if using Abyss)
+- **Pod security** — Run containers as non-root, read-only filesystem where possible
+- **Secret management** — Use an external secrets operator (AWS Secrets Manager, HashiCorp Vault) for sensitive values
+- **Image scanning** — Scan FerrisKey container images for vulnerabilities in your CI pipeline
+- **Audit logging** — Enable SeaWatch and forward events to your SIEM
+
+## Checklist
+
+| Item | Status |
+|---|---|
+| External PostgreSQL with SSL | |
+| TLS termination at ingress | |
+| Admin credentials changed from defaults | |
+| CORS origins restricted | |
+| Resource requests and limits set | |
+| Pod disruption budget configured | |
+| Prometheus scraping enabled | |
+| Network policies applied | |
+| Secrets managed externally | |
+| Backup strategy documented and tested | |

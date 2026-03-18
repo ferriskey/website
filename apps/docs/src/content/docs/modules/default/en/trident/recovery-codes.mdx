@@ -1,0 +1,63 @@
+---
+title: Recovery Codes
+description: Backup recovery codes in FerrisKey — generation, usage, and best practices.
+icon: file-key
+order: 5
+---
+
+# Recovery Codes
+
+Recovery codes are one-time backup credentials generated when MFA is first configured. They serve as a last resort when the user loses access to their primary MFA device — a lost phone, a broken hardware key, or a wiped authenticator app.
+
+## How They Work
+
+When a user configures TOTP or WebAuthn for the first time, FerrisKey generates a set of recovery codes. Each code is a random byte sequence that can be used exactly once to bypass the normal MFA challenge.
+
+### Lifecycle
+
+::::step-group
+:::step{title="Generation"}
+A set of recovery codes is generated alongside the primary MFA credential. Each code is a random value. The raw codes are returned to the user **once** — this is the only time they see them.
+:::
+
+:::step{title="Storage"}
+Each code is hashed before being stored in the database as a `RecoveryCode` credential. The plaintext codes are not retained by FerrisKey.
+:::
+
+:::step{title="User saves codes"}
+The user is instructed to save the codes in a secure location — a password manager, a printed sheet in a safe, or an encrypted file.
+:::
+
+:::step{title="Usage"}
+When the user cannot access their TOTP or WebAuthn device, they submit a recovery code instead. FerrisKey hashes the submitted code and checks it against the stored hashes.
+:::
+
+:::step{title="Consumption"}
+A matching code is consumed (deleted from the database) after use. It cannot be reused.
+:::
+::::
+
+## Security Model
+
+- **Hashed storage** — Recovery codes are never stored in plaintext. A compromised database does not expose usable codes.
+- **Single use** — Each code works exactly once. After use, it's permanently deleted.
+- **No expiration** — Recovery codes remain valid until used or until the user regenerates a new set.
+- **Independent of MFA** — Recovery codes bypass the normal TOTP/WebAuthn challenge entirely, making them a true last resort.
+
+:::callout{variant="danger" title="Treat codes like passwords"}
+Recovery codes grant full account access. Users should store them with the same care as a root password — never in plain text on a device, never shared, never in a screenshot.
+:::
+
+## Best Practices
+
+### Prompt Regeneration
+After a user consumes a recovery code, prompt them to generate a fresh set. Each used code reduces the safety net.
+
+### Display Code Count
+Show users how many recovery codes they have remaining. If the count is low (1-2 remaining), warn them to regenerate.
+
+### Secure Display
+When displaying recovery codes during generation, use a copy-to-clipboard button and a download option. Avoid showing codes in a way that could be cached by the browser or captured by screen recording.
+
+### Admin Recovery
+If a user loses all MFA credentials and all recovery codes, an administrator can remove the MFA credentials from the user's account through the admin console, allowing them to reconfigure MFA from scratch.

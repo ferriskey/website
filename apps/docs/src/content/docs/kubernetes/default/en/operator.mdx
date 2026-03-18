@@ -1,0 +1,131 @@
+---
+title: Operator
+description: Manage FerrisKey declaratively with the FerrisKey Operator and FerrisKeyCluster CRD.
+icon: bot
+order: 3
+---
+
+# FerrisKey Operator
+
+The FerrisKey Operator manages FerrisKey instances declaratively through a Kubernetes Custom Resource Definition (CRD). Define your desired state in a `FerrisKeyCluster` manifest and the operator handles the rest.
+
+## FerrisKeyCluster CRD
+
+The operator introduces the `FerrisKeyCluster` resource (API version `ferriskey.rs/v1alpha1`):
+
+```yaml title="ferriskey-cluster.yaml"
+apiVersion: ferriskey.rs/v1alpha1
+kind: FerrisKeyCluster
+metadata:
+  name: my-ferriskey
+  namespace: ferriskey
+spec:
+  name: my-ferriskey
+  replicas: 3
+  version: "latest"
+  api:
+    apiUrl: "https://api.iam.yourorg.com"
+    webappUrl: "https://iam.yourorg.com"
+    allowedOrigins:
+      - "https://iam.yourorg.com"
+  database:
+    secretRef:
+      name: ferriskey-db-credentials
+      namespace: ferriskey
+    databaseName: ferriskey
+    sslMode: require
+```
+
+## Spec Reference
+
+### Root
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Cluster name |
+| `replicas` | `integer` | Number of API pod replicas |
+| `version` | `string` | FerrisKey version to deploy |
+
+### API Configuration (`spec.api`)
+
+| Field | Type | Description |
+|---|---|---|
+| `apiUrl` | `string` | Public URL of the FerrisKey API |
+| `webappUrl` | `string` | Public URL of the web UI |
+| `allowedOrigins` | `string[]` | Allowed CORS origins |
+
+### Database Configuration (`spec.database`)
+
+| Field | Type | Description |
+|---|---|---|
+| `secretRef.name` | `string` | Kubernetes Secret containing database credentials |
+| `secretRef.namespace` | `string` | Secret namespace (optional, defaults to resource namespace) |
+| `databaseName` | `string` | Database name override |
+| `sslMode` | `string` | PostgreSQL SSL mode (`disable`, `require`, `verify-ca`, `verify-full`) |
+
+:::callout{variant="info" title="Database Secret format"}
+The referenced Secret should contain the standard PostgreSQL connection fields: `host`, `port`, `user`, `password`, and optionally `database`.
+:::
+
+## Status
+
+The operator reports cluster status through the `status` subresource:
+
+```yaml
+status:
+  ready: true
+  phase: Running
+  databaseStatus:
+    connected: true
+    host: "postgres.database.svc.cluster.local"
+    database: "ferriskey"
+    lastCheck: "2026-03-17T10:30:00Z"
+  conditions:
+    - conditionType: Ready
+      status: "True"
+      lastTransitionTime: "2026-03-17T10:25:00Z"
+    - conditionType: DatabaseConnected
+      status: "True"
+      lastTransitionTime: "2026-03-17T10:24:00Z"
+```
+
+| Field | Description |
+|---|---|
+| `ready` | Overall cluster readiness |
+| `phase` | Current phase (Pending, Running, Failed) |
+| `message` | Human-readable status message |
+| `databaseStatus` | Database connectivity information |
+| `conditions` | Standard Kubernetes conditions |
+
+## Deploying
+
+::::step-group
+:::step{title="Install the operator"}
+```bash
+kubectl apply -f https://github.com/ferriskey/ferriskey/releases/latest/download/operator.yaml
+```
+:::
+
+:::step{title="Create a database secret"}
+```bash
+kubectl create secret generic ferriskey-db-credentials \
+  --namespace ferriskey \
+  --from-literal=host=postgres.database.svc.cluster.local \
+  --from-literal=port=5432 \
+  --from-literal=user=ferriskey \
+  --from-literal=password=your-db-password
+```
+:::
+
+:::step{title="Apply the FerrisKeyCluster manifest"}
+```bash
+kubectl apply -f ferriskey-cluster.yaml
+```
+:::
+
+:::step{title="Check status"}
+```bash
+kubectl get ferriskeyclusters -n ferriskey
+```
+:::
+::::

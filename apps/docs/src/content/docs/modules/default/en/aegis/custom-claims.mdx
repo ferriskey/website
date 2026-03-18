@@ -1,0 +1,137 @@
+---
+title: Custom Claims
+description: Add business-specific claims to your tokens — real-world examples and patterns.
+icon: plus
+order: 3
+---
+
+# Custom Claims
+
+FerrisKey's default scopes cover standard OIDC claims. But real applications need more — user roles, tenant identifiers, subscription tiers, feature flags. Custom claims let you put exactly the data your application needs into the token, so your backend can make decisions without additional API calls.
+
+## Common Patterns
+
+### Realm Roles in the Access Token
+
+Your API gateway needs to enforce role-based access control. Add a `user_realm_role_mapper` to include roles directly in the access token.
+
+**Scope:** `roles` (Default)
+**Mapper:** `user_realm_role_mapper`
+```json
+{
+  "claim_name": "roles",
+  "add_to_id_token": false,
+  "add_to_access_token": true
+}
+```
+
+**Resulting token claim:**
+```json
+{
+  "roles": ["admin", "editor", "viewer"]
+}
+```
+
+Your API gateway reads `roles` from the token and allows/denies routes without calling FerrisKey.
+
+### Tenant Identifier for Multi-Tenant SaaS
+
+Each realm represents a tenant. Inject the realm name as a claim so your backend knows which tenant database to query.
+
+**Scope:** `tenant` (Default)
+**Mapper:** `hardcoded_claim_mapper`
+```json
+{
+  "claim_name": "tenant",
+  "claim_value": "acme-corp",
+  "claim_type": "String",
+  "add_to_id_token": false,
+  "add_to_access_token": true
+}
+```
+
+:::callout{variant="info" title="One scope per realm"}
+Since the tenant value is realm-specific, you'll create this scope within each realm with the appropriate hardcoded value. Alternatively, use a `user_attribute` mapper if the tenant is stored as a user attribute.
+:::
+
+### Permissions Bitmask
+
+FerrisKey uses bitwise permissions internally. Expose the resolved permission bitmask as a claim for fine-grained authorization:
+
+**Scope:** `permissions` (Default)
+**Mapper:** `user_attribute`
+```json
+{
+  "attribute": "permissions_bitmask",
+  "claim_name": "permissions",
+  "claim_type": "Integer",
+  "add_to_id_token": false,
+  "add_to_access_token": true
+}
+```
+
+Your backend performs bitwise AND checks against the `permissions` integer — fast and efficient.
+
+### Audience for Multiple Resource Servers
+
+Your tokens need to be accepted by both `api.yourapp.com` and `admin.yourapp.com`:
+
+**Scope:** `multi-audience` (Default)
+**Mapper 1:** `audience_mapper` → `api.yourapp.com`
+**Mapper 2:** `audience_mapper` → `admin.yourapp.com`
+
+**Resulting token claim:**
+```json
+{
+  "aud": ["my-client", "api.yourapp.com", "admin.yourapp.com"]
+}
+```
+
+### Feature Flags
+
+Inject feature flags into tokens so your frontend knows which features to enable:
+
+**Scope:** `features` (Optional — client requests it when needed)
+**Mapper:** `hardcoded_claim_mapper`
+```json
+{
+  "claim_name": "features",
+  "claim_value": "{\"new_dashboard\": true, \"beta_export\": false}",
+  "claim_type": "JSON",
+  "add_to_id_token": true,
+  "add_to_access_token": false
+}
+```
+
+## Scope Assignment Strategy
+
+### Default vs Optional
+
+| Assign as Default when... | Assign as Optional when... |
+|---|---|
+| Every request from this client needs the claim | The claim contains sensitive data |
+| The claim is needed for authorization decisions | The claim is large (increases token size) |
+| Missing the claim would break the client | Only specific flows need the data |
+
+### Per-Client Scope Overrides
+
+The same scope can have different types per client:
+
+- `roles` scope is **Default** for your admin dashboard (always needs roles)
+- `roles` scope is **Optional** for your public API (only needs roles for specific endpoints)
+- `roles` scope is **None** for a third-party integration (never gets roles)
+
+This lets you define scopes once and control exposure per client.
+
+## Debugging Claims
+
+To verify which claims end up in your tokens:
+
+1. Authenticate through the client
+2. Decode the access token (it's a JWT — use `jwt.io` or `base64 -d`)
+3. Check which claims are present
+4. If a claim is missing, verify:
+   - The scope is assigned to the client (as Default or Optional)
+   - If Optional, the client requested it in the `scope` parameter
+   - The mapper is configured with `add_to_access_token: true` (or `add_to_id_token` for ID tokens)
+   - The mapper's source data exists on the user (e.g., the attribute is set)

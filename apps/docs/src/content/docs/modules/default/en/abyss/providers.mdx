@@ -1,0 +1,113 @@
+---
+title: Configuring Providers
+description: Set up Google, GitHub, Discord, and custom OIDC providers in FerrisKey.
+icon: settings
+order: 3
+---
+
+# Configuring Providers
+
+This guide walks through setting up specific identity providers with Abyss. Each provider requires creating an OAuth2/OIDC application on the external platform and registering it in FerrisKey.
+
+## Google
+
+::::step-group
+:::step{title="Create a Google OAuth2 app"}
+Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID with:
+- **Application type:** Web application
+- **Authorized redirect URI:** `https://your-ferriskey.com/realms/{realm}/broker/google/callback`
+:::
+
+:::step{title="Register in FerrisKey"}
+In the FerrisKey admin console, navigate to **Identity Providers → Add Provider** and configure:
+
+| Field | Value |
+|---|---|
+| Name | Google |
+| Type | `oauth2` |
+| Client ID | From Google Console |
+| Client Secret | From Google Console |
+| Authorization URL | `https://accounts.google.com/o/oauth2/v2/auth` |
+| Token URL | `https://oauth2.googleapis.com/token` |
+| UserInfo URL | `https://openidconnect.googleapis.com/v1/userinfo` |
+| Scopes | `openid`, `email`, `profile` |
+:::
+::::
+
+## GitHub
+
+::::step-group
+:::step{title="Create a GitHub OAuth App"}
+Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**:
+- **Authorization callback URL:** `https://your-ferriskey.com/realms/{realm}/broker/github/callback`
+:::
+
+:::step{title="Register in FerrisKey"}
+
+| Field | Value |
+|---|---|
+| Name | GitHub |
+| Type | `oauth2` |
+| Client ID | From GitHub |
+| Client Secret | From GitHub |
+| Authorization URL | `https://github.com/login/oauth/authorize` |
+| Token URL | `https://github.com/login/oauth/access_token` |
+| UserInfo URL | `https://api.github.com/user` |
+| Scopes | `read:user`, `user:email` |
+:::
+::::
+
+## Discord
+
+::::step-group
+:::step{title="Create a Discord Application"}
+Go to the [Discord Developer Portal](https://discord.com/developers/applications), create an application, and add an OAuth2 redirect:
+- **Redirect URL:** `https://your-ferriskey.com/realms/{realm}/broker/discord/callback`
+:::
+
+:::step{title="Register in FerrisKey"}
+
+| Field | Value |
+|---|---|
+| Name | Discord |
+| Type | `oauth2` |
+| Client ID | From Discord |
+| Client Secret | From Discord |
+| Authorization URL | `https://discord.com/api/oauth2/authorize` |
+| Token URL | `https://discord.com/api/oauth2/token` |
+| UserInfo URL | `https://discord.com/api/users/@me` |
+| Scopes | `identify`, `email` |
+:::
+::::
+
+## Custom OIDC Provider
+
+For any OpenID Connect compliant provider (Okta, Auth0, Azure AD, Keycloak):
+
+| Field | How to Find It |
+|---|---|
+| Authorization URL | Provider's `.well-known/openid-configuration` → `authorization_endpoint` |
+| Token URL | → `token_endpoint` |
+| UserInfo URL | → `userinfo_endpoint` |
+| Scopes | Typically `openid email profile` |
+
+:::callout{variant="info" title="OIDC Discovery"}
+Most OIDC providers publish their configuration at `https://provider.com/.well-known/openid-configuration`. Use this to find all the endpoint URLs you need.
+:::
+
+## Provider Management
+
+### Disabling a Provider
+Toggle `enabled` to `false` to hide the provider from the login page without deleting its configuration. Existing federated credentials remain — users can still log in through other methods.
+
+### Updating Credentials
+When you rotate the client secret on the external provider, update it in FerrisKey immediately. A mismatched secret will cause all federated logins through that provider to fail.
+
+### Provider-Specific Configuration
+The `configuration` field accepts arbitrary JSON for provider-specific settings. For example, Azure AD may need a `tenant_id`:
+
+```json
+{
+  "tenant_id": "your-azure-tenant-id"
+}
+```

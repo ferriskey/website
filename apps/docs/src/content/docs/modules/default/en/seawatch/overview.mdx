@@ -1,0 +1,79 @@
+---
+title: Overview
+description: SeaWatch is FerrisKey's audit and security events module — track, query, and export every critical action.
+icon: eye
+order: 1
+---
+
+# SeaWatch — Audit & Security Events
+
+SeaWatch records every security-relevant action in FerrisKey. Every login, password reset, user creation, role assignment, and configuration change produces a structured event with full context — who did it, what they did, when, from where, and why it succeeded or failed.
+
+## Why Audit Logging Matters
+
+Without audit logs, you're blind to what's happening inside your identity system. SeaWatch gives you:
+
+- **Incident investigation** — Trace a compromised account back to the exact login attempt, IP address, and user agent
+- **Compliance** — SOC 2, ISO 27001, GDPR, and HIPAA all require audit trails for access management systems
+- **Anomaly detection** — Spot patterns like repeated login failures from the same IP, or unexpected configuration changes
+- **Operational visibility** — Know when admins create clients, rotate secrets, or modify realm settings
+
+## Event Structure
+
+Every SeaWatch event captures a complete picture:
+
+```json title="Example: Login failure event"
+{
+  "id": "01914b3c-7e8a-7f5a-b456-789012345678",
+  "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "event_type": "login_failure",
+  "status": "failure",
+  "actor_id": null,
+  "actor_type": null,
+  "target_type": "user",
+  "target_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "resource": "alice@example.com",
+  "ip_address": "203.0.113.42",
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "details": {
+    "reason": "invalid_credentials",
+    "client_id": "my-frontend"
+  },
+  "timestamp": "2026-03-17T14:30:00Z"
+}
+```
+
+| Field | Description |
+|---|---|
+| `id` | Unique event identifier (UUIDv7, time-ordered) |
+| `realm_id` | Realm where the event occurred |
+| `event_type` | What happened (see [Event Types](/modules/default/en/seawatch/event-types)) |
+| `status` | `success` or `failure` |
+| `actor_id` / `actor_type` | Who triggered the event and their classification |
+| `target_type` / `target_id` | What resource was affected |
+| `resource` | Human-readable resource description |
+| `ip_address` / `user_agent` | Client context |
+| `trace_id` | OpenTelemetry trace ID for distributed correlation |
+| `details` | Event-specific JSON payload |
+| `timestamp` | When the event occurred (UTC) |
+
+## Actor Types
+
+| Actor | When Used |
+|---|---|
+| `user` | A regular authenticated user performed the action |
+| `service_account` | A client's service account performed the action |
+| `admin` | An administrator performed the action via the admin console |
+| `system` | FerrisKey itself (automated processes, scheduled tasks) |
+
+## Real-World Patterns
+
+### Security Operations
+Forward SeaWatch events to your SIEM (Splunk, Elastic, Datadog) for correlation with other security signals. Use `trace_id` to link authentication events to downstream API requests.
+
+### Compliance Reporting
+Query events by time range and event type to generate compliance reports. SeaWatch's structured format makes it straightforward to produce SOC 2 evidence — "here are all admin actions on the identity system in Q1".
+
+### Anomaly Alerting
+Combine SeaWatch with [Webhooks](/modules/default/en/webhooks/overview) to trigger alerts on suspicious patterns — multiple `login_failure` events from the same IP, `client_secret_rotated` events outside of maintenance windows, or `realm_config_changed` events from unexpected actors.

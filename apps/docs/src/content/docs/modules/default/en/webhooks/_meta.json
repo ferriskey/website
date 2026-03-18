@@ -1,0 +1,6 @@
+{
+  "icon": "webhook",
+  "title": "Webhooks",
+  "type": "group",
+  "order": 7
+}

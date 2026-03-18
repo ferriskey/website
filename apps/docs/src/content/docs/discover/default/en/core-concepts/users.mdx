@@ -1,0 +1,52 @@
+---
+title: Users
+description: User accounts in FerrisKey — lifecycle, required actions, and realm scoping.
+icon: user
+order: 3
+---
+
+# Users
+
+A user represents an identity within a realm. Users authenticate through clients, receive tokens, and are authorized through role assignments.
+
+## User Properties
+
+| Property | Description |
+|---|---|
+| `username` | Unique identifier within the realm |
+| `email` | Email address |
+| `firstname` | Given name |
+| `lastname` | Family name |
+| `email_verified` | Whether the email has been verified |
+| `enabled` | Whether the account is active |
+
+A disabled user cannot authenticate. An unverified email may trigger a `VerifyEmail` required action depending on realm configuration.
+
+## Realm Scoping
+
+Users are fully scoped to their realm. The same email address can exist in multiple realms as completely independent accounts. There is no cross-realm user resolution — authentication always happens within a single realm context.
+
+## Required Actions
+
+Required actions are tasks a user must complete before full authentication is granted. When a user has pending required actions, the authentication flow returns a **temporary token** instead of full access tokens.
+
+| Action | Description |
+|---|---|
+| `ConfigureOtp` | User must set up multi-factor authentication (TOTP) |
+| `VerifyEmail` | User must verify their email address |
+| `UpdatePassword` | User must change their password |
+
+Required actions are enforced during the authentication chain: after credentials are validated but before tokens are issued. The client receives a temporary token and the list of pending actions, then guides the user through completing them.
+
+:::callout{variant="info" title="Temporary tokens"}
+A temporary token is a short-lived JWT that authorizes only required action completion endpoints. It cannot be used to access protected resources.
+:::
+
+## Service Account Users
+
+When a client has `service_account_enabled`, FerrisKey automatically creates a linked service account user. This user:
+
+- Has `client_id` set to the owning client
+- Authenticates via the client credentials grant (no password)
+- Can be assigned roles and permissions like any user
+- Represents the client identity for authorization purposes

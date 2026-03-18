@@ -1,0 +1,72 @@
+---
+title: TOTP
+description: Time-based one-time passwords in FerrisKey — setup, verification, and configuration.
+icon: clock
+order: 2
+---
+
+# TOTP (Time-based One-Time Password)
+
+TOTP generates a 6-digit code that changes every 30 seconds using a shared secret between FerrisKey and the user's authenticator app. It follows [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238) and is compatible with Google Authenticator, Authy, 1Password, Bitwarden, and any TOTP-compliant app.
+
+## How It Works
+
+TOTP relies on two ingredients: a **shared secret** (a 20-byte key) and **time**. Both FerrisKey and the authenticator app derive the same code from the secret and the current 30-second time window. Because both sides share the secret and agree on the time, the codes match.
+
+### TOTP Parameters
+
+| Parameter | Value | Description |
+|---|---|---|
+| `algorithm` | SHA-1 | Hash function used for code generation |
+| `digits` | 6 | Length of the generated code |
+| `period` | 30 seconds | How often the code rotates |
+| `issuer` | FerrisKey (configurable) | Display name in the authenticator app |
+
+## Setup Flow
+
+::::step-group
+:::step{title="Initiate MFA enrollment"}
+The user navigates to MFA settings (or has the `ConfigureOtp` required action pending). FerrisKey generates a random 20-byte secret and encodes it in base32.
+:::
+
+:::step{title="Display QR code"}
+FerrisKey returns a `otpauth://` URI containing the secret, issuer, algorithm, digits, and period. The client renders this as a QR code:
+
+```
+otpauth://totp/FerrisKey:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=FerrisKey&algorithm=SHA1&digits=6&period=30
+```
+:::
+
+:::step{title="Scan and verify"}
+The user scans the QR code with their authenticator app, then submits the current 6-digit code to FerrisKey. FerrisKey validates the code against the secret to confirm the app is configured correctly.
+:::
+
+:::step{title="Credential stored"}
+On successful verification, the TOTP credential is saved. The credential includes the encrypted secret, algorithm, digit count, and period. The `ConfigureOtp` required action is removed.
+:::
+::::
+
+## Verification During Login
+
+After password validation, if the user has a TOTP credential:
+
+1. FerrisKey returns `status: requires_otp_challenge` with a temporary token
+2. The client collects the 6-digit code from the user
+3. The client submits the code with the temporary token
+4. FerrisKey computes the expected code from the stored secret and current time
+5. If the code matches (with a small time-window tolerance), authentication succeeds
+
+:::callout{variant="warning" title="Time synchronization"}
+TOTP depends on both FerrisKey and the authenticator app agreeing on the current time. If the server clock drifts significantly, codes will fail validation. Use NTP to keep your server clock accurate.
+:::
+
+## Customization
+
+### Changing the Issuer
+The issuer name displayed in authenticator apps comes from the TOTP credential configuration. Customize it per realm to show your application's name instead of "FerrisKey".
+
+### Enforcing TOTP for All Users
+Add `ConfigureOtp` to the list of required actions for every new user created in the realm. This makes MFA enrollment mandatory — users cannot get full tokens until they set up TOTP.
+
+### Time Window Tolerance
+FerrisKey accepts codes from the current and adjacent time windows to account for minor clock skew. This means a code from the previous or next 30-second window may also be accepted.

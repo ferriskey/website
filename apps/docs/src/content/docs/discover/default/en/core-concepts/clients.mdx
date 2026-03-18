@@ -1,0 +1,59 @@
+---
+title: Clients
+description: OAuth2/OIDC clients in FerrisKey — application registration, client types, and token configuration.
+icon: app-window
+order: 2
+---
+
+# Clients
+
+A client represents an application that uses FerrisKey for authentication. Every OAuth2/OIDC flow starts with a client — it identifies which application is requesting access and determines what authentication methods and token configurations apply.
+
+## Client Types
+
+FerrisKey supports three client types:
+
+| Type | Secret | Use Case |
+|---|---|---|
+| **Confidential** | Yes | Server-side applications that can securely store a client secret |
+| **Public** | No | Single-page applications (SPAs), mobile apps, or CLI tools |
+| **System** | — | Internal FerrisKey clients (auto-created, not user-managed) |
+
+:::callout{variant="info" title="Choosing a client type"}
+Use **Confidential** when your application has a backend that can keep the client secret safe. Use **Public** for browser-based or mobile applications where the secret would be exposed to the user.
+:::
+
+## Client Properties
+
+| Property | Description |
+|---|---|
+| `client_id` | Public identifier used in OAuth2 flows |
+| `secret` | Client secret (confidential clients only) |
+| `protocol` | Protocol type (e.g., `openid-connect`) |
+| `enabled` | Whether the client can initiate authentication |
+| `redirect_uris` | Allowed redirect URIs after authentication |
+| `direct_access_grants_enabled` | Allow the password grant type |
+| `service_account_enabled` | Enable client credentials grant |
+
+## Token Lifetime Overrides
+
+By default, clients inherit token lifetimes from their realm. You can override these per-client for fine-grained control:
+
+| Override | Description |
+|---|---|
+| `access_token_lifetime` | Access token TTL in seconds |
+| `refresh_token_lifetime` | Refresh token TTL in seconds |
+| `id_token_lifetime` | ID token TTL in seconds |
+| `temporary_token_lifetime` | Temporary token TTL in seconds |
+
+When set, the client's value takes precedence over the realm default. When `null`, the realm default applies.
+
+## Direct Access Grants
+
+When enabled, a client can use the **Resource Owner Password Credentials** grant — sending username and password directly to the token endpoint. This is useful for trusted first-party applications and testing, but should not be used for third-party clients.
+
+## Service Accounts
+
+A client with `service_account_enabled` can authenticate using the **Client Credentials** grant — no user involved. FerrisKey creates a linked service account user for the client, which can be assigned roles and permissions just like a regular user.
+
+This is the standard pattern for machine-to-machine communication.

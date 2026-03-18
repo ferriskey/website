@@ -1,0 +1,149 @@
+---
+title: Protocol Mappers
+description: Protocol mapper types in FerrisKey — how user data becomes JWT claims.
+icon: arrow-right-left
+order: 2
+---
+
+# Protocol Mappers
+
+Protocol mappers are the rules that transform user and client data into JWT claims. Each mapper belongs to a client scope and runs during token generation. Aegis provides six built-in mapper types that cover the most common claim patterns.
+
+## Mapper Types
+
+### `user_property`
+
+Maps a built-in user field directly to a token claim.
+
+| Config Field | Description |
+|---|---|
+| `property` | User field to read (`email`, `username`, `firstname`, `lastname`) |
+| `claim_name` | Target claim name in the JWT |
+| `claim_type` | Value type (`String`, `JSON`, `Integer`, `Boolean`) |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+**Example:** Map the user's email to the `email` claim:
+```json title="user_property mapper config"
+{
+  "property": "email",
+  "claim_name": "email",
+  "claim_type": "String",
+  "add_to_id_token": true,
+  "add_to_access_token": true
+}
+```
+
+### `user_attribute`
+
+Maps a custom user attribute (key-value metadata) to a token claim. Use this for business-specific data like department, plan tier, or feature flags.
+
+| Config Field | Description |
+|---|---|
+| `attribute` | Custom attribute key on the user |
+| `claim_name` | Target claim name |
+| `claim_type` | Value type |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+### `user_realm_role_mapper`
+
+Includes the user's realm-level role names in the token.
+
+| Config Field | Description |
+|---|---|
+| `claim_name` | Target claim name (e.g., `realm_roles`) |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+**Output example:**
+```json
+{
+  "realm_roles": ["admin", "user-manager", "viewer"]
+}
+```
+
+### `user_client_role_mapper`
+
+Includes the user's client-specific role names. Useful when different clients have their own role hierarchies.
+
+| Config Field | Description |
+|---|---|
+| `client_id` | Which client's roles to include |
+| `claim_name` | Target claim name (e.g., `resource_access`) |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+### `audience_mapper`
+
+Adds audience (`aud`) values to the token. Use this when your token needs to be accepted by multiple resource servers.
+
+| Config Field | Description |
+|---|---|
+| `audience` | Audience value to add |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+### `hardcoded_claim_mapper`
+
+Injects a static value as a claim. Useful for environment indicators, feature flags, or tenant identifiers that don't come from user data.
+
+| Config Field | Description |
+|---|---|
+| `claim_name` | Target claim name |
+| `claim_value` | Static value to inject |
+| `claim_type` | Value type |
+| `add_to_id_token` | Include in ID token |
+| `add_to_access_token` | Include in access token |
+
+**Example:** Add an environment indicator:
+```json title="hardcoded_claim_mapper config"
+{
+  "claim_name": "environment",
+  "claim_value": "production",
+  "claim_type": "String",
+  "add_to_id_token": false,
+  "add_to_access_token": true
+}
+```
+
+## Execution Order
+
+Protocol mappers execute in the order they appear within their scope. When multiple scopes are active, mappers from each scope run in scope order.
+
+:::callout{variant="warning" title="Claim collisions"}
+If two mappers target the same claim name, the later one overwrites the earlier one. Be intentional about claim names across scopes to avoid unintended overrides.
+:::
+
+## Token Generation Pipeline
+
+When a token is generated, Aegis follows this pipeline:
+
+1. **Resolve scopes** — Collect all default scopes for the client, plus any optional scopes requested in the `scope` parameter
+2. **Gather mappers** — Collect all protocol mappers from the active scopes
+3. **Execute mappers** — Run each mapper against the authenticated user and client context
+4. **Build payload** — Merge mapper outputs with standard claims (`sub`, `iss`, `exp`, etc.)
+5. **Filter by token type** — Include only claims marked for the target token type (access token vs ID token)
+6. **Sign** — Sign the JWT with the realm's signing key
+
+## Creating Custom Mappers
+
+To add a custom claim to your tokens:
+
+::::step-group
+:::step{title="Create or select a scope"}
+Navigate to **Client Scopes** in the admin console. Create a new scope or select an existing one.
+:::
+
+:::step{title="Add a protocol mapper"}
+On the scope's **Mappers** tab, click **Add Mapper**. Select the mapper type and configure it.
+:::
+
+:::step{title="Assign the scope to a client"}
+Navigate to the client's **Client Scopes** tab. Add the scope as Default or Optional.
+:::
+
+:::step{title="Test"}
+Authenticate through the client and inspect the resulting token. The custom claim should appear in the payload.
+:::
+::::

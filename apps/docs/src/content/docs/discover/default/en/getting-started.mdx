@@ -1,8 +1,134 @@
 ---
 title: Getting Started
-description: Set up Ferriskey and start to use IAM in minutes.
+description: Deploy FerrisKey in minutes with Docker and authenticate your first user.
 icon: rocket
-order: 1
+order: 2
 ---
 
-Soon
+# Getting Started
+
+This guide takes you from zero to a working FerrisKey instance with your first authenticated user. You'll deploy the full stack with Docker, create a realm, register a client, and obtain your first tokens.
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
+- A terminal and a web browser
+- Ports `3333` (API) and `5555` (UI) available
+
+## Deploy FerrisKey
+
+::::step-group
+:::step{title="Start the stack"}
+Clone the repository and start all services:
+
+```bash
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey
+docker compose --profile registry up -d
+```
+
+This starts PostgreSQL, the FerrisKey API server, database migrations, and the web UI.
+:::
+
+:::step{title="Verify the deployment"}
+Wait a few seconds for migrations to complete, then check that all services are healthy:
+
+```bash
+docker compose --profile registry ps
+```
+
+The API is available at `http://localhost:3333` and the UI at `http://localhost:5555`.
+:::
+
+:::step{title="Log in to the admin console"}
+Open `http://localhost:5555` in your browser and sign in with the default credentials:
+
+- **Username:** `admin`
+- **Password:** `admin`
+
+You'll land in the **master** realm — the built-in realm that manages all other realms.
+:::
+::::
+
+:::callout{variant="warning" title="Change default credentials"}
+The default admin credentials are for local development only. Change them immediately in any non-local environment by setting the `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables.
+:::
+
+## Create Your First Realm
+
+A realm is an isolated tenant. Everything — users, clients, roles, credentials — lives within a realm.
+
+::::step-group
+:::step{title="Create a realm"}
+In the admin console, navigate to **Realms** and click **Create Realm**. Give it a name like `my-app` and save.
+:::
+
+:::step{title="Switch to the new realm"}
+Use the realm selector in the sidebar to switch to `my-app`. All subsequent operations happen within this realm.
+:::
+::::
+
+## Register a Client
+
+A client represents an application that uses FerrisKey for authentication.
+
+::::step-group
+:::step{title="Create a client"}
+Navigate to **Clients** and click **Create Client**. Set:
+
+- **Client ID:** `my-frontend`
+- **Client Type:** `Public` (for a single-page application)
+- **Redirect URIs:** `http://localhost:3000/*`
+
+Save the client.
+:::
+
+:::step{title="Enable direct access grants"}
+If you want to test authentication directly via the API (password grant), enable **Direct Access Grants** on the client settings page.
+:::
+::::
+
+## Create a User
+
+::::step-group
+:::step{title="Create a user"}
+Navigate to **Users** and click **Create User**. Fill in:
+
+- **Username:** `alice`
+- **Email:** `alice@example.com`
+- **First Name:** `Alice`
+- **Last Name:** `Smith`
+
+Save the user.
+:::
+
+:::step{title="Set a password"}
+On the user's **Credentials** tab, set a password. Uncheck **Temporary** if you don't want to force a password change on first login.
+:::
+::::
+
+## Authenticate
+
+With direct access grants enabled, you can obtain tokens using the password grant:
+
+```bash title="Obtain tokens via password grant"
+curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=my-frontend" \
+  -d "username=alice" \
+  -d "password=your-password"
+```
+
+The response contains an `access_token`, `refresh_token`, and optionally an `id_token` — you're authenticated.
+
+## What's Next?
+
+::::card-group{cols=2}
+:::card{label="Core Concepts" icon="lucide:layers" href="/discover/default/en/core-concepts/realms"}
+Deep dive into realms, clients, users, roles, and tokens.
+:::
+:::card{label="Configuration" icon="lucide:settings" href="/discover/default/en/configuration"}
+Environment variables, SMTP setup, and deployment options.
+:::
+::::
