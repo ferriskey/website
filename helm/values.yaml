@@ -1,0 +1,68 @@
+## Common image tag applied to all apps
+imageTag: sha-e6ae9d8
+
+## Ingress shared config
+ingress:
+  className: traefik
+  clusterIssuer: letsencrypt-prod
+
+apps:
+  website:
+    enabled: true
+    image: ghcr.io/ferriskey/ferriskey-website
+    replicas: 1
+    containerPort: 8080
+    service:
+      type: ClusterIP
+      port: 80
+    ingress:
+      enabled: true
+      host: ferriskey.rs
+      annotations: {}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  docs:
+    enabled: true
+    image: ghcr.io/ferriskey/ferriskey-docs
+    replicas: 1
+    containerPort: 8080
+    service:
+      type: ClusterIP
+      port: 80
+    ingress:
+      enabled: true
+      host: docs.ferriskey.rs
+      annotations: {}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  blog:
+    enabled: true
+    image: ghcr.io/ferriskey/ferriskey-blog
+    replicas: 1
+    containerPort: 8080
+    service:
+      type: ClusterIP
+      port: 80
+    ingress:
+      enabled: true
+      host: blog.ferriskey.rs
+      annotations: {}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ferriskey-website
+description: Helm chart for FerrisKey website, docs and blog
+type: application
+version: 0.1.0
+appVersion: "latest"

@@ -1,0 +1,23 @@
+{{- range $name, $app := .Values.apps }}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ferriskey-website.labels" (dict "root" $ "app" $app) | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  type: {{ $app.service.type }}
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $app.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
+{{- end }}

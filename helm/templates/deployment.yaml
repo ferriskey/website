@@ -1,0 +1,47 @@
+{{- range $name, $app := .Values.apps }}
+{{- if $app.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ferriskey-website.labels" (dict "root" $ "app" $app) | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ $app.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: {{ include "ferriskey-website.image" (dict "root" $ "app" $app) }}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: {{ $app.containerPort }}
+              protocol: TCP
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+{{- end }}
+{{- end }}
