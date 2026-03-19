@@ -8,19 +8,20 @@ export default defineConfig({
   integrations: [
     react(),
     thumbnailIntegration({
-      appName: 'Explainer',
+      appName: 'FerrisKey',
+      primaryColor: '#F97316',
       content: {
         type: 'static',
         pages: [
           {
             path: '/',
-            title: 'Explainer v2',
-            description: 'Documentation boilerplate for developers.',
+            title: 'FerrisKey',
+            description: 'A modern IAM built for distributed systems',
           },
           {
             path: '/thumbnails/fr',
-            title: 'Explainer v2',
-            description: 'Boilerplate de documentation pour les développeurs.',
+            title: 'FerrisKey',
+            description: 'A modern IAM built for distributed systems',
           },
         ],
       },

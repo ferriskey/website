@@ -43,6 +43,7 @@ export default defineConfig({
     thumbnailIntegration({
       appName: 'Blog',
       content: { type: 'collection', dir: './src/content/posts' },
+       primaryColor: '#F97316',
     }),
   ],
   vite: {

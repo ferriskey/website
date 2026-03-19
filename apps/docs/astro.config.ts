@@ -20,6 +20,7 @@ export default defineConfig({
     thumbnailIntegration({
       appName: 'Docs',
       content: { type: 'collection', dir: './src/content/docs' },
+      primaryColor: '#F97316',
     }),
   ],
   vite: {
