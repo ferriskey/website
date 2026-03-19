@@ -1,17 +1,26 @@
 ---
-import { cn } from '@explainer/ui'
+const gridCols = {
+  1: "md:grid-cols-1",
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-3",
+  4: "md:grid-cols-4",
+  5: "md:grid-cols-5",
+  6: "md:grid-cols-6",
+  7: "md:grid-cols-7",
+  8: "md:grid-cols-8",
+  9: "md:grid-cols-9",
+  10: "md:grid-cols-10",
+  11: "md:grid-cols-11",
+  12: "md:grid-cols-12",
+} as const;
 
 interface Props {
-  cols?: 1 | 2 | 3 | 4
-  className?: string
-}
+  cols?: keyof typeof gridCols
+};
 
-const { cols = 2, className } = Astro.props
+const { cols = 2 } = Astro.props as Props;
+const colClass = gridCols[cols as keyof typeof gridCols];
 ---
-
-<div
-  class={cn('my-4 grid gap-5', className)}
-  style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
->
+<div class:list={["grid gap-5 sm:grid-cols-1", colClass]}>
   <slot />
 </div>
