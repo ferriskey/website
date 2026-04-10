@@ -1,0 +1,401 @@
+---
+import Base from '../layouts/base.astro'
+import { WebsiteNavbar } from '../components/website-navbar'
+import { BackgroundAnimation } from '../components/background-animation'
+import { latestRelease, releaseNotes, releaseNoteTranslations } from '../lib/release-notes'
+import { ui } from '../i18n/ui'
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+
+const translations = ui.fr
+
+const firstRelease = releaseNotes[releaseNotes.length - 1]
+const releaseGroups = releaseNotes
+  .slice()
+  .reverse()
+  .reduce<Array<{ milestone: (typeof releaseNotes)[number]; patches: (typeof releaseNotes)[number][] }>>((groups, release) => {
+    if (release.kind === 'major') {
+      groups.push({ milestone: release, patches: [] })
+      return groups
+    }
+
+    const currentGroup = groups[groups.length - 1]
+    if (currentGroup) currentGroup.patches.push(release)
+    return groups
+  }, [])
+  .map((group) => ({ ...group, patches: group.patches.reverse() }))
+  .reverse()
+
+const kindKey = {
+  patch: 'releaseNotes.patch',
+  minor: 'releaseNotes.minor',
+  major: 'releaseNotes.major',
+} as const
+
+const kindLabel = {
+  patch: 'Patch release',
+  minor: 'Feature release',
+  major: 'Milestone release',
+} as const
+
+const kindUi = {
+  patch: {
+    dot: 'border-border bg-background',
+    card: 'border-border/70 bg-background/70',
+    badge: 'border-border/70 bg-muted/20 text-muted-foreground',
+    title: 'text-foreground',
+    meta: 'text-muted-foreground',
+  },
+  minor: {
+    dot: 'border-primary/40 bg-background',
+    card: 'border-border/70 bg-background/75',
+    badge: 'border-primary/25 bg-primary/8 text-primary',
+    title: 'text-foreground',
+    meta: 'text-primary',
+  },
+  major: {
+    dot: 'border-primary/60 bg-primary/10',
+    card: 'border-primary/20 bg-background/80',
+    badge: 'border-primary/30 bg-primary/10 text-primary',
+    title: 'text-primary',
+    meta: 'text-primary',
+  },
+} as const
+
+function formatDate(date: string, locale = 'en-US') {
+  return new Date(date).toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+---
+
+<Base
+  title="Release Notes — Ferriskey"
+  description="A curated timeline of Ferriskey releases, from the first stable baseline to federation, observability, and recovery flows."
+>
+  <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
+
+  <main class="relative overflow-hidden pb-24">
+    <section class="relative px-4 sm:px-6 lg:px-8 flex flex-col py-24 sm:py-32 lg:py-40 pb-0! overflow-hidden">
+      <div>
+        <div class="absolute inset-0 w-full -z-10">
+          <BackgroundAnimation client:load />
+        </div>
+
+        <div
+          class="absolute inset-0 -z-5 pointer-events-none"
+          style="clip-path: inset(0 -100vw 0 -100vw);"
+          aria-hidden="true"
+        >
+          <div class="absolute -top-16 -left-16 w-56 h-56 sm:-top-32 sm:-left-32 sm:w-md sm:h-112 rounded-full border-2 border-primary/10">
+            <div class="absolute inset-0 m-auto w-32 h-32 sm:w-80 sm:h-80 rounded-full border border-primary/[0.07]"></div>
+          </div>
+
+          <div class="hidden sm:block absolute -top-24 -right-24 w-80 h-80 rounded-full border-2 border-primary/10"></div>
+          <div class="hidden sm:block absolute top-1/2 -left-16 w-48 h-48 rounded-full border border-primary/8 -translate-y-1/2"></div>
+          <div class="hidden sm:block absolute -bottom-16 -right-16 w-48 h-48 rounded-full border-2 border-primary/8"></div>
+
+          <div class="hidden sm:block absolute top-1/4 right-[15%] size-3 rounded-full bg-primary/10"></div>
+          <div class="hidden sm:block absolute top-[40%] left-[25%] size-2 rounded-full bg-primary/8"></div>
+          <div class="hidden sm:block absolute bottom-1/3 right-1/3 size-2.5 rounded-full bg-primary/9"></div>
+        </div>
+
+        <div
+          class="hidden sm:block absolute bottom-0 left-[33%] -translate-x-1/2 -z-5 pointer-events-none"
+          aria-hidden="true"
+        >
+          <div class="absolute -bottom-24 -left-32 w-64 h-64 rounded-full border-2 border-primary/10"></div>
+        </div>
+
+        <div class="absolute bottom-0 inset-x-0 h-px bg-linear-to-r from-transparent via-border to-transparent"></div>
+
+        <div class="w-full max-w-7xl mx-auto pb-24 lg:pb-32">
+          <div class="grid gap-10 lg:grid-cols-[1.4fr_0.8fr] items-start">
+        <div data-anim="fade-right">
+          <p class="text-sm font-semibold text-primary uppercase tracking-[0.24em]" data-t="releaseNotes.label">
+            Release notes
+          </p>
+          <h1 class="mt-4 max-w-4xl text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground text-balance" data-t="releaseNotes.title">
+            How Ferriskey has been taking shape, release after release.
+          </h1>
+          <p class="mt-6 max-w-3xl text-lg sm:text-xl leading-relaxed text-muted-foreground text-balance" data-t="releaseNotes.description">
+            A curated timeline of stable Ferriskey releases, condensed from the public GitHub history into product-level notes.
+          </p>
+          <p class="mt-4 max-w-2xl text-sm text-muted-foreground" data-t="releaseNotes.basedOn">
+            Based on the public release history of ferriskey/ferriskey on GitHub.
+          </p>
+
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a
+              href={latestRelease.githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors"
+            >
+              <span data-t="releaseNotes.github">GitHub release</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </a>
+            <a
+              href="/"
+              class="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background/70 px-5 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <span data-t="releaseNotes.back">Back to homepage</span>
+            </a>
+          </div>
+        </div>
+
+        <aside data-anim="fade-left" class="rounded-3xl border bg-background/75 backdrop-blur p-6 sm:p-7">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-t="releaseNotes.latest">Latest stable</p>
+              <h2 class="mt-3 text-3xl font-semibold text-foreground">{latestRelease.version}</h2>
+              <p class="mt-2 text-sm text-muted-foreground" data-release-version={latestRelease.version} data-release-field="title">{latestRelease.title}</p>
+            </div>
+            <span class="whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary sm:text-[11px]">
+              {formatDate(latestRelease.publishedAt)}
+            </span>
+          </div>
+
+          <div class="mt-6 grid grid-cols-2 gap-3">
+            <div class="rounded-2xl border bg-muted/20 p-4">
+              <p class="text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-t="releaseNotes.stableCount">Stable releases</p>
+              <p class="mt-2 text-3xl font-semibold text-foreground">{releaseNotes.length}</p>
+            </div>
+            <div class="rounded-2xl border bg-muted/20 p-4">
+              <p class="text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-t="releaseNotes.timelineStart">Timeline start</p>
+              <p class="mt-2 text-lg font-semibold text-foreground">{firstRelease.version}</p>
+              <p class="mt-1 text-xs text-muted-foreground">{formatDate(firstRelease.publishedAt)}</p>
+            </div>
+          </div>
+
+          <p class="mt-6 text-sm leading-relaxed text-muted-foreground" data-t="releaseNotes.overview">
+            From the first public baseline to federation, observability, and recovery flows.
+          </p>
+          </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="max-w-7xl mx-auto px-5 mt-20 sm:mt-24">
+      <div class="mb-10" data-anim="fade-up">
+        <p class="text-sm font-semibold text-primary uppercase tracking-[0.24em]" data-t="releaseNotes.timeline">
+          Stable release timeline
+        </p>
+        <p class="mt-3 max-w-2xl text-sm text-muted-foreground" data-t="releaseNotes.timelineHelp">
+          Each section starts from a milestone release. The newer fixes released for that same line are grouped with it.
+        </p>
+      </div>
+
+      <div class="relative">
+        <div class="absolute left-[1.1rem] top-3 bottom-3 w-px bg-gradient-to-b from-primary/50 via-border to-transparent sm:left-[8.2rem]"></div>
+
+        <div class="space-y-10 sm:space-y-12">
+          {releaseGroups.map(({ milestone, patches }) => {
+            const ui = kindUi[milestone.kind]
+            const latestUsable = patches[0] ?? milestone
+            return (
+            <div class="space-y-4 sm:space-y-5">
+              {patches.length > 0 && (
+                <div class="relative grid gap-4 sm:grid-cols-[7rem_1fr] sm:gap-7">
+                  <div class="relative pl-8 sm:pl-0">
+                    <p class="text-sm font-semibold text-foreground">{latestUsable.version}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">{formatDate(latestUsable.publishedAt)}</p>
+                  </div>
+
+                  <div class="relative ml-4 border-l border-border/60 pl-5 sm:ml-0 sm:pl-6">
+                  <div class="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    {milestone.version.replace(/^v/, '').split('.').slice(0, 2).join('.')} <span data-t="releaseNotes.lineSuffix">line</span>
+                  </div>
+                  <div class="space-y-0 divide-y divide-border/60 rounded-2xl border border-border/60 bg-background/40">
+                    {patches.map((release) => {
+                      const patchUi = kindUi[release.kind]
+                      return (
+                        <article class="relative px-4 py-4 sm:px-5" data-anim="fade-up">
+                          <div class="absolute -left-[1.6rem] top-7 hidden h-px w-4 bg-border/70 sm:block"></div>
+                          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="max-w-3xl">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span class={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${patchUi.badge}`} data-t={kindKey[release.kind]}>
+                                  {kindLabel[release.kind]}
+                                </span>
+                                {release.version === latestUsable.version && (
+                                  <span class="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400" data-t="releaseNotes.latestInLine">
+                                    Latest usable in line
+                                  </span>
+                                )}
+                                <p class="text-sm font-medium text-foreground">{release.version}</p>
+                                <p class="text-xs text-muted-foreground">{formatDate(release.publishedAt)}</p>
+                              </div>
+                              <h3 class="mt-3 text-lg sm:text-xl font-semibold text-foreground" data-release-version={release.version} data-release-field="title">{release.title}</h3>
+                              <p class="mt-2 text-sm leading-relaxed text-muted-foreground" data-release-version={release.version} data-release-field="summary">{release.summary}</p>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2 lg:justify-end">
+                              <a
+                                href={release.githubUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary hover:bg-primary/15 transition-colors"
+                              >
+                                <span data-t="releaseNotes.github">GitHub release</span>
+                              </a>
+                              {release.compareUrl && (
+                                <a
+                                  href={release.compareUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                >
+                                  <span data-t="releaseNotes.compare">Compare changes</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          <ul class="mt-4 space-y-2">
+                            {release.highlights.map((highlight, index) => (
+                              <li class="text-sm leading-relaxed text-muted-foreground" data-release-version={release.version} data-release-highlight-index={index}>
+                                <span class="mr-2 text-primary">•</span>{highlight}
+                              </li>
+                            ))}
+                          </ul>
+                        </article>
+                      )
+                    })}
+                  </div>
+                </div>
+                </div>
+              )}
+
+              <div class="relative grid gap-4 sm:grid-cols-[7rem_1fr] sm:gap-7" data-anim="fade-up">
+              <div class="relative pl-8 sm:pl-0">
+                <div class="sm:pl-0">
+                  <p class="text-sm font-semibold text-foreground">{milestone.version}</p>
+                  <p class="mt-1 text-xs text-muted-foreground">{formatDate(milestone.publishedAt)}</p>
+                </div>
+              </div>
+
+              <article class={`relative overflow-hidden rounded-3xl border backdrop-blur px-5 py-5 sm:px-7 sm:py-6 ${ui.card}`}>
+                {milestone.kind === 'major' && (
+                  <div class="absolute inset-y-6 left-0 w-1 rounded-r-full bg-primary"></div>
+                )}
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="max-w-3xl">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${ui.badge}`} data-t={kindKey[milestone.kind]}>
+                        {kindLabel[milestone.kind]}
+                      </span>
+                      {milestone.version === latestUsable.version && (
+                        <span class="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400" data-t="releaseNotes.latestInLine">
+                          Latest usable in line
+                        </span>
+                      )}
+                    </div>
+                    <h2 class={`mt-4 text-2xl sm:text-3xl font-semibold text-balance ${ui.title}`} data-release-version={milestone.version} data-release-field="title">{milestone.title}</h2>
+                    <p class={`mt-1 text-sm font-medium ${ui.meta}`}>{milestone.version} · {formatDate(milestone.publishedAt)}</p>
+                    <p class="mt-3 text-base leading-relaxed text-muted-foreground" data-release-version={milestone.version} data-release-field="summary">{milestone.summary}</p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2 lg:justify-end">
+                    <a
+                      href={milestone.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary hover:bg-primary/15 transition-colors"
+                    >
+                      <span data-t="releaseNotes.github">GitHub release</span>
+                    </a>
+                    {milestone.compareUrl && (
+                      <a
+                        href={milestone.compareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      >
+                        <span data-t="releaseNotes.compare">Compare changes</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <ul class="mt-6 grid gap-3 sm:grid-cols-3">
+                  {milestone.highlights.map((highlight, index) => (
+                    <li class="rounded-2xl border border-border/60 bg-muted/10 p-4 text-sm leading-relaxed text-muted-foreground" data-release-version={milestone.version} data-release-highlight-index={index}>
+                      {highlight}
+                    </li>
+                  ))}
+                </ul>
+
+                {milestone.transition && (
+                  <p class="mt-5 border-t pt-4 text-sm italic leading-relaxed text-muted-foreground/90" data-release-version={milestone.version} data-release-field="transition">
+                    {milestone.transition}
+                  </p>
+                )}
+              </article>
+              </div>
+            </div>
+          )})}
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script is:inline define:vars={{ translations, releaseNoteTranslations }}>
+  function detectLocale() {
+    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
+    const cookie = match ? match[1] : null
+    if (cookie === 'en' || cookie === 'fr') return cookie
+
+    const browser = (navigator.language || '').split('-')[0]
+    if (browser === 'en' || browser === 'fr') return browser
+    return 'en'
+  }
+
+  function applyTranslations() {
+    const locale = detectLocale()
+    document.documentElement.lang = locale
+
+    if (locale === 'en') {
+      document.querySelectorAll('[data-t]').forEach(function (el) {
+        if (el.dataset.tDefault) el.textContent = el.dataset.tDefault
+      })
+      return
+    }
+
+    document.querySelectorAll('[data-t]').forEach(function (el) {
+      const key = el.getAttribute('data-t')
+      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
+      if (translations[key]) el.textContent = translations[key]
+    })
+
+    document.querySelectorAll('[data-release-version][data-release-field]').forEach(function (el) {
+      const version = el.getAttribute('data-release-version')
+      const field = el.getAttribute('data-release-field')
+      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
+      const localized = releaseNoteTranslations[locale]?.[version]?.[field]
+      el.textContent = localized ?? el.dataset.tDefault ?? ''
+    })
+
+    document.querySelectorAll('[data-release-version][data-release-highlight-index]').forEach(function (el) {
+      const version = el.getAttribute('data-release-version')
+      const index = Number(el.getAttribute('data-release-highlight-index'))
+      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
+      const localized = releaseNoteTranslations[locale]?.[version]?.highlights?.[index]
+      el.textContent = localized ?? el.dataset.tDefault ?? ''
+    })
+  }
+
+  applyTranslations()
+  document.addEventListener('astro:after-swap', applyTranslations)
+  window.addEventListener('ferriskey:locale-change', applyTranslations)
+</script>

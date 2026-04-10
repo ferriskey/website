@@ -122,19 +122,26 @@ const cards = [
 </style>
 
 <script>
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible')
-          observer.unobserve(entry.target)
-        }
-      })
-    },
-    { threshold: 0.15 }
-  )
+  function initFeaturesReveal() {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.15 }
+    )
 
-  document
-    .querySelectorAll('.reveal-left, .feature-card')
-    .forEach((el) => observer.observe(el))
+    document
+      .querySelectorAll('.reveal-left, .feature-card')
+      .forEach((el) => {
+        if (!el.classList.contains('is-visible')) observer.observe(el)
+      })
+  }
+
+  initFeaturesReveal()
+  document.addEventListener('astro:after-swap', initFeaturesReveal)
 </script>

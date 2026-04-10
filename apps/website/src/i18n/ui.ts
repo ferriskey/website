@@ -7,6 +7,7 @@ export const ui = {
 
     // Nav
     'nav.features': 'Features',
+    'nav.releaseNotes': 'Release Notes',
     'nav.getStarted': 'Get Started',
 
     // Hero
@@ -16,7 +17,7 @@ export const ui = {
     'hero.secondaryAction': 'View on GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Early Access · v0.4.2',
+    'hero.badge.version': 'Early Access · v0.4.3',
 
     // Features
     'features.label': 'Why FerrisKey',
@@ -49,10 +50,31 @@ export const ui = {
 
     // OSS
     'oss.releases': 'Releases',
-    'oss.changelog': 'Changelog',
+    'oss.changelog': 'GitHub Changelog',
+    'oss.releaseNotes': 'Release Notes',
     'oss.card.title': 'Built in the open.\nSecured by design.',
     'oss.card.desc': 'No lock-in, no black boxes. Audit the code, contribute, or fork it — Ferriskey belongs to the community.',
     'oss.stats': 'OSS Stats',
+
+    // Release notes
+    'releaseNotes.label': 'Release notes',
+    'releaseNotes.title': 'How Ferriskey has been taking shape, release after release.',
+    'releaseNotes.description': 'A curated timeline of stable Ferriskey releases, condensed from the public GitHub history into product-level notes.',
+    'releaseNotes.latest': 'Latest stable',
+    'releaseNotes.stableCount': 'Stable releases',
+    'releaseNotes.timelineStart': 'Timeline start',
+    'releaseNotes.timeline': 'Stable release timeline',
+    'releaseNotes.timelineHelp': 'Each section starts from a milestone release. The newer fixes released for that same line are grouped with it.',
+    'releaseNotes.overview': 'From the first public baseline to federation, observability, and recovery flows.',
+    'releaseNotes.back': 'Back to homepage',
+    'releaseNotes.github': 'GitHub release',
+    'releaseNotes.compare': 'Compare changes',
+    'releaseNotes.patch': 'Patch release',
+    'releaseNotes.minor': 'Feature release',
+    'releaseNotes.major': 'Milestone release',
+    'releaseNotes.latestInLine': 'Latest usable in line',
+    'releaseNotes.lineSuffix': 'line',
+    'releaseNotes.basedOn': 'Based on the public release history of ferriskey/ferriskey on GitHub.',
 
     // Team
     'team.label': 'Team',
@@ -78,6 +100,7 @@ export const ui = {
 
     // Nav
     'nav.features': 'Fonctionnalités',
+    'nav.releaseNotes': 'Release notes',
     'nav.getStarted': 'Démarrer',
 
     // Hero
@@ -87,7 +110,7 @@ export const ui = {
     'hero.secondaryAction': 'Voir sur GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Accès anticipé · v0.4.2',
+    'hero.badge.version': 'Accès anticipé · v0.4.3',
 
     // Features
     'features.label': 'Pourquoi FerrisKey',
@@ -120,10 +143,31 @@ export const ui = {
 
     // OSS
     'oss.releases': 'Versions',
-    'oss.changelog': 'Changelog',
+    'oss.changelog': 'Changelog GitHub',
+    'oss.releaseNotes': 'Release notes',
     'oss.card.title': 'Construit en public.\nSécurisé par conception.',
     'oss.card.desc': "Pas de verrouillage, pas de boîtes noires. Auditez le code, contribuez ou forkez-le — Ferriskey appartient à la communauté.",
     'oss.stats': 'Stats OSS',
+
+    // Release notes
+    'releaseNotes.label': 'Release notes',
+    'releaseNotes.title': 'Comment Ferriskey a pris forme, release après release.',
+    'releaseNotes.description': "Une timeline éditorialisée des releases stables de Ferriskey, condensée à partir de l'historique public GitHub.",
+    'releaseNotes.latest': 'Dernière stable',
+    'releaseNotes.stableCount': 'Releases stables',
+    'releaseNotes.timelineStart': 'Début de la timeline',
+    'releaseNotes.timeline': 'Timeline des releases stables',
+    'releaseNotes.timelineHelp': 'Chaque section part d’une release jalon. Les correctifs plus récents publiés sur cette même ligne sont regroupés avec elle.',
+    'releaseNotes.overview': 'De la première base publique à la fédération, l’observabilité et la récupération de compte.',
+    'releaseNotes.back': "Retour à l'accueil",
+    'releaseNotes.github': 'Release GitHub',
+    'releaseNotes.compare': 'Comparer les changements',
+    'releaseNotes.patch': 'Release corrective',
+    'releaseNotes.minor': 'Release fonctionnelle',
+    'releaseNotes.major': 'Release jalon',
+    'releaseNotes.latestInLine': 'Dernière utilisable de la ligne',
+    'releaseNotes.lineSuffix': 'ligne',
+    'releaseNotes.basedOn': "Basé sur l'historique public des releases de ferriskey/ferriskey sur GitHub.",
 
     // Team
     'team.label': 'Équipe',

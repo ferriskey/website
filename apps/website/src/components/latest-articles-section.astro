@@ -190,4 +190,5 @@ function formatDate(date: Date, locale: string) {
 
   showLocaleArticles()
   document.addEventListener('astro:after-swap', showLocaleArticles)
+  window.addEventListener('ferriskey:locale-change', showLocaleArticles)
 </script>

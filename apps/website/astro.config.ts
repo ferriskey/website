@@ -30,5 +30,8 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     envDir: '../../',
+    server: {
+      allowedHosts: ['unlimitedly-uncompletable-addilyn.ngrok-free.dev']
+    }
   },
 })

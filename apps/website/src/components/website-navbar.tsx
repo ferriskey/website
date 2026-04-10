@@ -18,24 +18,27 @@ interface WebsiteNavbarProps {
 
 export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
   const [locale, setLocale] = useState('en')
-  const appLinks = getAppLinks('website', appUrlOverrides)
+  const [pathname, setPathname] = useState('/')
+  const appLinks = getAppLinks(pathname === '/' ? 'website' : '', appUrlOverrides)
   const t = useTranslations(locale)
   const docsHref = appUrlOverrides?.docs ?? '/'
 
   useEffect(() => {
     setLocale(getClientLocale())
+    setPathname(window.location.pathname)
   }, [])
 
   const websiteLinks: NavbarLink[] = [
-    { label: t('nav.features'), href: '#features' },
+    { label: t('nav.releaseNotes'), href: '/release-notes' },
     { label: t('nav.getStarted'), href: docsHref },
   ]
 
   return (
     <Navbar
-      currentApp="website"
+      currentApp={pathname === '/' ? 'website' : ''}
       appUrlOverrides={appUrlOverrides}
       links={websiteLinks}
+      activePath={pathname}
       leftSlot={
         <MobileMenu>
           <MobileNavLinks
@@ -48,7 +51,11 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
         <LocaleSwitcher
           locales={['en', 'fr']}
           currentLocale={locale}
-          onLocaleChange={() => window.location.reload()}
+          onLocaleChange={(nextLocale) => {
+            setLocale(nextLocale)
+            window.dispatchEvent(new CustomEvent('ferriskey:locale-change', { detail: { locale: nextLocale } }))
+            window.setTimeout(() => window.location.reload(), 50)
+          }}
         />
       }
     />

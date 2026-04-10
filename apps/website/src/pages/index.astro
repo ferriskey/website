@@ -80,4 +80,5 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
 
   applyTranslations()
   document.addEventListener('astro:after-swap', applyTranslations)
+  window.addEventListener('ferriskey:locale-change', applyTranslations)
 </script>
