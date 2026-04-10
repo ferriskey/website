@@ -8,6 +8,7 @@ export const ui = {
     // Nav
     'nav.features': 'Features',
     'nav.releaseNotes': 'Release Notes',
+    'nav.roadmap': 'Roadmap',
     'nav.getStarted': 'Get Started',
 
     // Hero
@@ -76,6 +77,22 @@ export const ui = {
     'releaseNotes.lineSuffix': 'line',
     'releaseNotes.basedOn': 'Based on the public release history of ferriskey/ferriskey on GitHub.',
 
+    // Roadmap
+    'roadmap.label': 'Roadmap',
+    'roadmap.title': 'Where Ferriskey is going next.',
+    'roadmap.description': 'A directional view of what Ferriskey already supports, what comes next, and which longer-term bets matter most.',
+    'roadmap.scrollHint': 'On desktop, scrolling down moves the roadmap from current capabilities to next steps and longer-term bets.',
+    'roadmap.timelineLabel': 'Timeline',
+    'roadmap.cta.releaseNotes': 'See release notes',
+    'roadmap.cta.home': 'Back to homepage',
+    'roadmap.principles.title': 'Principles',
+    'roadmap.principles.one': 'Current capabilities describe what exists today; next and later items remain directional.',
+    'roadmap.principles.two': 'The focus is on product capabilities that improve security, operability, and developer experience.',
+    'roadmap.principles.three': 'Release Notes explain what shipped version by version. This page explains the broader product direction.',
+    'roadmap.status.available': 'Available',
+    'roadmap.status.planned': 'Planned',
+    'roadmap.status.exploring': 'Exploring',
+
     // Team
     'team.label': 'Team',
     'team.title': 'Meet the core team',
@@ -101,6 +118,7 @@ export const ui = {
     // Nav
     'nav.features': 'Fonctionnalités',
     'nav.releaseNotes': 'Release notes',
+    'nav.roadmap': 'Roadmap',
     'nav.getStarted': 'Démarrer',
 
     // Hero
@@ -168,6 +186,22 @@ export const ui = {
     'releaseNotes.latestInLine': 'Dernière utilisable de la ligne',
     'releaseNotes.lineSuffix': 'ligne',
     'releaseNotes.basedOn': "Basé sur l'historique public des releases de ferriskey/ferriskey sur GitHub.",
+
+    // Roadmap
+    'roadmap.label': 'Roadmap',
+    'roadmap.title': 'Où Ferriskey va ensuite.',
+    'roadmap.description': 'Une vue directionnelle de ce que Ferriskey supporte déjà, de ce qui vient ensuite, et des paris plus long terme qui comptent le plus.',
+    'roadmap.scrollHint': 'Sur desktop, le scroll vertical fait avancer la roadmap des capacités actuelles vers les prochaines étapes puis le long terme.',
+    'roadmap.timelineLabel': 'Timeline',
+    'roadmap.cta.releaseNotes': 'Voir les release notes',
+    'roadmap.cta.home': "Retour à l'accueil",
+    'roadmap.principles.title': 'Principes',
+    'roadmap.principles.one': "Les capacités actuelles décrivent ce qui existe déjà; les items next et later restent directionnels.",
+    'roadmap.principles.two': "L'accent est mis sur les capacités produit qui améliorent la sécurité, l'opérabilité et l'expérience développeur.",
+    'roadmap.principles.three': 'Les Release Notes expliquent ce qui a été livré version par version. Cette page explique la direction produit plus large.',
+    'roadmap.status.available': 'Disponible',
+    'roadmap.status.planned': 'Prévu',
+    'roadmap.status.exploring': 'Exploration',
 
     // Team
     'team.label': 'Équipe',
