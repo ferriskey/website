@@ -19,6 +19,23 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.5.0',
+    publishedAt: '2026-04-12T00:00:00Z',
+    title: 'Passwordless authentication, organizations, and email theming',
+    summary:
+      'Ferriskey 0.5.0 moves the product beyond core IAM administration with native passwordless sign-in, multi-tenant organization management, and customizable transactional emails.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.5.0',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.4.3...v0.5.0',
+    highlights: [
+      'Adds native WebAuthn passkeys for passwordless authentication without heavy external infrastructure.',
+      'Introduces Magic Link sign-in for teams that want a simpler passwordless user experience.',
+      'Ships organizations and email builder theming so tenants and transactional emails can be managed directly from Ferriskey.',
+    ],
+    transition:
+      'After the 0.4 line focused on observability, recovery, and token control, 0.5.0 turns that foundation into a more complete end-user and multi-tenant experience.',
+  },
+  {
     version: 'v0.4.3',
     publishedAt: '2026-03-24T11:40:26Z',
     title: 'Authentication URL hardening and release alignment',
@@ -174,6 +191,18 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.5.0': {
+      title: 'Authentification passwordless, organisations et thèmes email',
+      summary:
+        "Ferriskey 0.5.0 dépasse l'administration IAM de base avec l'authentification passwordless native, la gestion multi-tenant par organisations et la personnalisation des emails transactionnels.",
+      highlights: [
+        "Ajoute les passkeys WebAuthn natives pour une authentification passwordless sans infrastructure externe complexe.",
+        "Introduit Magic Link pour offrir une expérience de connexion plus fluide aux utilisateurs qui veulent éviter les mots de passe.",
+        "Livre les organisations et les thèmes de l'email builder pour gérer les tenants et les emails transactionnels directement depuis Ferriskey.",
+      ],
+      transition:
+        "Après une ligne 0.4 centrée sur l'observabilité, la récupération de compte et le contrôle des tokens, la 0.5.0 transforme ces fondations en une expérience plus complète pour les utilisateurs finaux et les contextes multi-tenant.",
+    },
     'v0.4.3': {
       title: "Durcissement des URLs d'authentification et alignement de release",
       summary:

@@ -18,7 +18,7 @@ export const ui = {
     'hero.secondaryAction': 'View on GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Early Access · v0.4.3',
+    'hero.badge.version': 'Early Access · v0.5.0',
 
     // Features
     'features.label': 'Why FerrisKey',
@@ -66,7 +66,7 @@ export const ui = {
     'releaseNotes.timelineStart': 'Timeline start',
     'releaseNotes.timeline': 'Stable release timeline',
     'releaseNotes.timelineHelp': 'Each section starts from a milestone release. The newer fixes released for that same line are grouped with it.',
-    'releaseNotes.overview': 'From the first public baseline to federation, observability, and recovery flows.',
+    'releaseNotes.overview': 'From the first public baseline to federation, observability, recovery flows, and passwordless authentication.',
     'releaseNotes.back': 'Back to homepage',
     'releaseNotes.github': 'GitHub release',
     'releaseNotes.compare': 'Compare changes',
@@ -128,7 +128,7 @@ export const ui = {
     'hero.secondaryAction': 'Voir sur GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Accès anticipé · v0.4.3',
+    'hero.badge.version': 'Accès anticipé · v0.5.0',
 
     // Features
     'features.label': 'Pourquoi FerrisKey',
@@ -176,7 +176,7 @@ export const ui = {
     'releaseNotes.timelineStart': 'Début de la timeline',
     'releaseNotes.timeline': 'Timeline des releases stables',
     'releaseNotes.timelineHelp': 'Chaque section part d’une release jalon. Les correctifs plus récents publiés sur cette même ligne sont regroupés avec elle.',
-    'releaseNotes.overview': 'De la première base publique à la fédération, l’observabilité et la récupération de compte.',
+    'releaseNotes.overview': 'De la première base publique à la fédération, l’observabilité, la récupération de compte et l’authentification passwordless.',
     'releaseNotes.back': "Retour à l'accueil",
     'releaseNotes.github': 'Release GitHub',
     'releaseNotes.compare': 'Comparer les changements',
