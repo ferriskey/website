@@ -1,6 +1,6 @@
 ---
 title: Federation Flow
-description: How the Abyss federation flow works — redirect, callback, token exchange, and account linking.
+description: "How the Abyss federation flow works: redirect, callback, token exchange, and account linking."
 icon: git-branch
 order: 42
 ---
@@ -48,9 +48,9 @@ If a `userinfo_url` is configured, FerrisKey calls it with the provider's access
 
 :::step{title="8. Account resolution"}
 FerrisKey resolves the external identity to a local user:
-- **Existing link found** — The user has a federated credential for this provider. Log them in.
-- **Email match** — A local user with the same email exists. Link the external identity and log them in.
-- **New user** — No match found. Create a new local user from the provider's attributes and store a federated credential.
+- **Existing link found**: The user has a federated credential for this provider. Log them in.
+- **Email match**: A local user with the same email exists. Link the external identity and log them in.
+- **New user**: No match found. Create a new local user from the provider's attributes and store a federated credential.
 :::
 
 :::step{title="9. FerrisKey tokens issued"}
@@ -72,7 +72,7 @@ When a user authenticates through an external provider, FerrisKey stores a **fed
 }
 ```
 
-This links the local user to their external identity. A user can have federated credentials from multiple providers simultaneously — allowing them to sign in with Google one day and GitHub the next, both resolving to the same account.
+This links the local user to their external identity. A user can have federated credentials from multiple providers simultaneously, allowing them to sign in with Google one day and GitHub the next, both resolving to the same account.
 
 ## Federation Types (Advanced)
 

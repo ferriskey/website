@@ -1,13 +1,13 @@
 ---
 title: Authentication
-description: OAuth2 grant types, authentication flows, and the authentication chain in FerrisKey.
+description: "OAuth2 grant types, authentication flows, and the authentication chain in FerrisKey."
 icon: log-in
 order: 16
 ---
 
 # Authentication
 
-FerrisKey implements the OAuth 2.0 and OpenID Connect specifications. Authentication always produces tokens — the grant type determines how the user (or client) proves their identity.
+FerrisKey implements the OAuth 2.0 and OpenID Connect specifications. Authentication always produces tokens, the grant type determines how the user (or client) proves their identity.
 
 ## Grant Types
 
@@ -26,7 +26,7 @@ The most secure flow for web applications. The user is redirected to FerrisKey, 
 
 ### Password (Resource Owner)
 
-The client collects credentials directly and sends them to the token endpoint. Simple but less secure — the client handles the user's password.
+The client collects credentials directly and sends them to the token endpoint. Simple but less secure, the client handles the user's password.
 
 **Flow:**
 1. Client sends `grant_type=password`, `username`, `password` to the token endpoint
@@ -43,7 +43,7 @@ The client must have `direct_access_grants_enabled` to use this flow.
 
 ### Client Credentials
 
-Machine-to-machine authentication. The client authenticates with its own credentials (client ID + secret) — no user involved.
+Machine-to-machine authentication. The client authenticates with its own credentials (client ID + secret), no user involved.
 
 **Flow:**
 1. Client sends `grant_type=client_credentials`, `client_id`, `client_secret`
@@ -81,10 +81,10 @@ graph TD
     MFA -->|No| T
 ```
 
-1. **Credential Validation** — Username and password are verified
-2. **Required Actions Check** — If the user has pending actions (ConfigureOtp, VerifyEmail, UpdatePassword), a temporary token is returned
-3. **MFA Check** — If TOTP or WebAuthn is configured, the user must complete the challenge
-4. **Token Issuance** — Full access, refresh, and ID tokens are generated
+1. **Credential Validation**: Username and password are verified
+2. **Required Actions Check**: If the user has pending actions (ConfigureOtp, VerifyEmail, UpdatePassword), a temporary token is returned
+3. **MFA Check**: If TOTP or WebAuthn is configured, the user must complete the challenge
+4. **Token Issuance**: Full access, refresh, and ID tokens are generated
 
 ## Auth Sessions
 

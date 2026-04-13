@@ -1,13 +1,13 @@
 ---
 title: Recovery Codes
-description: Backup recovery codes in FerrisKey — generation, usage, and best practices.
+description: "Backup recovery codes in FerrisKey: generation, usage, and best practices."
 icon: file-key
 order: 14
 ---
 
 # Recovery Codes
 
-Recovery codes are one-time backup credentials generated when MFA is first configured. They serve as a last resort when the user loses access to their primary MFA device — a lost phone, a broken hardware key, or a wiped authenticator app.
+Recovery codes are one-time backup credentials generated when MFA is first configured. They serve as a last resort when the user loses access to their primary MFA device, a lost phone, a broken hardware key, or a wiped authenticator app.
 
 ## How They Work
 
@@ -17,7 +17,7 @@ When a user configures TOTP or WebAuthn for the first time, FerrisKey generates 
 
 ::::step-group
 :::step{title="Generation"}
-A set of recovery codes is generated alongside the primary MFA credential. Each code is a random value. The raw codes are returned to the user **once** — this is the only time they see them.
+A set of recovery codes is generated alongside the primary MFA credential. Each code is a random value. The raw codes are returned to the user **once**: this is the only time they see them.
 :::
 
 :::step{title="Storage"}
@@ -25,7 +25,7 @@ Each code is hashed before being stored in the database as a `RecoveryCode` cred
 :::
 
 :::step{title="User saves codes"}
-The user is instructed to save the codes in a secure location — a password manager, a printed sheet in a safe, or an encrypted file.
+The user is instructed to save the codes in a secure location, a password manager, a printed sheet in a safe, or an encrypted file.
 :::
 
 :::step{title="Usage"}
@@ -39,13 +39,13 @@ A matching code is consumed (deleted from the database) after use. It cannot be 
 
 ## Security Model
 
-- **Hashed storage** — Recovery codes are never stored in plaintext. A compromised database does not expose usable codes.
-- **Single use** — Each code works exactly once. After use, it's permanently deleted.
-- **No expiration** — Recovery codes remain valid until used or until the user regenerates a new set.
-- **Independent of MFA** — Recovery codes bypass the normal TOTP/WebAuthn challenge entirely, making them a true last resort.
+- **Hashed storage**: Recovery codes are never stored in plaintext. A compromised database does not expose usable codes.
+- **Single use**: Each code works exactly once. After use, it's permanently deleted.
+- **No expiration**: Recovery codes remain valid until used or until the user regenerates a new set.
+- **Independent of MFA**: Recovery codes bypass the normal TOTP/WebAuthn challenge entirely, making them a true last resort.
 
 :::callout{variant="danger" title="Treat codes like passwords"}
-Recovery codes grant full account access. Users should store them with the same care as a root password — never in plain text on a device, never shared, never in a screenshot.
+Recovery codes grant full account access. Users should store them with the same care as a root password, never in plain text on a device, never shared, never in a screenshot.
 :::
 
 ## Best Practices

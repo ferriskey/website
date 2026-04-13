@@ -1,6 +1,6 @@
 ---
 title: Helm Chart
-description: Install FerrisKey on Kubernetes using the official Helm chart.
+description: "Install FerrisKey on Kubernetes using the official Helm chart."
 icon: package
 order: 2
 ---
@@ -13,7 +13,7 @@ The official FerrisKey Helm chart is published as an OCI artifact. It deploys th
 
 ::::step-group
 :::step{title="Install the chart"}
-The chart is available as an OCI artifact — no `helm repo add` needed:
+The chart is available as an OCI artifact, no `helm repo add` needed:
 
 ```bash
 helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
@@ -85,12 +85,12 @@ helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
 
 | Key | Default | Description |
 |---|---|---|
-| `database.host` | — | PostgreSQL host |
+| `database.host` | None | PostgreSQL host |
 | `database.port` | `5432` | PostgreSQL port |
 | `database.name` | `ferriskey` | Database name |
 | `database.user` | `ferriskey` | Database user |
-| `database.passwordSecret.name` | — | Kubernetes Secret name containing the password |
-| `database.passwordSecret.key` | — | Key within the Secret |
+| `database.passwordSecret.name` | None | Kubernetes Secret name containing the password |
+| `database.passwordSecret.key` | None | Key within the Secret |
 
 ### Common Settings
 
@@ -103,7 +103,7 @@ helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
 | `common.volumeMounts` | `[]` | Volume mounts for all containers |
 | `common.volumes` | `[]` | Volumes for all pods |
 | `common.serviceAccount.create` | `true` | Create a ServiceAccount |
-| `common.serviceAccount.name` | — | ServiceAccount name override |
+| `common.serviceAccount.name` | None | ServiceAccount name override |
 | `common.affinity` | `{}` | Pod affinity rules |
 | `common.tolerations` | `[]` | Pod tolerations |
 | `common.topologySpreadConstraints` | `[]` | Topology spread |

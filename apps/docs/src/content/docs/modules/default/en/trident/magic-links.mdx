@@ -1,6 +1,6 @@
 ---
 title: Magic Links
-description: Passwordless email login in FerrisKey — generate, deliver, and verify magic links.
+description: "Passwordless email login in FerrisKey: generate, deliver, and verify magic links."
 icon: mail
 order: 13
 ---
@@ -49,7 +49,7 @@ Magic links require a configured SMTP provider on the realm. Without email deliv
 ## Security Considerations
 
 ### Token Hashing
-The magic link token is never stored in plaintext. FerrisKey stores only the hash — even if the database is compromised, the tokens cannot be used.
+The magic link token is never stored in plaintext. FerrisKey stores only the hash, even if the database is compromised, the tokens cannot be used.
 
 ### Single Use
 Each magic link can be used exactly once. After the token is verified and the user is authenticated, the magic link record is consumed.
@@ -63,7 +63,7 @@ The security of magic links depends on the security of the user's email inbox. I
 ## Real-World Patterns
 
 ### Consumer Onboarding
-Send a magic link as part of the registration flow. The user signs up with their email, receives a link, clicks it — and they're authenticated with a verified email in one step. No password to create, no email verification step needed separately.
+Send a magic link as part of the registration flow. The user signs up with their email, receives a link, clicks it, and they're authenticated with a verified email in one step. No password to create, no email verification step needed separately.
 
 ### Low-Friction Internal Tools
 For internal dashboards where users already have corporate email, magic links eliminate password management entirely. Users click "Send me a link", check their inbox, and they're in.

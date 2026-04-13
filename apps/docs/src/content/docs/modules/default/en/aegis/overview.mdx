@@ -1,11 +1,11 @@
 ---
 title: Overview
-description: Aegis is FerrisKey's scope and protocol mapper module — control exactly what data flows into your tokens.
+description: "Aegis is FerrisKey's scope and protocol mapper module: control exactly what data flows into your tokens."
 icon: lock
 order: 50
 ---
 
-# Aegis — Scopes & Protocol Mappers
+# Aegis: Scopes & Protocol Mappers
 
 Aegis is the system that controls what information appears in your tokens. It manages **client scopes** (named collections of claims) and **protocol mappers** (rules that extract data and inject it into JWTs). Together, they form the contract between your application and FerrisKey: "Grant me this scope, and I guarantee these claims in the token."
 
@@ -13,9 +13,9 @@ Aegis is the system that controls what information appears in your tokens. It ma
 
 Without scopes, every token would contain the same set of claims for every client. Aegis gives you fine-grained control:
 
-- **Minimize data exposure** — A public mobile app gets `sub` and `email`. An internal admin tool gets `realm_roles` and `permissions`. Different clients, different claims.
-- **Standard compliance** — OIDC defines standard scopes (`openid`, `profile`, `email`). Aegis implements them out of the box.
-- **Custom claims** — Add your own business-specific claims (department, plan tier, feature flags) through custom protocol mappers.
+- **Minimize data exposure**: A public mobile app gets `sub` and `email`. An internal admin tool gets `realm_roles` and `permissions`. Different clients, different claims.
+- **Standard compliance**: OIDC defines standard scopes (`openid`, `profile`, `email`). Aegis implements them out of the box.
+- **Custom claims**: Add your own business-specific claims (department, plan tier, feature flags) through custom protocol mappers.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ graph TD
 
 The data flow:
 
-1. A **client** has **client scope mappings** — links to specific scopes with a type (Default/Optional)
+1. A **client** has **client scope mappings**: links to specific scopes with a type (Default/Optional)
 2. Each **scope** contains one or more **protocol mappers**
 3. During token generation, mappers extract data from the **user** and produce **JWT claims**
 4. Claims are assembled into the final token

@@ -1,13 +1,13 @@
 ---
 title: Configuration
-description: Environment variables, SMTP setup, and deployment options for FerrisKey.
+description: "Environment variables, SMTP setup, and deployment options for FerrisKey."
 icon: settings
 order: 20
 ---
 
 # Configuration
 
-FerrisKey is configured through environment variables. Every setting has a sensible default for local development — override only what you need.
+FerrisKey is configured through environment variables. Every setting has a sensible default for local development, override only what you need.
 
 ## Environment Variables
 
@@ -36,16 +36,16 @@ FerrisKey is configured through environment variables. Every setting has a sensi
 |---|---|---|
 | `SERVER_HOST` | `0.0.0.0` | Bind address |
 | `SERVER_PORT` | `3333` | HTTP port |
-| `SERVER_ROOT_PATH` | — | URL path prefix (for reverse proxies) |
-| `ALLOWED_ORIGINS` | — | Comma-separated CORS origins |
-| `WEBAPP_URL` | — | Frontend URL (used for redirects) |
+| `SERVER_ROOT_PATH` | None | URL path prefix (for reverse proxies) |
+| `ALLOWED_ORIGINS` | None | Comma-separated CORS origins |
+| `WEBAPP_URL` | None | Frontend URL (used for redirects) |
 
 ### TLS
 
 | Variable | Default | Description |
 |---|---|---|
-| `TLS_CERT_PATH` | — | Path to TLS certificate |
-| `TLS_KEY_PATH` | — | Path to TLS private key |
+| `TLS_CERT_PATH` | None | Path to TLS certificate |
+| `TLS_KEY_PATH` | None | Path to TLS private key |
 
 ### Logging
 

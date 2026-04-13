@@ -1,22 +1,22 @@
 ---
 title: Overview
-description: SeaWatch is FerrisKey's audit and security events module — track, query, and export every critical action.
+description: "SeaWatch is FerrisKey's audit and security events module: track, query, and export every critical action."
 icon: eye
 order: 20
 ---
 
-# SeaWatch — Audit & Security Events
+# SeaWatch: Audit & Security Events
 
-SeaWatch records every security-relevant action in FerrisKey. Every login, password reset, user creation, role assignment, and configuration change produces a structured event with full context — who did it, what they did, when, from where, and why it succeeded or failed.
+SeaWatch records every security-relevant action in FerrisKey. Every login, password reset, user creation, role assignment, and configuration change produces a structured event with full context, who did it, what they did, when, from where, and why it succeeded or failed.
 
 ## Why Audit Logging Matters
 
 Without audit logs, you're blind to what's happening inside your identity system. SeaWatch gives you:
 
-- **Incident investigation** — Trace a compromised account back to the exact login attempt, IP address, and user agent
-- **Compliance** — SOC 2, ISO 27001, GDPR, and HIPAA all require audit trails for access management systems
-- **Anomaly detection** — Spot patterns like repeated login failures from the same IP, or unexpected configuration changes
-- **Operational visibility** — Know when admins create clients, rotate secrets, or modify realm settings
+- **Incident investigation**: Trace a compromised account back to the exact login attempt, IP address, and user agent
+- **Compliance**: SOC 2, ISO 27001, GDPR, and HIPAA all require audit trails for access management systems
+- **Anomaly detection**: Spot patterns like repeated login failures from the same IP, or unexpected configuration changes
+- **Operational visibility**: Know when admins create clients, rotate secrets, or modify realm settings
 
 ## Event Structure
 
@@ -48,7 +48,7 @@ Every SeaWatch event captures a complete picture:
 |---|---|
 | `id` | Unique event identifier (UUIDv7, time-ordered) |
 | `realm_id` | Realm where the event occurred |
-| `event_type` | What happened (see [Event Types](/modules/default/en/seawatch/event-types)) |
+| `event_type` | What happened (see [Event Types](/en/modules/seawatch/event-types)) |
 | `status` | `success` or `failure` |
 | `actor_id` / `actor_type` | Who triggered the event and their classification |
 | `target_type` / `target_id` | What resource was affected |
@@ -73,7 +73,7 @@ Every SeaWatch event captures a complete picture:
 Forward SeaWatch events to your SIEM (Splunk, Elastic, Datadog) for correlation with other security signals. Use `trace_id` to link authentication events to downstream API requests.
 
 ### Compliance Reporting
-Query events by time range and event type to generate compliance reports. SeaWatch's structured format makes it straightforward to produce SOC 2 evidence — "here are all admin actions on the identity system in Q1".
+Query events by time range and event type to generate compliance reports. SeaWatch's structured format makes it straightforward to produce SOC 2 evidence. "here are all admin actions on the identity system in Q1".
 
 ### Anomaly Alerting
-Combine SeaWatch with [Webhooks](/modules/default/en/webhooks/overview) to trigger alerts on suspicious patterns — multiple `login_failure` events from the same IP, `client_secret_rotated` events outside of maintenance windows, or `realm_config_changed` events from unexpected actors.
+Combine SeaWatch with [Webhooks](/en/modules/webhooks/overview) to trigger alerts on suspicious patterns, multiple `login_failure` events from the same IP, `client_secret_rotated` events outside of maintenance windows, or `realm_config_changed` events from unexpected actors.

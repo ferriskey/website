@@ -1,22 +1,22 @@
 ---
 title: Overview
-description: Webhooks in FerrisKey — event-driven extensibility for real-time notifications and integrations.
+description: "Webhooks in FerrisKey: event-driven extensibility for real-time notifications and integrations."
 icon: webhook
 order: 60
 ---
 
-# Webhooks — Event-Driven Extensibility
+# Webhooks: Event-Driven Extensibility
 
-Webhooks let you react to events in FerrisKey by pushing HTTP notifications to external systems. When something happens — a user is created, a role is assigned, a client secret is rotated — FerrisKey sends an HTTP POST to your registered endpoints with a structured payload.
+Webhooks let you react to events in FerrisKey by pushing HTTP notifications to external systems. When something happens, a user is created, a role is assigned, a client secret is rotated. FerrisKey sends an HTTP POST to your registered endpoints with a structured payload.
 
 ## Why Webhooks?
 
 FerrisKey manages identity, but your application lives outside of it. Webhooks bridge the gap:
 
-- **Real-time sync** — Keep external systems (CRM, data warehouse, email marketing) in sync with user changes without polling
-- **Automation** — Trigger downstream workflows when specific events occur (welcome emails, Slack notifications, provisioning)
-- **Monitoring** — Forward events to alerting systems for security-sensitive actions
-- **Decoupling** — Your application reacts to events without being tightly coupled to FerrisKey's internals
+- **Real-time sync**: Keep external systems (CRM, data warehouse, email marketing) in sync with user changes without polling
+- **Automation**: Trigger downstream workflows when specific events occur (welcome emails, Slack notifications, provisioning)
+- **Monitoring**: Forward events to alerting systems for security-sensitive actions
+- **Decoupling**: Your application reacts to events without being tightly coupled to FerrisKey's internals
 
 ## How It Works
 
@@ -34,7 +34,7 @@ Create a webhook with a target endpoint URL, optional custom headers, and a name
 :::
 
 :::step{title="Subscribe to events"}
-Add subscribers to the webhook — each subscriber listens for a specific trigger event (e.g., `user.created`, `client.deleted`).
+Add subscribers to the webhook, each subscriber listens for a specific trigger event (e.g., `user.created`, `client.deleted`).
 :::
 
 :::step{title="Events fire"}

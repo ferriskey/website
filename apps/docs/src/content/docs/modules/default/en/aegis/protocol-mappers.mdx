@@ -1,6 +1,6 @@
 ---
 title: Protocol Mappers
-description: Protocol mapper types in FerrisKey — how user data becomes JWT claims.
+description: "Protocol mapper types in FerrisKey: how user data becomes JWT claims."
 icon: arrow-right-left
 order: 51
 ---
@@ -119,12 +119,12 @@ If two mappers target the same claim name, the later one overwrites the earlier 
 
 When a token is generated, Aegis follows this pipeline:
 
-1. **Resolve scopes** — Collect all default scopes for the client, plus any optional scopes requested in the `scope` parameter
-2. **Gather mappers** — Collect all protocol mappers from the active scopes
-3. **Execute mappers** — Run each mapper against the authenticated user and client context
-4. **Build payload** — Merge mapper outputs with standard claims (`sub`, `iss`, `exp`, etc.)
-5. **Filter by token type** — Include only claims marked for the target token type (access token vs ID token)
-6. **Sign** — Sign the JWT with the realm's signing key
+1. **Resolve scopes**: Collect all default scopes for the client, plus any optional scopes requested in the `scope` parameter
+2. **Gather mappers**: Collect all protocol mappers from the active scopes
+3. **Execute mappers**: Run each mapper against the authenticated user and client context
+4. **Build payload**: Merge mapper outputs with standard claims (`sub`, `iss`, `exp`, etc.)
+5. **Filter by token type**: Include only claims marked for the target token type (access token vs ID token)
+6. **Sign**: Sign the JWT with the realm's signing key
 
 ## Creating Custom Mappers
 

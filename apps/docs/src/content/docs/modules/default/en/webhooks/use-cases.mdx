@@ -1,6 +1,6 @@
 ---
 title: Use Cases
-description: Real-world webhook patterns — Slack notifications, CRM sync, security alerts, and more.
+description: "Real-world webhook patterns: Slack notifications, CRM sync, security alerts, and more."
 icon: lightbulb
 order: 63
 ---
@@ -200,9 +200,9 @@ FerrisKey sends a `user.created` payload with username, email, and name.
 
 :::step{title="Create accounts in downstream systems"}
 Your handler creates accounts in:
-- **Email system** — Create a mailbox or alias
-- **Project management** — Add to the default workspace
-- **Cloud platform** — Create an IAM identity
+- **Email system**: Create a mailbox or alias
+- **Project management**: Add to the default workspace
+- **Cloud platform**: Create an IAM identity
 :::
 
 :::step{title="Notify the user"}
@@ -327,7 +327,7 @@ For complex integrations, register multiple webhooks per realm:
 | `security-alerts` | `client.updated`, `realm.settings.updated`, `auth.reset_password` | PagerDuty proxy |
 | `audit-log` | All events | S3/GCS audit bucket |
 
-Each webhook is independent — a failure in the Slack webhook doesn't affect CRM sync or security alerts.
+Each webhook is independent, a failure in the Slack webhook doesn't affect CRM sync or security alerts.
 
 In AdonisJS, register each handler as a separate route:
 

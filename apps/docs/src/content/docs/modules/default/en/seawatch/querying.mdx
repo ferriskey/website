@@ -1,6 +1,6 @@
 ---
 title: Querying & Integration
-description: Query, filter, and export SeaWatch events — SIEM integration and compliance workflows.
+description: "Query, filter, and export SeaWatch events: SIEM integration and compliance workflows."
 icon: search
 order: 22
 ---
@@ -46,9 +46,9 @@ curl -X GET "http://localhost:3333/admin/realms/my-app/events?actor_type=admin" 
 
 For production deployments, forward SeaWatch events to your SIEM for correlation with other security signals:
 
-- **Splunk** — Use a webhook subscriber to forward events to the Splunk HTTP Event Collector (HEC)
-- **Elastic** — Forward events to Elasticsearch via a webhook or Logstash pipeline
-- **Datadog** — Send events to the Datadog Logs API via webhook
+- **Splunk**: Use a webhook subscriber to forward events to the Splunk HTTP Event Collector (HEC)
+- **Elastic**: Forward events to Elasticsearch via a webhook or Logstash pipeline
+- **Datadog**: Send events to the Datadog Logs API via webhook
 
 ### OpenTelemetry Correlation
 
@@ -61,7 +61,7 @@ SeaWatch events include a `trace_id` field when OpenTelemetry is enabled. This a
 
 ### Webhook Automation
 
-Use [Webhooks](/modules/default/en/webhooks/overview) to react to SeaWatch-tracked events in real time:
+Use [Webhooks](/en/modules/webhooks/overview) to react to SeaWatch-tracked events in real time:
 
 - Alert on-call when `client_secret_rotated` happens outside maintenance windows
 - Notify a Slack channel on `user_created` events

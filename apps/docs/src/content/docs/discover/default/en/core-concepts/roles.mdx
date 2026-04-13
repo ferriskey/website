@@ -1,6 +1,6 @@
 ---
 title: Roles & Permissions
-description: Bitwise role system in FerrisKey — permission bundles, bitmask operations, and role mappings.
+description: "Bitwise role system in FerrisKey: permission bundles, bitmask operations, and role mappings."
 icon: shield-check
 order: 14
 ---
@@ -20,7 +20,7 @@ ManageClients       = 0b0000...0100  (bit 2)
 ...
 ```
 
-A role stores its permissions as a single `u64` bitmask — the OR of all included permission bits. Checking whether a user has a permission is a single AND operation:
+A role stores its permissions as a single `u64` bitmask, the OR of all included permission bits. Checking whether a user has a permission is a single AND operation:
 
 ```rust title="Permission check"
 fn has_permission(user_permissions: u64, required: u64) -> bool {
@@ -78,7 +78,7 @@ For example, if a user has two roles:
 - **Viewer** with permissions `ViewUsers | ViewClients` = `0b...10100`
 - **User Manager** with permissions `ManageUsers | QueryUsers` = `0b...01010`
 
-Their effective bitmask is `0b...11110` — they can view and manage users, view clients, and query users.
+Their effective bitmask is `0b...11110`, they can view and manage users, view clients, and query users.
 
 ## Realm-Scoped Roles
 

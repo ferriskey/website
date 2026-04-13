@@ -1,17 +1,17 @@
 ---
 title: Overview
-description: Abyss is FerrisKey's identity provider federation module — connect external OAuth2, OIDC, and enterprise providers.
+description: "Abyss is FerrisKey's identity provider federation module: connect external OAuth2, OIDC, and enterprise providers."
 icon: link
 order: 40
 ---
 
-# Abyss — Identity Provider Federation
+# Abyss: Identity Provider Federation
 
-Abyss connects FerrisKey to external identity providers. Users can authenticate through Google, GitHub, Discord, or any custom OAuth2/OIDC provider — and FerrisKey handles the token exchange, user provisioning, account linking, and attribute mapping.
+Abyss connects FerrisKey to external identity providers. Users can authenticate through Google, GitHub, Discord, or any custom OAuth2/OIDC provider, and FerrisKey handles the token exchange, user provisioning, account linking, and attribute mapping.
 
 ## Why Federation?
 
-Federation lets you meet users where they already have an identity. Instead of forcing users to create yet another account, let them sign in with their existing Google or corporate credentials. FerrisKey becomes the identity broker — normalizing different provider formats into a consistent internal model.
+Federation lets you meet users where they already have an identity. Instead of forcing users to create yet another account, let them sign in with their existing Google or corporate credentials. FerrisKey becomes the identity broker, normalizing different provider formats into a consistent internal model.
 
 ## Supported Provider Types
 
@@ -50,12 +50,12 @@ Provider mappings define how external attributes map to internal FerrisKey user 
 | External Field | Internal Field | Required |
 |---|---|---|
 | `email` | `email` | Yes |
-| `sub` | — (used for linking) | Yes |
+| `sub` |. (used for linking) | Yes |
 | `preferred_username` | `username` | No |
 | `given_name` | `firstname` | No |
 | `family_name` | `lastname` | No |
 
-Each mapping specifies whether it's required — if a required mapping is missing from the provider's response, the federation flow fails.
+Each mapping specifies whether it's required, if a required mapping is missing from the provider's response, the federation flow fails.
 
 ## Real-World Patterns
 

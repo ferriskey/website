@@ -1,6 +1,6 @@
 ---
 title: Payload Format
-description: Webhook payload structure in FerrisKey — fields, examples, and handling best practices.
+description: "Webhook payload structure in FerrisKey: fields, examples, and handling best practices."
 icon: braces
 order: 62
 ---
@@ -97,14 +97,14 @@ Webhooks support custom HTTP headers. Use them to authenticate requests to your 
 ```
 
 Common patterns:
-- **Bearer token** — Authenticate with a static secret
-- **HMAC signature** — Compute a signature over the payload for verification (implement in your handler)
-- **Custom identifiers** — Tag the source for routing in multi-webhook architectures
+- **Bearer token**: Authenticate with a static secret
+- **HMAC signature**: Compute a signature over the payload for verification (implement in your handler)
+- **Custom identifiers**: Tag the source for routing in multi-webhook architectures
 
 ## Handling Best Practices
 
 ### Respond Quickly
-Return a `2xx` status code as fast as possible. Process the payload asynchronously — enqueue it for background processing rather than doing heavy work in the request handler.
+Return a `2xx` status code as fast as possible. Process the payload asynchronously, enqueue it for background processing rather than doing heavy work in the request handler.
 
 ### Be Idempotent
 Your handler may receive the same event more than once (retries, network issues). Use the `resource_id` and `timestamp` combination to deduplicate.

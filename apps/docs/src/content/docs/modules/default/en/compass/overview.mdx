@@ -1,13 +1,13 @@
 ---
 title: Overview
-description: Compass is FerrisKey's authentication flow engine — record, observe, and debug multi-step authentication.
+description: "Compass is FerrisKey's authentication flow engine: record, observe, and debug multi-step authentication."
 icon: compass
 order: 30
 ---
 
-# Compass — Authentication Flow Engine
+# Compass: Authentication Flow Engine
 
-Compass is FerrisKey's authentication flow engine. It records every authentication attempt as a structured **flow** — a sequence of named steps with individual outcomes, timings, and error details. Compass gives you deep observability into how users authenticate, where failures occur, and how long each step takes.
+Compass is FerrisKey's authentication flow engine. It records every authentication attempt as a structured **flow**: a sequence of named steps with individual outcomes, timings, and error details. Compass gives you deep observability into how users authenticate, where failures occur, and how long each step takes.
 
 ## Why Compass?
 
@@ -79,7 +79,7 @@ A `CompassFlow` captures the full picture of an authentication attempt:
 
 | Status | Meaning |
 |---|---|
-| `pending` | Flow is in progress — steps are still being recorded |
+| `pending` | Flow is in progress, steps are still being recorded |
 | `success` | Authentication completed successfully, tokens were issued |
 | `failure` | Authentication failed at one of the steps |
 | `expired` | The auth session expired before completion (user took too long) |
@@ -103,20 +103,20 @@ Each step within a flow records:
 
 | Step | When It Executes | Typical Duration |
 |---|---|---|
-| `authorize` | OAuth2 authorization request validation — checks redirect URI, scope, response type, CSRF state | &lt;5ms |
-| `credential_validation` | Username lookup + password hash verification (Argon2) | 50–200ms |
-| `mfa_challenge` | TOTP code validation or WebAuthn assertion verification | 5–50ms |
-| `token_exchange` | Authorization code → token exchange (code lookup + token generation) | 10–30ms |
+| `authorize` | OAuth2 authorization request validation, checks redirect URI, scope, response type, CSRF state | &lt;5ms |
+| `credential_validation` | Username lookup + password hash verification (Argon2) | 50-200ms |
+| `mfa_challenge` | TOTP code validation or WebAuthn assertion verification | 5-50ms |
+| `token_exchange` | Authorization code → token exchange (code lookup + token generation) | 10-30ms |
 | `idp_redirect` | Building and recording the redirect to an external identity provider | &lt;5ms |
-| `idp_callback` | Processing the callback from an external IdP (token exchange + user lookup) | 100–500ms |
-| `finalize` | Session creation, SeaWatch event emission, and cleanup | 5–15ms |
+| `idp_callback` | Processing the callback from an external IdP (token exchange + user lookup) | 100-500ms |
+| `finalize` | Session creation, SeaWatch event emission, and cleanup | 5-15ms |
 
 ### Step Status Values
 
 | Status | Meaning |
 |---|---|
 | `success` | Step completed successfully |
-| `failure` | Step failed — check `error_code` and `error_message` |
+| `failure` | Step failed, check `error_code` and `error_message` |
 | `skipped` | Step was not applicable (e.g., `mfa_challenge` skipped when no MFA is configured) |
 
 ## Configuration
@@ -125,7 +125,7 @@ Each step within a flow records:
 |---|---|---|
 | `compass_enabled` | `true` | Enable/disable flow recording per realm |
 
-When disabled, authentication works exactly the same — the flow recording is simply skipped. No flows are created, no steps are recorded, and no database writes occur. Toggle this off for realms where you don't need flow-level observability.
+When disabled, authentication works exactly the same, the flow recording is simply skipped. No flows are created, no steps are recorded, and no database writes occur. Toggle this off for realms where you don't need flow-level observability.
 
 :::callout{variant="info" title="Zero performance impact when disabled"}
 When `compass_enabled` is `false`, the FlowRecorder short-circuits immediately. No channels are used, no database writes happen, no memory is allocated for flow objects.

@@ -1,6 +1,6 @@
 ---
 title: TOTP
-description: Time-based one-time passwords in FerrisKey — setup, verification, and configuration.
+description: "Time-based one-time passwords in FerrisKey: setup, verification, and configuration."
 icon: clock
 order: 11
 ---
@@ -66,7 +66,7 @@ TOTP depends on both FerrisKey and the authenticator app agreeing on the current
 The issuer name displayed in authenticator apps comes from the TOTP credential configuration. Customize it per realm to show your application's name instead of "FerrisKey".
 
 ### Enforcing TOTP for All Users
-Add `ConfigureOtp` to the list of required actions for every new user created in the realm. This makes MFA enrollment mandatory — users cannot get full tokens until they set up TOTP.
+Add `ConfigureOtp` to the list of required actions for every new user created in the realm. This makes MFA enrollment mandatory, users cannot get full tokens until they set up TOTP.
 
 ### Time Window Tolerance
 FerrisKey accepts codes from the current and adjacent time windows to account for minor clock skew. This means a code from the previous or next 30-second window may also be accepted.

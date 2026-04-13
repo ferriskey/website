@@ -1,13 +1,13 @@
 ---
 title: Custom Claims
-description: Add business-specific claims to your tokens — real-world examples and patterns.
+description: "Add business-specific claims to your tokens: real-world examples and patterns."
 icon: plus
 order: 52
 ---
 
 # Custom Claims
 
-FerrisKey's default scopes cover standard OIDC claims. But real applications need more — user roles, tenant identifiers, subscription tiers, feature flags. Custom claims let you put exactly the data your application needs into the token, so your backend can make decisions without additional API calls.
+FerrisKey's default scopes cover standard OIDC claims. But real applications need more, user roles, tenant identifiers, subscription tiers, feature flags. Custom claims let you put exactly the data your application needs into the token, so your backend can make decisions without additional API calls.
 
 ## Common Patterns
 
@@ -70,7 +70,7 @@ FerrisKey uses bitwise permissions internally. Expose the resolved permission bi
 }
 ```
 
-Your backend performs bitwise AND checks against the `permissions` integer — fast and efficient.
+Your backend performs bitwise AND checks against the `permissions` integer, fast and efficient.
 
 ### Audience for Multiple Resource Servers
 
@@ -91,7 +91,7 @@ Your tokens need to be accepted by both `api.yourapp.com` and `admin.yourapp.com
 
 Inject feature flags into tokens so your frontend knows which features to enable:
 
-**Scope:** `features` (Optional — client requests it when needed)
+**Scope:** `features` (Optional, client requests it when needed)
 **Mapper:** `hardcoded_claim_mapper`
 ```json
 {
@@ -128,7 +128,7 @@ This lets you define scopes once and control exposure per client.
 To verify which claims end up in your tokens:
 
 1. Authenticate through the client
-2. Decode the access token (it's a JWT — use `jwt.io` or `base64 -d`)
+2. Decode the access token (it's a JWT, use `jwt.io` or `base64 -d`)
 3. Check which claims are present
 4. If a claim is missing, verify:
    - The scope is assigned to the client (as Default or Optional)

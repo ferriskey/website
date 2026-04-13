@@ -1,13 +1,13 @@
 ---
 title: Getting Started
-description: Deploy FerrisKey in minutes with Docker and authenticate your first user.
+description: "Deploy FerrisKey in minutes with Docker and authenticate your first user."
 icon: rocket
 order: 2
 ---
 
 # Getting Started
 
-This guide takes you from zero to a working FerrisKey instance with your first authenticated user. You'll deploy the full stack with Docker, create a realm, register a client, and obtain your first tokens.
+This guide gets you to a working FerrisKey instance with your first authenticated user. You will start the Docker stack, create a realm, register a client, create a user, and request tokens.
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ cd ferriskey
 docker compose --profile registry up -d
 ```
 
-This starts PostgreSQL, the FerrisKey API server, database migrations, and the web UI.
+This starts PostgreSQL, the FerrisKey API server, database migrations, and the admin console.
 :::
 
 :::step{title="Verify the deployment"}
@@ -46,7 +46,7 @@ Open `http://localhost:5555` in your browser and sign in with the default creden
 - **Username:** `admin`
 - **Password:** `admin`
 
-You'll land in the **master** realm — the built-in realm that manages all other realms.
+You'll land in the **master** realm, the built-in realm that manages all other realms.
 :::
 ::::
 
@@ -56,7 +56,7 @@ The default admin credentials are for local development only. Change them immedi
 
 ## Create Your First Realm
 
-A realm is an isolated tenant. Everything — users, clients, roles, credentials — lives within a realm.
+A realm is an isolated tenant. Users, clients, roles, and credentials all live inside a realm.
 
 ::::step-group
 :::step{title="Create a realm"}
@@ -74,7 +74,7 @@ A client represents an application that uses FerrisKey for authentication.
 
 ::::step-group
 :::step{title="Create a client"}
-Navigate to **Clients** and click **Create Client**. Set:
+Navigate to **Clients** and click **Create Client**. Use these values:
 
 - **Client ID:** `my-frontend`
 - **Client Type:** `Public` (for a single-page application)
@@ -109,7 +109,7 @@ On the user's **Credentials** tab, set a password. Uncheck **Temporary** if you 
 
 ## Authenticate
 
-With direct access grants enabled, you can obtain tokens using the password grant:
+With direct access grants enabled, you can request tokens directly from the API:
 
 ```bash title="Obtain tokens via password grant"
 curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
@@ -120,7 +120,13 @@ curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
   -d "password=your-password"
 ```
 
-The response contains an `access_token`, `refresh_token`, and optionally an `id_token` — you're authenticated.
+The response contains an `access_token`, `refresh_token`, and optionally an `id_token`. That means the user authenticated successfully.
+
+## Connect a Real Application
+
+The password grant above is useful for a quick API test. For real applications, use browser-based SSO with the OpenID Connect authorization code flow.
+
+If you want to connect a dashboard, internal service, or self-hosted tool, follow the application SSO guide next. It shows which dashboard screens to use, what values to copy, and how to debug common setup mistakes.
 
 ## What's Next?
 
@@ -128,7 +134,7 @@ The response contains an `access_token`, `refresh_token`, and optionally an `id_
 :::card{label="Core Concepts" icon="lucide:layers" href="/en/discover/core-concepts/realms"}
 Deep dive into realms, clients, users, roles, and tokens.
 :::
-:::card{label="Configuration" icon="lucide:settings" href="/en/discover/guides/configuration"}
-Environment variables, SMTP setup, and deployment options.
+:::card{label="Connect an Application" icon="lucide:plug" href="/en/discover/guides/application-sso"}
+Set up OpenID Connect SSO for an application with the FerrisKey dashboard.
 :::
 ::::

@@ -1,6 +1,6 @@
 ---
 title: Production Guide
-description: Production checklist for running FerrisKey on Kubernetes — database, TLS, monitoring, and security.
+description: "Production checklist for running FerrisKey on Kubernetes: database, TLS, monitoring, and security."
 icon: shield
 order: 4
 ---
@@ -15,17 +15,17 @@ This checklist covers everything you need to harden a FerrisKey deployment for p
 Always use a managed PostgreSQL service or a properly operated PostgreSQL cluster.
 :::
 
-- **Use a managed PostgreSQL** — AWS RDS, Google Cloud SQL, Azure Database for PostgreSQL, or a self-managed HA cluster
-- **Enable SSL** — Set `sslMode: require` (or `verify-full` for certificate validation)
-- **Dedicated database** — Run FerrisKey in its own database, not a shared instance
-- **Regular backups** — Configure automated backups with point-in-time recovery
-- **Connection pooling** — Consider PgBouncer for high-traffic deployments
+- **Use a managed PostgreSQL**: AWS RDS, Google Cloud SQL, Azure Database for PostgreSQL, or a self-managed HA cluster
+- **Enable SSL**: Set `sslMode: require` (or `verify-full` for certificate validation)
+- **Dedicated database**: Run FerrisKey in its own database, not a shared instance
+- **Regular backups**: Configure automated backups with point-in-time recovery
+- **Connection pooling**: Consider PgBouncer for high-traffic deployments
 
 ## TLS & Ingress
 
-- **Terminate TLS at the ingress** — Use cert-manager with Let's Encrypt or your organization's CA
-- **Force HTTPS** — Redirect all HTTP traffic to HTTPS
-- **Set `ALLOWED_ORIGINS`** — Restrict CORS to your actual frontend domain(s)
+- **Terminate TLS at the ingress**: Use cert-manager with Let's Encrypt or your organization's CA
+- **Force HTTPS**: Redirect all HTTP traffic to HTTPS
+- **Set `ALLOWED_ORIGINS`**: Restrict CORS to your actual frontend domain(s)
 
 Example ingress configuration:
 
@@ -57,9 +57,9 @@ spec:
 
 ## Admin Credentials
 
-- **Change default credentials immediately** — Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` via Kubernetes Secrets
-- **Use strong passwords** — Minimum 16 characters, generated randomly
-- **Rotate regularly** — Establish a rotation schedule for admin credentials
+- **Change default credentials immediately**: Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` via Kubernetes Secrets
+- **Use strong passwords**: Minimum 16 characters, generated randomly
+- **Rotate regularly**: Establish a rotation schedule for admin credentials
 
 ```yaml title="admin-secret.yaml"
 apiVersion: v1
@@ -91,8 +91,8 @@ common:
 
 ## Scaling
 
-- **Horizontal scaling** — Increase `replicas` to handle more concurrent requests. FerrisKey API pods are stateless.
-- **Pod disruption budgets** — Ensure availability during cluster maintenance:
+- **Horizontal scaling**: Increase `replicas` to handle more concurrent requests. FerrisKey API pods are stateless.
+- **Pod disruption budgets**: Ensure availability during cluster maintenance:
 
 ```yaml title="pdb.yaml"
 apiVersion: policy/v1
@@ -111,18 +111,18 @@ spec:
 
 FerrisKey exposes a Prometheus metrics endpoint at `/metrics`:
 
-- **Scrape configuration** — Point your Prometheus instance at the FerrisKey service on port `3333`, path `/metrics`
-- **Key metrics** — Request latency, error rates, active sessions, token issuance rates
-- **Alerting** — Set alerts for error rate spikes, high latency, and database connection failures
-- **Distributed tracing** — Enable OpenTelemetry OTLP export for end-to-end request tracing
+- **Scrape configuration**: Point your Prometheus instance at the FerrisKey service on port `3333`, path `/metrics`
+- **Key metrics**: Request latency, error rates, active sessions, token issuance rates
+- **Alerting**: Set alerts for error rate spikes, high latency, and database connection failures
+- **Distributed tracing**: Enable OpenTelemetry OTLP export for end-to-end request tracing
 
 ## Security Hardening
 
-- **Network policies** — Restrict pod-to-pod traffic. FerrisKey API pods only need to reach PostgreSQL and external IdPs (if using Abyss)
-- **Pod security** — Run containers as non-root, read-only filesystem where possible
-- **Secret management** — Use an external secrets operator (AWS Secrets Manager, HashiCorp Vault) for sensitive values
-- **Image scanning** — Scan FerrisKey container images for vulnerabilities in your CI pipeline
-- **Audit logging** — Enable SeaWatch and forward events to your SIEM
+- **Network policies**: Restrict pod-to-pod traffic. FerrisKey API pods only need to reach PostgreSQL and external IdPs (if using Abyss)
+- **Pod security**: Run containers as non-root, read-only filesystem where possible
+- **Secret management**: Use an external secrets operator (AWS Secrets Manager, HashiCorp Vault) for sensitive values
+- **Image scanning**: Scan FerrisKey container images for vulnerabilities in your CI pipeline
+- **Audit logging**: Enable SeaWatch and forward events to your SIEM
 
 ## Checklist
 

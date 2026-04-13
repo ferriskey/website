@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: How the Compass FlowRecorder works internally — async channels, backpressure, and persistence.
+description: "How the Compass FlowRecorder works internally: async channels, backpressure, and persistence."
 icon: cpu
 order: 31
 ---
@@ -37,9 +37,9 @@ The FlowRecorder communicates with a background writer task through a Tokio `mps
 
 | Event | Behavior | Blocking? |
 |---|---|---|
-| `FlowStarted` | Creates the flow record. Includes a `oneshot` acknowledgment channel. | **Yes** — waits for DB write |
-| `StepRecorded` | Persists a step record. | No — fire and forget |
-| `FlowCompleted` | Updates the flow with final status, duration, and user ID. | No — fire and forget |
+| `FlowStarted` | Creates the flow record. Includes a `oneshot` acknowledgment channel. | **Yes**: waits for DB write |
+| `StepRecorded` | Persists a step record. | No, fire and forget |
+| `FlowCompleted` | Updates the flow with final status, duration, and user ID. | No, fire and forget |
 
 ### Why `FlowStarted` Blocks
 
@@ -67,7 +67,7 @@ The channel has a bounded capacity. When the channel is full (the writer can't k
 1. `try_send()` fails immediately
 2. The event is dropped
 3. A warning is logged: `"Compass: channel full, dropping event"`
-4. **Authentication continues normally** — Compass never blocks or fails a login
+4. **Authentication continues normally**: Compass never blocks or fails a login
 
 This is a deliberate design choice: observability data is valuable but not critical. A dropped step record is acceptable; a blocked login request is not.
 
@@ -118,7 +118,7 @@ Both repositories are implemented via SeaORM against PostgreSQL, following Ferri
 Compass flows accumulate over time. For a high-traffic realm, this can mean thousands of flows per day. The `purge_old_flows(older_than)` method removes flows (and their steps, via CASCADE) older than a given timestamp.
 
 :::callout{variant="warning" title="Plan your retention"}
-Compass does not auto-purge. Set up a scheduled task to call `purge_old_flows()` periodically — for example, deleting flows older than 30 days. This keeps the database manageable and queries fast.
+Compass does not auto-purge. Set up a scheduled task to call `purge_old_flows()` periodically, for example, deleting flows older than 30 days. This keeps the database manageable and queries fast.
 :::
 
 ### Storage Estimate
@@ -129,6 +129,6 @@ A rough estimate per flow:
 |---|---|
 | Flow record | ~200 bytes |
 | Step record (each) | ~150 bytes |
-| Average steps per flow | 3–5 |
+| Average steps per flow | 3-5 |
 
-For a realm with **10,000 logins/day**, that's approximately **7–9 MB/day** or **250 MB/month**. Plan your PostgreSQL storage accordingly.
+For a realm with **10,000 logins/day**, that's approximately **7-9 MB/day** or **250 MB/month**. Plan your PostgreSQL storage accordingly.

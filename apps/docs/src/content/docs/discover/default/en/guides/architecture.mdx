@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Hexagonal architecture, domain modules, and the ports & adapters pattern in FerrisKey.
+description: "Hexagonal architecture, domain modules, and the ports & adapters pattern in FerrisKey."
 icon: boxes
 order: 21
 ---
@@ -32,11 +32,11 @@ graph TD
 
 The core of FerrisKey. Contains pure business logic with no dependencies on frameworks, databases, or HTTP. Each domain module defines:
 
-- **Entities** — Immutable value objects representing domain concepts
-- **Ports** — Trait definitions (interfaces) that declare what the domain needs
-- **Services** — Business logic that operates on entities through ports
-- **Value Objects** — DTOs for use cases and data transfer
-- **Policies** — Authorization rules
+- **Entities**: Immutable value objects representing domain concepts
+- **Ports**: Trait definitions (interfaces) that declare what the domain needs
+- **Services**: Business logic that operates on entities through ports
+- **Value Objects**: DTOs for use cases and data transfer
+- **Policies**: Authorization rules
 
 ### Application Layer
 
@@ -46,8 +46,8 @@ Orchestrates domain services. The `ApplicationService` struct wires together all
 
 Implements the ports defined by the domain:
 
-- **Repositories** — Database access via SeaORM (PostgreSQL)
-- **External services** — SMTP, webhook delivery, identity provider communication
+- **Repositories**: Database access via SeaORM (PostgreSQL)
+- **External services**: SMTP, webhook delivery, identity provider communication
 
 ### API Layer
 
@@ -89,12 +89,12 @@ The dependency rule is strict: **inner layers never depend on outer layers**.
 - Infrastructure implements domain ports
 - API depends on application
 
-This means you can swap PostgreSQL for another database, replace Axum with a different HTTP framework, or test domain logic entirely in memory — without touching business rules.
+This means you can swap PostgreSQL for another database, replace Axum with a different HTTP framework, or test domain logic entirely in memory, without touching business rules.
 
 ## Error Propagation
 
 Errors flow outward through automatic conversions:
 
-1. **`CoreError`** — Domain-level errors (not found, validation, conflict)
-2. **`ApiError`** — HTTP response format with status codes
-3. **`From<CoreError> for ApiError`** — Automatic conversion at the boundary
+1. **`CoreError`**: Domain-level errors (not found, validation, conflict)
+2. **`ApiError`**: HTTP response format with status codes
+3. **`From<CoreError> for ApiError`**: Automatic conversion at the boundary

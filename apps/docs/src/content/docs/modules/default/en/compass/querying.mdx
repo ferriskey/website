@@ -1,6 +1,6 @@
 ---
 title: Querying & Analytics
-description: Query Compass flows, filter by criteria, aggregate statistics, and build authentication dashboards.
+description: "Query Compass flows, filter by criteria, aggregate statistics, and build authentication dashboards."
 icon: bar-chart-3
 order: 32
 ---
@@ -164,11 +164,11 @@ async function getTopFailureReasons(realmName: string) {
 ```
 
 Common findings:
-- `invalid_credentials` — Wrong password (most common)
-- `invalid_otp` — Wrong TOTP code (clock skew? user confusion?)
-- `expired_session` — User took too long to complete the flow
-- `invalid_redirect_uri` — Client misconfiguration
-- `idp_error` — External provider returned an error
+- `invalid_credentials`. Wrong password (most common)
+- `invalid_otp`. Wrong TOTP code (clock skew? user confusion?)
+- `expired_session`. User took too long to complete the flow
+- `invalid_redirect_uri`. Client misconfiguration
+- `idp_error`. External provider returned an error
 
 ### Slow Flow Detection
 
@@ -187,10 +187,10 @@ limit=100" \
 
 ### IdP Performance Monitoring
 
-When using [Abyss](/modules/default/en/abyss/overview) for external IdP federation, Compass tracks `idp_redirect` and `idp_callback` steps. These are particularly valuable because they involve network calls to third-party services:
+When using [Abyss](/en/modules/abyss/overview) for external IdP federation, Compass tracks `idp_redirect` and `idp_callback` steps. These are particularly valuable because they involve network calls to third-party services:
 
-- **`idp_redirect`** — Should be < 5ms (just building a URL). If slow, check network/DNS.
-- **`idp_callback`** — Involves token exchange with the external provider. Typical: 100-500ms. If >1s, the external provider may be degraded.
+- **`idp_redirect`**: Should be < 5ms (just building a URL). If slow, check network/DNS.
+- **`idp_callback`**: Involves token exchange with the external provider. Typical: 100-500ms. If >1s, the external provider may be degraded.
 
 ### User-Level Flow History
 
@@ -203,7 +203,7 @@ limit=20" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-This shows their recent login attempts — useful for support tickets ("I can't log in") or security investigations ("was this account compromised?").
+This shows their recent login attempts, useful for support tickets ("I can't log in") or security investigations ("was this account compromised?").
 
 ## Data Maintenance
 
@@ -219,9 +219,9 @@ For a realm with 10,000 logins/day, Compass generates ~250 MB/month of flow data
 
 For compliance, you may need to retain flow data longer than you want it in PostgreSQL. A good pattern:
 
-1. **Export** — Periodically query flows and export to cold storage (S3, GCS)
-2. **Purge** — Delete flows older than your hot retention window (30-90 days)
-3. **Query cold storage** — For historical investigations, query the archived data
+1. **Export**: Periodically query flows and export to cold storage (S3, GCS)
+2. **Purge**: Delete flows older than your hot retention window (30-90 days)
+3. **Query cold storage**: For historical investigations, query the archived data
 
 ## Compass + SeaWatch
 

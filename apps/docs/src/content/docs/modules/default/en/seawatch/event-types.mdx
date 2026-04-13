@@ -1,6 +1,6 @@
 ---
 title: Event Types
-description: Complete reference of the 16 SeaWatch security event types in FerrisKey.
+description: "Complete reference of the 16 SeaWatch security event types in FerrisKey."
 icon: list
 order: 21
 ---
@@ -14,7 +14,7 @@ SeaWatch tracks 16 security event types organized into five categories. Each eve
 | Event | Description | Actor | Target |
 |---|---|---|---|
 | `login_success` | User successfully authenticated | User | User |
-| `login_failure` | Authentication attempt failed | — | User (if identified) |
+| `login_failure` | Authentication attempt failed | None | User (if identified) |
 
 **`login_success` details:**
 ```json
@@ -46,7 +46,7 @@ When a login fails, the user is not yet authenticated, so `actor_id` is typicall
 | `password_reset_requested` | User requested a password reset email | System | User |
 | `password_reset_completed` | User completed the password reset flow | User | User |
 
-These three events trace the full password reset lifecycle. A `password_reset_requested` without a matching `password_reset_completed` might indicate a user who abandoned the flow — or an attacker testing email enumeration.
+These three events trace the full password reset lifecycle. A `password_reset_requested` without a matching `password_reset_completed` might indicate a user who abandoned the flow, or an attacker testing email enumeration.
 
 ## User
 
@@ -76,7 +76,7 @@ Role events are critical for access control audits. They answer: "Who granted th
 | `client_deleted` | Client removed | Admin | Client |
 | `client_secret_rotated` | Client secret was regenerated | Admin | Client |
 
-**`client_secret_rotated`** is particularly important — it means the old secret is invalidated. If this happens unexpectedly, it could indicate a compromised admin account.
+**`client_secret_rotated`** is particularly important, it means the old secret is invalidated. If this happens unexpectedly, it could indicate a compromised admin account.
 
 ## Configuration
 

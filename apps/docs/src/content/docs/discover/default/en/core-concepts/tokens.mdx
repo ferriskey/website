@@ -1,6 +1,6 @@
 ---
 title: Tokens
-description: JWT tokens in FerrisKey — access, refresh, ID, and temporary tokens, claims, and lifetimes.
+description: "JWT tokens in FerrisKey: access, refresh, ID, and temporary tokens, claims, and lifetimes."
 icon: ticket
 order: 17
 ---
@@ -26,18 +26,18 @@ Every FerrisKey token is a signed JWT with three parts: header, payload, and sig
 
 | Claim | Description |
 |---|---|
-| `sub` | Subject — the user's unique ID |
-| `aud` | Audience — the client ID |
-| `iss` | Issuer — the realm's token endpoint URL |
+| `sub` | Subject, the user's unique ID |
+| `aud` | Audience, the client ID |
+| `iss` | Issuer, the realm's token endpoint URL |
 | `exp` | Expiration timestamp |
 | `iat` | Issued-at timestamp |
 | `nbf` | Not-before timestamp |
-| `jti` | JWT ID — unique token identifier |
+| `jti` | JWT ID, unique token identifier |
 | `scope` | Space-separated list of granted scopes |
 
 ### Custom Claims
 
-Protocol mappers (configured through [client scopes](/discover/default/en/core-concepts/client-scopes)) inject additional claims:
+Protocol mappers (configured through [client scopes](/en/discover/core-concepts/client-scopes)) inject additional claims:
 
 | Claim | Source |
 |---|---|
@@ -53,8 +53,8 @@ Protocol mappers (configured through [client scopes](/discover/default/en/core-c
 
 Token lifetimes are configured at two levels:
 
-1. **Realm defaults** — Apply to all clients in the realm
-2. **Client overrides** — Take precedence when set
+1. **Realm defaults**: Apply to all clients in the realm
+2. **Client overrides**: Take precedence when set
 
 | Token | Realm Default | Client Override |
 |---|---|---|

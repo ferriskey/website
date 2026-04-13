@@ -1,54 +1,54 @@
 ---
 title: What is FerrisKey?
-description: A modern, open-source Identity & Access Management system built in Rust.
+description: "A modern, open-source Identity & Access Management system built in Rust."
 icon: shield
 order: 1
 ---
 
 # What is FerrisKey?
 
-FerrisKey is a modern, open-source Identity & Access Management (IAM) system built in Rust. It gives your applications authentication, authorization, and user management — without the complexity of legacy solutions.
+FerrisKey is a modern, open-source Identity & Access Management (IAM) system built in Rust. It gives your applications authentication, authorization, and user management without the weight of legacy IAM platforms.
 
 ## What is IAM?
 
 Identity & Access Management answers two questions for every request your system receives:
 
-- **Authentication** — _Who are you?_ Verifying identity through passwords, multi-factor authentication, passkeys, or federated providers.
-- **Authorization** — _What can you do?_ Determining which resources and actions an authenticated identity is permitted to access.
+- **Authentication**: _Who are you?_ Verifying identity through passwords, multi-factor authentication, passkeys, or federated providers.
+- **Authorization**: _What can you do?_ Determining which resources and actions an authenticated identity is permitted to access.
 
 Beyond these fundamentals, a modern IAM system handles token issuance (JWT), single sign-on (SSO), session management, audit logging, and integration with external identity providers.
 
 ## Why FerrisKey?
 
-FerrisKey was built from scratch in Rust to address the shortcomings of existing IAM solutions:
+FerrisKey was built from scratch in Rust for teams that want a clear, modern IAM system:
 
-- **Performance & Safety** — Rust's memory safety guarantees and zero-cost abstractions deliver an IAM server that is fast, reliable, and free from entire classes of security vulnerabilities.
-- **Multi-Tenancy** — Realms provide complete tenant isolation. Users, clients, roles, credentials, and configuration are fully scoped — one deployment serves many organizations.
-- **Modular Architecture** — A hexagonal architecture with clearly separated domain modules. Enable only what you need.
-- **Open Source** — MIT-licensed, community-driven, and designed for transparency.
+- **Performance & Safety**: Rust gives FerrisKey a fast, reliable foundation with strong memory safety.
+- **Multi-Tenancy**: Realms isolate users, clients, roles, credentials, and configuration so one deployment can serve many organizations.
+- **Modular Architecture**: FerrisKey is split into focused modules. Enable the parts you need.
+- **Open Source**: FerrisKey is MIT-licensed, community-driven, and designed to be understood.
 
 ## Modules
 
-FerrisKey is organized into purpose-built modules, each handling a specific aspect of identity management:
+FerrisKey is organized into modules, each focused on one part of identity management:
 
 ::::card-group{cols=3}
 :::card{label="Trident" icon="lucide:shield-check" href="/en/modules/trident/overview"}
-Multi-factor authentication — TOTP, WebAuthn passkeys, magic links, and recovery codes.
+Multi-factor authentication with TOTP, WebAuthn passkeys, magic links, and recovery codes.
 :::
 :::card{label="SeaWatch" icon="lucide:eye" href="/en/modules/seawatch/overview"}
-Audit & security events — track every critical action across your realms.
+Audit and security events for critical actions across your realms.
 :::
 :::card{label="Compass" icon="lucide:compass" href="/en/modules/compass/overview"}
-Authentication flow engine — orchestrate and customize authentication steps.
+Authentication flow recording and debugging for multi-step sign-in.
 :::
 :::card{label="Abyss" icon="lucide:link" href="/en/modules/abyss/overview"}
-Identity provider federation — Google, GitHub, Discord, and custom OIDC providers.
+Identity provider federation for Google, GitHub, Discord, and custom OIDC providers.
 :::
 :::card{label="Aegis" icon="lucide:lock" href="/en/modules/aegis/overview"}
-Scopes & protocol mappers — control exactly what goes into your tokens.
+Scopes and protocol mappers to control what goes into your tokens.
 :::
 :::card{label="Webhooks" icon="lucide:webhook" href="/en/modules/webhooks/overview"}
-Event-driven extensibility — subscribe to lifecycle events and notify external systems.
+Event-driven integrations for lifecycle events and external notifications.
 :::
 ::::
 

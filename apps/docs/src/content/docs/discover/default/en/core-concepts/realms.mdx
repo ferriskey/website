@@ -1,25 +1,25 @@
 ---
 title: Realms
-description: Multi-tenancy in FerrisKey — how realms isolate users, clients, roles, and configuration.
+description: "Multi-tenancy in FerrisKey: how realms isolate users, clients, roles, and configuration."
 icon: globe
 order: 10
 ---
 
 # Realms
 
-A realm is the top-level isolation boundary in FerrisKey. Every entity — users, clients, roles, credentials, scopes, sessions — belongs to exactly one realm. Realms are the foundation of multi-tenancy: one FerrisKey deployment can serve many independent organizations.
+A realm is the top-level isolation boundary in FerrisKey. Users, clients, roles, credentials, scopes, and sessions each belong to exactly one realm. Realms make multi-tenancy possible: one FerrisKey deployment can serve many independent organizations.
 
 ## What a Realm Isolates
 
 Each realm is a self-contained identity domain:
 
-- **Users** — accounts, profiles, and credentials
-- **Clients** — applications registered for authentication
-- **Roles** — permission bundles and role mappings
-- **Credentials** — passwords, TOTP secrets, WebAuthn passkeys
-- **Client Scopes** — token claim definitions and protocol mappers
-- **Sessions** — active user sessions
-- **Configuration** — token lifetimes, registration policies, feature toggles
+- **Users**: accounts, profiles, and credentials
+- **Clients**: applications registered for authentication
+- **Roles**: permission bundles and role mappings
+- **Credentials**: passwords, TOTP secrets, WebAuthn passkeys
+- **Client Scopes**: token claim definitions and protocol mappers
+- **Sessions**: active user sessions
+- **Configuration**: token lifetimes, registration policies, feature toggles
 
 There is no data leakage between realms. A user in realm A cannot authenticate to a client in realm B.
 
