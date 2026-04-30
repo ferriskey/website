@@ -121,6 +121,7 @@ const appUrlOverrides = {
       transition:persist
       transition:animate="none"
     />
+    <div id="docs-nav-data" data-items={JSON.stringify(navItems)} hidden />
     <div class="flex max-w-350 mx-auto">
       <div class="hidden lg:block w-64 shrink-0 border-r h-[calc(100vh-var(--header-height))] overflow-y-auto sticky top-(--header-height) py-6 pl-3 pr-3" transition:persist transition:animate="none">
         <Sidebar items={navItems} currentPath={currentPath} client:load />

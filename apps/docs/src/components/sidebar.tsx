@@ -8,13 +8,28 @@ interface SidebarProps {
   currentPath: string
 }
 
-export function Sidebar({ items, currentPath: initialPath }: SidebarProps) {
+export function Sidebar({ items: initialItems, currentPath: initialPath }: SidebarProps) {
+  const [items, setItems] = React.useState(initialItems)
   const [currentPath, setCurrentPath] = React.useState(initialPath)
 
   React.useEffect(() => {
-    const handleSwap = () => setCurrentPath(window.location.pathname)
-    document.addEventListener('astro:after-swap', handleSwap)
-    return () => document.removeEventListener('astro:after-swap', handleSwap)
+    const handleBeforeSwap = (e: Event) => {
+      const newDoc = (e as CustomEvent & { newDocument: Document }).newDocument
+      const dataEl = newDoc?.getElementById('docs-nav-data')
+      if (dataEl) {
+        try {
+          setItems(JSON.parse(dataEl.getAttribute('data-items') || '[]'))
+        } catch {}
+      }
+    }
+    const handleAfterSwap = () => setCurrentPath(window.location.pathname)
+
+    document.addEventListener('astro:before-swap', handleBeforeSwap)
+    document.addEventListener('astro:after-swap', handleAfterSwap)
+    return () => {
+      document.removeEventListener('astro:before-swap', handleBeforeSwap)
+      document.removeEventListener('astro:after-swap', handleAfterSwap)
+    }
   }, [])
 
   return (
