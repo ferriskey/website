@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/base.astro'
+import { defaultLang } from '../i18n/ui'
+---
+
+<Base title="404 — Page not found" locale={defaultLang}>
+  <section class="flex-1 flex flex-col items-center justify-center text-center">
+    <p class="text-primary text-sm font-semibold tracking-widest uppercase mb-4">404</p>
+    <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Page not found</h1>
+    <p class="text-muted-foreground text-lg max-w-md mb-8">
+      Sorry, we couldn't find the page you're looking for.
+    </p>
+    <a
+      href="/"
+      class="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+    >
+      Back to blog
+    </a>
+  </section>
+</Base>

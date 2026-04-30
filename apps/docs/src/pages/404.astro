@@ -1,0 +1,35 @@
+---
+import Base from '../layouts/base.astro'
+import { Navbar } from '@explainer/ui'
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+---
+
+<Base title="404 — Page not found">
+  <Navbar
+    currentApp="docs"
+    appUrlOverrides={appUrlOverrides}
+    breakpoint="lg"
+    className="border-b"
+    client:load
+    transition:persist
+  />
+
+  <main class="flex-1 flex flex-col items-center justify-center px-6 text-center">
+    <p class="text-primary text-sm font-semibold tracking-widest uppercase mb-4">404</p>
+    <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Page not found</h1>
+    <p class="text-muted-foreground text-lg max-w-md mb-8">
+      Sorry, we couldn't find the page you're looking for.
+    </p>
+    <a
+      href="/"
+      class="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+    >
+      Back to docs
+    </a>
+  </main>
+</Base>

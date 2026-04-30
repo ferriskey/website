@@ -56,9 +56,9 @@ const appUrlOverrides = {
       })
     </script>
   </head>
-  <body class="min-h-screen antialiased">
+  <body class="min-h-screen antialiased flex flex-col">
     <BlogNavbar activePath={Astro.url.pathname} appUrlOverrides={appUrlOverrides} locale={locale} locales={locales} localeSwitchUrls={localeSwitchUrls} client:load transition:persist />
-    <main class="mx-auto max-w-6xl px-6 py-10">
+    <main class="flex-1 flex flex-col mx-auto max-w-6xl px-6 py-10 w-full">
       <slot />
     </main>
     <footer class="border-t mt-16">
