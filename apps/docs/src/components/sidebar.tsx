@@ -8,7 +8,15 @@ interface SidebarProps {
   currentPath: string
 }
 
-export function Sidebar({ items, currentPath }: SidebarProps) {
+export function Sidebar({ items, currentPath: initialPath }: SidebarProps) {
+  const [currentPath, setCurrentPath] = React.useState(initialPath)
+
+  React.useEffect(() => {
+    const handleSwap = () => setCurrentPath(window.location.pathname)
+    document.addEventListener('astro:after-swap', handleSwap)
+    return () => document.removeEventListener('astro:after-swap', handleSwap)
+  }, [])
+
   return (
     <nav className="flex-1 overflow-y-auto">
       <ul>
@@ -27,6 +35,12 @@ function SidebarItem({ item, currentPath, depth = 0 }: { item: NavItem; currentP
     }
     return false
   })
+
+  React.useEffect(() => {
+    if (item.type === 'category') {
+      setOpen(isActiveCategory(item, currentPath))
+    }
+  }, [currentPath, item])
 
   // Group: bold label, no collapse, children always visible, depth resets
   if (item.type === 'group') {
