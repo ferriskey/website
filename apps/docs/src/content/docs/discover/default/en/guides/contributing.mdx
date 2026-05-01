@@ -1,0 +1,125 @@
+---
+title: Contributing
+description: "How to contribute issues, documentation, code, tests, and pull requests to FerrisKey."
+icon: git-pull-request
+order: 22
+---
+
+# Contributing
+
+FerrisKey is open source and welcomes contributions of every size: bug reports, documentation fixes, examples, tests, design feedback, and code changes.
+
+## Before You Start
+
+- Check the [GitHub repository](https://github.com/ferriskey/ferriskey) for existing issues or pull requests related to your change.
+- Open an issue first for large features, architecture changes, security-sensitive behavior, or breaking changes.
+- Keep pull requests focused. A small PR with one clear purpose is easier to review and merge than a broad rewrite.
+- Avoid mixing formatting-only changes with behavior changes.
+
+:::callout{variant="info" title="Security issues"}
+Do not report vulnerabilities in public issues. Use the repository's private security reporting flow when available, or contact the maintainers before sharing exploit details.
+:::
+
+## Set Up the Documentation Website
+
+The documentation, website, and blog live in a pnpm workspace.
+
+```bash title="Clone and install"
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey
+pnpm install --frozen-lockfile
+```
+
+Run the docs locally:
+
+```bash title="Start the docs app"
+pnpm --filter @explainer/docs dev
+```
+
+The docs app is an Astro project. Content lives under:
+
+```text
+apps/docs/src/content/docs/
+```
+
+Each page is an MDX file with frontmatter:
+
+```mdx title="Example frontmatter"
+---
+title: Page Title
+description: "Short page description."
+icon: book-open
+order: 10
+---
+```
+
+## Writing Documentation
+
+Good documentation should help readers complete a task or understand a concept without guessing.
+
+- Start with the outcome the reader wants.
+- Use concrete examples, URLs, environment variables, and commands.
+- Prefer short sections with descriptive headings.
+- Add screenshots only when the UI state matters.
+- Keep terminology consistent with the existing docs: realms, clients, users, credentials, client scopes, and modules.
+- Link to related pages when the next step is obvious.
+
+When adding a new page, place it in the right project, version, and locale directory. For English Discover guides, use:
+
+```text
+apps/docs/src/content/docs/discover/default/en/guides/
+```
+
+Navigation order is controlled by the `order` field in page frontmatter and by `_meta.json` files for groups.
+
+## Code Contributions
+
+Before changing code, read the nearby implementation and follow the existing patterns. FerrisKey uses a modular architecture: domain logic, infrastructure, API boundaries, and documentation should stay separated.
+
+For user-facing changes, update the relevant docs in the same pull request. For bug fixes, add or update tests when the behavior can regress.
+
+## Validate Your Changes
+
+Run formatting before opening a pull request:
+
+```bash title="Format"
+pnpm format
+```
+
+Build the workspace:
+
+```bash title="Build"
+pnpm build
+```
+
+For documentation-only changes, you can also build only the docs app:
+
+```bash title="Build docs"
+pnpm --filter @explainer/docs build
+```
+
+## Pull Request Checklist
+
+Before requesting review, check that:
+
+- The change has a clear title and description.
+- The PR explains why the change is needed, not only what changed.
+- Screenshots or recordings are included for visible UI changes.
+- New documentation is linked from the appropriate section.
+- Formatting and build commands pass locally.
+- The PR does not include unrelated rewrites, generated noise, or local environment files.
+
+## Review Process
+
+Maintainers review for correctness, maintainability, security, and consistency with FerrisKey's direction. Expect questions and requested changes, especially for public APIs, authentication flows, deployment behavior, and documentation that affects production usage.
+
+When feedback arrives:
+
+- Reply when a comment needs discussion.
+- Push follow-up commits for requested changes.
+- Keep the conversation focused on the technical decision.
+- Ask for another review when the PR is ready.
+
+## Community Standards
+
+Be direct, respectful, and specific. Assume contributors are trying to improve the project, and keep discussions grounded in reproducible behavior, code, documentation, or user impact.
