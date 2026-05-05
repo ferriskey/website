@@ -33,6 +33,7 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  # update-helm job needs write to push values.yaml back to main
 
 jobs:
   build:
@@ -160,3 +161,29 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf 'ghcr.io/ferriskey/ferriskey-${{ matrix.target }}@sha256:%s ' *)
+
+  update-helm:
+    if: github.ref_name == github.event.repository.default_branch
+    needs:
+      - push-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: update imageTag in values.yaml
+        run: |
+          TAG="sha-${GITHUB_SHA::7}"
+          sed -i "s/^imageTag:.*/imageTag: ${TAG}/" helm/values.yaml
+
+      - name: commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/values.yaml
+          git diff --staged --quiet || git commit -m "chore: update imageTag to sha-${GITHUB_SHA::7} [skip ci]"
+          git push
