@@ -1,0 +1,175 @@
+---
+title: Contributing
+description: "How to contribute issues, documentation, code, tests, and pull requests to FerrisKey."
+icon: git-pull-request
+order: 22
+---
+
+# Contributing
+
+FerrisKey is open source and welcomes contributions of every size: bug reports, documentation fixes, examples, tests, design feedback, and code changes.
+
+The main rule is simple: **keep pull requests small and reviewable**. A contribution should be easy to understand, test, and merge without forcing maintainers to review unrelated layers at the same time.
+
+## Before You Start
+
+- Check the [GitHub repository](https://github.com/ferriskey/ferriskey) for existing issues or pull requests related to your change.
+- Open an issue first for large features, architecture changes, security-sensitive behavior, or breaking changes.
+- Keep pull requests focused. A small PR with one clear purpose is easier to review and merge than a broad rewrite.
+- Avoid mixing formatting-only changes with behavior changes.
+
+:::callout{variant="info" title="Security issues"}
+Do not report vulnerabilities in public issues. Use the repository's private security reporting flow when available, or contact the maintainers before sharing exploit details.
+:::
+
+## Contribution Process
+
+Every pull request must have a reduced scope. Avoid submitting one large PR that changes every layer of the product at once.
+
+For example, do not open a single PR that contains:
+
+- A SQL migration
+- Core domain changes
+- API handlers
+- Frontend screens
+- Documentation updates
+
+That kind of PR is hard to review because reviewers must validate the database model, business rules, API behavior, UI behavior, and documentation in one pass. It also makes it harder to merge partial progress when one layer needs more discussion.
+
+Instead, split the work into a series of focused pull requests. A large feature can usually be reviewed as:
+
+1. **Data model PR**: migrations, entities, and repository changes.
+2. **Core PR**: domain types, services, validation, and tests.
+3. **API PR**: routes, handlers, request/response types, and OpenAPI updates.
+4. **Frontend PR**: UI screens, forms, client integration, and user-facing states.
+5. **Documentation PR**: usage guide, configuration notes, or release documentation.
+
+Each PR should stand on its own when possible. If a PR depends on a previous one, mention it clearly in the description and link the dependency.
+
+:::callout{variant="warning" title="Large PRs may be sent back"}
+Maintainers may ask you to split a pull request before reviewing it. This is not about blocking the contribution; it keeps review quality high and reduces the chance of regressions.
+:::
+
+## How to Split a Change
+
+Use these rules when deciding what belongs in the same PR:
+
+- Keep one behavioral change per PR.
+- Keep database migrations separate from UI work.
+- Keep refactors separate from feature work.
+- Keep formatting-only changes in their own PR.
+- Add tests in the PR that introduces the behavior being tested.
+- Update documentation in the same PR only when the behavior is already reviewable and the docs are needed to explain that behavior.
+
+If the feature cannot work until several PRs are merged, prefer a stacked sequence with clear descriptions over one broad PR.
+
+Good PR descriptions include:
+
+- The exact scope of the PR.
+- What is intentionally left for a follow-up PR.
+- How the change was tested.
+- Screenshots or recordings for visible UI changes.
+
+## Set Up the Documentation Website
+
+The documentation, website, and blog live in a pnpm workspace.
+
+```bash title="Clone and install"
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey
+pnpm install --frozen-lockfile
+```
+
+Run the docs locally:
+
+```bash title="Start the docs app"
+pnpm --filter @explainer/docs dev
+```
+
+The docs app is an Astro project. Content lives under:
+
+```text
+apps/docs/src/content/docs/
+```
+
+Each page is an MDX file with frontmatter:
+
+```mdx title="Example frontmatter"
+---
+title: Page Title
+description: "Short page description."
+icon: book-open
+order: 10
+---
+```
+
+## Writing Documentation
+
+Good documentation should help readers complete a task or understand a concept without guessing.
+
+- Start with the outcome the reader wants.
+- Use concrete examples, URLs, environment variables, and commands.
+- Prefer short sections with descriptive headings.
+- Add screenshots only when the UI state matters.
+- Keep terminology consistent with the existing docs: realms, clients, users, credentials, client scopes, and modules.
+- Link to related pages when the next step is obvious.
+
+When adding a new page, place it in the right project, version, and locale directory. For English Discover guides, use:
+
+```text
+apps/docs/src/content/docs/discover/default/en/guides/
+```
+
+Navigation order is controlled by the `order` field in page frontmatter and by `_meta.json` files for groups.
+
+## Code Contributions
+
+Before changing code, read the nearby implementation and follow the existing patterns. FerrisKey uses a modular architecture: domain logic, infrastructure, API boundaries, and documentation should stay separated.
+
+For user-facing changes, update the relevant docs in the same pull request. For bug fixes, add or update tests when the behavior can regress.
+
+## Validate Your Changes
+
+Run formatting before opening a pull request:
+
+```bash title="Format"
+pnpm format
+```
+
+Build the workspace:
+
+```bash title="Build"
+pnpm build
+```
+
+For documentation-only changes, you can also build only the docs app:
+
+```bash title="Build docs"
+pnpm --filter @explainer/docs build
+```
+
+## Pull Request Checklist
+
+Before requesting review, check that:
+
+- The change has a clear title and description.
+- The PR explains why the change is needed, not only what changed.
+- Screenshots or recordings are included for visible UI changes.
+- New documentation is linked from the appropriate section.
+- Formatting and build commands pass locally.
+- The PR does not include unrelated rewrites, generated noise, or local environment files.
+
+## Review Process
+
+Maintainers review for correctness, maintainability, security, and consistency with FerrisKey's direction. Expect questions and requested changes, especially for public APIs, authentication flows, deployment behavior, and documentation that affects production usage.
+
+When feedback arrives:
+
+- Reply when a comment needs discussion.
+- Push follow-up commits for requested changes.
+- Keep the conversation focused on the technical decision.
+- Ask for another review when the PR is ready.
+
+## Community Standards
+
+Be direct, respectful, and specific. Assume contributors are trying to improve the project, and keep discussions grounded in reproducible behavior, code, documentation, or user impact.

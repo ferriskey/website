@@ -162,6 +162,24 @@ Paste these values into the application.
 | Scopes | `openid profile email` |
 | Redirect URI | `https://vault.example.com/identity/connect/oidc-signin` |
 
+### What the Discovery Endpoint Does
+
+The discovery endpoint is the URL an OpenID Connect application uses to learn how to talk to FerrisKey.
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+When the application opens that URL, FerrisKey returns a JSON document with the realm's OIDC metadata. That document tells the application:
+
+- Where to redirect users when they click "Sign in"
+- Where to exchange the authorization code for tokens
+- Which issuer value to expect in tokens
+- Where to fetch the public keys used to verify token signatures
+- Which scopes and response types are supported
+
+This is why many applications only ask for an **issuer**, **authority**, or **discovery URL** instead of asking you to configure every endpoint manually.
+
 :::callout{variant="info" title="Authority vs discovery endpoint"}
 Some applications ask for the issuer or authority URL. Others ask directly for the discovery endpoint. If the application asks for the authority, usually use the realm URL without `/.well-known/openid-configuration`.
 :::

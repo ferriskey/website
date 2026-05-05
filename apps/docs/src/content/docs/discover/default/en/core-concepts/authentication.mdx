@@ -9,6 +9,37 @@ order: 16
 
 FerrisKey implements the OAuth 2.0 and OpenID Connect specifications. Authentication always produces tokens, the grant type determines how the user (or client) proves their identity.
 
+## OpenID Connect Discovery
+
+OpenID Connect applications need to know where the authorization server lives and which endpoints it exposes. FerrisKey publishes that information through the discovery endpoint:
+
+```text
+/realms/{realm}/.well-known/openid-configuration
+```
+
+For example, if FerrisKey is available at `https://sso.example.com` and your realm is `home`, the discovery endpoint is:
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+This endpoint returns a JSON document that OIDC clients can read automatically. It includes values such as:
+
+| Field | What it tells the application |
+|---|---|
+| `issuer` | The canonical URL for this realm as an identity provider |
+| `authorization_endpoint` | Where the browser is sent to start login |
+| `token_endpoint` | Where the application exchanges codes for tokens |
+| `userinfo_endpoint` | Where the application can fetch profile information |
+| `jwks_uri` | Where public signing keys are exposed so tokens can be verified |
+| `scopes_supported` | Which scopes can be requested, such as `openid`, `profile`, and `email` |
+
+Most applications use discovery so you do not have to paste every endpoint by hand. You give the application either the discovery endpoint or the issuer URL, and it learns the rest from FerrisKey.
+
+:::callout{variant="info" title="Issuer and discovery are not always the same setting"}
+If an application asks for the **issuer** or **authority**, use the realm URL, for example `https://sso.example.com/realms/home`. If it asks for the **discovery endpoint** or **OpenID configuration URL**, use the full `/.well-known/openid-configuration` URL.
+:::
+
 ## Grant Types
 
 ### Authorization Code
