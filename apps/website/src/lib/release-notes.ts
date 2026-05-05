@@ -19,6 +19,22 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.6.0',
+    publishedAt: '2026-05-04T00:00:00Z',
+    title: 'Maintenance mode, user attributes, and OpenTelemetry tracing',
+    summary:
+      'FerrisKey 0.6.0 introduces two major platform capabilities — a built-in maintenance mode and extensible user attributes — alongside full OpenTelemetry tracing support for production observability.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.6.0',
+    highlights: [
+      'Ships a first-class maintenance mode across the full stack, letting administrators halt user-facing operations gracefully during upgrades or incidents while retaining admin access.',
+      'Adds user attributes support so realms can store arbitrary key-value metadata on users and propagate them into tokens via protocol mappers.',
+      'Integrates OpenTelemetry tracing and OTLP log bridge for seamless compatibility with observability stacks such as Grafana Tempo and Jaeger.',
+    ],
+    transition:
+      'Building on the passwordless and multi-tenant foundations of 0.5.0, this release shifts focus to operational control and extensibility — giving platform teams the tools to manage identity infrastructure with greater confidence.',
+  },
+  {
     version: 'v0.5.0',
     publishedAt: '2026-04-12T00:00:00Z',
     title: 'Passwordless authentication, organizations, and email theming',
@@ -191,6 +207,18 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.6.0': {
+      title: "Mode maintenance, attributs utilisateur et tracing OpenTelemetry",
+      summary:
+        "FerrisKey 0.6.0 introduit deux grandes capacités plateforme — un mode maintenance natif et des attributs utilisateur extensibles — ainsi qu'un support complet du tracing OpenTelemetry pour l'observabilité en production.",
+      highlights: [
+        "Livre un mode maintenance de bout en bout permettant aux administrateurs de suspendre les opérations utilisateur de façon contrôlée lors d'une mise à jour ou d'un incident, tout en conservant l'accès admin.",
+        "Ajoute le support des attributs utilisateur pour stocker des métadonnées clé-valeur arbitraires sur les utilisateurs et les propager dans les tokens via les protocol mappers.",
+        "Intègre le tracing OpenTelemetry et le bridge OTLP pour une compatibilité native avec les stacks d'observabilité comme Grafana Tempo et Jaeger.",
+      ],
+      transition:
+        "Après les fondations passwordless et multi-tenant de la 0.5.0, cette release met l'accent sur le contrôle opérationnel et l'extensibilité, pour donner aux équipes plateforme les outils nécessaires à une gestion de l'infrastructure d'identité plus sereine.",
+    },
     'v0.5.0': {
       title: 'Authentification passwordless, organisations et thèmes email',
       summary:

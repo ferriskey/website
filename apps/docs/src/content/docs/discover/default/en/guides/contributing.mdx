@@ -9,6 +9,8 @@ order: 22
 
 FerrisKey is open source and welcomes contributions of every size: bug reports, documentation fixes, examples, tests, design feedback, and code changes.
 
+The main rule is simple: **keep pull requests small and reviewable**. A contribution should be easy to understand, test, and merge without forcing maintainers to review unrelated layers at the same time.
+
 ## Before You Start
 
 - Check the [GitHub repository](https://github.com/ferriskey/ferriskey) for existing issues or pull requests related to your change.
@@ -19,6 +21,54 @@ FerrisKey is open source and welcomes contributions of every size: bug reports, 
 :::callout{variant="info" title="Security issues"}
 Do not report vulnerabilities in public issues. Use the repository's private security reporting flow when available, or contact the maintainers before sharing exploit details.
 :::
+
+## Contribution Process
+
+Every pull request must have a reduced scope. Avoid submitting one large PR that changes every layer of the product at once.
+
+For example, do not open a single PR that contains:
+
+- A SQL migration
+- Core domain changes
+- API handlers
+- Frontend screens
+- Documentation updates
+
+That kind of PR is hard to review because reviewers must validate the database model, business rules, API behavior, UI behavior, and documentation in one pass. It also makes it harder to merge partial progress when one layer needs more discussion.
+
+Instead, split the work into a series of focused pull requests. A large feature can usually be reviewed as:
+
+1. **Data model PR**: migrations, entities, and repository changes.
+2. **Core PR**: domain types, services, validation, and tests.
+3. **API PR**: routes, handlers, request/response types, and OpenAPI updates.
+4. **Frontend PR**: UI screens, forms, client integration, and user-facing states.
+5. **Documentation PR**: usage guide, configuration notes, or release documentation.
+
+Each PR should stand on its own when possible. If a PR depends on a previous one, mention it clearly in the description and link the dependency.
+
+:::callout{variant="warning" title="Large PRs may be sent back"}
+Maintainers may ask you to split a pull request before reviewing it. This is not about blocking the contribution; it keeps review quality high and reduces the chance of regressions.
+:::
+
+## How to Split a Change
+
+Use these rules when deciding what belongs in the same PR:
+
+- Keep one behavioral change per PR.
+- Keep database migrations separate from UI work.
+- Keep refactors separate from feature work.
+- Keep formatting-only changes in their own PR.
+- Add tests in the PR that introduces the behavior being tested.
+- Update documentation in the same PR only when the behavior is already reviewable and the docs are needed to explain that behavior.
+
+If the feature cannot work until several PRs are merged, prefer a stacked sequence with clear descriptions over one broad PR.
+
+Good PR descriptions include:
+
+- The exact scope of the PR.
+- What is intentionally left for a follow-up PR.
+- How the change was tested.
+- Screenshots or recordings for visible UI changes.
 
 ## Set Up the Documentation Website
 
