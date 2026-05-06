@@ -20,7 +20,7 @@ export interface ReleaseNoteTranslation {
 export const releaseNotes: ReleaseNote[] = [
   {
     version: 'v0.6.0',
-    publishedAt: '2026-05-04T00:00:00Z',
+    publishedAt: '2026-05-06T00:00:00Z',
     title: 'Maintenance mode, user attributes, and OpenTelemetry tracing',
     summary:
       'FerrisKey 0.6.0 introduces two major platform capabilities — a built-in maintenance mode and extensible user attributes — alongside full OpenTelemetry tracing support for production observability.',

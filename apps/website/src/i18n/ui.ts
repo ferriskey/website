@@ -18,7 +18,7 @@ export const ui = {
     'hero.secondaryAction': 'View on GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Early Access · v0.5.0',
+    'hero.badge.version': 'Early Access · v0.6.0',
 
     // Features
     'features.label': 'Why FerrisKey',
@@ -128,7 +128,7 @@ export const ui = {
     'hero.secondaryAction': 'Voir sur GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Accès anticipé · v0.5.0',
+    'hero.badge.version': 'Accès anticipé · v0.6.0',
 
     // Features
     'features.label': 'Pourquoi FerrisKey',
