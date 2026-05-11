@@ -7,7 +7,7 @@ order: 4
 
 # SSO & Session Management
 
-Single Sign-On (SSO) is the experience of logging in once and being recognized by many applications. OIDC makes this work without each app having a copy of the user's credentials.
+Single Sign-On (SSO) is the experience of logging in once and being recognized by every app afterwards. OIDC pulls it off without each app holding a copy of the user's credentials.
 
 ## The mechanism in plain terms
 
@@ -24,7 +24,7 @@ The session lives in the Authorization Server, not in any one app.
 
 ## Sessions, not tokens
 
-A common confusion: tokens are short-lived; sessions are not. The user can have a 30-minute access token and an 8-hour session. The session is what enables silent re-auth when the access token expires.
+This catches people out: tokens are short-lived, sessions aren't. A user can have a 30-minute access token and an 8-hour session running at the same time. The session is what makes silent re-auth possible when the access token expires.
 
 If your refresh token expires and you ask for a new one but the session is still valid, silent success. If the session has expired, the user sees a login form.
 

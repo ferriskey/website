@@ -19,7 +19,7 @@ A successful OAuth2 flow returns a JSON payload that looks roughly like this:
 }
 ```
 
-Two pieces of paper come out of that envelope: an access token and a refresh token. They do different jobs.
+Two pieces of paper come out of that envelope. An access token and a refresh token. They do very different jobs, and people mix them up constantly.
 
 ## Access Token
 
@@ -40,7 +40,7 @@ Authorization: Bearer eyJhbGciOi...
 
 ### Why so short-lived?
 
-If an access token leaks, the attacker has access until it expires. Short lifetimes shrink that window from "forever" to "a few minutes." The trade-off: the client needs a way to renew them silently. That is what refresh tokens are for.
+If an access token leaks, the attacker has access right up until it expires. Short lifetimes turn "forever" into "a few minutes." The cost: the client needs some way to renew tokens silently. That's exactly what refresh tokens are for.
 
 ## Refresh Token
 

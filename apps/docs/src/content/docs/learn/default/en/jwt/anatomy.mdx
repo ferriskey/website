@@ -7,7 +7,7 @@ order: 2
 
 # JWT Anatomy
 
-A JWT has three parts, separated by dots:
+A JWT is three parts separated by dots. That's it.
 
 ```
 eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9
@@ -80,15 +80,15 @@ For OIDC, you will almost always see RS256 or ES256.
 
 ## How verification works
 
-A verifier does:
+A verifier does this:
 
 1. Split the token by `.` into three parts.
 2. Decode the header, look at `alg` and `kid`.
-3. Fetch the matching public key (from `jwks_uri`, cached).
-4. Recompute `sign(header + "." + payload)` and compare to the third part.
-5. If they match, decode the payload and check the claims (`exp`, `iss`, `aud`, ...).
+3. Fetch the matching public key from `jwks_uri` (cached).
+4. Recompute `sign(header + "." + payload)` and compare to the third segment.
+5. If they match, decode the payload and check the claims: `exp`, `iss`, `aud`, etc.
 
-Every step matters. Skipping signature verification turns a JWT into "trust whatever the user sent." That has been the root cause of more than one production breach.
+Every step matters. Skip signature verification and a JWT becomes "trust whatever the user sent." That has been the root cause of more than one production breach.
 
 ## A worked example
 

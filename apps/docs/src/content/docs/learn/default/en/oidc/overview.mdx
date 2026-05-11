@@ -7,13 +7,13 @@ order: 1
 
 # What is OpenID Connect?
 
-OpenID Connect (OIDC) is a thin identity layer built on top of OAuth2. Where OAuth2 answers _"what is this token allowed to do?"_, OIDC adds _"and by the way, who is the user?"_
+OpenID Connect (OIDC) is a thin identity layer on top of OAuth2. Where OAuth2 answers _"what is this token allowed to do?"_, OIDC tacks on _"and, by the way, who is the user?"_
 
-If you have ever clicked "Sign in with Google," you have used OIDC.
+If you've ever clicked "Sign in with Google," you've used OIDC.
 
 ## The one-paragraph version
 
-OIDC reuses OAuth2's flows, endpoints, and token plumbing. It standardizes one extra thing: a signed ID Token that proves who the user is. The client validates the ID Token locally and now knows the user's identity, without having seen their password.
+OIDC reuses everything from OAuth2: the flows, the endpoints, the token plumbing. It adds one new thing on top: a signed ID Token that proves who the user is. The client validates the ID Token locally and now knows the user's identity, no password ever touched it.
 
 ## OIDC vs OAuth2
 

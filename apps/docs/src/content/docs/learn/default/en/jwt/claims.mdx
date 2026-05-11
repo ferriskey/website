@@ -7,7 +7,7 @@ order: 3
 
 # JWT Claims
 
-A claim is a key-value pair in a JWT's payload. Some claims have universally agreed meanings; others are application-specific. Knowing which is which keeps your tokens interoperable.
+A claim is a key-value pair in a JWT's payload. Some have agreed-on meanings everywhere. Others are whatever your app made up. Knowing which is which is what keeps your tokens portable.
 
 ## Registered claims (RFC 7519)
 
@@ -23,7 +23,7 @@ Seven claims are defined in the core JWT spec. They are short on purpose; JWTs a
 | `iat` | Issued at. Unix timestamp. |
 | `jti` | JWT ID. A unique identifier, useful for revocation lists. |
 
-Validators must always check `exp`, `nbf`, `iss`, and `aud`. Skipping any of these is a known class of security bug.
+Always check `exp`, `nbf`, `iss`, and `aud` on incoming tokens. Skipping any one of these is a known class of bug, and people keep shipping it.
 
 ## OIDC standard claims
 

@@ -7,9 +7,9 @@ order: 2
 
 # The ID Token
 
-The ID Token is OIDC's contribution to OAuth2. It is a JWT issued alongside the access token, and it has exactly one job: tell the client who the user is.
+The ID Token is OIDC's contribution to OAuth2. It's a JWT issued alongside the access token, and it has exactly one job: tell the client who the user is.
 
-It is not for calling APIs. It is for the client to read.
+Not for calling APIs. Just for the client to read.
 
 ## What it looks like
 
@@ -64,17 +64,17 @@ Pulled in by the `profile`, `email`, `address`, and `phone` scopes:
 
 ## How a client validates an ID Token
 
-This is what a competent OIDC client library does every time:
+This is what every halfway-competent OIDC library does, every single time:
 
 1. **Parse** the JWT. Confirm three segments.
 2. **Verify the signature** against the provider's public key from `jwks_uri`.
 3. **Check `iss`** matches the expected issuer.
 4. **Check `aud`** contains the client's own `client_id`.
-5. **Check `exp`** is in the future (with a small clock skew tolerance).
-6. **Check `nonce`** matches what was sent in the authorize request.
-7. (If present) **Check `c_hash` / `at_hash`** against the code and access token.
+5. **Check `exp`** is in the future (with a small clock-skew tolerance).
+6. **Check `nonce`** matches what the client sent in the authorize request.
+7. If present, **check `c_hash` / `at_hash`** against the code and access token.
 
-Skipping any of these is a security bug. Use a vetted library; never roll this from scratch.
+Skip any of these and you've shipped a security bug. Use a vetted library. Don't roll your own.
 
 ## ID Token vs Access Token: the rule
 

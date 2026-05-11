@@ -9,7 +9,7 @@ order: 1
 
 OAuth 2.0 is a delegation protocol. It lets an application act on behalf of a user without ever seeing that user's password.
 
-That one sentence does a lot of work. The analogy below is well-worn, but nothing else captures it as cleanly.
+That one sentence is doing a lot of work. The standard analogy for it is the valet key, and yes, it's overused, but nothing else captures it as cleanly.
 
 ## The valet parking analogy
 
@@ -37,13 +37,13 @@ The Authorization Server and Resource Server can be the same service or two sepa
 
 ## What OAuth2 is **not**
 
-This trips up most newcomers, so it is worth saying clearly:
+This trips people up constantly, so it's worth being blunt:
 
-- OAuth2 is not an authentication protocol. It tells you what an app is allowed to do, not who the user is. For "who is the user," you need OIDC (built on top of OAuth2).
-- OAuth2 does not define a token format. Access tokens can be opaque strings or JWTs. The protocol does not care.
-- OAuth2 is not a session protocol. It issues tokens. How the client stores and reuses them is the client's problem.
+- OAuth2 is not an authentication protocol. It tells you what an app is allowed to do, not who the user is. For "who is the user," you want OIDC, which is built on top.
+- OAuth2 doesn't define a token format. Access tokens can be random strings, JWTs, anything. The spec doesn't care.
+- OAuth2 isn't a session protocol either. It hands out tokens and walks away. What the client does with them is the client's problem.
 
-If someone says "I'm using OAuth2 for login," they almost always mean OIDC.
+When someone says "I'm using OAuth2 for login," they almost always mean OIDC and don't know it yet.
 
 ## The shape of an OAuth2 exchange
 
@@ -59,11 +59,11 @@ Different situations call for different flows. See the [Flows](/en/learn/oauth2/
 
 ## Why OAuth2 won
 
-Before OAuth2, "Login with this other service" meant typing your password from service A into service B. Service B would then log in as you. This was called the password antipattern, and it was as bad as it sounds.
+Before OAuth2, "Login with this other service" worked like this: you typed your service A password into service B, and service B logged in as you. It was called the password antipattern, and it was as bad as it sounds.
 
-OAuth2 replaced that with a controlled handoff: service B redirects you to service A, you log in at service A, and service A hands service B a tightly scoped token. Service B never sees your password, and you can revoke its token at any time.
+OAuth2 replaced that with a controlled handoff. Service B redirects you to service A, you log in _there_, and service A hands service B a tightly scoped token. Service B never sees your password. You can revoke its token whenever you want.
 
-That model (short-lived, scoped, revocable, delegated) is what every modern API integration is built on.
+Short-lived, scoped, revocable, delegated. Every modern API integration sits on top of that idea, even when nobody calls it OAuth2 anymore.
 
 ## In FerrisKey
 

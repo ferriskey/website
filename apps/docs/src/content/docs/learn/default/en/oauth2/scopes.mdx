@@ -7,11 +7,11 @@ order: 4
 
 # Scopes & Consent
 
-A scope is a label attached to an access token that says "this token is allowed to do these things, and nothing else." Resource servers check scopes before honoring a request.
+A scope is a label attached to an access token that says "this token can do these things and nothing else." Resource servers look at scopes before they honor a request.
 
 ## The badge analogy
 
-Picture a conference. At the door, you are given a badge. The badge has stickers:
+Picture a conference. At the door, you get a badge. The badge has stickers:
 
 - `attendee`: get into the main hall
 - `lunch`: eat in the cafeteria
@@ -19,7 +19,7 @@ Picture a conference. At the door, you are given a badge. The badge has stickers
 
 You hand your badge to whoever you meet. A bouncer at the backstage door looks for the right sticker and turns you away.
 
-OAuth2 scopes work the same way. The access token is the badge. Each scope is a sticker. The resource server is the bouncer.
+OAuth2 scopes work the same way. The access token is the badge, each scope is a sticker, and the resource server is the bouncer.
 
 ```http
 GET /api/admin/users

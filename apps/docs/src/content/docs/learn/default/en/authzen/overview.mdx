@@ -7,9 +7,9 @@ order: 1
 
 # What is AuthZen?
 
-OAuth2 and OIDC handle authentication and coarse-grained delegation. They do not really handle authorization. The question _"can this specific user do this specific thing to this specific resource right now?"_
+OAuth2 and OIDC handle authentication and coarse-grained delegation. They don't really handle authorization, in the sense of _"can this specific user do this specific thing to this specific resource right now?"_
 
-That question is what AuthZen is about.
+That's the question AuthZen tries to answer in a standard way.
 
 ## The fine-grained authorization problem
 
@@ -27,17 +27,17 @@ But real systems quickly outgrow it. Real questions look like:
 
 These decisions depend on the user, the action, the resource, the resource attributes, the context (time, location, MFA level), and business rules that often live outside the IAM system.
 
-This is called fine-grained authorization (FGA) or attribute-based access control (ABAC), and it has historically been every team's homegrown mess.
+This is called fine-grained authorization (FGA), or sometimes attribute-based access control (ABAC). For most of the last decade, it has been every team's homegrown mess.
 
 ## The interop problem
 
-For the last decade, fine-grained authorization tools all spoke different dialects:
+Every fine-grained authz tool speaks a different dialect:
 
-- One uses YAML files of allow/deny rules.
+- One wants YAML files of allow/deny rules.
 - Another wants a relationship graph.
-- A third wants a policy language.
+- A third wants a policy language with its own DSL.
 
-If you change tools, you rewrite everything. If you have multiple apps, they often pick different tools and end up unable to talk to each other.
+Change tools, rewrite everything. Run multiple apps, and they often pick different tools and end up unable to talk to each other.
 
 AuthZen is a draft standard from the OpenID Foundation that tries to fix this. It defines a wire-level API for asking and answering authorization questions. Different policy engines can implement the same API, and applications can switch between them, or talk to several at once, without changing a line of code.
 

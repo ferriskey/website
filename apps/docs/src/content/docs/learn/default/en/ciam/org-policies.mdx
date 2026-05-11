@@ -7,9 +7,9 @@ order: 2
 
 # Branding, Portals & Org Policies
 
-A CIAM system has to deal with the fact that one product can serve many customers, and those customers want different experiences. A login page for Acme Corp's employees should not look identical to one for Globex Inc. A B2B customer with a strict security posture may demand MFA for everyone; a freemium customer may not.
+A CIAM system has to live with the fact that one product serves many customers, and those customers want different experiences. The login page for Acme Corp's employees shouldn't look identical to Globex Inc.'s. A B2B customer with a strict security posture may demand MFA for everyone; a freemium customer may not care at all.
 
-The CIAM concepts that handle this: branding, org-level policies, and portals.
+Three CIAM concepts handle this: branding, org-level policies, and portals.
 
 ## Branding
 
@@ -20,9 +20,9 @@ Branding is the visible layer. The user sees:
 - Themed email templates for password resets, magic links, invitations.
 - A favicon and tab title that match the customer.
 
-Most CIAM platforms let each tenant override a base theme. The build-time tactic is to ship a default theme and let realms override CSS variables and string slots.
+Most CIAM platforms let each tenant override a base theme. The usual tactic is to ship a default theme and let realms override CSS variables and string slots.
 
-A useful guideline: brand everything the user can see during authentication, including error messages and email templates. Half-branded flows feel broken.
+One guideline worth keeping: brand everything the user sees during authentication, including error messages and email templates. Half-branded flows feel broken to users, even when they can't say why.
 
 ## Org-level policies
 

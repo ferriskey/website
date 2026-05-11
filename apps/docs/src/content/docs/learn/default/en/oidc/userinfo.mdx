@@ -26,10 +26,11 @@ Authorization: Bearer eyJhbGciOi...
 
 ## Why call it if the ID Token already has claims?
 
-Two reasons:
+Two reasons.
 
-1. **Freshness.** The ID Token is a snapshot taken at login. If the user changes their name an hour later, the ID Token still says the old name. `/userinfo` reads from the live store.
-2. **Footprint.** Tokens travel everywhere. Putting every claim into an ID Token bloats every request. The minimal pattern: small ID Token, fetch the rest from `/userinfo` on demand.
+First, freshness. The ID Token is a snapshot from login time. If the user changes their name an hour later, the old ID Token still has the old name. `/userinfo` reads from the live store.
+
+Second, footprint. Tokens travel everywhere. Stuffing every claim into the ID Token bloats every single request. The clean pattern is a slim ID Token, plus `/userinfo` calls when you actually need the rest.
 
 ## How clients typically use it
 

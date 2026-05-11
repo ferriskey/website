@@ -7,23 +7,23 @@ order: 1
 
 # Why IAM Exists
 
-Software systems rarely live alone. A frontend talks to an API, that API talks to other services, and somewhere a human is on the other end clicking buttons. Identity & Access Management (IAM) answers two questions that every one of those interactions has to answer:
+Almost nothing in software runs alone. A frontend calls an API. That API calls three more. Somewhere a human is clicking buttons. Every one of those hops needs to answer two questions:
 
 - _Who is this?_ (authentication)
 - _What are they allowed to do?_ (authorization)
 
-These look simple on their own. They get hard the moment more than one application is involved, or more than one team needs to integrate.
+On a whiteboard, both look trivial. In practice, they get ugly the moment more than one app shows up, or more than one team has to share the answer.
 
 ## The problem in one picture
 
-Imagine you build three apps: a customer-facing web app, an internal admin tool, and a mobile app. Each needs login. Without IAM, you would:
+Say you ship three apps: a customer web app, an internal admin tool, a mobile app. Each one needs login. Without IAM, you'd:
 
 - Store passwords in three databases.
-- Build "forgot password," MFA, and account lockout three times.
-- Reimplement session handling, token issuance, and revocation in each app.
-- Re-invent permissions every time a new feature ships.
+- Build "forgot password," MFA, and lockout three times.
+- Reimplement session handling, token issuance, and revocation in every app.
+- Reinvent permissions every time someone ships a feature.
 
-An IAM system extracts those concerns into one trusted service that every app delegates to. That trusted service speaks a few well-known protocols, and those protocols are what this section teaches.
+Most teams notice this somewhere around app number two and start cutting corners. An IAM system is the way out: one trusted service that every app delegates to. That service speaks a handful of protocols, and those protocols are what this section is about.
 
 ## The standards you will meet
 
@@ -49,12 +49,12 @@ An emerging standard for fine-grained authorization. What a user can do, decided
 
 ## How to read this section
 
-You can read these pages in any order. Each one is standalone. Two paths are common:
+Read in any order. Every page is meant to stand on its own. Two reasonable starting points:
 
-- Start with OAuth2 if you have ever wondered why "Login with Google" works the way it does, or if you are building an API that other apps will call.
-- Start with JWT if you have hit a token in the wild and want to understand what is inside it.
+- Start with OAuth2 if you've ever wondered why "Login with Google" works the way it does, or if you're building an API that other apps will call.
+- Start with JWT if you've hit a real token in the wild and you just want to know what's inside it before zooming out.
 
-Every page ends with an "In FerrisKey" section that points to where the concept shows up in this product.
+Every page ends with an "In FerrisKey" section pointing to where the concept lives in the product.
 
 ## In FerrisKey
 

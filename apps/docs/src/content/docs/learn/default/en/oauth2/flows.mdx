@@ -7,9 +7,9 @@ order: 2
 
 # OAuth2 Flows
 
-OAuth2 defines several grant types, also called flows. Each one is a different choreography for the same goal: getting an access token into the hands of the right client.
+OAuth2 defines several grant types, also called flows. Different choreographies, same goal: get an access token into the hands of the right client.
 
-The flow you pick depends on who the client is, and how well it can keep secrets.
+Picking the right flow comes down to two questions. Who is the client? And can it keep a secret?
 
 | Flow | Use when |
 | --- | --- |
@@ -18,7 +18,7 @@ The flow you pick depends on who the client is, and how well it can keep secrets
 | Device Authorization | The device has no good way to type a password (TV, CLI) |
 | Refresh Token | Renew an access token without bothering the user |
 
-Older flows (Implicit, Resource Owner Password Credentials) still exist but are discouraged. Modern OAuth2 (`OAuth 2.1`) drops them.
+A few older flows (Implicit, Resource Owner Password Credentials) still exist but you shouldn't reach for them. OAuth 2.1 drops them outright.
 
 ## Authorization Code with PKCE
 
