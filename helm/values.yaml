@@ -1,5 +1,5 @@
 ## Common image tag applied to all apps
-imageTag: sha-cc0e40c
+imageTag: sha-b369255
 
 ## Ingress shared config
 ingress:
