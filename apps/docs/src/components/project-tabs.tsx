@@ -13,7 +13,7 @@ export function ProjectTabs({ projects, currentProject, switchUrls }: ProjectTab
 
   return (
     <div className="border-b bg-background">
-      <div className="flex h-10 items-end overflow-x-auto px-6 max-w-350 mx-auto">
+      <div className="flex h-10 items-end overflow-x-auto overflow-y-hidden px-6 max-w-350 mx-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {projects.map((project, index) => {
           const isActive = project.name === currentProject
           return (

@@ -57,7 +57,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           className={cn(

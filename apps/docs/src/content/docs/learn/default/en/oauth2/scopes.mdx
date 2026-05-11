@@ -1,0 +1,110 @@
+---
+title: Scopes & Consent
+description: "Scopes are the badges that limit what an access token can do."
+icon: badge-check
+order: 4
+---
+
+# Scopes & Consent
+
+A scope is a label attached to an access token that says "this token is allowed to do these things, and nothing else." Resource servers check scopes before honoring a request.
+
+## The badge analogy
+
+Picture a conference. At the door, you are given a badge. The badge has stickers:
+
+- `attendee`: get into the main hall
+- `lunch`: eat in the cafeteria
+- ~~`backstage`~~: not granted
+
+You hand your badge to whoever you meet. A bouncer at the backstage door looks for the right sticker and turns you away.
+
+OAuth2 scopes work the same way. The access token is the badge. Each scope is a sticker. The resource server is the bouncer.
+
+```http
+GET /api/admin/users
+Authorization: Bearer ...
+
+→ 403 Forbidden (required scope: admin:users)
+```
+
+## What scopes look like
+
+Scopes are just short strings. There is no universal naming convention; pick one and be consistent. Common shapes:
+
+- `read:orders`, `write:orders` (verb:resource)
+- `orders.read`, `orders.write` (resource.verb)
+- `openid`, `profile`, `email` (OIDC's standard scopes, more on this in a moment)
+- `admin` (a coarse, role-like scope)
+
+Scopes are usually requested in the authorization URL:
+
+```
+GET /authorize?
+  response_type=code&
+  client_id=my-frontend&
+  scope=openid profile read:orders&
+  ...
+```
+
+## Consent: asking the user
+
+When a client requests scopes that affect the user's data, the authorization server can show a consent screen:
+
+```
+my-frontend wants to:
+  ☑ Access your basic profile
+  ☑ Read your orders
+  ☐ Modify your billing details
+
+   [Deny]    [Allow]
+```
+
+Consent gives the user the final say. It is what makes OAuth2 feel like a delegation protocol and not a permission rubber-stamp.
+
+Not every scope needs consent. Two categories:
+
+- **User-consentable scopes**: meaningful to the end user. Show them.
+- **Internal/technical scopes**: meaningless to the user (`internal_service_call`). Skip consent; the client is trusted.
+
+## Standard OIDC scopes
+
+OIDC reserves a handful of well-known scopes:
+
+| Scope | Meaning |
+| --- | --- |
+| `openid` | Mandatory for OIDC. Triggers ID Token issuance. |
+| `profile` | Adds standard profile claims (`name`, `family_name`, `picture`...) |
+| `email` | Adds `email` and `email_verified` claims |
+| `address` | Adds `address` claim |
+| `phone` | Adds `phone_number` claim |
+| `offline_access` | Requests a refresh token |
+
+If you only see one OIDC scope in the wild, it will be `openid`. Without it, OIDC is not in play. You are doing plain OAuth2.
+
+## Scopes vs roles vs permissions
+
+Newcomers often conflate three things. They are different.
+
+- **Scope**: _what this token is allowed to do._ Granted at authorization time, per client request, with possible user consent.
+- **Role**: _what this user is, organizationally._ A persistent attribute (admin, support, viewer). Roles are usually mapped into tokens as claims.
+- **Permission**: _a fine-grained allowed action._ Derived from roles, scopes, and policies inside the resource server.
+
+For fine-grained authorization that goes beyond what scopes can encode, see [AuthZen](/en/learn/authzen/overview).
+
+## Client scopes
+
+A common pattern is to attach default scopes to a client, so they are always present in tokens issued to that client. FerrisKey supports this directly: a client has _default_ and _optional_ scopes.
+
+## In FerrisKey
+
+FerrisKey lets you define scopes per realm, attach them to clients (default or optional), and shape exactly which claims they add to tokens.
+
+::::card-group{cols=2}
+:::card{label="Aegis Module" icon="lucide:lock" href="/en/modules/aegis/overview"}
+Scopes and protocol mappers in FerrisKey.
+:::
+:::card{label="Tokens" icon="lucide:key" href="/en/learn/oauth2/tokens"}
+Where scopes live inside an access token.
+:::
+::::

@@ -1,0 +1,122 @@
+---
+title: Access & Refresh Tokens
+description: "Access tokens, refresh tokens, and the difference between opaque and JWT formats."
+icon: key
+order: 3
+---
+
+# Access & Refresh Tokens
+
+A successful OAuth2 flow returns a JSON payload that looks roughly like this:
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "refresh_token": "8xLOxBtZp8...",
+  "scope": "openid profile email"
+}
+```
+
+Two pieces of paper come out of that envelope: an access token and a refresh token. They do different jobs.
+
+## Access Token
+
+The access token is the valet key. The client presents it to an API to prove "I am allowed to do this on behalf of the user."
+
+You attach it to API calls in the `Authorization` header:
+
+```http
+GET /api/orders
+Authorization: Bearer eyJhbGciOi...
+```
+
+### Properties
+
+- Short-lived. Minutes, not hours. Five minutes is a healthy default.
+- Scoped. Carries the `scope` the user (or admin) granted. The API uses scopes to decide what is allowed.
+- Bearer. Whoever holds the token can use it, like cash. Treat it like cash: do not log it, do not put it in URLs, do not store it in `localStorage` if you can help it.
+
+### Why so short-lived?
+
+If an access token leaks, the attacker has access until it expires. Short lifetimes shrink that window from "forever" to "a few minutes." The trade-off: the client needs a way to renew them silently. That is what refresh tokens are for.
+
+## Refresh Token
+
+The refresh token is the receipt that lets the client ask for a new access token without bothering the user again.
+
+```bash
+curl -X POST .../token \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=••••••••" \
+  -d "client_id=my-frontend"
+```
+
+### Properties
+
+- Long-lived. Hours to weeks, depending on policy.
+- Single-purpose. Used only to obtain new access tokens, never to call APIs.
+- Sensitive. A leaked refresh token is far worse than a leaked access token. It is a renewable source of access. Store it carefully, ideally rotated on each use.
+
+### Refresh token rotation
+
+A modern authorization server rotates refresh tokens: each refresh request returns a new refresh token and invalidates the old one. If an attacker steals a token and uses it, the legitimate client's next refresh will fail loudly. That is a clear signal of theft.
+
+## Opaque tokens vs JWT
+
+OAuth2 does not specify the format of an access token. Two camps exist.
+
+### Opaque tokens
+
+A random string. Looks like `8xLOxBtZp8N3...`. Carries no information by itself. To know what it grants, the resource server must call the authorization server's introspection endpoint:
+
+```http
+POST /protocol/openid-connect/token/introspect
+Authorization: Basic ...
+token=8xLOxBtZp8N3...
+```
+
+The server responds with metadata: scopes, expiration, the user it represents.
+
+**Pros:** can be revoked instantly (just delete the record on the server side). No claims leak into logs.
+
+**Cons:** every API call may require a roundtrip to the auth server. Higher latency, more coupling.
+
+### JWT tokens
+
+A signed JSON document. The resource server can validate it locally using the auth server's public key. No network call needed.
+
+```
+header.payload.signature
+```
+
+**Pros:** stateless, fast, scales horizontally.
+
+**Cons:** cannot be revoked before expiration. The fix is short lifetimes + a deny-list for emergencies.
+
+See the [JWT section](/en/learn/jwt/overview) for the format details.
+
+### Which to choose?
+
+- JWT if your APIs are distributed, latency-sensitive, and you can live with short lifetimes.
+- Opaque if you need instant revocation or you do not want claims sitting in client memory.
+
+Most modern IAM systems, including FerrisKey, issue JWTs by default for access tokens.
+
+## ID Token: a related but different thing
+
+OIDC adds a third token: the ID Token. It is _not_ meant for calling APIs. It exists to tell the client who logged in. See [ID Token](/en/learn/oidc/id-token) for the full story. Confusing access tokens with ID tokens is the most common rookie mistake in OIDC. They are not interchangeable.
+
+## In FerrisKey
+
+FerrisKey issues JWT access tokens by default and supports refresh token rotation.
+
+::::card-group{cols=2}
+:::card{label="JWT Anatomy" icon="lucide:file-code-2" href="/en/learn/jwt/anatomy"}
+What is actually inside a FerrisKey access token.
+:::
+:::card{label="Aegis Module" icon="lucide:lock" href="/en/modules/aegis/overview"}
+Control which claims and scopes go into tokens with protocol mappers.
+:::
+::::

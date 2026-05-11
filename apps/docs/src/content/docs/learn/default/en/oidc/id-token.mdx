@@ -1,0 +1,106 @@
+---
+title: The ID Token
+description: "Anatomy of an ID Token: claims, validation, and what it is (and isn't) for."
+icon: id-card
+order: 2
+---
+
+# The ID Token
+
+The ID Token is OIDC's contribution to OAuth2. It is a JWT issued alongside the access token, and it has exactly one job: tell the client who the user is.
+
+It is not for calling APIs. It is for the client to read.
+
+## What it looks like
+
+An ID Token is a JWT, so it has three dot-separated parts:
+
+```
+eyJhbGciOiJSUzI1Ni...eyJzdWIiOiI0Mj...siglmFsdfqkn...
+└── header ────┘└── payload ─────┘└── signature ─┘
+```
+
+Decoded payload, typical example:
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "auth_time": 1736376400,
+  "nonce": "n-0S6_WzA2Mj",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true
+}
+```
+
+Each field is a claim. Some claims are standardized; others are added by the provider or the client.
+
+## Mandatory claims
+
+OIDC requires these claims, and clients must validate them:
+
+| Claim | Meaning |
+| --- | --- |
+| `iss` | _Issuer._ Who issued this token. Must match the expected provider. |
+| `sub` | _Subject._ The user's stable identifier. Treat as the primary key. |
+| `aud` | _Audience._ Which client this token is for. Must be your `client_id`. |
+| `exp` | _Expiration._ Unix timestamp. After this, reject. |
+| `iat` | _Issued at._ When it was minted. |
+| `auth_time` | When the user actually logged in (vs. when this token was issued). |
+| `nonce` | The value your client sent in the authorization request. Replay protection. |
+
+## Optional standard claims
+
+Pulled in by the `profile`, `email`, `address`, and `phone` scopes:
+
+- `name`, `given_name`, `family_name`, `nickname`, `preferred_username`
+- `email`, `email_verified`
+- `picture`, `locale`, `zoneinfo`
+- `address`, `phone_number`
+
+## How a client validates an ID Token
+
+This is what a competent OIDC client library does every time:
+
+1. **Parse** the JWT. Confirm three segments.
+2. **Verify the signature** against the provider's public key from `jwks_uri`.
+3. **Check `iss`** matches the expected issuer.
+4. **Check `aud`** contains the client's own `client_id`.
+5. **Check `exp`** is in the future (with a small clock skew tolerance).
+6. **Check `nonce`** matches what was sent in the authorize request.
+7. (If present) **Check `c_hash` / `at_hash`** against the code and access token.
+
+Skipping any of these is a security bug. Use a vetted library; never roll this from scratch.
+
+## ID Token vs Access Token: the rule
+
+This is the single most-broken rule in OIDC, so it deserves a callout:
+
+:::callout{variant="warning" title="ID Tokens are not bearer tokens for APIs"}
+The ID Token is for the client to inspect. The Access Token is for the API. Sending the ID Token in `Authorization: Bearer` headers to your API is wrong. If your APIs accept ID Tokens, an attacker can replay any ID Token issued to any client for any audience.
+:::
+
+If your API "just wants to know who the user is," issue a real access token that carries `sub` and validate that.
+
+## Where the user identity actually lives
+
+`sub` is the stable identifier. Treat it as the user's primary key in your own database. Do not use `email` or `preferred_username` as the key. Those can change.
+
+If the user changes their email at the IdP, `email` in tomorrow's ID Tokens will change. `sub` will not.
+
+## In FerrisKey
+
+FerrisKey issues OIDC ID Tokens as JWTs signed with the realm's signing key. You can decode any FerrisKey ID Token at [jwt.io](https://jwt.io) for a quick visual.
+
+::::card-group{cols=2}
+:::card{label="JWT Anatomy" icon="lucide:file-code-2" href="/en/learn/jwt/anatomy"}
+The structure that ID Tokens use.
+:::
+:::card{label="UserInfo Endpoint" icon="lucide:user-search" href="/en/learn/oidc/userinfo"}
+Fetch fresh user claims with the access token.
+:::
+::::

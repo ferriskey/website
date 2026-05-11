@@ -1,0 +1,83 @@
+---
+title: What is CIAM?
+description: "Customer IAM: the flavor of IAM aimed at end-users of a product, not employees."
+icon: users
+order: 1
+---
+
+# What is CIAM?
+
+CIAM stands for Customer Identity & Access Management. It is the flavor of IAM aimed at end-users of your product, as opposed to Workforce IAM, which is aimed at your employees.
+
+The two share underlying protocols (OIDC, OAuth2, JWT, the same building blocks) but solve very different problems.
+
+## CIAM vs Workforce IAM
+
+| | Workforce IAM | CIAM |
+| --- | --- | --- |
+| Who logs in | Employees | Customers / end-users |
+| User count | Thousands | Millions |
+| Account creation | Provisioned by IT | Self-service signup |
+| Look & feel | Internal, functional | Branded, on-brand |
+| Login methods | Corporate SSO, MFA | Social, email-link, passkeys, MFA |
+| Org structure | Departments, teams | _Tenants_, _organizations_, B2B groups |
+| Audit needs | Compliance with internal policy | Compliance + user-visible audit |
+| Onboarding goal | Get to work | Don't lose the signup |
+
+The technical kernel is the same; the experience and scale are not.
+
+## What CIAM actually adds
+
+The pieces a CIAM system has to do well, on top of plain IAM:
+
+### Branded experiences
+Each tenant (or product) should look like itself. The login page for `acme.example.com` should be Acme's, not yours. That means customizable themes, logos, copy, and email templates per realm / per organization.
+
+### Self-service everything
+Customers cannot wait for IT. They expect to sign up, reset passwords, link social accounts, enable MFA, delete their account, and export their data, all without a human in the loop.
+
+### Many login methods
+Email + password is the floor. Above it: passkeys (WebAuthn), magic links, social login (Google, GitHub, Apple), enterprise SSO for B2B customers, phone OTP.
+
+### Organizations / B2B
+A single customer is often a _company_, not a person. CIAM needs to model:
+
+- Users belonging to multiple organizations
+- Per-organization policies (this org requires MFA, that one allows only enterprise SSO)
+- Org-level admins who manage their own users
+- Invite flows, domain claiming, JIT provisioning
+
+### Scale and abuse resistance
+A million users means a constant trickle of bot signups, credential-stuffing attempts, fraudulent password resets. CIAM systems need rate limiting, bot detection, risk-based MFA, and the ability to globally invalidate sessions during incidents.
+
+### Privacy & consent
+GDPR, CCPA, and similar laws demand explicit consent, data portability, and the ability to delete. CIAM owns the consent record: what the user agreed to, when, and for which scope.
+
+## Why not just use Workforce IAM tools?
+
+You can, but rough edges show up:
+
+- Workforce tools assume IT controls user lifecycle. CIAM customers self-onboard.
+- Workforce tools sell per-seat licenses. CIAM scale (millions of users) breaks that pricing model.
+- Workforce login pages are functional, not branded. Customers notice.
+
+The protocols don't change; the operational shape does.
+
+## A useful mental model
+
+Workforce IAM is your office security: badge readers, controlled access, employees only.
+
+CIAM is your storefront: anyone can walk in, you need to recognize regulars, the entrance is part of your brand, and the door is open 24/7 globally.
+
+## In FerrisKey
+
+FerrisKey was designed CIAM-first. Realms isolate tenants. Each realm has its own branding, login methods, MFA policies, and identity providers.
+
+::::card-group{cols=2}
+:::card{label="Org-Level Policies" icon="lucide:building-2" href="/en/learn/ciam/org-policies"}
+How per-organization policies and login experiences work.
+:::
+:::card{label="Abyss Module" icon="lucide:link" href="/en/modules/abyss/overview"}
+Federate social and enterprise identity providers per realm.
+:::
+::::

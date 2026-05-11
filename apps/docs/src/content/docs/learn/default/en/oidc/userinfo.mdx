@@ -1,0 +1,83 @@
+---
+title: The UserInfo Endpoint
+description: "A standard OIDC endpoint that returns the user's current claims, given an access token."
+icon: user-search
+order: 3
+---
+
+# The UserInfo Endpoint
+
+`/userinfo` is one of the few endpoints OIDC standardizes by name. It does one thing: given an access token, it returns the current claims about the authenticated user.
+
+```http
+GET /realms/my-app/protocol/openid-connect/userinfo
+Authorization: Bearer eyJhbGciOi...
+```
+
+```json
+{
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "picture": "https://example.com/avatar/alice.png"
+}
+```
+
+## Why call it if the ID Token already has claims?
+
+Two reasons:
+
+1. **Freshness.** The ID Token is a snapshot taken at login. If the user changes their name an hour later, the ID Token still says the old name. `/userinfo` reads from the live store.
+2. **Footprint.** Tokens travel everywhere. Putting every claim into an ID Token bloats every request. The minimal pattern: small ID Token, fetch the rest from `/userinfo` on demand.
+
+## How clients typically use it
+
+- At login, right after exchanging the code for tokens, to fill out the user profile in the app.
+- On profile refresh, when the user reopens their settings page.
+- Rarely on every request. That defeats the purpose of stateless tokens.
+
+## Authentication
+
+The endpoint takes the access token, not the ID token. (Yes, this is the only OIDC endpoint where the access token is for the OIDC provider itself.) Send it as a Bearer token:
+
+```bash
+curl https://auth.example.com/realms/my-app/protocol/openid-connect/userinfo \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+## What claims appear?
+
+The same claims that scopes promise:
+
+- `openid` → `sub`
+- `profile` → `name`, `given_name`, `family_name`, `picture`, `locale`, ...
+- `email` → `email`, `email_verified`
+- `address`, `phone` → their respective claims
+
+If a client did not request a scope at login, the corresponding claims will not appear at `/userinfo`. The endpoint respects the scopes carried by the access token.
+
+## Response formats
+
+By default `/userinfo` returns a plain JSON object. OIDC also allows responses to be returned as a signed JWT (set in the client's `userinfo_signed_response_alg`). The signed form is useful when the response needs to be verifiable end-to-end, for example when it transits an untrusted intermediary.
+
+## A common pitfall
+
+Some clients call `/userinfo` on every request to get the user identity. Don't. That makes every request to your app round-trip to the auth server. The right pattern:
+
+- Validate the access token locally (if it is a JWT).
+- Read `sub` from the JWT.
+- Call `/userinfo` only when you need claims you do not already have.
+
+## In FerrisKey
+
+FerrisKey exposes `/userinfo` per realm at the standard OIDC path. It supports both JSON and signed JWT responses.
+
+::::card-group{cols=2}
+:::card{label="ID Token" icon="lucide:id-card" href="/en/learn/oidc/id-token"}
+The login-time snapshot of user claims.
+:::
+:::card{label="Scopes & Consent" icon="lucide:badge-check" href="/en/learn/oauth2/scopes"}
+What controls which claims appear at /userinfo.
+:::
+::::

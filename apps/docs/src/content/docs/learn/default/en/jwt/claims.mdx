@@ -1,0 +1,112 @@
+---
+title: JWT Claims
+description: "Standard claims, OIDC claims, and how to add custom claims safely."
+icon: list-checks
+order: 3
+---
+
+# JWT Claims
+
+A claim is a key-value pair in a JWT's payload. Some claims have universally agreed meanings; others are application-specific. Knowing which is which keeps your tokens interoperable.
+
+## Registered claims (RFC 7519)
+
+Seven claims are defined in the core JWT spec. They are short on purpose; JWTs are small.
+
+| Claim | Meaning |
+| --- | --- |
+| `iss` | Issuer. The URL of the entity that minted the token. |
+| `sub` | Subject. The principal the token is about. For users, this is their stable ID. |
+| `aud` | Audience. The intended recipient(s). A string or array of strings. |
+| `exp` | Expiration time. Unix timestamp. After this, reject. |
+| `nbf` | Not before. Unix timestamp. Reject if current time is before this. |
+| `iat` | Issued at. Unix timestamp. |
+| `jti` | JWT ID. A unique identifier, useful for revocation lists. |
+
+Validators must always check `exp`, `nbf`, `iss`, and `aud`. Skipping any of these is a known class of security bug.
+
+## OIDC standard claims
+
+OIDC adds a vocabulary for user identity:
+
+### Identity
+- `name`, `given_name`, `family_name`, `middle_name`, `nickname`
+- `preferred_username`
+- `profile`, `picture`, `website`
+- `gender`, `birthdate`
+- `zoneinfo`, `locale`
+- `updated_at`
+
+### Contact
+- `email`, `email_verified`
+- `phone_number`, `phone_number_verified`
+- `address` (a structured claim)
+
+### Authentication context
+- `auth_time`: when the user actually logged in
+- `nonce`: replay protection (ID Token only)
+- `acr`, `amr`: authentication context class and methods used
+
+These are returned in ID Tokens and at `/userinfo`, scoped by what the client requested (`profile`, `email`, etc.).
+
+## OAuth2 access-token claims
+
+Access tokens that happen to be JWTs (the common case) often carry:
+
+- `scope`: space-separated list of granted scopes
+- `client_id`: which client requested the token
+- `sub`: the user, or the client itself for `client_credentials`
+- `roles` / `realm_access` / `resource_access`: provider-specific role claims
+
+These are not standardized across all providers, but they are very common.
+
+## Custom claims
+
+You can add your own. Two rules of thumb:
+
+**Namespace them.** A flat claim called `tenant_id` works in your app today. Tomorrow a library you import adds its own `tenant_id`, and the meanings collide. Prefix custom claims with a URL or reverse-domain string:
+
+```json
+{
+  "https://example.com/tenant_id": "acme",
+  "https://example.com/feature_flags": ["beta-search"]
+}
+```
+
+This is the [OIDC convention](https://openid.net/specs/openid-connect-core-1_0.html#AdditionalClaims) for non-standard claims and avoids stepping on registered names.
+
+**Keep them small.** Every claim ships in every HTTP request that carries the token. A 4 KB cookie header is a real cost. If a value is large or rarely needed, put it behind `/userinfo` instead.
+
+## Audience (`aud`) deserves a section
+
+`aud` is the most-misunderstood standard claim. It says who this token is for.
+
+- An ID Token's `aud` is the client ID. The client checks `aud == my_client_id`.
+- An access token's `aud` is the resource server. The API checks `aud` matches its identifier.
+
+If you have multiple APIs, each should validate that incoming tokens were minted **for it**. Otherwise a token issued for `api-A` can be replayed against `api-B`. This is the failure mode that ID-Token-as-bearer-token attacks exploit.
+
+## A practical validation checklist
+
+For any incoming JWT:
+
+1. ✅ Signature verifies against the expected key.
+2. ✅ `alg` is in your allow-list (never `none`).
+3. ✅ `iss` matches the expected issuer.
+4. ✅ `aud` contains your identifier.
+5. ✅ `exp` is in the future.
+6. ✅ `nbf` (if present) is in the past.
+7. ✅ Type-specific checks: `nonce` (ID Token), `scope` (access token), etc.
+
+## In FerrisKey
+
+FerrisKey lets you control which claims appear in tokens through **protocol mappers** on clients and scopes. You can attach standard OIDC claims, add custom ones, and configure their lifecycle.
+
+::::card-group{cols=2}
+:::card{label="Aegis Module" icon="lucide:lock" href="/en/modules/aegis/overview"}
+Protocol mappers and scope configuration in FerrisKey.
+:::
+:::card{label="ID Token" icon="lucide:id-card" href="/en/learn/oidc/id-token"}
+Which OIDC claims sit inside an ID Token.
+:::
+::::

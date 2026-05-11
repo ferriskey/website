@@ -1,0 +1,100 @@
+---
+title: The Authorization Ecosystem
+description: "A tour of OPA, Cerbos, Cedar, OpenFGA, and how AuthZen connects them."
+icon: network
+order: 2
+---
+
+# The Authorization Ecosystem
+
+Fine-grained authorization has a healthy ecosystem of policy engines. They differ in how you write rules, what they're best at, and how they integrate. AuthZen is the emerging wire protocol that lets you talk to any of them with one API shape.
+
+Here is the lay of the land.
+
+## OPA (Open Policy Agent)
+
+The most widely deployed general-purpose policy engine. Open source. Graduated CNCF project.
+
+- **Policy language:** Rego, a Datalog-flavored language. Powerful, sometimes terse.
+- **Strengths:** Universally embeddable. Used for Kubernetes admission, API gateways, microservice policy, infra-as-code policy. Vast ecosystem.
+- **Best for:** Teams that want one policy engine across infra and apps. Strong fit for platform / DevOps use cases.
+- **Watch out for:** Rego has a learning curve. Performance tuning for high-QPS app-level decisions can take work.
+
+## Cerbos
+
+Open source. Designed specifically for application-level authorization.
+
+- **Policy language:** YAML / human-readable rules. Resource-centric.
+- **Strengths:** Easy to read and review. Designed for app developers, not platform engineers. Stateless engine; policies are files.
+- **Best for:** Application teams that want clear, reviewable, version-controlled policy without a heavy DSL.
+- **Watch out for:** Less general-purpose than OPA (no admission-controller story). That's also the point.
+
+## AWS Cedar
+
+Open source. Built by AWS for use in services like Verified Permissions and Verified Access.
+
+- **Policy language:** Cedar, a purpose-built, strongly typed, formally analyzable language.
+- **Strengths:** Excellent ergonomics for RBAC + ABAC. Formal verifier can prove policy properties (e.g. "no policy ever grants delete to anyone outside the admin group").
+- **Best for:** Teams that want AWS-native authorization, or who appreciate formal analysis guarantees.
+- **Watch out for:** Smaller ecosystem than OPA. Tooling outside AWS is still maturing.
+
+## OpenFGA / Zanzibar-style
+
+Open source. Inspired by Google's Zanzibar paper.
+
+- **Model:** Relationship-based access control (ReBAC). Authorization is a graph query: _"is there a relation chain from this user to this resource that grants this action?"_
+
+
+- **Strengths:** Outstanding for Google-Docs-style sharing, hierarchical orgs, deeply nested resources. Sub-millisecond decisions at scale.
+- **Best for:** Products with rich sharing, group inheritance, or org-tree permissions.
+- **Watch out for:** Modeling takes thought. Not the right tool when permissions are predominantly attribute-based.
+
+## SpiceDB (Authzed)
+
+Another Zanzibar-style engine. Same family as OpenFGA, slightly different model and operator ergonomics. Same use-case sweet spot.
+
+## How AuthZen ties them together
+
+Without AuthZen, every engine has its own SDK and request shape. Your app code embeds the engine choice.
+
+With AuthZen, your app speaks one request shape:
+
+```
+POST /access/v1/evaluation
+{ subject, action, resource, context }
+```
+
+A small adapter in front of each engine translates the AuthZen request into the engine's native call. From the app's perspective, all engines look the same.
+
+This lets you:
+
+- Stack engines behind a router (ReBAC engine for sharing, ABAC engine for compliance, single endpoint to your app).
+- Migrate from one engine to another as needs evolve.
+- Build tools (policy debuggers, audit explorers) once, run them against any engine.
+
+## Picking an engine: a quick triage
+
+- Most permissions are role + attribute checks? Cerbos or Cedar.
+- Heavy sharing / hierarchical resources / nested groups? OpenFGA or SpiceDB.
+- One engine for everything from K8s admission to app authz? OPA.
+- Need formal verification of policies? Cedar.
+- You're on AWS and want managed? Verified Permissions (Cedar).
+
+It is fine to use more than one in the same product. AuthZen makes that less painful.
+
+## A mental model
+
+Think of policy engines as database engines for permissions. They differ in their query language and what they optimize for. AuthZen is the SQL standard of authorization: not the engine itself, but a shared way to ask questions of any of them.
+
+## In FerrisKey
+
+FerrisKey's job is identity (who, with what scopes, with what claims). The decisions an engine makes consume that identity information. The cleaner FerrisKey's claims are, the better any AuthZen-compatible engine downstream behaves.
+
+::::card-group{cols=2}
+:::card{label="AuthZen Overview" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
+The standard itself, and the problem it solves.
+:::
+:::card{label="JWT Claims" icon="lucide:list-checks" href="/en/learn/jwt/claims"}
+What FerrisKey can put into a token for a policy engine to read.
+:::
+::::

@@ -1,0 +1,79 @@
+---
+title: What is OAuth2?
+description: "OAuth2 is a delegation protocol that lets apps act on behalf of users without sharing passwords."
+icon: key-round
+order: 1
+---
+
+# What is OAuth2?
+
+OAuth 2.0 is a delegation protocol. It lets an application act on behalf of a user without ever seeing that user's password.
+
+That one sentence does a lot of work. The analogy below is well-worn, but nothing else captures it as cleanly.
+
+## The valet parking analogy
+
+When you park at a hotel, you do not hand the valet your full house keys, your car keys, and your wallet. You hand them a **valet key**. A valet key starts the car, opens the doors, and nothing else. It cannot open the trunk or the glove box. If the valet loses it, you are not bankrupt.
+
+OAuth2 hands out valet keys. They are called **access tokens**.
+
+- The car owner is the user.
+- The valet is some application that wants to do something for the user (post a tweet, read a calendar, charge a card).
+- The garage owner who issues valet keys is the Authorization Server. In FerrisKey's case, that is FerrisKey itself.
+- The car is the resource, usually an API.
+
+You hand out keys with just enough power to do a specific job. That is the whole game.
+
+## The four roles
+
+OAuth2 defines four roles. You will see these terms everywhere:
+
+- **Resource Owner**: the user. Owns the data.
+- **Client**: the application asking for access (web app, mobile app, server).
+- **Authorization Server**: the trusted service that authenticates the user and issues tokens. This is what FerrisKey is.
+- **Resource Server**: the API that holds the user's data and accepts access tokens.
+
+The Authorization Server and Resource Server can be the same service or two separate ones. In OIDC deployments, they are often bundled.
+
+## What OAuth2 is **not**
+
+This trips up most newcomers, so it is worth saying clearly:
+
+- OAuth2 is not an authentication protocol. It tells you what an app is allowed to do, not who the user is. For "who is the user," you need OIDC (built on top of OAuth2).
+- OAuth2 does not define a token format. Access tokens can be opaque strings or JWTs. The protocol does not care.
+- OAuth2 is not a session protocol. It issues tokens. How the client stores and reuses them is the client's problem.
+
+If someone says "I'm using OAuth2 for login," they almost always mean OIDC.
+
+## The shape of an OAuth2 exchange
+
+In the most common flow (Authorization Code with PKCE), the user is redirected through a sequence:
+
+```
+User → Client → Authorization Server → (user logs in) → Client → Authorization Server → Access Token
+```
+
+The user proves their identity to the Authorization Server, not to the client. The client never sees the password. In return, the client receives a short-lived access token it can present to the API.
+
+Different situations call for different flows. See the [Flows](/en/learn/oauth2/flows) page.
+
+## Why OAuth2 won
+
+Before OAuth2, "Login with this other service" meant typing your password from service A into service B. Service B would then log in as you. This was called the password antipattern, and it was as bad as it sounds.
+
+OAuth2 replaced that with a controlled handoff: service B redirects you to service A, you log in at service A, and service A hands service B a tightly scoped token. Service B never sees your password, and you can revoke its token at any time.
+
+That model (short-lived, scoped, revocable, delegated) is what every modern API integration is built on.
+
+## In FerrisKey
+
+FerrisKey is an OAuth2 Authorization Server. When you register a client and request a token, you are speaking OAuth2.
+
+::::card-group{cols=2}
+:::card{label="OAuth2 Flows" icon="lucide:git-branch" href="/en/learn/oauth2/flows"}
+Authorization Code + PKCE, Client Credentials, Device Flow. When to use each.
+:::
+:::card{label="Getting Started" icon="lucide:rocket" href="/en/discover/getting-started"}
+Register a client in FerrisKey and obtain your first access token.
+:::
+::::

@@ -1,0 +1,70 @@
+---
+title: Why IAM Exists
+description: "A beginner-friendly tour of identity standards: OAuth2, OIDC, JWT, CIAM, and AuthZen."
+icon: graduation-cap
+order: 1
+---
+
+# Why IAM Exists
+
+Software systems rarely live alone. A frontend talks to an API, that API talks to other services, and somewhere a human is on the other end clicking buttons. Identity & Access Management (IAM) answers two questions that every one of those interactions has to answer:
+
+- _Who is this?_ (authentication)
+- _What are they allowed to do?_ (authorization)
+
+These look simple on their own. They get hard the moment more than one application is involved, or more than one team needs to integrate.
+
+## The problem in one picture
+
+Imagine you build three apps: a customer-facing web app, an internal admin tool, and a mobile app. Each needs login. Without IAM, you would:
+
+- Store passwords in three databases.
+- Build "forgot password," MFA, and account lockout three times.
+- Reimplement session handling, token issuance, and revocation in each app.
+- Re-invent permissions every time a new feature ships.
+
+An IAM system extracts those concerns into one trusted service that every app delegates to. That trusted service speaks a few well-known protocols, and those protocols are what this section teaches.
+
+## The standards you will meet
+
+Each standard solves one slice of the IAM problem:
+
+::::card-group{cols=2}
+:::card{label="OAuth2" icon="lucide:key-round" href="/en/learn/oauth2/overview"}
+A delegation protocol. Lets one application call another on behalf of a user, without sharing the user's password.
+:::
+:::card{label="OpenID Connect" icon="lucide:id-card" href="/en/learn/oidc/overview"}
+A thin layer on top of OAuth2 that adds "who is the user?" with a verifiable identity token.
+:::
+:::card{label="JWT" icon="lucide:file-key-2" href="/en/learn/jwt/overview"}
+A compact, signed token format. Used by OIDC, OAuth2, and many APIs to carry claims about an identity.
+:::
+:::card{label="CIAM" icon="lucide:users" href="/en/learn/ciam/overview"}
+Customer IAM. The flavor of IAM aimed at end-users of a product, not employees: branding, self-service signup, organization-level policies.
+:::
+:::card{label="AuthZen" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
+An emerging standard for fine-grained authorization. What a user can do, decided in a consistent way across tools.
+:::
+::::
+
+## How to read this section
+
+You can read these pages in any order. Each one is standalone. Two paths are common:
+
+- Start with OAuth2 if you have ever wondered why "Login with Google" works the way it does, or if you are building an API that other apps will call.
+- Start with JWT if you have hit a token in the wild and want to understand what is inside it.
+
+Every page ends with an "In FerrisKey" section that points to where the concept shows up in this product.
+
+## In FerrisKey
+
+FerrisKey implements the protocols described in this section. To see them in practice:
+
+::::card-group{cols=2}
+:::card{label="What is FerrisKey?" icon="lucide:shield" href="/en/discover/what-is-ferriskey"}
+The high-level overview of the platform.
+:::
+:::card{label="Getting Started" icon="lucide:rocket" href="/en/discover/getting-started"}
+Run FerrisKey locally and obtain your first tokens.
+:::
+::::

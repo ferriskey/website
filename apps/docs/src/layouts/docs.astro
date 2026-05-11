@@ -89,13 +89,23 @@ const appUrlOverrides = {
       })()
     </script>
     <script is:inline>
+      function computeIsDark() {
+        var theme = localStorage.getItem('theme') || 'system'
+        return theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      }
+      // Apply the dark class to the *incoming* document before it is swapped in,
+      // so the user never sees a one-frame flash of the light palette.
+      document.addEventListener('astro:before-swap', function (e) {
+        var newDoc = e.newDocument
+        if (newDoc && newDoc.documentElement) {
+          newDoc.documentElement.classList.toggle('dark', computeIsDark())
+        }
+      })
       document.addEventListener('astro:after-swap', function () {
         if (!window.location.hash) {
           window.scrollTo({ top: 0 })
         }
-        var theme = localStorage.getItem('theme') || 'system'
-        var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        document.documentElement.classList.toggle('dark', isDark)
+        document.documentElement.classList.toggle('dark', computeIsDark())
       })
     </script>
     <style define:vars={{ headerHeight: showTabs ? '6rem' : '3.5rem' }}>

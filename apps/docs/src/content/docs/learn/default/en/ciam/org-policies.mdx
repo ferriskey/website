@@ -1,0 +1,83 @@
+---
+title: Branding, Portals & Org Policies
+description: "How customer-facing IAM expresses per-org branding and login policies."
+icon: building-2
+order: 2
+---
+
+# Branding, Portals & Org Policies
+
+A CIAM system has to deal with the fact that one product can serve many customers, and those customers want different experiences. A login page for Acme Corp's employees should not look identical to one for Globex Inc. A B2B customer with a strict security posture may demand MFA for everyone; a freemium customer may not.
+
+The CIAM concepts that handle this: branding, org-level policies, and portals.
+
+## Branding
+
+Branding is the visible layer. The user sees:
+
+- A logo, colors, and copy on the login page.
+- A custom domain (`login.acme.com` instead of `login.your-product.com`).
+- Themed email templates for password resets, magic links, invitations.
+- A favicon and tab title that match the customer.
+
+Most CIAM platforms let each tenant override a base theme. The build-time tactic is to ship a default theme and let realms override CSS variables and string slots.
+
+A useful guideline: brand everything the user can see during authentication, including error messages and email templates. Half-branded flows feel broken.
+
+## Org-level policies
+
+A policy is a rule that applies to everyone authenticating against this org / realm, regardless of which app they are using.
+
+Common policies:
+
+- **Required MFA**: TOTP, WebAuthn, or both.
+- **Allowed login methods**: disable email/password if SSO is mandatory.
+- **Session lifetime**: short for finance customers, long for casual products.
+- **Password rules**: length, character classes, breach-list checks.
+- **IdP restrictions**: only allow logins via the customer's own SAML / OIDC provider.
+- **Email domain claim**: anyone signing up with `@acme.com` is automatically a member of Acme's org.
+- **Account self-deletion**: allowed or not.
+
+These policies are enforced by the Authorization Server, not by the apps. That is the whole point: every app trusting this server inherits the policy automatically.
+
+## Portals
+
+A portal is a CIAM-specific UI surface aimed at users (not admins):
+
+- **Account portal**: where the user manages their profile, sessions, credentials, MFA, and connected social accounts.
+- **Org admin portal**: where an org admin manages their users, invites, SSO setup, and policies _without_ admin access to the rest of the platform.
+
+The org admin portal is a hallmark of mature CIAM. It lets your customers self-serve user management instead of filing tickets to you.
+
+## The B2B vs B2C split
+
+CIAM has to handle both:
+
+- **B2C**: direct relationship with end-users. Self-signup, social login, brand consistency.
+- **B2B**: your customer is a company. You issue admins on their side, federate their corporate IdP, honor their security policies.
+
+Real systems are usually both. A B2C product grows enterprise customers and now needs SAML + per-org MFA + SCIM provisioning. A B2B platform adds a "free tier" and now needs self-signup + social login + per-user upgrades.
+
+The CIAM platform's job is to make this transition cheap.
+
+## A mental model
+
+Think of CIAM as a white-label hotel chain.
+
+- The chain (your product) owns the building, plumbing, security.
+- Each hotel (each tenant) decorates its lobby, picks its dress code, sets its check-in rules.
+- The guests (end users) see the hotel, not the chain.
+- The chain still enforces fire codes and structural integrity across all hotels. That's your security baseline.
+
+## In FerrisKey
+
+FerrisKey models CIAM with realms. Each realm is an isolated tenant with its own users, clients, policies, branding, and identity providers. Multi-tenancy is built into the data model, not retrofitted.
+
+::::card-group{cols=2}
+:::card{label="Core Concepts: Realms" icon="lucide:layers" href="/en/discover/core-concepts/realms"}
+The primary multi-tenancy unit in FerrisKey.
+:::
+:::card{label="Trident Module" icon="lucide:shield-check" href="/en/modules/trident/overview"}
+MFA policies: TOTP, WebAuthn, magic links, recovery codes.
+:::
+::::

@@ -1,0 +1,98 @@
+---
+title: What is OpenID Connect?
+description: "OIDC is the identity layer on top of OAuth2. It answers 'who is the user?'"
+icon: id-card
+order: 1
+---
+
+# What is OpenID Connect?
+
+OpenID Connect (OIDC) is a thin identity layer built on top of OAuth2. Where OAuth2 answers _"what is this token allowed to do?"_, OIDC adds _"and by the way, who is the user?"_
+
+If you have ever clicked "Sign in with Google," you have used OIDC.
+
+## The one-paragraph version
+
+OIDC reuses OAuth2's flows, endpoints, and token plumbing. It standardizes one extra thing: a signed ID Token that proves who the user is. The client validates the ID Token locally and now knows the user's identity, without having seen their password.
+
+## OIDC vs OAuth2
+
+A side-by-side that clears up most confusion:
+
+| | OAuth2 | OIDC |
+| --- | --- | --- |
+| **Question answered** | _What can this token do?_ | _Who is the user (and what can the token do)?_ |
+| **Primary token** | Access Token | ID Token + Access Token |
+| **Built for** | API access delegation | User authentication / SSO |
+| **Trigger** | Any scope | `openid` scope is mandatory |
+| **Defines a `/userinfo` endpoint?** | No | Yes |
+
+OIDC = OAuth2 + ID Token + a few extra endpoints. Everything you learned about OAuth2 flows still applies.
+
+## When OIDC is in play
+
+The deciding signal is the `openid` scope in the authorization request:
+
+```
+scope=openid profile email
+```
+
+- Without `openid`: plain OAuth2, no ID Token.
+- With `openid`: OIDC, and you get an ID Token alongside the access token.
+
+If a client asks for `profile` and `email` but forgets `openid`, the server will silently treat it as OAuth2 only. This is the most common "why is there no ID token?" bug.
+
+## What OIDC standardizes
+
+On top of OAuth2, OIDC adds:
+
+1. **The ID Token**: a JWT carrying claims about the authenticated user.
+2. **The `/userinfo` endpoint**: call it with an access token to get up-to-date user claims.
+3. **Discovery**: every OIDC provider publishes `/.well-known/openid-configuration`, a JSON document listing all its endpoints, supported scopes, signing keys, and capabilities. Clients can configure themselves automatically.
+4. **Session management**: optional standards for tracking when the user logs out at the provider.
+5. **Standard claims**: `sub`, `name`, `email`, `email_verified`, and a documented vocabulary.
+
+## Discovery in one example
+
+Point a client at `https://auth.example.com/realms/my-app` and it can find everything it needs:
+
+```bash
+curl https://auth.example.com/realms/my-app/.well-known/openid-configuration
+```
+
+```json
+{
+  "issuer": "https://auth.example.com/realms/my-app",
+  "authorization_endpoint": ".../authorize",
+  "token_endpoint": ".../token",
+  "userinfo_endpoint": ".../userinfo",
+  "jwks_uri": ".../certs",
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "response_types_supported": ["code", "id_token", "token id_token"],
+  ...
+}
+```
+
+Most modern OIDC libraries take only the issuer URL and figure out the rest.
+
+## A mental model
+
+Think of OIDC as OAuth2 with a passport stapled to it.
+
+- The access token is your visa: _what you may do_.
+- The ID token is your passport: _who you are_.
+
+The passport is for the client to inspect (so it can greet you by name). The visa is for the API to inspect (so it knows what to let you do). They are different documents for different audiences. Mixing them, like using the ID token to call an API, is the #1 OIDC bug in the wild.
+
+## In FerrisKey
+
+FerrisKey speaks OIDC. Any client you register gets an OIDC discovery URL automatically.
+
+::::card-group{cols=2}
+:::card{label="ID Token" icon="lucide:id-card" href="/en/learn/oidc/id-token"}
+What is inside an ID Token, and how the client validates it.
+:::
+:::card{label="Getting Started" icon="lucide:rocket" href="/en/discover/getting-started"}
+Log in via OIDC and inspect your first ID Token.
+:::
+::::

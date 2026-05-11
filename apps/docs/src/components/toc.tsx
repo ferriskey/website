@@ -12,36 +12,62 @@ interface TocProps {
   contributors?: Contributor[]
 }
 
+const INDENT_PX = 16
+
 export function TableOfContents({ headings, contributors = [] }: TocProps) {
   const filtered = headings.filter((h) => h.depth >= 2 && h.depth <= 3)
-  const [activeId, setActiveId] = React.useState<string>('')
+  const [activeIds, setActiveIds] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     const elements = filtered.map((h) => document.getElementById(h.slug)).filter(Boolean) as HTMLElement[]
     if (elements.length === 0) return
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id)
-            break
-          }
-        }
-      },
-      { rootMargin: '-80px 0px -75% 0px' },
-    )
+    const update = () => {
+      const scrollY = window.scrollY
+      const viewportH = window.innerHeight
+      const docH = document.documentElement.scrollHeight
+      const headerVar = getComputedStyle(document.documentElement).getPropertyValue('--header-height').trim()
+      const headerH = headerVar.endsWith('rem')
+        ? parseFloat(headerVar) * 16
+        : parseFloat(headerVar) || 56
+      const readingLine = scrollY + headerH + 8
+      const tops = elements.map((el) => el.getBoundingClientRect().top + scrollY)
 
-    for (const el of elements) {
-      observer.observe(el)
+      const active = new Set<string>()
+      // Primary active: last heading whose top is at or above the reading line.
+      let primary = -1
+      for (let i = 0; i < tops.length; i++) {
+        if (tops[i] <= readingLine) primary = i
+        else break
+      }
+      if (primary >= 0) active.add(elements[primary].id)
+      else active.add(elements[0].id)
+
+      // Also activate any heading whose own top is visible below the reading line in the viewport.
+      const visibleBottom = scrollY + viewportH - 40
+      for (let i = Math.max(primary, -1) + 1; i < tops.length; i++) {
+        if (tops[i] <= visibleBottom) {
+          active.add(elements[i].id)
+        } else break
+      }
+
+      if (scrollY + viewportH >= docH - 8) {
+        active.add(elements[elements.length - 1].id)
+      }
+      setActiveIds(active)
     }
 
-    return () => observer.disconnect()
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
   }, [filtered.map((h) => h.slug).join(',')])
 
   if (filtered.length === 0) return null
 
-  // Number h3 headings: counter resets at each h2
   let h3Counter = 0
   const numbered = filtered.map((heading) => {
     if (heading.depth === 2) {
@@ -53,28 +79,60 @@ export function TableOfContents({ headings, contributors = [] }: TocProps) {
   })
 
   return (
-    <nav className="w-56 shrink-0 hidden xl:block h-[calc(100vh-var(--header-height,4rem))] overflow-y-auto sticky top-(--header-height,4rem) py-6 pl-4">
+    <nav className="w-56 shrink-0 hidden xl:block sticky top-(--header-height,4rem) py-6 pl-4">
       <p className="text-sm font-medium mb-3">On this page</p>
-      <ul className="border-l border-border space-y-0.5">
-        {numbered.map((heading) => (
-          <li key={heading.slug}>
-            <a
-              href={`#${heading.slug}`}
-              className={cn(
-                'block -ml-px border-l-2 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:text-foreground',
-                heading.depth === 3 ? 'pl-6' : 'pl-3',
-                activeId === heading.slug
-                  ? 'border-primary text-primary font-medium'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
+      <ul>
+        {numbered.map((heading, i) => {
+          const isActive = activeIds.has(heading.slug)
+          const indent = (heading.depth - 2) * INDENT_PX
+          const prev = i > 0 ? numbered[i - 1] : null
+          const prevIndent = prev ? (prev.depth - 2) * INDENT_PX : indent
+          const prevActive = prev ? activeIds.has(prev.slug) : false
+          const bendNeeded = prev !== null && prevIndent !== indent
+          const bendLeft = Math.min(indent, prevIndent)
+          const bendWidth = Math.abs(indent - prevIndent)
+          const bendActive = isActive || prevActive
+
+          return (
+            <li key={heading.slug} className="relative">
+              <span
+                aria-hidden
+                className={cn(
+                  'pointer-events-none absolute top-0 bottom-0 w-px transition-colors',
+                  isActive ? 'bg-primary' : 'bg-border',
+                )}
+                style={{ left: indent }}
+              />
+              {bendNeeded && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute h-px transition-colors',
+                    bendActive ? 'bg-primary' : 'bg-border',
+                  )}
+                  style={{ top: 0, left: bendLeft, width: bendWidth }}
+                />
               )}
-            >
-              {heading.label}
-            </a>
-          </li>
-        ))}
+              <a
+                href={`#${heading.slug}`}
+                data-slug={heading.slug}
+                className={cn(
+                  'block py-1 pr-2 transition-colors focus-visible:outline-none focus-visible:text-foreground',
+                  heading.depth === 3 ? 'text-xs' : 'text-sm',
+                  isActive ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+                )}
+                style={{ paddingLeft: indent + 12 }}
+              >
+                {heading.label}
+              </a>
+            </li>
+          )
+        })}
       </ul>
-      <SponsorCards sponsors={defaultSponsors} />
-      <ContributorCards contributors={contributors} />
+      <div>
+        <SponsorCards sponsors={defaultSponsors} />
+        <ContributorCards contributors={contributors} />
+      </div>
     </nav>
   )
 }

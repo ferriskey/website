@@ -1,0 +1,117 @@
+---
+title: JWT Anatomy
+description: "The three parts of a JWT (header, payload, signature) broken down."
+icon: scan-text
+order: 2
+---
+
+# JWT Anatomy
+
+A JWT has three parts, separated by dots:
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9
+.
+eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0
+.
+SfXPyZbR2X4Z6BvRrR4n...
+```
+
+Each part is Base64URL-encoded, _not_ encrypted. You can decode it with any Base64 tool.
+
+## Part 1: Header
+
+The header describes the token itself: what algorithm signed it, what type it is, and optionally which key to use.
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "key-2025-01"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `alg` | The signing algorithm. `RS256`, `ES256`, `HS256`, `none`, etc. |
+| `typ` | Token type. Usually `JWT`. |
+| `kid` | Key ID. Tells the verifier which public key to use when the issuer rotates keys. |
+
+:::callout{variant="warning" title="Beware alg=none"}
+The original JWT spec allowed `alg: "none"`, an unsigned token. Some libraries used to accept this from incoming tokens. Always reject `alg: "none"`, and reject any algorithm not in your allow-list.
+:::
+
+## Part 2: Payload
+
+The payload is the JSON that carries the claims. This is the part you actually care about.
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "scope": "openid profile email",
+  "name": "Alice Smith"
+}
+```
+
+Each top-level key is a claim. Standard claims and custom claims sit side by side in the same JSON object. See [Claims](/en/learn/jwt/claims) for the full vocabulary.
+
+The payload is not encrypted. Anyone with the token can read it. If you need confidentiality, use JWE (encrypted JWTs). Or just don't put secrets in there.
+
+## Part 3: Signature
+
+The signature is computed over the encoded header and payload:
+
+```
+signature = sign(base64url(header) + "." + base64url(payload), key)
+```
+
+The signer's algorithm choice (`alg` in the header) determines what `sign` and `key` mean:
+
+- **HS256**: HMAC-SHA256. Symmetric. The same secret signs and verifies. Both parties must hold it. Fine when one service signs _and_ validates. Risky to share.
+- **RS256**: RSA-SHA256. Asymmetric. Private key signs, public key verifies. The standard for OIDC providers.
+- **ES256**: ECDSA-SHA256. Asymmetric, smaller signatures than RSA. Increasingly popular.
+- **EdDSA**: Modern, fast, fixed-size. Not universally supported yet.
+
+For OIDC, you will almost always see RS256 or ES256.
+
+## How verification works
+
+A verifier does:
+
+1. Split the token by `.` into three parts.
+2. Decode the header, look at `alg` and `kid`.
+3. Fetch the matching public key (from `jwks_uri`, cached).
+4. Recompute `sign(header + "." + payload)` and compare to the third part.
+5. If they match, decode the payload and check the claims (`exp`, `iss`, `aud`, ...).
+
+Every step matters. Skipping signature verification turns a JWT into "trust whatever the user sent." That has been the root cause of more than one production breach.
+
+## A worked example
+
+For `RS256`, a verifier might:
+
+```
+header_b64 = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+payload_b64 = "eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0"
+signing_input = header_b64 + "." + payload_b64
+verify(public_key, signing_input, signature) → ok
+```
+
+If `ok`, treat the JSON in `payload_b64` as authoritative. If not, throw the token away.
+
+## In FerrisKey
+
+FerrisKey signs tokens with per-realm keys (RSA by default). The public keys are exposed at `/.well-known/openid-configuration`'s `jwks_uri`. Use jwt.io or `jose` libraries to decode and verify.
+
+::::card-group{cols=2}
+:::card{label="JWT Claims" icon="lucide:list-checks" href="/en/learn/jwt/claims"}
+The vocabulary that appears inside the payload.
+:::
+:::card{label="OAuth2 Tokens" icon="lucide:key" href="/en/learn/oauth2/tokens"}
+Where JWTs fit in the OAuth2 token lifecycle.
+:::
+::::

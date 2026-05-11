@@ -1,0 +1,81 @@
+---
+title: SSO & Session Management
+description: "How OIDC enables Single Sign-On and how logout actually works."
+icon: log-in
+order: 4
+---
+
+# SSO & Session Management
+
+Single Sign-On (SSO) is the experience of logging in once and being recognized by many applications. OIDC makes this work without each app having a copy of the user's credentials.
+
+## The mechanism in plain terms
+
+Three apps (`intranet`, `wiki`, `dashboard`) all trust the same Authorization Server. The first time the user visits `intranet`, they are redirected to log in. The Authorization Server authenticates them and sets a session cookie in the user's browser, scoped to its own domain.
+
+When the user later visits `wiki` and is redirected to the same Authorization Server, the cookie is already present. The server skips the login form and just hands back a new authorization code, silently. From the user's point of view, `wiki` "just knew" they were logged in.
+
+```
+First visit:   User → intranet → AuthServer (login form) → cookie set → intranet
+Second visit:  User → wiki     → AuthServer (cookie present) → wiki (no form)
+```
+
+The session lives in the Authorization Server, not in any one app.
+
+## Sessions, not tokens
+
+A common confusion: tokens are short-lived; sessions are not. The user can have a 30-minute access token and an 8-hour session. The session is what enables silent re-auth when the access token expires.
+
+If your refresh token expires and you ask for a new one but the session is still valid, silent success. If the session has expired, the user sees a login form.
+
+## Logout: harder than it looks
+
+"Log out" needs to mean different things in different contexts:
+
+- **Local logout**: clear the app's own cookies/storage. Easy.
+- **SSO logout (single logout)**: invalidate the session at the Authorization Server, so future visits to _any_ app require a fresh login. Harder.
+- **Back-channel logout**: notify _all the other apps_ that share the session, so they can invalidate their local state too. Hardest.
+
+OIDC defines a few specs for this:
+
+- **RP-Initiated Logout**: the app redirects the user to a `/logout` endpoint on the Authorization Server, which clears the SSO cookie.
+- **Front-Channel Logout**: the Authorization Server returns a page with hidden iframes pointing at each app's logout URL. Each iframe clears local state. Works only while the user is in front of the browser.
+- **Back-Channel Logout**: the Authorization Server makes server-to-server calls to each app, sending a logout token. More reliable.
+
+Most teams ship with RP-initiated logout first, then add back-channel logout if they have several apps that need state cleared without depending on the browser.
+
+## Detecting "is the user still logged in?"
+
+OIDC also defines the `prompt=none` parameter on the authorization endpoint. The client sends a normal authorize request but adds `prompt=none`:
+
+- If the session is alive: silent success, fresh tokens.
+- If not: an `interaction_required` error.
+
+Useful for "are they still logged in?" checks on app load. A hidden iframe (or modern `<iframe>` alternatives) makes this background check possible.
+
+## `max_age` and `auth_time`
+
+When you really do not trust an old session (say, before a sensitive action), you can force a fresh re-auth:
+
+```
+GET /authorize?max_age=300&...
+```
+
+This says: "if `auth_time` is older than 300 seconds, prompt for password again." The `auth_time` claim in the ID Token then tells the client when the password was last typed.
+
+## A mental model
+
+The Authorization Server is the front desk of an office building. You badge in once at the front desk. Inside, you walk into any meeting room. The meeting rooms (apps) just check that you came past the front desk recently. To "log out of the building," you have to go to the front desk, not just leave one meeting room.
+
+## In FerrisKey
+
+FerrisKey acts as the central session holder. Multiple clients in the same realm share an SSO session per browser.
+
+::::card-group{cols=2}
+:::card{label="What is FerrisKey?" icon="lucide:shield" href="/en/discover/what-is-ferriskey"}
+How realms group apps that share a session.
+:::
+:::card{label="Compass Module" icon="lucide:compass" href="/en/modules/compass/overview"}
+Inspect and debug authentication flows step-by-step.
+:::
+::::
