@@ -35,12 +35,18 @@ const { docsHref = '/' } = Astro.props;
       >
       </div>
     </div>
-    <h2 class="text-3xl font-semibold text-foreground sm:text-4xl" data-t="cta.title">
-      Your identity layer, your rules.
-    </h2>
-    <p class="mt-4 text-lg text-muted-foreground max-w-xl mx-auto text-balance" data-t="cta.description">
-      Self-hosted, Apache 2.0, built in Rust. Deploy Ferriskey in minutes and own your authentication stack — no vendor, no lock-in.
-    </p>
+    <div class="relative max-w-3xl mx-auto" data-anim="fade-up">
+      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center justify-center gap-2">
+        <span class="inline-block size-2 rounded-sm bg-primary"></span>
+        <span data-t="cta.label">Ready when you are</span>
+      </p>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6" data-t="cta.title">
+        Your identity layer, your rules.
+      </h2>
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl mx-auto text-balance" data-t="cta.description">
+        Self-hosted, Apache 2.0, built in Rust. Deploy Ferriskey in minutes and own your authentication stack — no vendor, no lock-in.
+      </p>
+    </div>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
       <Button size="lg" className="cursor-pointer" client:load>
         <a href={docsHref} class="flex gap-2" rel="noopener noreferrer">

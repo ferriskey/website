@@ -1,0 +1,290 @@
+---
+// Live audit feed — a self-animating mock of FerrisKey audit events
+// No backend; deterministic-ish rotation driven by a small JS loop.
+
+interface AuditEvent {
+  kind: 'oidc' | 'mfa' | 'token' | 'fed' | 'role' | 'audit' | 'passkey' | 'warn' | 'logout'
+  message: string
+  realm: string
+  latency: string // "12 ms" or "blocked"
+}
+
+// Initial set rendered server-side so the feed isn't empty on first paint
+const initialEvents: AuditEvent[] = [
+  { kind: 'oidc',    message: 'alice@acme.com signed in via Google',          realm: 'acme',   latency: '12 ms' },
+  { kind: 'mfa',     message: 'bob@globex.com authenticated with WebAuthn',   realm: 'globex', latency: '8 ms'  },
+  { kind: 'token',   message: 'service:billing received access_token',        realm: 'acme',   latency: '4 ms'  },
+  { kind: 'role',    message: 'admin granted editor → carol@globex.com',      realm: 'globex', latency: '11 ms' },
+  { kind: 'fed',     message: 'alice@acme.com linked Google identity',        realm: 'acme',   latency: '87 ms' },
+  { kind: 'audit',   message: 'charlie@acme.com viewed user list',            realm: 'acme',   latency: '3 ms'  },
+  { kind: 'warn',    message: '3 failed logins for eve@acme.com',             realm: 'acme',   latency: 'blocked' },
+  { kind: 'passkey', message: 'dan@acme.com registered a passkey',            realm: 'acme',   latency: '145 ms' },
+]
+
+// Larger pool used by the JS rotation (kept identical to initial for variety)
+const rotationPool: AuditEvent[] = [
+  ...initialEvents,
+  { kind: 'oidc',    message: 'refresh_token rotated for app:cli',            realm: 'acme',   latency: '6 ms'  },
+  { kind: 'logout',  message: 'user logged out from app:dashboard',           realm: 'globex', latency: '2 ms'  },
+  { kind: 'oidc',    message: 'pierre@acme.com signed in (password)',         realm: 'acme',   latency: '19 ms' },
+  { kind: 'mfa',     message: 'TOTP verified for sarah@globex.com',           realm: 'globex', latency: '5 ms'  },
+  { kind: 'token',   message: 'introspect(token) → active for app:web',       realm: 'acme',   latency: '2 ms'  },
+  { kind: 'role',    message: 'role:billing-admin assigned to ops-team',      realm: 'acme',   latency: '14 ms' },
+  { kind: 'fed',     message: 'sso:saml linked from corp.example.com',        realm: 'globex', latency: '63 ms' },
+  { kind: 'warn',    message: 'access_token reuse detected · revoked',        realm: 'acme',   latency: 'blocked' },
+  { kind: 'passkey', message: 'lucas@globex.com replaced primary passkey',    realm: 'globex', latency: '92 ms' },
+  { kind: 'oidc',    message: 'device_code flow completed for cli',           realm: 'acme',   latency: '34 ms' },
+]
+
+// Map kind → tag style
+const KIND_STYLE: Record<AuditEvent['kind'], { label: string; cls: string }> = {
+  oidc:    { label: 'OIDC',    cls: 'bg-sky-500/12 text-sky-300 border-sky-500/25' },
+  mfa:     { label: 'MFA',     cls: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25' },
+  token:   { label: 'TOKEN',   cls: 'bg-primary/15 text-primary border-primary/30' },
+  fed:     { label: 'FED',     cls: 'bg-violet-500/12 text-violet-300 border-violet-500/25' },
+  role:    { label: 'ROLE',    cls: 'bg-amber-500/12 text-amber-300 border-amber-500/25' },
+  audit:   { label: 'AUDIT',   cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+  passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/12 text-fuchsia-300 border-fuchsia-500/25' },
+  warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+  logout:  { label: 'LOGOUT',  cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+}
+
+const stats = [
+  { key: 'eps',     value: '12.4k', label: 'events / sec at p50' },
+  { key: 'realms',  value: '∞',     label: 'realms watched in parallel' },
+  { key: 'latency', value: '< 5 ms', label: 'audit write p99' },
+]
+---
+
+<section class="relative w-full py-16 sm:py-24 lg:py-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-10 lg:gap-16 items-start">
+
+      <!-- Left: header + stats -->
+      <div data-anim="fade-up">
+        <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
+          <span class="relative flex size-2">
+            <span class="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping"></span>
+            <span class="relative inline-flex size-2 rounded-full bg-primary"></span>
+          </span>
+          <span data-t="audit.label">Live</span>
+        </p>
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6">
+          <span data-t="audit.title.lead">Every identity event,</span>{' '}
+          <span class="text-primary" data-t="audit.title.accent">streamed and auditable.</span>
+        </h2>
+        <p class="text-base sm:text-lg text-muted-foreground leading-relaxed mb-8 max-w-md" data-t="audit.description">
+          Sign-ins, MFA challenges, token issuance, role changes, federation events — FerrisKey writes them all to one structured stream. Tail it, ship it to your SIEM, or replay it.
+        </p>
+
+        <dl class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 max-w-md">
+          {stats.map((s) => (
+            <div class="rounded-xl border border-white/10 bg-white/[0.015] p-4 flex items-center gap-4">
+              <dt class="text-2xl sm:text-3xl font-semibold text-primary leading-none font-mono whitespace-nowrap">{s.value}</dt>
+              <dd class="text-xs text-muted-foreground leading-snug" data-t={`audit.stat.${s.key}`}>{s.label}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <!-- Right: feed card -->
+      <div data-anim="fade-up" style="transition-delay:120ms" class="relative">
+        <div class="rounded-2xl border border-white/10 bg-zinc-950 overflow-hidden shadow-2xl">
+
+          <!-- Feed header -->
+          <div class="flex items-center justify-between px-5 py-3 border-b border-white/10 bg-white/[0.02]">
+            <div class="flex items-center gap-2">
+              <span class="size-2.5 rounded-full bg-rose-400/70"></span>
+              <span class="size-2.5 rounded-full bg-amber-300/70"></span>
+              <span class="size-2.5 rounded-full bg-emerald-400/70"></span>
+              <span class="ml-3 text-xs font-mono text-white/45 tracking-wide" data-t="audit.feed.path">~/realms/audit.tail</span>
+            </div>
+            <div class="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-white/35 uppercase tracking-widest">
+              <svg class="size-3 text-emerald-400/80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="3"/></svg>
+              <span data-t="audit.feed.connected">connected</span>
+            </div>
+          </div>
+
+          <!-- Feed list -->
+          <ul id="ferriskey-audit-feed" class="audit-list relative" aria-live="polite" aria-relevant="additions" data-pool={JSON.stringify(rotationPool)}>
+            {initialEvents.map((evt, i) => {
+              const style = KIND_STYLE[evt.kind]
+              return (
+                <li class="audit-row flex items-center gap-3 px-5 py-3 border-b border-white/[0.05] last:border-b-0" style={`--row-delay: ${i * 60}ms`}>
+                  <span class={`shrink-0 inline-flex items-center justify-center text-[10px] font-semibold font-mono uppercase tracking-wider rounded border px-1.5 py-0.5 min-w-[56px] text-center ${style.cls}`}>
+                    {style.label}
+                  </span>
+                  <span class="flex-1 min-w-0 text-sm text-white/85 truncate">{evt.message}</span>
+                  <span class="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-white/40 shrink-0">
+                    <span class="text-white/30">realm:</span>{evt.realm}
+                  </span>
+                  <span class={`text-[11px] font-mono shrink-0 tabular-nums ${evt.latency === 'blocked' ? 'text-rose-300' : 'text-white/55'}`}>
+                    {evt.latency}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+
+          <!-- Feed footer -->
+          <div class="px-5 py-2.5 border-t border-white/10 bg-white/[0.02] flex items-center justify-between text-[10px] font-mono text-white/35 uppercase tracking-widest">
+            <span data-t="audit.feed.format">format: jsonl · ndjson</span>
+            <span data-t="audit.feed.sink">→ webhooks · siem · s3</span>
+          </div>
+        </div>
+
+        <!-- Subtle ambient glow behind card -->
+        <div class="absolute -inset-x-8 -inset-y-12 -z-10 pointer-events-none" style="background: radial-gradient(60% 50% at 50% 50%, rgba(249,115,22,0.10), transparent 70%);"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Initial staggered entry of pre-rendered rows */
+  .audit-row {
+    opacity: 0;
+    transform: translateY(-6px);
+    animation: audit-fade-in 0.45s ease forwards;
+    animation-delay: var(--row-delay, 0ms);
+  }
+  @keyframes audit-fade-in {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* When JS prepends a new row, it gets the .audit-new class for a flash effect */
+  .audit-row.audit-new {
+    animation: audit-flash 0.9s ease;
+  }
+  @keyframes audit-flash {
+    0%   { background: rgba(249,115,22,0.12); transform: translateY(-8px); opacity: 0; }
+    20%  { transform: translateY(0); opacity: 1; }
+    100% { background: transparent; transform: translateY(0); opacity: 1; }
+  }
+
+  /* Soft fade-out for the last row when removed */
+  .audit-row.audit-leaving {
+    animation: audit-fade-out 0.4s ease forwards;
+  }
+  @keyframes audit-fade-out {
+    to { opacity: 0; transform: translateY(8px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .audit-row,
+    .audit-row.audit-new,
+    .audit-row.audit-leaving { animation: none !important; opacity: 1; transform: none; }
+  }
+</style>
+
+<script>
+  type AuditEvent = {
+    kind: keyof typeof KIND_STYLE
+    message: string
+    realm: string
+    latency: string
+  }
+
+  const KIND_STYLE = {
+    oidc:    { label: 'OIDC',    cls: 'bg-sky-500/12 text-sky-300 border-sky-500/25' },
+    mfa:     { label: 'MFA',     cls: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25' },
+    token:   { label: 'TOKEN',   cls: 'bg-primary/15 text-primary border-primary/30' },
+    fed:     { label: 'FED',     cls: 'bg-violet-500/12 text-violet-300 border-violet-500/25' },
+    role:    { label: 'ROLE',    cls: 'bg-amber-500/12 text-amber-300 border-amber-500/25' },
+    audit:   { label: 'AUDIT',   cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+    passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/12 text-fuchsia-300 border-fuchsia-500/25' },
+    warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+    logout:  { label: 'LOGOUT',  cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+  }
+
+  const MAX_ROWS = 8
+  const TICK_MS  = 2400
+  let timer: number | null = null
+  let io: IntersectionObserver | null = null
+
+  function buildRow(evt: AuditEvent): HTMLLIElement {
+    const li = document.createElement('li')
+    li.className = 'audit-row audit-new flex items-center gap-3 px-5 py-3 border-b border-white/[0.05]'
+
+    const style = KIND_STYLE[evt.kind] ?? KIND_STYLE.audit
+    const tag = document.createElement('span')
+    tag.className =
+      'shrink-0 inline-flex items-center justify-center text-[10px] font-semibold font-mono uppercase tracking-wider rounded border px-1.5 py-0.5 min-w-[56px] text-center ' +
+      style.cls
+    tag.textContent = style.label
+
+    const msg = document.createElement('span')
+    msg.className = 'flex-1 min-w-0 text-sm text-white/85 truncate'
+    msg.textContent = evt.message
+
+    const realm = document.createElement('span')
+    realm.className = 'hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-white/40 shrink-0'
+    const realmKey = document.createElement('span')
+    realmKey.className = 'text-white/30'
+    realmKey.textContent = 'realm:'
+    realm.appendChild(realmKey)
+    realm.appendChild(document.createTextNode(evt.realm))
+
+    const latency = document.createElement('span')
+    latency.className =
+      'text-[11px] font-mono shrink-0 tabular-nums ' +
+      (evt.latency === 'blocked' ? 'text-rose-300' : 'text-white/55')
+    latency.textContent = evt.latency
+
+    li.append(tag, msg, realm, latency)
+    return li
+  }
+
+  function startFeed() {
+    const feed = document.getElementById('ferriskey-audit-feed') as HTMLUListElement | null
+    if (!feed) return
+    const raw = feed.getAttribute('data-pool')
+    if (!raw) return
+
+    let pool: AuditEvent[]
+    try { pool = JSON.parse(raw) as AuditEvent[] } catch { return }
+    if (!Array.isArray(pool) || pool.length === 0) return
+
+    let cursor = 0
+
+    // Clean up state from any previous invocation (view transitions reuse the JS module)
+    if (timer !== null) { window.clearInterval(timer); timer = null }
+    if (io !== null)    { io.disconnect();             io = null    }
+
+    const tick = () => {
+      const evt = pool[cursor % pool.length]
+      cursor++
+      const row = buildRow(evt)
+      feed.prepend(row)
+
+      // Count rows that are NOT already on their way out
+      const live = feed.querySelectorAll(':scope > li:not(.audit-leaving)')
+      if (live.length > MAX_ROWS) {
+        // Mark the last live row for removal; the rest is handled by the timeout
+        const last = live[live.length - 1] as HTMLElement
+        last.classList.add('audit-leaving')
+        window.setTimeout(() => last.remove(), 400)
+      }
+    }
+
+    // Respect reduced motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    // Only run when visible to avoid background CPU
+    io = new IntersectionObserver((entries) => {
+      const visible = entries.some((e) => e.isIntersecting)
+      if (visible && timer === null) {
+        timer = window.setInterval(tick, TICK_MS)
+      } else if (!visible && timer !== null) {
+        window.clearInterval(timer)
+        timer = null
+      }
+    }, { threshold: 0.15 })
+    io.observe(feed)
+  }
+
+  startFeed()
+  document.addEventListener('astro:after-swap', startFeed)
+</script>

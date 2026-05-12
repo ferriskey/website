@@ -1,0 +1,172 @@
+---
+// Comparison section — FerrisKey vs Keycloak / Auth0 / Authentik
+
+type Cell = string | { v: 'yes' | 'no' | 'partial' | 'planned'; label?: string }
+
+interface Row {
+  key: string
+  label: string
+  cells: Record<string, Cell>
+}
+
+const tools = [
+  { key: 'ferriskey', name: 'FerrisKey', highlight: true },
+  { key: 'keycloak',  name: 'Keycloak'  },
+  { key: 'auth0',     name: 'Auth0'     },
+  { key: 'authentik', name: 'Authentik' },
+  { key: 'ory',       name: 'Ory'       },
+] as const
+
+const rows: Row[] = [
+  {
+    key: 'runtime',
+    label: 'Runtime',
+    cells: { ferriskey: 'Rust', keycloak: 'Java / JVM', auth0: 'SaaS only', authentik: 'Python', ory: 'Go' },
+  },
+  {
+    key: 'license',
+    label: 'License',
+    cells: { ferriskey: 'Apache 2.0', keycloak: 'Apache 2.0', auth0: 'Commercial', authentik: 'MIT', ory: 'Apache 2.0' },
+  },
+  {
+    key: 'memory',
+    label: 'Memory footprint',
+    cells: { ferriskey: '~10 MB', keycloak: '~500 MB', auth0: '—', authentik: '~200 MB', ory: '~80 MB / svc' },
+  },
+  {
+    key: 'coldstart',
+    label: 'Cold start',
+    cells: { ferriskey: '< 1 s', keycloak: '10–30 s', auth0: '—', authentik: '~5 s', ory: '~2 s' },
+  },
+  {
+    key: 'selfhost',
+    label: 'Self-hosted',
+    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'no' }, authentik: { v: 'yes' }, ory: { v: 'yes' } },
+  },
+  {
+    key: 'multitenancy',
+    label: 'Multi-tenancy',
+    cells: { ferriskey: 'Realms', keycloak: 'Realms', auth0: 'Tenants', authentik: 'Brands', ory: 'Projects' },
+  },
+  {
+    key: 'k8s',
+    label: 'Kubernetes operator',
+    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'no' }, authentik: { v: 'partial', label: 'partial' }, ory: { v: 'partial', label: 'helm only' } },
+  },
+  {
+    key: 'oidc',
+    label: 'OIDC / OAuth2',
+    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'yes' }, authentik: { v: 'yes' }, ory: { v: 'yes' } },
+  },
+  {
+    key: 'mfa',
+    label: 'MFA built-in',
+    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'yes' }, authentik: { v: 'yes' }, ory: { v: 'yes' } },
+  },
+  {
+    key: 'modular',
+    label: 'Modular architecture',
+    cells: { ferriskey: { v: 'yes' }, keycloak: 'SPI extensions', auth0: { v: 'no' }, authentik: { v: 'no' }, ory: 'Split services' },
+  },
+  {
+    key: 'authzen',
+    label: 'AuthZen-ready',
+    cells: { ferriskey: { v: 'planned', label: 'planned' }, keycloak: { v: 'no' }, auth0: { v: 'no' }, authentik: { v: 'no' }, ory: { v: 'partial', label: 'Keto ReBAC' } },
+  },
+]
+---
+
+<section class="relative w-full py-16 sm:py-24 lg:py-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+
+    <!-- Header -->
+    <div class="max-w-3xl mb-12 sm:mb-16" data-anim="fade-up">
+      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
+        <span class="inline-block size-2 rounded-sm bg-primary"></span>
+        <span data-t="compare.label">Compare</span>
+      </p>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6">
+        <span data-t="compare.title.lead">How FerrisKey stacks up against</span>{' '}
+        <span class="text-primary" data-t="compare.title.accent">the IAM you already know.</span>
+      </h2>
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl" data-t="compare.description">
+        Quick, factual comparison with the IAM tools teams reach for first. Same protocols on the surface, very different shapes underneath.
+      </p>
+    </div>
+
+    <!-- Table card -->
+    <div data-anim="fade-up" style="transition-delay:80ms" class="rounded-2xl border border-white/10 bg-zinc-950 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse min-w-[820px]">
+          <thead>
+            <tr class="border-b border-white/10">
+              <th class="text-left font-medium text-xs uppercase tracking-widest text-white/40 py-4 pl-6 pr-4 align-bottom" data-t="compare.header.criteria">
+                Criteria
+              </th>
+              {tools.map((t) => (
+                <th class={`text-left py-4 px-4 align-bottom ${t.highlight ? 'bg-primary/[0.06]' : ''}`}>
+                  <div class="flex items-center gap-2">
+                    {t.highlight ? (
+                      <span class="inline-block size-2 rounded-full bg-primary"></span>
+                    ) : (
+                      <span class="inline-block size-2 rounded-full bg-white/20"></span>
+                    )}
+                    <span class={`text-sm font-semibold ${t.highlight ? 'text-primary' : 'text-white/85'}`}>
+                      {t.name}
+                    </span>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr class={idx % 2 === 1 ? 'bg-white/[0.015]' : ''}>
+                <td class="py-3.5 pl-6 pr-4 text-white/70" data-t={`compare.row.${row.key}`}>
+                  {row.label}
+                </td>
+                {tools.map((t) => {
+                  const cell = row.cells[t.key]
+                  const isHighlight = t.highlight
+                  return (
+                    <td class={`py-3.5 px-4 ${isHighlight ? 'bg-primary/[0.06]' : ''}`}>
+                      {typeof cell === 'string' ? (
+                        <span class={isHighlight ? 'text-primary/95 font-medium' : 'text-white/80'}>{cell}</span>
+                      ) : cell.v === 'yes' ? (
+                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary' : 'text-emerald-400/85'}`}>
+                          <svg class="size-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
+                          <span class="text-xs">Yes</span>
+                        </span>
+                      ) : cell.v === 'no' ? (
+                        <span class="inline-flex items-center gap-1.5 text-white/30">
+                          <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg>
+                          <span class="text-xs">No</span>
+                        </span>
+                      ) : cell.v === 'partial' ? (
+                        <span class="inline-flex items-center gap-1.5 text-amber-300/80">
+                          <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="3"/></svg>
+                          <span class="text-xs">{cell.label ?? 'Partial'}</span>
+                        </span>
+                      ) : (
+                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary/80' : 'text-amber-300/70'}`}>
+                          <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 6v4l3 2"/></svg>
+                          <span class="text-xs">{cell.label ?? 'Planned'}</span>
+                        </span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="border-t border-white/10 px-6 py-4 text-[11px] text-white/40 font-mono" data-t="compare.footnote">
+        Memory and cold-start figures are typical for a small production instance. Last reviewed May 2026.
+      </div>
+    </div>
+
+  </div>
+</section>
+

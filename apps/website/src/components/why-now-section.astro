@@ -1,0 +1,479 @@
+---
+// Why Now section — fragmented IAM vs FerrisKey, side-by-side comparison
+
+const withoutServices = [
+  { key: 'passwords', label: 'Password hashing' },
+  { key: 'mfa',       label: 'MFA flows' },
+  { key: 'oidc',      label: 'OIDC tokens' },
+  { key: 'sessions',  label: 'Session storage' },
+  { key: 'audit',     label: 'Audit logging' },
+  { key: 'social',    label: 'Social login' },
+  { key: 'rbac',      label: 'Permission rules' },
+]
+
+// Keycloak variant — extensions / themes you'll wire or maintain for common needs
+const keycloakExtensions = [
+  { key: 'magiclink', label: 'Magic link login (SPI)' },
+  { key: 'email',     label: 'Email templates (theme)' },
+  { key: 'audit',     label: 'Audit shipping (SPI)' },
+  { key: 'webhook',   label: 'Webhook emitter (SPI)' },
+  { key: 'mappers',   label: 'Claim mappers (SPI)' },
+  { key: 'ratelimit', label: 'Rate limiting (proxy)' },
+]
+
+// Auth0 variant — what you delegate to the vendor
+const auth0Facts = [
+  { key: 'hosted',   label: 'Hosted by the vendor' },
+  { key: 'mau',      label: 'Pricing scales with MAU' },
+  { key: 'data',     label: 'User data leaves your network' },
+  { key: 'custom',   label: 'Customization through Rules / Actions' },
+  { key: 'lockin',   label: 'Logo, themes & flows are vendor-owned' },
+]
+
+const withTags = [
+  { key: 'auth',  label: 'Auth' },
+  { key: 'mfa',   label: 'MFA' },
+  { key: 'oidc',  label: 'OIDC' },
+  { key: 'sess',  label: 'Sessions' },
+  { key: 'audit', label: 'Audit' },
+  { key: 'fed',   label: 'Federation' },
+  { key: 'rbac',  label: 'RBAC' },
+]
+
+// SVG style values (inline; Astro hoists <style> tags so we can't use them inside SVG)
+const LINE_STROKE   = 'rgba(255,255,255,0.18)'
+const BOX_FILL      = 'rgba(255,255,255,0.04)'
+const BOX_STROKE    = 'rgba(255,255,255,0.18)'
+const ANCHOR_FILL   = 'rgba(255,255,255,0.06)'
+const ANCHOR_STROKE = 'rgba(255,255,255,0.24)'
+const TEXT_COLOR    = 'rgba(255,255,255,0.88)'
+const TEXT_SMALL    = 'rgba(255,255,255,0.82)'
+const SVG_FONT      = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif'
+
+const HUB_FILL      = 'rgba(249,115,22,0.08)'
+const HUB_STROKE    = 'rgba(249,115,22,0.55)'
+const HUB_TITLE     = '#f97316'
+const TAG_FILL      = 'rgba(249,115,22,0.16)'
+const TAG_STROKE    = 'rgba(249,115,22,0.45)'
+const ARROW_STROKE  = 'rgba(255,255,255,0.45)'
+const ARROW_FILL    = 'rgba(255,255,255,0.55)'
+---
+
+<section class="relative w-full py-16 sm:py-24 lg:py-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+
+    <!-- Header -->
+    <div class="max-w-3xl mb-12 sm:mb-16" data-anim="fade-up">
+      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
+        <span class="inline-block size-2 rounded-sm bg-primary"></span>
+        <span data-t="whyNow.label">Why now</span>
+      </p>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6">
+        <span data-t="whyNow.title.lead">Every IAM was built for the monolith era.</span>{' '}
+        <span class="text-primary" data-t="whyNow.title.accent">Cloud-native needs more.</span>
+      </h2>
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl" data-t="whyNow.description">
+        Wiring identity into a modern stack means stitching together password storage, MFA, OIDC, sessions, audit, federation, and policy across fragmented systems — with no unified audit trail and no consistent policy. FerrisKey unifies everything behind one Rust-native service.
+      </p>
+    </div>
+
+    <!-- Tab switcher -->
+    <div data-anim="fade-up" class="mb-4 flex flex-wrap items-center gap-3">
+      <span class="text-[11px] font-mono uppercase tracking-widest text-muted-foreground" data-t="whyNow.tabs.label">Compare with:</span>
+      <div role="tablist" id="why-now-tabs" class="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-white/[0.04] border border-white/10">
+        <button type="button" role="tab" data-view-button="custom" aria-selected="true"
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white">
+          <span data-t="whyNow.tabs.custom">Built in-house</span>
+        </button>
+        <button type="button" role="tab" data-view-button="keycloak" aria-selected="false"
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white/55 hover:text-white">
+          <span data-t="whyNow.tabs.keycloak">Keycloak</span>
+        </button>
+        <button type="button" role="tab" data-view-button="auth0" aria-selected="false"
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white/55 hover:text-white">
+          <span data-t="whyNow.tabs.auth0">Auth0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Two cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+
+      <!-- LEFT: CUSTOM variant (default) -->
+      <div data-view-pane="custom" data-anim="fade-up" style="transition-delay:80ms" class="relative rounded-2xl border border-white/10 bg-zinc-950 p-6 sm:p-8 overflow-hidden">
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <p class="flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-300/90 font-mono">
+            <span class="inline-block size-2 rounded-full bg-zinc-400"></span>
+            <span data-t="whyNow.without.label">Built in-house</span>
+          </p>
+          <div class="text-right shrink-0">
+            <div class="text-2xl sm:text-3xl font-semibold text-white/85 leading-none font-mono">7+</div>
+            <div class="text-[10px] uppercase tracking-wider text-white/40 mt-1" data-t="whyNow.without.metric">Code paths your app owns</div>
+          </div>
+        </div>
+
+        <!-- Diagram -->
+        <div class="w-full">
+          <svg viewBox="0 0 640 380" class="w-full h-auto" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+
+            <defs>
+              <marker id="wo-arrow-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.5)" />
+              </marker>
+            </defs>
+
+            {/* Big "Your App" container — holds every identity concern internally */}
+            <rect x="22" y="30" width="430" height="320" rx="14"
+                  fill="rgba(255,255,255,0.02)"
+                  stroke="rgba(255,255,255,0.22)"
+                  stroke-width="1.4" stroke-dasharray="5 4" />
+
+            {/* App title row */}
+            <g transform="translate(38 58)">
+              <text x="0" y="0" fill="rgba(255,255,255,0.6)" font-size="14" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{ }`}</text>
+              <text x="32" y="0" fill="rgba(255,255,255,0.95)" font-size="14" font-weight="600" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
+            </g>
+            <text x="38" y="78" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.without.subtitle">handles every identity concern itself:</text>
+
+            {/* Internal module boxes — code paths inside the app */}
+            {withoutServices.map((svc, i) => {
+              const y = 96 + i * 34
+              return (
+                <g>
+                  <rect x="38" y={y} width="398" height="26" rx="6"
+                        fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.16)"
+                        stroke-width="1" stroke-dasharray="3 3" />
+                  <text x="52" y={y + 18} fill="rgba(255,255,255,0.5)" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">›</text>
+                  <text x="68" y={y + 17} fill="rgba(255,255,255,0.86)" font-size="12" font-family={SVG_FONT}
+                        data-t={`whyNow.without.svc.${svc.key}`}>{svc.label}</text>
+                </g>
+              )
+            })}
+
+            {/* Arrow from App container to Users */}
+            <path d="M 454 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#wo-arrow-head)" />
+
+            {/* Users box (right) */}
+            <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
+          </svg>
+        </div>
+
+        <!-- Bottom bullets -->
+        <div class="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-white/65">
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.without.bullet1">Auth code lives in every app</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.without.bullet2">Audit and policy stay scattered</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.without.bullet3">Full control, full ownership</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.without.bullet4">Long-term maintenance load</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- LEFT: KEYCLOAK variant (hidden by default) -->
+      <div data-view-pane="keycloak" data-anim="fade-up" style="transition-delay:80ms" class="hidden relative rounded-2xl border border-white/10 bg-zinc-950 p-6 sm:p-8 overflow-hidden">
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <p class="flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-300/90 font-mono">
+            <span class="inline-block size-2 rounded-full bg-zinc-400"></span>
+            <span data-t="whyNow.keycloak.label">Keycloak + extensions</span>
+          </p>
+          <div class="text-right shrink-0">
+            <div class="text-2xl sm:text-3xl font-semibold text-white/85 leading-none font-mono">6+</div>
+            <div class="text-[10px] uppercase tracking-wider text-white/40 mt-1" data-t="whyNow.keycloak.metric">Integrations to wire</div>
+          </div>
+        </div>
+
+        <!-- Diagram -->
+        <div class="w-full">
+          <svg viewBox="0 0 640 380" class="w-full h-auto" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+
+            <defs>
+              <marker id="kc-arrow-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.5)" />
+              </marker>
+            </defs>
+
+            {/* App box (left) */}
+            <rect x="22" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="77" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
+
+            {/* Arrow app → Keycloak */}
+            <path d="M 132 190 L 184 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+
+            {/* Big "Keycloak" container — core + extensions to wire (spans 190→450) */}
+            <rect x="190" y="30" width="260" height="320" rx="14"
+                  fill="rgba(255,255,255,0.02)"
+                  stroke="rgba(255,255,255,0.22)"
+                  stroke-width="1.4" stroke-dasharray="5 4" />
+
+            {/* Keycloak title */}
+            <g transform="translate(206 58)">
+              <circle r="6" cx="0" cy="-2" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.4)" stroke-width="1" />
+              <path d="M -2.5 -4 L 0 -2 M 0 -2 L 0 1.5 M -1.5 0 L 1.5 0" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.4" stroke-linecap="round" />
+              <text x="14" y="2" fill="rgba(255,255,255,0.95)" font-size="14" font-weight="600" font-family={SVG_FONT}>Keycloak</text>
+              <text x="76" y="2" fill="rgba(255,255,255,0.45)" font-size="11" font-family={SVG_FONT}>core</text>
+            </g>
+            <text x="206" y="80" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.keycloak.subtitle">common needs handled by extensions:</text>
+
+            {/* Extension boxes — fit inside the narrower container */}
+            {keycloakExtensions.map((ext, i) => {
+              const y = 100 + i * 38
+              return (
+                <g>
+                  <rect x="206" y={y} width="228" height="30" rx="6"
+                        fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.16)"
+                        stroke-width="1" stroke-dasharray="3 3" />
+                  {/* "EXT" badge on the left */}
+                  <rect x="214" y={y + 8} width="32" height="14" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.22)" stroke-width="0.8" />
+                  <text x="230" y={y + 19} text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">EXT</text>
+                  <text x="254" y={y + 19} fill="rgba(255,255,255,0.86)" font-size="12" font-family={SVG_FONT}
+                        data-t={`whyNow.keycloak.ext.${ext.key}`}>{ext.label}</text>
+                </g>
+              )
+            })}
+
+            {/* Arrow Keycloak → Users — now 52px, symmetric with the left arrow */}
+            <path d="M 450 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+
+            {/* Users box (right) */}
+            <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
+          </svg>
+        </div>
+
+        <!-- Bullets -->
+        <div class="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-white/65">
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.keycloak.bullet1">Java/Quarkus to operate</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.keycloak.bullet2">SPIs and themes to ship</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.keycloak.bullet3">Mature ecosystem</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.keycloak.bullet4">Self-hosted, fully open</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- LEFT: AUTH0 variant (hidden by default) -->
+      <div data-view-pane="auth0" data-anim="fade-up" style="transition-delay:80ms" class="hidden relative rounded-2xl border border-white/10 bg-zinc-950 p-6 sm:p-8 overflow-hidden">
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <p class="flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-zinc-300/90 font-mono">
+            <span class="inline-block size-2 rounded-full bg-zinc-400"></span>
+            <span data-t="whyNow.auth0.label">Auth0 (SaaS)</span>
+          </p>
+          <div class="text-right shrink-0">
+            <div class="text-2xl sm:text-3xl font-semibold text-white/85 leading-none font-mono">MAU</div>
+            <div class="text-[10px] uppercase tracking-wider text-white/40 mt-1" data-t="whyNow.auth0.metric">Per active user / month</div>
+          </div>
+        </div>
+
+        <!-- Diagram -->
+        <div class="w-full">
+          <svg viewBox="0 0 640 380" class="w-full h-auto" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+
+            <defs>
+              <marker id="a0-arrow-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.5)" />
+              </marker>
+              {/* Tiny diagonal hatch to suggest "outside your infra" */}
+              <pattern id="a0-outside" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+              </pattern>
+            </defs>
+
+            {/* "Outside your network" zone — centered on x=320 */}
+            <rect x="160" y="20" width="320" height="340" rx="18" fill="url(#a0-outside)" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="2 6" />
+            <text x="320" y="46" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.4" data-t="whyNow.auth0.zone">OUTSIDE YOUR NETWORK</text>
+
+            {/* App box (inside your network) */}
+            <rect x="22" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="77" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
+
+            {/* Arrow app → Auth0 (crossing the boundary at x=160) */}
+            <path d="M 132 190 L 196 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+
+            {/* Auth0 SaaS box — centered on x=320 (spans 204→436) */}
+            <rect x="204" y="110" width="232" height="160" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.32)" stroke-width="1.4" />
+
+            {/* Cloud icon centered at (320, 146) — Heroicons cloud */}
+            <g transform="translate(320 146)">
+              <path d="M4.5 9.75a6 6 0 0111.573-2.226 3.75 3.75 0 014.133 4.303A4.5 4.5 0 0118 20.25H6.75a5.25 5.25 0 01-2.25-10.5z"
+                    transform="translate(-12 -14)"
+                    fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.6)" stroke-width="1.4" stroke-linejoin="round" />
+            </g>
+
+            {/* "Auth0" title — centered on x=320 */}
+            <text x="320" y="190" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-size="15" font-weight="700" font-family={SVG_FONT}>Auth0</text>
+            <text x="320" y="208" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.auth0.subtitle">managed identity service</text>
+
+            {/* Pricing tag — wider, more padding (centered on x=320, y=240) */}
+            <g transform="translate(320 240)">
+              <rect x="-96" y="-14" width="192" height="28" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.2)" stroke-width="0.9" />
+              <text x="0" y="4" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.6" data-t="whyNow.auth0.billing">per MAU · billed monthly</text>
+            </g>
+
+            {/* Arrow Auth0 → Users (crossing the boundary at x=480) */}
+            <path d="M 436 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+
+            {/* Users box */}
+            <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
+          </svg>
+        </div>
+
+        <!-- Bullets -->
+        <div class="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-white/65">
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.auth0.bullet1">Zero infra to run</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.auth0.bullet2">Cost scales with users</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.auth0.bullet3">User data leaves your perimeter</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="inline-block size-1.5 rounded-full bg-white/45 shrink-0"></span>
+            <span data-t="whyNow.auth0.bullet4">Customization via Rules & Actions</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- WITH FerrisKey -->
+      <div data-anim="fade-up" style="transition-delay:160ms" class="relative rounded-2xl border border-primary/25 bg-zinc-950 p-6 sm:p-8 overflow-hidden">
+        <div class="absolute inset-0 -z-0 pointer-events-none" style="background: radial-gradient(circle at 50% 50%, rgba(249,115,22,0.12), transparent 60%);"></div>
+
+        <div class="relative flex items-start justify-between gap-4 mb-6">
+          <p class="flex items-center gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-primary font-mono">
+            <span class="inline-block size-2 rounded-full bg-primary"></span>
+            <span data-t="whyNow.with.label">With FerrisKey</span>
+          </p>
+          <div class="text-right shrink-0">
+            <div class="text-2xl sm:text-3xl font-semibold text-primary leading-none font-mono">1</div>
+            <div class="text-[10px] uppercase tracking-wider text-white/40 mt-1" data-t="whyNow.with.metric">Service to call</div>
+          </div>
+        </div>
+
+        <!-- Diagram -->
+        <div class="relative w-full">
+          <svg viewBox="0 0 640 380" class="w-full h-auto" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+
+            <defs>
+              <marker id="wi-arrow-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={ARROW_FILL} />
+              </marker>
+            </defs>
+
+            {/* Solid arrows */}
+            <path d="M 132 190 L 184 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
+            <path d="M 450 190 L 502 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
+
+            {/* App box (left) */}
+            <rect x="22" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="77" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
+
+            {/* Users box (right) */}
+            <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
+            <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
+
+            {/* FerrisKey hub — one solid block, presented as ONE thing */}
+            <rect x="190" y="120" width="260" height="140" rx="16" fill={HUB_FILL} stroke={HUB_STROKE} stroke-width="1.8" />
+
+            {/* Soft inner glow */}
+            <rect x="198" y="128" width="244" height="124" rx="12" fill="none" stroke="rgba(249,115,22,0.18)" stroke-width="1" />
+
+            {/* FerrisKey logo + name, centered */}
+            <g transform="translate(320 168)">
+              <circle r="14" cx="0" cy="0" fill="rgba(249,115,22,0.25)" stroke={HUB_STROKE} stroke-width="1.2" />
+              <path d="M -6 -2 L 0 4 L 6 -2" fill="none" stroke={HUB_TITLE} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <text x="0" y="32" text-anchor="middle" fill={HUB_TITLE} font-size="15" font-weight="700" font-family={SVG_FONT}>FerrisKey</text>
+              <text x="0" y="50" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.with.subtitle">Unified identity service</text>
+            </g>
+
+          </svg>
+        </div>
+
+        <!-- Bottom bullets -->
+        <div class="relative mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-white/75">
+          <span class="flex items-center gap-2">
+            <svg class="size-3.5 text-primary shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
+            <span data-t="whyNow.with.bullet1">One IAM service</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <svg class="size-3.5 text-primary shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
+            <span data-t="whyNow.with.bullet2">Unified audit trail</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <svg class="size-3.5 text-primary shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
+            <span data-t="whyNow.with.bullet3">Consistent policy</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <svg class="size-3.5 text-primary shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
+            <span data-t="whyNow.with.bullet4">One API to integrate</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function initWhyNowTabs() {
+    const tabsRoot = document.getElementById('why-now-tabs')
+    if (!tabsRoot) return
+    const buttons = Array.from(tabsRoot.querySelectorAll<HTMLButtonElement>('[data-view-button]'))
+    const panes   = Array.from(document.querySelectorAll<HTMLElement>('[data-view-pane]'))
+
+    function activate(view: string) {
+      buttons.forEach((b) => {
+        const isActive = b.getAttribute('data-view-button') === view
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false')
+        b.classList.toggle('bg-white/10', isActive)
+        b.classList.toggle('text-white', isActive)
+        b.classList.toggle('text-white/55', !isActive)
+        b.classList.toggle('hover:text-white', !isActive)
+      })
+      panes.forEach((p) => {
+        const isActive = p.getAttribute('data-view-pane') === view
+        p.classList.toggle('hidden', !isActive)
+        // Make sure the newly visible pane is "in" (already animated in or trigger it)
+        if (isActive) p.classList.add('in')
+      })
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-view-button')
+        if (view) activate(view)
+      })
+    })
+
+    // Sync initial active button visuals (default = custom)
+    const initial = buttons.find((b) => b.getAttribute('aria-selected') === 'true')?.getAttribute('data-view-button') ?? 'custom'
+    activate(initial)
+  }
+
+  initWhyNowTabs()
+  document.addEventListener('astro:after-swap', initWhyNowTabs)
+</script>

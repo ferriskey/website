@@ -29,11 +29,15 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
     ></div>
 
     <!-- Header -->
-    <div data-anim="fade-up" class="relative text-center mb-14 px-8 pt-8">
-      <h2 class="text-3xl sm:text-4xl font-semibold text-foreground text-balance" data-t="sponsors.title">
+    <div data-anim="fade-up" class="relative text-center max-w-3xl mx-auto mb-12 sm:mb-16 pt-8">
+      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center justify-center gap-2">
+        <span class="inline-block size-2 rounded-sm bg-primary"></span>
+        <span data-t="sponsors.label">Partners</span>
+      </p>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6 text-balance" data-t="sponsors.title">
         Proudly supported by our partners
       </h2>
-      <p class="mt-4 text-muted-foreground max-w-xl mx-auto text-balance leading-relaxed" data-t="sponsors.description">
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl mx-auto text-balance" data-t="sponsors.description">
         These companies and projects keep Ferriskey thriving. Their support funds
         development, maintenance, and community growth — allowing us to stay
         independent and focused on building the best IAM we can.
@@ -51,15 +55,15 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
 
     <div class="relative flex flex-col gap-10">
 
-      <!-- Platinum + Gold : 3 par ligne -->
+      <!-- Platinum + Gold : 2 par ligne sur mobile, 3 ensuite -->
       {(platinum.length > 0 || gold.length > 0) && (
-        <div data-anim="fade-up" style="transition-delay:120ms" class="grid grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
+        <div data-anim="fade-up" style="transition-delay:120ms" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
           {[...platinum, ...gold].map(s => (
             <a
               href={s.href}
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center justify-center rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors px-6 py-8 group"
+              class="flex items-center justify-center rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors px-4 sm:px-6 py-8 overflow-hidden group"
             >
               {logoSrcs(s).same ? (
                 <img src={logoSrcs(s).light} alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity ${logoScale[s.id] ?? ''}`} />
@@ -74,7 +78,7 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
           <a
             href="https://github.com/sponsors/ferriskey"
             target="_blank"
-            class="flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-6 py-8"
+            class="flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-4 sm:px-6 py-8 overflow-hidden"
           >
             <span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/40" data-t="sponsors.placeholder">Your Logo</span>
           </a>
@@ -85,13 +89,13 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
       {supporters.length > 0 && (
         <div data-anim="fade-up" style="transition-delay:240ms">
           <p class="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4 text-center" data-t="sponsors.supporters">Supporters</p>
-          <div class="grid grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
             {supporters.map(s => (
               <a
                 href={s.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 hover:bg-muted/20 transition-colors px-6 py-6 group"
+                class="flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 hover:bg-muted/20 transition-colors px-4 sm:px-6 py-6 overflow-hidden group"
               >
                 {logoSrcs(s).same ? (
                   <img src={logoSrcs(s).light} alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity ${logoScale[s.id] ?? ''}`} />

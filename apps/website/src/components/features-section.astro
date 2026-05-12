@@ -49,20 +49,21 @@ const cards = [
 
       <!-- Left: sticky label + title + description -->
       <div class="lg:sticky lg:top-28 reveal-left">
-        <p class="text-sm font-semibold text-primary uppercase tracking-widest mb-3 font-mono" data-t="features.label">
-          Why FerrisKey
+        <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2" data-t-host>
+          <span class="inline-block size-2 rounded-sm bg-primary"></span>
+          <span data-t="features.label">Why FerrisKey</span>
         </p>
-        <h2 class="text-3xl sm:text-4xl font-semibold text-foreground leading-tight mb-6" data-t="features.title">
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6" data-t="features.title">
           Identity infrastructure for cloud-native platforms, without legacy IAM complexity.
         </h2>
-        <p class="text-base text-muted-foreground leading-relaxed mb-4" data-t="features.desc1">
+        <p class="text-base sm:text-lg text-muted-foreground leading-relaxed mb-4" data-t="features.desc1">
           Identity &amp; Access Management is the backbone of any secure platform. It controls
           <span class="text-foreground">who can authenticate</span>,
           <span class="text-foreground">what they are authorized to do</span>, and
           <span class="text-foreground">how every access event is tracked</span>
           across every service, team, and environment in your infrastructure.
         </p>
-        <p class="text-base text-muted-foreground leading-relaxed" data-t="features.desc2">
+        <p class="text-base sm:text-lg text-muted-foreground leading-relaxed" data-t="features.desc2">
           Without a solid IAM foundation, teams end up with fragmented auth logic scattered across services, no unified audit trail, and security gaps that grow with every new product. FerrisKey addresses this with a
           <span class="text-foreground">unified, operator-first approach</span>
           designed for distributed systems from day one.

@@ -2,7 +2,10 @@
 import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
 import HeroSection from '../components/hero-section.astro'
+import WhyNowSection from '../components/why-now-section.astro'
 import FeaturesSection from '../components/features-section.astro'
+import ComparisonSection from '../components/comparison-section.astro'
+import AuditFeedSection from '../components/audit-feed-section.astro'
 import UiShowcaseSection from '../components/ui-showcase-section.astro'
 import ModulesSection from '../components/modules-section.astro'
 import OssSection from '../components/oss-section.astro'
@@ -27,7 +30,10 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
   <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
 
   <HeroSection />
+  <WhyNowSection />
   <FeaturesSection />
+  <ComparisonSection />
+  <AuditFeedSection />
   <UiShowcaseSection />
   <ModulesSection />
   <OssSection />
