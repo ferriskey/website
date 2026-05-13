@@ -80,17 +80,17 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
     <!-- Tab switcher -->
     <div data-anim="fade-up" class="mb-4 flex flex-wrap items-center gap-3">
       <span class="text-[11px] font-mono uppercase tracking-widest text-muted-foreground" data-t="whyNow.tabs.label">Compare with:</span>
-      <div role="tablist" id="why-now-tabs" class="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-white/[0.04] border border-white/10">
+      <div role="tablist" id="why-now-tabs" class="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-muted/40 border">
         <button type="button" role="tab" data-view-button="custom" aria-selected="true"
-                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white">
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors bg-background text-foreground shadow-sm">
           <span data-t="whyNow.tabs.custom">Built in-house</span>
         </button>
         <button type="button" role="tab" data-view-button="keycloak" aria-selected="false"
-                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white/55 hover:text-white">
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground">
           <span data-t="whyNow.tabs.keycloak">Keycloak</span>
         </button>
         <button type="button" role="tab" data-view-button="auth0" aria-selected="false"
-                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-white/55 hover:text-white">
+                class="why-tab px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground">
           <span data-t="whyNow.tabs.auth0">Auth0</span>
         </button>
       </div>
@@ -449,10 +449,11 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
       buttons.forEach((b) => {
         const isActive = b.getAttribute('data-view-button') === view
         b.setAttribute('aria-selected', isActive ? 'true' : 'false')
-        b.classList.toggle('bg-white/10', isActive)
-        b.classList.toggle('text-white', isActive)
-        b.classList.toggle('text-white/55', !isActive)
-        b.classList.toggle('hover:text-white', !isActive)
+        b.classList.toggle('bg-background', isActive)
+        b.classList.toggle('shadow-sm', isActive)
+        b.classList.toggle('text-foreground', isActive)
+        b.classList.toggle('text-muted-foreground', !isActive)
+        b.classList.toggle('hover:text-foreground', !isActive)
       })
       panes.forEach((p) => {
         const isActive = p.getAttribute('data-view-pane') === view

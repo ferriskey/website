@@ -36,17 +36,17 @@ const rotationPool: AuditEvent[] = [
   { kind: 'oidc',    message: 'device_code flow completed for cli',           realm: 'acme',   latency: '34 ms' },
 ]
 
-// Map kind → tag style
+// Map kind → tag style (theme-aware via dark: variants)
 const KIND_STYLE: Record<AuditEvent['kind'], { label: string; cls: string }> = {
-  oidc:    { label: 'OIDC',    cls: 'bg-sky-500/12 text-sky-300 border-sky-500/25' },
-  mfa:     { label: 'MFA',     cls: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25' },
+  oidc:    { label: 'OIDC',    cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30' },
+  mfa:     { label: 'MFA',     cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
   token:   { label: 'TOKEN',   cls: 'bg-primary/15 text-primary border-primary/30' },
-  fed:     { label: 'FED',     cls: 'bg-violet-500/12 text-violet-300 border-violet-500/25' },
-  role:    { label: 'ROLE',    cls: 'bg-amber-500/12 text-amber-300 border-amber-500/25' },
-  audit:   { label: 'AUDIT',   cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
-  passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/12 text-fuchsia-300 border-fuchsia-500/25' },
-  warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
-  logout:  { label: 'LOGOUT',  cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+  fed:     { label: 'FED',     cls: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30' },
+  role:    { label: 'ROLE',    cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
+  audit:   { label: 'AUDIT',   cls: 'bg-muted text-muted-foreground border' },
+  passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30' },
+  warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30' },
+  logout:  { label: 'LOGOUT',  cls: 'bg-muted text-muted-foreground border' },
 }
 
 const stats = [
@@ -80,7 +80,7 @@ const stats = [
 
         <dl class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4 max-w-md">
           {stats.map((s) => (
-            <div class="rounded-xl border border-white/10 bg-white/[0.015] p-4 flex items-center gap-4">
+            <div class="rounded-xl border bg-muted/30 p-4 flex items-center gap-4">
               <dt class="text-2xl sm:text-3xl font-semibold text-primary leading-none font-mono whitespace-nowrap">{s.value}</dt>
               <dd class="text-xs text-muted-foreground leading-snug" data-t={`audit.stat.${s.key}`}>{s.label}</dd>
             </div>
@@ -90,45 +90,46 @@ const stats = [
 
       <!-- Right: feed card -->
       <div data-anim="fade-up" style="transition-delay:120ms" class="relative">
-        <div class="rounded-2xl border border-white/10 bg-zinc-950 overflow-hidden shadow-2xl">
+        <div class="rounded-2xl border bg-card overflow-hidden shadow-xl">
 
-          <!-- Feed header -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-white/10 bg-white/[0.02]">
+          <!-- Feed header — just 3 dots + connected indicator -->
+          <div class="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
             <div class="flex items-center gap-2">
               <span class="size-2.5 rounded-full bg-rose-400/70"></span>
               <span class="size-2.5 rounded-full bg-amber-300/70"></span>
               <span class="size-2.5 rounded-full bg-emerald-400/70"></span>
-              <span class="ml-3 text-xs font-mono text-white/45 tracking-wide" data-t="audit.feed.path">~/realms/audit.tail</span>
             </div>
-            <div class="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-white/35 uppercase tracking-widest">
-              <svg class="size-3 text-emerald-400/80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="3"/></svg>
+            <div class="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+              <svg class="size-3 text-emerald-600 dark:text-emerald-400/80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="3"/></svg>
               <span data-t="audit.feed.connected">connected</span>
             </div>
           </div>
 
-          <!-- Feed list -->
-          <ul id="ferriskey-audit-feed" class="audit-list relative" aria-live="polite" aria-relevant="additions" data-pool={JSON.stringify(rotationPool)}>
-            {initialEvents.map((evt, i) => {
-              const style = KIND_STYLE[evt.kind]
-              return (
-                <li class="audit-row flex items-center gap-3 px-5 py-3 border-b border-white/[0.05] last:border-b-0" style={`--row-delay: ${i * 60}ms`}>
-                  <span class={`shrink-0 inline-flex items-center justify-center text-[10px] font-semibold font-mono uppercase tracking-wider rounded border px-1.5 py-0.5 min-w-[56px] text-center ${style.cls}`}>
-                    {style.label}
-                  </span>
-                  <span class="flex-1 min-w-0 text-sm text-white/85 truncate">{evt.message}</span>
-                  <span class="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-white/40 shrink-0">
-                    <span class="text-white/30">realm:</span>{evt.realm}
-                  </span>
-                  <span class={`text-[11px] font-mono shrink-0 tabular-nums ${evt.latency === 'blocked' ? 'text-rose-300' : 'text-white/55'}`}>
-                    {evt.latency}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
+          <!-- Feed window: fixed height, clips overflow so the card never resizes -->
+          <div id="ferriskey-audit-window" class="audit-window relative overflow-hidden">
+            <ul id="ferriskey-audit-feed" class="audit-list" aria-live="polite" aria-relevant="additions" data-pool={JSON.stringify(rotationPool)}>
+              {initialEvents.map((evt, i) => {
+                const style = KIND_STYLE[evt.kind]
+                return (
+                  <li class="audit-row flex items-center gap-3 px-5 py-3 border-b border-border/50 last:border-b-0" style={`--row-delay: ${i * 60}ms`}>
+                    <span class={`shrink-0 inline-flex items-center justify-center text-[10px] font-semibold font-mono uppercase tracking-wider rounded border px-1.5 py-0.5 min-w-[56px] text-center ${style.cls}`}>
+                      {style.label}
+                    </span>
+                    <span class="flex-1 min-w-0 text-sm text-foreground/85 truncate">{evt.message}</span>
+                    <span class="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground shrink-0">
+                      <span class="text-muted-foreground/70">realm:</span>{evt.realm}
+                    </span>
+                    <span class={`text-[11px] font-mono shrink-0 tabular-nums ${evt.latency === 'blocked' ? 'text-rose-600 dark:text-rose-300' : 'text-foreground/60'}`}>
+                      {evt.latency}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
 
           <!-- Feed footer -->
-          <div class="px-5 py-2.5 border-t border-white/10 bg-white/[0.02] flex items-center justify-between text-[10px] font-mono text-white/35 uppercase tracking-widest">
+          <div class="px-5 py-2.5 border-t bg-muted/30 flex items-center justify-between text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
             <span data-t="audit.feed.format">format: jsonl · ndjson</span>
             <span data-t="audit.feed.sink">→ webhooks · siem · s3</span>
           </div>
@@ -143,39 +144,41 @@ const stats = [
 </section>
 
 <style>
-  /* Initial staggered entry of pre-rendered rows */
+  /* Fixed-height window so the card never resizes when rows come and go.
+     Height is set in JS once we've measured a real row, so it adapts to font/zoom. */
+  .audit-window {
+    /* Sensible fallback before JS locks the height */
+    min-height: 384px;
+  }
+  .audit-list {
+    will-change: transform;
+  }
+
+  /* Initial staggered entry of pre-rendered rows — pure fade, no layout shift */
   .audit-row {
     opacity: 0;
-    transform: translateY(-6px);
     animation: audit-fade-in 0.45s ease forwards;
     animation-delay: var(--row-delay, 0ms);
   }
   @keyframes audit-fade-in {
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; }
   }
 
-  /* When JS prepends a new row, it gets the .audit-new class for a flash effect */
+  /* When JS prepends a new row it pre-positions the list one row higher and
+     then animates back to translateY(0), which makes the list visibly slide
+     down by exactly one row. The new row also gets a subtle primary flash. */
   .audit-row.audit-new {
-    animation: audit-flash 0.9s ease;
+    animation: audit-flash 0.9s ease-out;
   }
   @keyframes audit-flash {
-    0%   { background: rgba(249,115,22,0.12); transform: translateY(-8px); opacity: 0; }
-    20%  { transform: translateY(0); opacity: 1; }
-    100% { background: transparent; transform: translateY(0); opacity: 1; }
-  }
-
-  /* Soft fade-out for the last row when removed */
-  .audit-row.audit-leaving {
-    animation: audit-fade-out 0.4s ease forwards;
-  }
-  @keyframes audit-fade-out {
-    to { opacity: 0; transform: translateY(8px); }
+    0%   { background: rgba(249, 115, 22, 0.22); }
+    100% { background: transparent; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .audit-row,
-    .audit-row.audit-new,
-    .audit-row.audit-leaving { animation: none !important; opacity: 1; transform: none; }
+    .audit-row.audit-new { animation: none !important; opacity: 1; transform: none; }
+    .audit-list { transition: none !important; transform: none !important; }
   }
 </style>
 
@@ -188,15 +191,15 @@ const stats = [
   }
 
   const KIND_STYLE = {
-    oidc:    { label: 'OIDC',    cls: 'bg-sky-500/12 text-sky-300 border-sky-500/25' },
-    mfa:     { label: 'MFA',     cls: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25' },
+    oidc:    { label: 'OIDC',    cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30' },
+    mfa:     { label: 'MFA',     cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
     token:   { label: 'TOKEN',   cls: 'bg-primary/15 text-primary border-primary/30' },
-    fed:     { label: 'FED',     cls: 'bg-violet-500/12 text-violet-300 border-violet-500/25' },
-    role:    { label: 'ROLE',    cls: 'bg-amber-500/12 text-amber-300 border-amber-500/25' },
-    audit:   { label: 'AUDIT',   cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
-    passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/12 text-fuchsia-300 border-fuchsia-500/25' },
-    warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
-    logout:  { label: 'LOGOUT',  cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/25' },
+    fed:     { label: 'FED',     cls: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30' },
+    role:    { label: 'ROLE',    cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
+    audit:   { label: 'AUDIT',   cls: 'bg-muted text-muted-foreground border' },
+    passkey: { label: 'PASSKEY', cls: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30' },
+    warn:    { label: 'WARN',    cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30' },
+    logout:  { label: 'LOGOUT',  cls: 'bg-muted text-muted-foreground border' },
   }
 
   const MAX_ROWS = 8
@@ -206,7 +209,7 @@ const stats = [
 
   function buildRow(evt: AuditEvent): HTMLLIElement {
     const li = document.createElement('li')
-    li.className = 'audit-row audit-new flex items-center gap-3 px-5 py-3 border-b border-white/[0.05]'
+    li.className = 'audit-row audit-new flex items-center gap-3 px-5 py-3 border-b border-border/50'
 
     const style = KIND_STYLE[evt.kind] ?? KIND_STYLE.audit
     const tag = document.createElement('span')
@@ -216,13 +219,13 @@ const stats = [
     tag.textContent = style.label
 
     const msg = document.createElement('span')
-    msg.className = 'flex-1 min-w-0 text-sm text-white/85 truncate'
+    msg.className = 'flex-1 min-w-0 text-sm text-foreground/85 truncate'
     msg.textContent = evt.message
 
     const realm = document.createElement('span')
-    realm.className = 'hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-white/40 shrink-0'
+    realm.className = 'hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground shrink-0'
     const realmKey = document.createElement('span')
-    realmKey.className = 'text-white/30'
+    realmKey.className = 'text-muted-foreground/70'
     realmKey.textContent = 'realm:'
     realm.appendChild(realmKey)
     realm.appendChild(document.createTextNode(evt.realm))
@@ -230,16 +233,19 @@ const stats = [
     const latency = document.createElement('span')
     latency.className =
       'text-[11px] font-mono shrink-0 tabular-nums ' +
-      (evt.latency === 'blocked' ? 'text-rose-300' : 'text-white/55')
+      (evt.latency === 'blocked' ? 'text-rose-600 dark:text-rose-300' : 'text-foreground/60')
     latency.textContent = evt.latency
 
     li.append(tag, msg, realm, latency)
     return li
   }
 
+  const SLIDE_MS = 600
+
   function startFeed() {
     const feed = document.getElementById('ferriskey-audit-feed') as HTMLUListElement | null
-    if (!feed) return
+    const feedWindow = document.getElementById('ferriskey-audit-window') as HTMLDivElement | null
+    if (!feed || !feedWindow) return
     const raw = feed.getAttribute('data-pool')
     if (!raw) return
 
@@ -248,28 +254,52 @@ const stats = [
     if (!Array.isArray(pool) || pool.length === 0) return
 
     let cursor = 0
+    let animating = false
 
     // Clean up state from any previous invocation (view transitions reuse the JS module)
     if (timer !== null) { window.clearInterval(timer); timer = null }
     if (io !== null)    { io.disconnect();             io = null    }
 
+    // Measure the natural row height and lock the window to (MAX_ROWS * rowH).
+    // Robust to font scaling / zoom because we use a live measurement.
+    const firstRow = feed.firstElementChild as HTMLElement | null
+    const rowH = firstRow ? firstRow.offsetHeight : 48
+    feedWindow.style.height = (MAX_ROWS * rowH) + 'px'
+
     const tick = () => {
+      if (animating) return
+      animating = true
       const evt = pool[cursor % pool.length]
       cursor++
+
       const row = buildRow(evt)
       feed.prepend(row)
 
-      // Count rows that are NOT already on their way out
-      const live = feed.querySelectorAll(':scope > li:not(.audit-leaving)')
-      if (live.length > MAX_ROWS) {
-        // Mark the last live row for removal; the rest is handled by the timeout
-        const last = live[live.length - 1] as HTMLElement
-        last.classList.add('audit-leaving')
-        window.setTimeout(() => last.remove(), 400)
-      }
+      // Step 1: snap the list one row higher with no transition, so visually
+      // nothing has moved yet (the new row sits just outside the window).
+      feed.style.transition = 'none'
+      feed.style.transform  = `translateY(-${rowH}px)`
+      // Force reflow so the browser commits the above before we re-enable transitions.
+      void feed.offsetHeight
+
+      // Step 2: animate back to translateY(0). The list slides down by one row,
+      // revealing the new row at the top and pushing the bottom one out of view.
+      requestAnimationFrame(() => {
+        feed.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`
+        feed.style.transform  = 'translateY(0)'
+      })
+
+      // Step 3: once the slide is done, trim any extra rows from the bottom
+      // (they're already outside the visible window).
+      window.setTimeout(() => {
+        while (feed.children.length > MAX_ROWS) {
+          feed.lastElementChild?.remove()
+        }
+        animating = false
+      }, SLIDE_MS + 40)
     }
 
-    // Respect reduced motion
+    // Respect reduced motion: no slide, just swap in place.
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
     // Only run when visible to avoid background CPU

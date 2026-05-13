@@ -95,12 +95,12 @@ const rows: Row[] = [
     </div>
 
     <!-- Table card -->
-    <div data-anim="fade-up" style="transition-delay:80ms" class="rounded-2xl border border-white/10 bg-zinc-950 overflow-hidden">
+    <div data-anim="fade-up" style="transition-delay:80ms" class="rounded-2xl border bg-card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm border-collapse min-w-[820px]">
           <thead>
-            <tr class="border-b border-white/10">
-              <th class="text-left font-medium text-xs uppercase tracking-widest text-white/40 py-4 pl-6 pr-4 align-bottom" data-t="compare.header.criteria">
+            <tr class="border-b">
+              <th class="text-left font-medium text-xs uppercase tracking-widest text-muted-foreground py-4 pl-6 pr-4 align-bottom" data-t="compare.header.criteria">
                 Criteria
               </th>
               {tools.map((t) => (
@@ -109,9 +109,9 @@ const rows: Row[] = [
                     {t.highlight ? (
                       <span class="inline-block size-2 rounded-full bg-primary"></span>
                     ) : (
-                      <span class="inline-block size-2 rounded-full bg-white/20"></span>
+                      <span class="inline-block size-2 rounded-full bg-muted-foreground/40"></span>
                     )}
-                    <span class={`text-sm font-semibold ${t.highlight ? 'text-primary' : 'text-white/85'}`}>
+                    <span class={`text-sm font-semibold ${t.highlight ? 'text-primary' : 'text-foreground'}`}>
                       {t.name}
                     </span>
                   </div>
@@ -121,8 +121,8 @@ const rows: Row[] = [
           </thead>
           <tbody>
             {rows.map((row, idx) => (
-              <tr class={idx % 2 === 1 ? 'bg-white/[0.015]' : ''}>
-                <td class="py-3.5 pl-6 pr-4 text-white/70" data-t={`compare.row.${row.key}`}>
+              <tr class={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                <td class="py-3.5 pl-6 pr-4 text-muted-foreground" data-t={`compare.row.${row.key}`}>
                   {row.label}
                 </td>
                 {tools.map((t) => {
@@ -131,24 +131,24 @@ const rows: Row[] = [
                   return (
                     <td class={`py-3.5 px-4 ${isHighlight ? 'bg-primary/[0.06]' : ''}`}>
                       {typeof cell === 'string' ? (
-                        <span class={isHighlight ? 'text-primary/95 font-medium' : 'text-white/80'}>{cell}</span>
+                        <span class={isHighlight ? 'text-primary font-medium' : 'text-foreground/85'}>{cell}</span>
                       ) : cell.v === 'yes' ? (
-                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary' : 'text-emerald-400/85'}`}>
+                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary' : 'text-emerald-600 dark:text-emerald-400/85'}`}>
                           <svg class="size-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l4 4 8-9"/></svg>
                           <span class="text-xs">Yes</span>
                         </span>
                       ) : cell.v === 'no' ? (
-                        <span class="inline-flex items-center gap-1.5 text-white/30">
+                        <span class="inline-flex items-center gap-1.5 text-muted-foreground/60">
                           <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg>
                           <span class="text-xs">No</span>
                         </span>
                       ) : cell.v === 'partial' ? (
-                        <span class="inline-flex items-center gap-1.5 text-amber-300/80">
+                        <span class="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-300/80">
                           <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="3"/></svg>
                           <span class="text-xs">{cell.label ?? 'Partial'}</span>
                         </span>
                       ) : (
-                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary/80' : 'text-amber-300/70'}`}>
+                        <span class={`inline-flex items-center gap-1.5 ${isHighlight ? 'text-primary/80' : 'text-amber-600 dark:text-amber-300/70'}`}>
                           <svg class="size-3.5 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 6v4l3 2"/></svg>
                           <span class="text-xs">{cell.label ?? 'Planned'}</span>
                         </span>
@@ -162,7 +162,7 @@ const rows: Row[] = [
         </table>
       </div>
 
-      <div class="border-t border-white/10 px-6 py-4 text-[11px] text-white/40 font-mono" data-t="compare.footnote">
+      <div class="border-t px-6 py-4 text-[11px] text-muted-foreground font-mono" data-t="compare.footnote">
         Memory and cold-start figures are typical for a small production instance. Last reviewed May 2026.
       </div>
     </div>
