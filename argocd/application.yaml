@@ -13,7 +13,7 @@ spec:
     path: helm
     helm:
       valueFiles:
-        - values.yaml
+        - values-nginx.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: ferriskey
