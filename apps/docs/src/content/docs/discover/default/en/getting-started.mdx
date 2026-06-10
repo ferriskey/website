@@ -54,6 +54,109 @@ You'll land in the **master** realm, the built-in realm that manages all other r
 The default admin credentials are for local development only. Change them immediately in any non-local environment by setting the `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables.
 :::
 
+## Deploy Without Cloning the Repository
+
+The quickstart above clones the repository, but you don't need the source code to run FerrisKey. The API, web app, and database migrations all ship as published images on `ghcr.io/ferriskey`. To deploy on a server, save the following as `docker-compose.yml` and start it directly — no checkout required:
+
+```yaml title="docker-compose.yml"
+services:
+  db:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: ferriskey
+      POSTGRES_USER: ferriskey
+      POSTGRES_PASSWORD: ferriskey
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ferriskey"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  db-migrations:
+    image: ghcr.io/ferriskey/ferriskey-api
+    entrypoint: ["sqlx"]
+    command: ["migrate", "run", "--source", "/usr/local/src/ferriskey/migrations"]
+    environment:
+      DATABASE_URL: postgresql://ferriskey:ferriskey@db/ferriskey
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/ferriskey/ferriskey-api
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5555
+      WEBAPP_URL: http://localhost:5555
+      DATABASE_HOST: db
+      DATABASE_NAME: ferriskey
+      DATABASE_USER: ferriskey
+      DATABASE_PASSWORD: ferriskey
+    ports:
+      - 3333:3333
+    depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+
+  webapp:
+    image: ghcr.io/ferriskey/ferriskey-webapp
+    environment:
+      API_URL: http://localhost:3333
+    ports:
+      - 5555:80
+
+volumes:
+  pgdata:
+    name: ferriskey_pgdata
+```
+
+Then start the stack:
+
+```bash
+docker compose up -d
+```
+
+The migration files are baked into the `ferriskey-api` image (under `/usr/local/src/ferriskey/migrations`), so the `db-migrations` service applies the schema without any checked-out source. These are the same images the repository's `registry` profile uses, extracted into a self-contained file you can drop onto any host or convert to a Docker Swarm stack.
+
+:::callout{variant="info" title="Pin a version for production"}
+The images above track the latest tag. For reproducible deployments, pin an explicit tag — for example `ghcr.io/ferriskey/ferriskey-api:vX.Y.Z` — on both the `api` and `db-migrations` services so they always run the same binary and schema.
+:::
+
+## Upgrading FerrisKey
+
+Schema changes ship inside the API image, so upgrading a running stack is "pull, migrate, restart":
+
+::::step-group
+:::step{title="Pull the new images"}
+```bash
+docker compose pull
+```
+:::
+
+:::step{title="Apply new migrations"}
+The `db-migrations` service runs `sqlx migrate run`, which only applies migrations that have not run yet — so it is safe to run on every upgrade:
+
+```bash
+docker compose up -d db-migrations
+```
+:::
+
+:::step{title="Restart the application"}
+Once migrations complete, recreate the API and web app on the new images:
+
+```bash
+docker compose up -d api webapp
+```
+:::
+::::
+
+:::callout{variant="warning" title="Keep api and migrations on the same tag"}
+Always pull the `api` and `db-migrations` services from the **same image tag**. Running a newer API against an older schema — or an older API against a newer schema — can fail at startup.
+:::
+
 ## Create Your First Realm
 
 A realm is an isolated tenant. Users, clients, roles, and credentials all live inside a realm.
