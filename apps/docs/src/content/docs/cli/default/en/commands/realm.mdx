@@ -51,15 +51,20 @@ ferris-ctl realm create <name>
 
 ## `realm delete`
 
-Delete a realm.
+Delete a realm. This prompts for confirmation, since it also removes the realm's clients, users, and roles.
 
 ```bash
-ferris-ctl realm delete <name>
+ferris-ctl realm delete <name> [--force]
 ```
 
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<name>` | yes | Name of the realm to delete |
+| `--force` / `-f` | no | Skip the confirmation prompt |
+
+:::callout{variant="warning" title="Confirmation in scripts"}
+Without `--force`, the command refuses to run in a non-interactive shell rather than deleting silently. Pass `--force` (or `-f`) in CI and automation.
+:::
 
 ## `realm import`
 

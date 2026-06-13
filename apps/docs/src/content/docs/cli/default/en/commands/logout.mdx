@@ -1,0 +1,21 @@
+---
+title: logout
+description: "Remove the stored login session."
+icon: log-out
+order: 7
+---
+
+# `logout`
+
+Remove the session saved by [`login`](/en/cli/commands/login). It deletes `credentials.toml`, so the next command falls back to client credentials (if the context has a secret) or asks you to log in again.
+
+```bash
+ferris-ctl logout
+```
+
+The command takes no arguments. It reports whether a session was removed:
+
+- `Logged out. Stored credentials removed.` when a session existed.
+- `No active session; nothing to remove.` when there was nothing to delete.
+
+See [Authentication](/en/cli/authentication) for how sessions are stored and refreshed.

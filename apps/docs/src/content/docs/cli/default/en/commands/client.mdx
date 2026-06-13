@@ -75,13 +75,14 @@ ferris-ctl client create backend \
 
 ## `client delete`
 
-Delete a client.
+Delete a client. Prompts for confirmation unless `--force` is passed.
 
 ```bash
-ferris-ctl client delete <client_id> [--realm <realm>]
+ferris-ctl client delete <client_id> [--realm <realm>] [--force]
 ```
 
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<client_id>` | yes | Client identifier |
 | `--realm` | no | Realm (defaults to context realm) |
+| `--force` / `-f` | no | Skip the confirmation prompt (required in non-interactive shells) |

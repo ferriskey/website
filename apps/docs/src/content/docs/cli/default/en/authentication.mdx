@@ -89,8 +89,8 @@ No `login` step is needed. The CLI exchanges the secret for a token on each run.
 When a command needs an access token, `ferris-ctl` resolves credentials in this order:
 
 ::::step-group
-:::step{title="Reuse a login session"}
-If `credentials.toml` exists and its `(server_url, realm, client_id)` matches the active context, the saved `access_token` is reused.
+:::step{title="Reuse or refresh a login session"}
+If `credentials.toml` exists and its `(server_url, realm, client_id)` matches the active context, the saved `access_token` is reused while it is still valid. When it has expired, the CLI silently refreshes it with the stored `refresh_token` and saves the new tokens, so you don't have to log in again.
 :::
 
 :::step{title="Fall back to client credentials"}
@@ -102,6 +102,8 @@ If neither is available, the command fails with:
 `no credentials available: run 'ferris-ctl login' or add a context with --client-secret`.
 :::
 ::::
+
+To discard the saved session, run [`ferris-ctl logout`](/en/cli/commands/logout). It deletes `credentials.toml`; the next command then falls back to client credentials or asks you to log in again.
 
 ## Environment variables
 

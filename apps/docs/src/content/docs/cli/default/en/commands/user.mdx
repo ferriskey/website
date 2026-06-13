@@ -69,13 +69,14 @@ ferris-ctl user create alice \
 
 ## `user delete`
 
-Delete a user.
+Delete a user. Prompts for confirmation unless `--force` is passed.
 
 ```bash
-ferris-ctl user delete <username> [--realm <realm>]
+ferris-ctl user delete <username> [--realm <realm>] [--force]
 ```
 
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<username>` | yes | Username |
 | `--realm` | no | Realm (defaults to context realm) |
+| `--force` / `-f` | no | Skip the confirmation prompt (required in non-interactive shells) |
