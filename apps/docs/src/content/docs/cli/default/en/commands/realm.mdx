@@ -1,0 +1,103 @@
+---
+title: realm
+description: "Create, inspect, delete, and import realms."
+icon: layers
+order: 2
+---
+
+# `realm`
+
+Manage realms, the isolated tenants that contain clients, users, roles, and credentials.
+
+```bash
+ferris-ctl realm <subcommand>
+```
+
+Read operations target the realm resolved from your context (or `--realm`). See [Authentication](/en/cli/authentication).
+
+## `realm list`
+
+List all realms.
+
+```bash
+ferris-ctl realm list
+```
+
+Table columns: NAME, ID.
+
+## `realm get`
+
+Show a single realm's details.
+
+```bash
+ferris-ctl realm get <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Realm name |
+
+## `realm create`
+
+Create a new realm.
+
+```bash
+ferris-ctl realm create <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Name of the realm to create |
+
+## `realm delete`
+
+Delete a realm.
+
+```bash
+ferris-ctl realm delete <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Name of the realm to delete |
+
+## `realm import`
+
+Import a realm (its settings, roles, clients, and users) from a description file, a live Keycloak, or a live Zitadel instance.
+
+```bash
+ferris-ctl realm import --from <kind> [source flags] [--target-realm <name>] [--dry-run]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--from` | Source kind: `config`, `keycloak`, or `zitadel` (optional if `--source-ref` is given) |
+| `--source-ref` | Name of a stored [source](/en/cli/commands/source); inline flags below override its values |
+| `--file` | Path to a realm description file (required for `--from config`); `.yaml`, `.yml`, or `.toml` |
+| `--source-url` | Base URL of the source instance (Keycloak / Zitadel) |
+| `--source-realm` | Source realm name (Keycloak) |
+| `--source-org` | Source organization id (Zitadel); sent as the `x-zitadel-orgid` header |
+| `--source-client-id` | Client id for source authentication (Keycloak client credentials) |
+| `--source-client-secret` | Client secret for source authentication (Keycloak) |
+| `--source-token` | Bearer token / personal access token (Zitadel PAT, or a ready Keycloak token) |
+| `--target-realm` | Override the name of the realm created in FerrisKey (defaults to the source realm name) |
+| `--dry-run` | Resolve and print the planned realm without calling the FerrisKey API |
+
+```bash title="Preview a realm from a file (no network writes)"
+ferris-ctl realm import --from config --file examples/realm.yaml --dry-run -o yaml
+```
+
+```bash title="Import a live Keycloak realm"
+ferris-ctl realm import --from keycloak \
+  --source-url https://keycloak.example.com \
+  --source-realm acme \
+  --source-client-id admin-cli \
+  --source-client-secret "$KC_SECRET" \
+  --target-realm acme
+```
+
+The [Import](/en/cli/import/overview) section covers each source in full, including what is and isn't migrated.
+
+:::callout{variant="info" title="Re-running imports is safe"}
+Imports are idempotent: entities that already exist are skipped with a warning, so you can re-run an import after fixing the source.
+:::

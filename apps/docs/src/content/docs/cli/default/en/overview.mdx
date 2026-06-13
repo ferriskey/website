@@ -1,0 +1,88 @@
+---
+title: Overview
+description: "ferris-ctl is the official command-line interface for FerrisKey. Manage realms, clients, users, and imports from your terminal."
+icon: terminal
+order: 1
+---
+
+# FerrisKey CLI
+
+`ferris-ctl` is the official command-line interface for FerrisKey. It talks to the FerrisKey REST API, so from your terminal you can manage realms, OAuth2 clients, and users, import realms from Keycloak or Zitadel, and script administrative tasks.
+
+## What you can do
+
+::::card-group{cols=2}
+:::card{label="Manage contexts" icon="lucide:server" href="/en/cli/commands/context"}
+Store connection profiles (URL, client, realm) and switch between environments.
+:::
+:::card{label="Sign in" icon="lucide:log-in" href="/en/cli/commands/login"}
+Authenticate with the OAuth 2.0 Device Authorization Grant. No client secret required.
+:::
+:::card{label="Administer resources" icon="lucide:box" href="/en/cli/commands/realm"}
+Create and inspect realms, clients, and users.
+:::
+:::card{label="Import realms" icon="lucide:import" href="/en/cli/import/overview"}
+Migrate realms from a file, a live Keycloak, or a live Zitadel instance.
+:::
+::::
+
+## Install
+
+::::code-group
+```bash [Cargo]
+cargo install ferris-ctl
+```
+
+```bash [From source]
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey/cli
+cargo build --release
+# binary at target/release/ferris-ctl
+```
+::::
+
+Pre-built binaries for Linux, macOS, and Windows are also attached to every [GitHub release](https://github.com/ferriskey/ferriskey/releases). Download the archive for your platform, extract `ferris-ctl`, and place it on your `PATH`.
+
+Verify the install:
+
+```bash
+ferris-ctl --help
+```
+
+## How it works
+
+```
+CLI args → ferris-ctl → resolve context + credentials → FerrisKey REST API
+                              ↑
+                  config.toml / credentials.toml
+```
+
+Every command resolves three things in order:
+
+1. **Where** to connect: the server URL, from the active [context](/en/cli/commands/context) or a `--url` override.
+2. **Who** you are: a saved [login](/en/cli/commands/login) session or client credentials, resolved automatically.
+3. **Which realm** to operate on: the context default, or a `--realm` override.
+
+## Global flags
+
+These flags are available on every command and override values stored in your context.
+
+| Flag | Short | Values / default | Env var | Description |
+|------|-------|------------------|---------|-------------|
+| `--context` | | active context | | Use a specific context for this command |
+| `--output` | `-o` | `table` (default), `json`, `yaml` | | Output format |
+| `--url` | | context URL | `FERRISKEY_URL` | FerrisKey server URL |
+| `--client-id` | | context client | `FERRISKEY_CLIENT_ID` | Client ID used for authentication |
+| `--client-secret` | | context secret | `FERRISKEY_CLIENT_SECRET` | Client secret used for authentication |
+| `--realm` | | context realm | `FERRISKEY_REALM` | Realm to operate on |
+
+## Next steps
+
+::::card-group{cols=2}
+:::card{label="Getting Started" icon="lucide:rocket" href="/en/cli/getting-started"}
+Connect to a FerrisKey instance and run your first commands.
+:::
+:::card{label="Authentication" icon="lucide:key-round" href="/en/cli/authentication"}
+Understand contexts, login sessions, and credential resolution.
+:::
+::::

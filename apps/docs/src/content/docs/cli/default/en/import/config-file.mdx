@@ -1,0 +1,102 @@
+---
+title: From a file
+description: "The FerrisKey-native realm description format for ferris-ctl realm import --from config."
+icon: file-text
+order: 2
+---
+
+# Import from a file
+
+`--from config` imports a realm from a FerrisKey-native description file. The format is detected from the extension: `.yaml`, `.yml`, or `.toml`. No external system or credentials are involved.
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml
+```
+
+Preview without writing anything:
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
+```
+
+## Format
+
+A description has a `name` and optional `settings`, `roles`, `clients`, and `users` sections.
+
+```yaml title="realm.yaml"
+name: acme
+
+settings:
+  access_token_lifetime: 300
+  refresh_token_lifetime: 1800
+  user_registration_enabled: true
+  forgot_password_enabled: true
+
+roles:
+  - name: admin
+    description: Realm administrators
+    permissions:
+      - realm:manage
+  - name: viewer
+    description: Read-only access
+
+clients:
+  - client_id: web-app
+    name: Web Application
+    client_type: public
+    public_client: true
+    redirect_uris:
+      - https://app.acme.test/callback
+      - https://app.acme.test/*
+  - client_id: backend
+    name: Backend Service
+    client_type: confidential
+    service_account_enabled: true
+    direct_access_grants_enabled: true
+    roles:
+      - name: service-reader
+        description: Service-scoped read role
+
+users:
+  - username: alice
+    email: alice@acme.test
+    firstname: Alice
+    lastname: Doe
+    email_verified: true
+    roles:
+      - admin
+  - username: bob
+    email: bob@acme.test
+    roles:
+      - viewer
+```
+
+## Settings
+
+All settings are optional; omitted fields keep the FerrisKey default.
+
+| Field | Description |
+|-------|-------------|
+| `default_signing_algorithm` | Token signing algorithm |
+| `access_token_lifetime` | Access token TTL (seconds) |
+| `refresh_token_lifetime` | Refresh token TTL (seconds) |
+| `id_token_lifetime` | ID token TTL (seconds) |
+| `temporary_token_lifetime` | Temporary token TTL (seconds) |
+| `user_registration_enabled` | Allow self-registration |
+| `forgot_password_enabled` | Enable the forgot-password flow |
+| `remember_me_enabled` | Enable "remember me" |
+| `magic_link_enabled` / `magic_link_ttl` | Magic-link login and its TTL |
+| `passkey_enabled` | Enable passkeys |
+| `compass_enabled` | Enable the Compass module |
+| `email_verification_enabled` | Require email verification |
+| `email_verification_ttl_hours` | Email verification link TTL (hours) |
+
+## Roles, clients, users
+
+- **roles:** `name`, optional `description`, optional `permissions` list.
+- **clients:** `client_id`, optional `name`, `client_type` (`public` / `confidential` / `system`), `public_client`, `service_account_enabled`, `direct_access_grants_enabled`, `protocol`, `enabled`, `redirect_uris`, and per-client `roles`.
+- **users:** `username`, optional `email`, `firstname`, `lastname`, `email_verified`, and a `roles` list referencing realm role names.
+
+:::callout{variant="note" title="Passwords are not in the blueprint"}
+User credentials are never part of an import. Users are created without a password; set one afterward via the admin console or a recovery flow.
+:::

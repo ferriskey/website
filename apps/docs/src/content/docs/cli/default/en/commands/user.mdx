@@ -1,0 +1,81 @@
+---
+title: user
+description: "Create, inspect, and delete users within a realm."
+icon: users
+order: 4
+---
+
+# `user`
+
+Manage users within a realm.
+
+```bash
+ferris-ctl user <subcommand>
+```
+
+Every subcommand accepts `--realm <name>` to target a specific realm; otherwise the context default is used.
+
+## `user list`
+
+List users in a realm.
+
+```bash
+ferris-ctl user list [--realm <realm>]
+```
+
+Table columns: USERNAME, EMAIL, ID, ENABLED.
+
+## `user get`
+
+Show a user's details.
+
+```bash
+ferris-ctl user get <username> [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<username>` | yes | Username |
+| `--realm` | no | Realm (defaults to context realm) |
+
+Returns id, username, firstname, lastname, email, and enabled.
+
+## `user create`
+
+Create a user.
+
+```bash
+ferris-ctl user create <username> [flags]
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `<username>` |  | Username (required) |
+| `--realm` | context realm | Realm |
+| `--email` |  | User email |
+| `--firstname` |  | First name |
+| `--lastname` |  | Last name |
+
+```bash title="Example"
+ferris-ctl user create alice \
+  --email alice@example.com \
+  --firstname Alice \
+  --lastname Doe
+```
+
+:::callout{variant="note" title="Setting a password"}
+`user create` does not set credentials. Set the user's password from the FerrisKey admin console, or have the user complete a recovery flow.
+:::
+
+## `user delete`
+
+Delete a user.
+
+```bash
+ferris-ctl user delete <username> [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<username>` | yes | Username |
+| `--realm` | no | Realm (defaults to context realm) |

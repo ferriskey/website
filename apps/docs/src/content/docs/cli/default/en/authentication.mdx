@@ -1,0 +1,116 @@
+---
+title: Authentication
+description: "How ferris-ctl resolves contexts, login sessions, and client credentials before every API call."
+icon: key-round
+order: 3
+---
+
+# Authentication
+
+Before any command reaches the FerrisKey API, `ferris-ctl` resolves **where** to connect, **who** you are, and **which realm** to operate on. This page explains each piece and the order in which they're resolved.
+
+## Contexts
+
+A **context** is a named connection profile. It holds:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | yes | FerrisKey server URL |
+| `client-id` | yes | OAuth2 client used to authenticate |
+| `client-secret` | no | Set only for confidential clients / service accounts |
+| `realm` | no | Default realm for commands that need one |
+
+Contexts are stored as TOML at `$XDG_CONFIG_HOME/ferriskey/config.toml` (typically `~/.config/ferriskey/config.toml`). The active context is tracked by `current-context`.
+
+```toml title="config.toml"
+current-context = "local"
+
+[contexts.local]
+url = "http://localhost:3333"
+client-id = "ferris-ctl"
+realm = "master"
+```
+
+Manage contexts with the [`context`](/en/cli/commands/context) command. Any field can be overridden per-command with `--url`, `--client-id`, `--client-secret`, `--realm`, or the matching `FERRISKEY_*` environment variable.
+
+## Two ways to authenticate
+
+`ferris-ctl` supports two credential modes. You pick one when you set up a context.
+
+::::card-group{cols=2}
+:::card{label="Interactive login" icon="lucide:log-in" href="/en/cli/commands/login"}
+Run `ferris-ctl login` to sign in as a user via the Device Authorization Grant. Best for humans and public clients.
+:::
+:::card{label="Client credentials" icon="lucide:bot"}
+Add a context with `--client-secret`. The CLI obtains a token with the OAuth2 client-credentials grant. Best for CI and service accounts.
+:::
+::::
+
+### Interactive login (Device Authorization Grant)
+
+```bash
+ferris-ctl login
+```
+
+This runs the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)): the CLI requests a device code, shows you a verification URL and user code, opens your browser, and polls until you approve. On success it writes tokens to `credentials.toml`.
+
+```toml title="credentials.toml (mode 0600 on Unix)"
+server_url = "http://localhost:3333"
+realm = "master"
+client_id = "ferris-ctl"
+access_token = "eyJ..."
+refresh_token = "..."
+token_type = "Bearer"
+expires_in = 300
+obtained_at = 1700000000
+scope = "openid profile email"
+```
+
+:::callout{variant="warning" title="Protect the credentials file"}
+`credentials.toml` contains bearer tokens. On Unix it is written with `0600` permissions (owner read/write only). Treat it like an SSH private key. Never commit it or share it.
+:::
+
+### Client credentials
+
+For non-interactive use, store a client secret in the context:
+
+```bash
+ferris-ctl context add ci \
+  --url https://auth.example.com \
+  --client-id automation \
+  --client-secret "$FERRISKEY_CLIENT_SECRET" \
+  --realm master
+```
+
+No `login` step is needed. The CLI exchanges the secret for a token on each run.
+
+## Resolution order
+
+When a command needs an access token, `ferris-ctl` resolves credentials in this order:
+
+::::step-group
+:::step{title="Reuse a login session"}
+If `credentials.toml` exists and its `(server_url, realm, client_id)` matches the active context, the saved `access_token` is reused.
+:::
+
+:::step{title="Fall back to client credentials"}
+Otherwise, if the context has a non-empty `client-secret`, the CLI performs an OAuth2 client-credentials grant.
+:::
+
+:::step{title="Fail with guidance"}
+If neither is available, the command fails with:
+`no credentials available: run 'ferris-ctl login' or add a context with --client-secret`.
+:::
+::::
+
+## Environment variables
+
+Every connection setting can be supplied via the environment, which is convenient in CI:
+
+| Variable | Overrides |
+|----------|-----------|
+| `FERRISKEY_URL` | `--url` |
+| `FERRISKEY_CLIENT_ID` | `--client-id` |
+| `FERRISKEY_CLIENT_SECRET` | `--client-secret` |
+| `FERRISKEY_REALM` | `--realm` |
+| `XDG_CONFIG_HOME` | config & credentials directory |

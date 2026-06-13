@@ -1,0 +1,87 @@
+---
+title: context
+description: "Manage connection contexts: named profiles that store the server URL, client, and default realm."
+icon: server
+order: 1
+---
+
+# `context`
+
+Contexts are named connection profiles stored in `$XDG_CONFIG_HOME/ferriskey/config.toml`. Each holds a server URL, a client ID, an optional client secret, and an optional default realm. The first context you add becomes the active one.
+
+```bash
+ferris-ctl context <subcommand>
+```
+
+## `context add`
+
+Add a new context. The first context added is marked active.
+
+```bash
+ferris-ctl context add <name> --url <url> --client-id <id> [--client-secret <secret>] [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Unique context name |
+| `--url` | yes | FerrisKey server URL |
+| `--client-id` | yes | OAuth2 client identifier |
+| `--client-secret` | no | Client secret (omit for public clients) |
+| `--realm` | no | Default realm for this context |
+
+```bash title="Example"
+ferris-ctl context add staging \
+  --url https://auth.staging.example.com \
+  --client-id ferris-ctl \
+  --realm master
+```
+
+## `context list`
+
+List all configured contexts. The active context is marked with `*`.
+
+```bash
+ferris-ctl context list
+```
+
+Table columns: active marker, name, URL, client ID, realm.
+
+## `context current`
+
+Show the active context's full configuration.
+
+```bash
+ferris-ctl context current
+```
+
+## `context use`
+
+Switch the active context.
+
+```bash
+ferris-ctl context use <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Context to activate |
+
+## `context remove`
+
+Remove a stored context. If it was active, the active marker is cleared.
+
+```bash
+ferris-ctl context remove <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Context to remove |
+
+## `context path`
+
+Print the path to the configuration file.
+
+```bash
+ferris-ctl context path
+```

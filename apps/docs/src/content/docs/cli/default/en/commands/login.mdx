@@ -1,0 +1,51 @@
+---
+title: login
+description: "Sign in via the OAuth 2.0 Device Authorization Grant and persist a session for other commands."
+icon: log-in
+order: 6
+---
+
+# `login`
+
+Sign in to FerrisKey using the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)). On success, tokens are saved to `credentials.toml` and reused by subsequent commands.
+
+```bash
+ferris-ctl login [--scope <scope>] [--no-browser]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scope` | `openid profile email` | OAuth scope (space-separated) |
+| `--no-browser` | `false` | Don't open the verification URL in a browser |
+
+The command uses the active context (or a `--url` / `--client-id` / `--realm` override) to know where and how to sign in. The realm defaults to `master` when none is configured.
+
+## The flow
+
+::::step-group
+:::step{title="Request a device code"}
+The CLI asks FerrisKey for a device code and receives a verification URL and a user code.
+:::
+
+:::step{title="Approve in the browser"}
+The CLI prints the URL and user code, then opens your browser (use `--no-browser` to skip and open it yourself). Confirm the user code and sign in.
+:::
+
+:::step{title="Poll for the token"}
+The CLI polls FerrisKey at the server-provided interval, honoring `slow_down` and `authorization_pending` responses, until you approve or the code expires.
+:::
+
+:::step{title="Save the session"}
+Tokens are written to `credentials.toml` (mode `0600` on Unix). Other commands reuse this session automatically.
+:::
+::::
+
+```bash title="Headless / SSH session"
+ferris-ctl login --no-browser
+```
+
+:::callout{variant="note" title="Cancelling"}
+Press <kbd>Ctrl-C</kbd> during polling to abort the login. No credentials are written.
+:::
+
+[Authentication](/en/cli/authentication) covers the rest: how credentials are resolved, when to use client credentials instead, and the file format.

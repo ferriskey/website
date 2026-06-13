@@ -1,0 +1,54 @@
+---
+title: From Keycloak
+description: "Import a realm live from a Keycloak instance via its Admin REST API."
+icon: server
+order: 3
+---
+
+# Import from Keycloak
+
+`--from keycloak` reads a realm directly from a running Keycloak instance through its Admin REST API and recreates it in FerrisKey.
+
+```bash
+ferris-ctl realm import --from keycloak \
+  --source-url https://keycloak.example.com \
+  --source-realm acme \
+  --source-client-id admin-cli \
+  --source-client-secret "$KC_SECRET" \
+  --target-realm acme
+```
+
+## Required flags
+
+| Flag | Description |
+|------|-------------|
+| `--source-url` | Base URL of the Keycloak instance |
+| `--source-realm` | Realm to read from Keycloak |
+
+## Authentication
+
+Choose one of:
+
+- **Client credentials:** pass `--source-client-id` and `--source-client-secret`. The CLI performs a client-credentials grant against Keycloak.
+- **A ready token:** pass `--source-token` with an existing bearer token, if you already have one.
+
+```bash title="Using a stored source"
+ferris-ctl source add kc-prod --kind keycloak \
+  --url https://keycloak.example.com --realm acme \
+  --client-id admin-cli --client-secret "$KC_SECRET"
+
+ferris-ctl realm import --source-ref kc-prod --target-realm acme
+```
+
+## What gets imported
+
+The importer reads clients, realm roles, and users (paginated 100 per page) and maps them to a FerrisKey realm.
+
+:::callout{variant="warning" title="Limitations"}
+- **Passwords are never exported** by Keycloak, so users are recreated without credentials.
+- In the current iteration, realm roles are created but **per-user role mappings are not imported**.
+
+Review the imported realm and re-establish credentials and role assignments as needed.
+:::
+
+Preview first with `--dry-run -o yaml` to see exactly what will be created.

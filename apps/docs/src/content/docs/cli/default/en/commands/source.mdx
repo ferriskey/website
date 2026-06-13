@@ -1,0 +1,72 @@
+---
+title: source
+description: "Store reusable import sources so you don't repeat credentials and URLs on every realm import."
+icon: database
+order: 5
+---
+
+# `source`
+
+Sources are reusable import connections stored in your config file. Once saved, reference one with `realm import --source-ref <name>` instead of repeating its URL and credentials. See [Import](/en/cli/import/overview) for how they're consumed.
+
+```bash
+ferris-ctl source <subcommand>
+```
+
+## `source list`
+
+List configured sources.
+
+```bash
+ferris-ctl source list
+```
+
+Table columns: NAME, KIND, URL, SECRET (whether a secret/token is stored).
+
+## `source add`
+
+Add (or overwrite) a source.
+
+```bash
+ferris-ctl source add <name> --kind <kind> --url <url> [auth flags]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Source name |
+| `--kind` | yes | `keycloak` or `zitadel` |
+| `--url` | yes | Base URL of the source instance |
+| `--realm` | no | Source realm name (Keycloak) |
+| `--client-id` | no | Client id for source auth (Keycloak) |
+| `--client-secret` | no | Client secret for source auth (Keycloak) |
+| `--token` | no | Bearer token / PAT (Zitadel, or a ready Keycloak token) |
+| `--org-id` | no | Organization id (Zitadel); omit to import all orgs |
+
+```bash title="Store a Keycloak source"
+ferris-ctl source add keycloak-prod \
+  --kind keycloak \
+  --url https://keycloak.example.com \
+  --realm acme \
+  --client-id admin-cli \
+  --client-secret "$KC_SECRET"
+```
+
+```bash title="Use it later"
+ferris-ctl realm import --source-ref keycloak-prod --target-realm acme
+```
+
+:::callout{variant="warning" title="Secrets are stored in plain text"}
+Source secrets and tokens are written to `config.toml` without redaction. Protect the file with appropriate filesystem permissions, and prefer short-lived tokens where possible.
+:::
+
+## `source remove`
+
+Remove a stored source.
+
+```bash
+ferris-ctl source remove <name>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Source name |

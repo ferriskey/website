@@ -1,0 +1,54 @@
+---
+title: From Zitadel
+description: "Import organizations and projects live from a Zitadel instance via its Management API."
+icon: server
+order: 4
+---
+
+# Import from Zitadel
+
+`--from zitadel` reads from a running Zitadel instance through its Management API (v1) and recreates it in FerrisKey. A single Zitadel organization maps to one FerrisKey realm.
+
+```bash
+ferris-ctl realm import --from zitadel \
+  --source-url https://zitadel.example.com \
+  --source-token "$ZITADEL_PAT" \
+  --source-org 123456789 \
+  --target-realm acme
+```
+
+## Required flags
+
+| Flag | Description |
+|------|-------------|
+| `--source-url` | Base URL of the Zitadel instance |
+| `--source-token` | Personal Access Token (PAT) used as a bearer token |
+
+## Selecting organizations
+
+| Flag | Behavior |
+|------|----------|
+| `--source-org <id>` | Import a single organization. Sent as the `x-zitadel-orgid` header. |
+| _(omitted)_ | Import **all** organizations, each as a separate realm. Requires IAM permissions to list orgs. |
+
+```bash title="Using a stored source"
+ferris-ctl source add zitadel-prod --kind zitadel \
+  --url https://zitadel.example.com --token "$ZITADEL_PAT"
+
+ferris-ctl realm import --source-ref zitadel-prod --source-org 123456789
+```
+
+## How resources map
+
+| Zitadel | FerrisKey |
+|---------|-----------|
+| Organization | Realm |
+| Human user | Realm user |
+| Machine (service) user | Confidential client with a service account |
+| Project / application | Client |
+
+Organization names are sanitized into realm names: lowercased, with non-alphanumeric characters collapsed to `-`.
+
+:::callout{variant="warning" title="Limitations"}
+Passwords and secrets are not read from Zitadel. Recreate credentials and machine-user keys after import. Preview with `--dry-run -o yaml` before applying.
+:::

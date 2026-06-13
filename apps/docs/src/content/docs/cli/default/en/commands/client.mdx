@@ -1,0 +1,87 @@
+---
+title: client
+description: "Create, inspect, and delete OAuth2 clients within a realm."
+icon: box
+order: 3
+---
+
+# `client`
+
+Manage OAuth2 clients within a realm.
+
+```bash
+ferris-ctl client <subcommand>
+```
+
+Every subcommand accepts `--realm <name>` to target a specific realm; otherwise the context default is used.
+
+## `client list`
+
+List clients in a realm.
+
+```bash
+ferris-ctl client list [--realm <realm>]
+```
+
+Table columns: CLIENT_ID, ID, NAME.
+
+## `client get`
+
+Show a client's details.
+
+```bash
+ferris-ctl client get <client_id> [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<client_id>` | yes | Client identifier |
+| `--realm` | no | Realm (defaults to context realm) |
+
+Returns id, client_id, name, realm, enabled, protocol, public_client, service_accounts_enabled, and direct_access_grants_enabled.
+
+## `client create`
+
+Create a client.
+
+```bash
+ferris-ctl client create <name> [flags]
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `<name>` |  | Client name (required) |
+| `--client-id` | `<name>` | Client identifier |
+| `--realm` | context realm | Realm |
+| `--type` | `public` | Client type: `public`, `confidential`, or `system` |
+| `--enabled` | `false` | Enable the client |
+| `--protocol` | `openid-connect` | Protocol used by the client |
+| `--direct-access-grants` | `false` | Enable direct access grants |
+
+The client type controls a few defaults:
+
+| Type | `public_client` | Service account |
+|------|-----------------|-----------------|
+| `public` | `true` | disabled |
+| `confidential` | `false` | enabled |
+| `system` | `false` | enabled |
+
+```bash title="Create an enabled confidential client"
+ferris-ctl client create backend \
+  --type confidential \
+  --enabled \
+  --direct-access-grants
+```
+
+## `client delete`
+
+Delete a client.
+
+```bash
+ferris-ctl client delete <client_id> [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<client_id>` | yes | Client identifier |
+| `--realm` | no | Realm (defaults to context realm) |

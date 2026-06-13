@@ -1,0 +1,90 @@
+---
+title: Getting Started
+description: "Connect ferris-ctl to a FerrisKey instance, sign in, and run your first commands."
+icon: rocket
+order: 2
+---
+
+# Getting Started
+
+This guide takes you from a fresh `ferris-ctl` install to listing realms and creating your first user. It assumes you have a running FerrisKey instance. If you don't, follow the [deployment getting-started](/en/discover/getting-started) first.
+
+## Prerequisites
+
+- `ferris-ctl` installed and on your `PATH` (see [Overview → Install](/en/cli/overview))
+- A reachable FerrisKey server URL (e.g. `http://localhost:3333`)
+- A client ID to authenticate with
+
+## Add a context
+
+A **context** stores how to reach a FerrisKey instance so you don't repeat the URL and client on every command. The first context you add becomes the active one.
+
+::::step-group
+:::step{title="Create the context"}
+```bash
+ferris-ctl context add local \
+  --url http://localhost:3333 \
+  --client-id ferris-ctl \
+  --realm master
+```
+
+This writes a profile named `local` to your config file and marks it active.
+:::
+
+:::step{title="Confirm it's active"}
+```bash
+ferris-ctl context current
+```
+:::
+::::
+
+:::callout{variant="info" title="Where is the config stored?"}
+Contexts live in `$XDG_CONFIG_HOME/ferriskey/config.toml` (typically `~/.config/ferriskey/config.toml`). Run `ferris-ctl context path` to print the exact location.
+:::
+
+## Sign in
+
+Authenticate with the OAuth 2.0 Device Authorization Grant. The CLI prints a code, opens your browser, and waits while you approve the sign-in.
+
+```bash
+ferris-ctl login
+```
+
+Follow the prompt: confirm the user code in the browser, and the CLI stores the resulting tokens in `credentials.toml` (mode `0600` on Unix). Subsequent commands reuse that session automatically.
+
+:::callout{variant="note" title="Service accounts"}
+If you'd rather authenticate non-interactively, add a context with a `--client-secret` instead. The CLI then uses the OAuth2 client-credentials grant and you can skip `login`. See [Authentication](/en/cli/authentication).
+:::
+
+## Run your first commands
+
+```bash title="List realms"
+ferris-ctl realm list
+```
+
+```bash title="Create a user in the master realm"
+ferris-ctl user create alice \
+  --email alice@example.com \
+  --firstname Alice \
+  --lastname Doe
+```
+
+```bash title="Inspect it as JSON"
+ferris-ctl user get alice -o json
+```
+
+The `-o` flag switches output between `table` (default), `json`, and `yaml` for any command, which is handy for scripting and `jq` pipelines.
+
+## What's next?
+
+::::card-group{cols=2}
+:::card{label="Authentication" icon="lucide:key-round" href="/en/cli/authentication"}
+Contexts, login sessions, and how credentials are resolved.
+:::
+:::card{label="Command reference" icon="lucide:square-terminal" href="/en/cli/commands/context"}
+Every command, subcommand, and flag.
+:::
+:::card{label="Import a realm" icon="lucide:import" href="/en/cli/import/overview"}
+Bring a realm in from a file, Keycloak, or Zitadel.
+:::
+::::

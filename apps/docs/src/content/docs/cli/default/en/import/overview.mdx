@@ -1,0 +1,67 @@
+---
+title: Overview
+description: "Import realms into FerrisKey from a description file, a live Keycloak, or a live Zitadel instance."
+icon: import
+order: 1
+---
+
+# Import
+
+`ferris-ctl realm import` brings a realm (its settings, roles, clients, and users) into FerrisKey from three kinds of source:
+
+::::card-group{cols=3}
+:::card{label="Config file" icon="lucide:file-text" href="/en/cli/import/config-file"}
+A FerrisKey-native YAML or TOML description. No external system needed.
+:::
+:::card{label="Keycloak" icon="lucide:server" href="/en/cli/import/keycloak"}
+Read a realm live from a Keycloak Admin REST API.
+:::
+:::card{label="Zitadel" icon="lucide:server" href="/en/cli/import/zitadel"}
+Read organizations and projects live from a Zitadel instance.
+:::
+::::
+
+## How it works
+
+Each source is resolved into a **blueprint** (a normalized description of the realm) which is then applied to FerrisKey.
+
+```
+source (file | keycloak | zitadel) → blueprint → apply to FerrisKey
+```
+
+Apply order: realm → settings → realm roles → clients (with redirect URIs and client roles) → users (with role assignments).
+
+```bash title="Basic shape"
+ferris-ctl realm import --from <config|keycloak|zitadel> [source flags] [--target-realm <name>]
+```
+
+See the full flag list on the [`realm import`](/en/cli/commands/realm) reference.
+
+## Preview with `--dry-run`
+
+Add `--dry-run` to resolve the source and print the planned realm **without** writing anything to FerrisKey. Combine it with `-o yaml` to inspect the blueprint:
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
+```
+
+## Idempotency
+
+Imports are safe to re-run. Entities that already exist (the API returns a conflict) are skipped with a warning rather than failing the whole import, so you can fix a source and run it again.
+
+## Stored sources
+
+For Keycloak and Zitadel, save the connection once as a [source](/en/cli/commands/source) and reference it with `--source-ref`, instead of passing URL and credentials every time:
+
+```bash
+ferris-ctl source add kc-prod --kind keycloak --url https://kc.example.com \
+  --realm acme --client-id admin-cli --client-secret "$KC_SECRET"
+
+ferris-ctl realm import --source-ref kc-prod --target-realm acme
+```
+
+Inline `--source-*` flags override values from a referenced source.
+
+:::callout{variant="info" title="Renaming on import"}
+By default the imported realm keeps the source realm's name. Use `--target-realm` to import it under a different name in FerrisKey.
+:::
