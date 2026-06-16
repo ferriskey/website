@@ -1,4 +1,5 @@
 {
   "icon": "graduation-cap",
-  "title": "Learn"
+  "title": "Learn",
+  "order": 2
 }

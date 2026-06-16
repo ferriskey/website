@@ -30,7 +30,7 @@ export function ProjectTabs({ projects, currentProject, switchUrls }: ProjectTab
               )}
             >
               {project.icon && <Icon icon={`lucide:${project.icon}`} className="size-4 shrink-0" />}
-              {project.name}
+              {project.title ?? project.name}
             </a>
           )
         })}

@@ -1,0 +1,95 @@
+---
+title: Overview
+description: "Organizations in FerrisKey: B2B tenancy that groups users with shared membership and custom attributes."
+icon: building-2
+order: 80
+---
+
+# Organizations
+
+Organizations are a B2B grouping layer inside a realm. A single realm can contain many organizations; a user can belong to many organizations simultaneously; and each organization can carry custom key-value metadata. Together, these primitives cover the most common multi-tenant SaaS pattern: customers are organizations, users are members.
+
+:::callout{variant="info" title="New to B2B identity?"}
+For conceptual background on how customer-facing (B2B/CIAM) identity differs from workforce IAM, see [What is CIAM?](/en/learn/ciam/overview) and [Branding, Portals & Org Policies](/en/learn/ciam/org-policies) in the Learn section.
+:::
+
+## Why Organizations?
+
+Realms provide isolation at the deployment level — one realm per product, or per environment. Organizations sit one level below that. They let you model the business structure of your customers without spinning up a new realm per customer.
+
+Use organizations when:
+
+- Your users belong to customer accounts that have distinct identities (company name, billing plan, external IDs).
+- You need to list every organization a given user belongs to, or every member of a given organization.
+- You want to attach arbitrary metadata to a customer account (CRM ID, subscription tier, feature flags) without extending the user schema.
+
+Use a separate realm per tenant instead when you need complete credential isolation, different authentication policies, or different token lifetimes per tenant.
+
+## Organization Fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | UUID v7 | — | Auto-generated identifier |
+| `realm_id` | UUID | — | The realm this organization belongs to |
+| `name` | String (1–255) | Yes | Human-readable label |
+| `alias` | String (1–255) | Yes | URL-safe identifier — lowercase alphanumeric, `-`, and `_`. Unique per realm |
+| `domain` | String (≤255) | No | Optional email domain. Stored and validated but **not yet used** for automatic onboarding — see Roadmap below |
+| `redirect_url` | String | No | Optional callback URL |
+| `description` | String | No | Optional free-text description |
+| `enabled` | Boolean | No | Defaults to `true`. A disabled organization rejects new member additions |
+| `created_at` | DateTime (UTC) | — | Creation timestamp |
+| `updated_at` | DateTime (UTC) | — | Last-modified timestamp |
+
+## Realm Scoping
+
+Every organization belongs to exactly one realm. All API endpoints are realm-scoped:
+
+```
+/realms/{realm_name}/organizations
+```
+
+A user and the organization they join must be in the same realm. Cross-realm membership is rejected.
+
+The `alias` must be unique within the realm. Attempting to create or update an organization with a duplicate alias returns a `AlreadyExists` error.
+
+## The `enabled` Flag
+
+Setting `enabled: false` on an organization freezes membership additions — the `POST /members` endpoint will reject new requests. Existing members are unaffected. Use this to suspend an organization without deleting it or removing all its members.
+
+## Permissions
+
+| Action | Required permission |
+|---|---|
+| List, view organization | `ManageRealm` or `ManageUsers` or `ViewUsers` |
+| Create, update organization | `ManageRealm` or `ManageUsers` |
+| Manage members and attributes | `ManageRealm` or `ManageUsers` |
+| Delete organization | `ManageRealm` only |
+
+There are no organization-specific permissions. All access control uses the realm-level permissions above.
+
+:::callout{variant="info" title="Roadmap"}
+The following features are planned but not yet implemented:
+
+- **Organization-scoped roles**: membership is currently flat — there is no per-member role or permission within an organization.
+- **Domain-based auto-onboarding**: the `domain` field is stored and validated, but FerrisKey does not yet automatically assign users to an organization based on their email domain.
+- **Organization policies**: forced SSO, domain-matching rules, and org-level authentication policies are aspirational and not shipped.
+- **Soft delete**: deletes are hard (permanent). There is no archive or restore flow.
+:::
+
+## When to Use Organizations vs. Separate Realms
+
+| Scenario | Recommendation |
+|---|---|
+| B2B SaaS, customers share auth policies | Organizations within one realm |
+| Customers need completely different token lifetimes or IdP federation | Separate realms per customer |
+| Internal multi-team product | Organizations within one realm |
+| Regulated multi-tenant isolation (data residency) | Separate realms |
+
+::::card-group{cols=2}
+:::card{label="Members" icon="lucide:users" href="/en/modules/organization/members"}
+Add, remove, and list organization members, and look up which organizations a user belongs to.
+:::
+:::card{label="Attributes" icon="lucide:tags" href="/en/modules/organization/attributes"}
+Attach custom key-value metadata to an organization — plan tier, CRM IDs, feature flags.
+:::
+::::

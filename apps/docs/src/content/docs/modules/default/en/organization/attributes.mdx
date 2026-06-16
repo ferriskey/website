@@ -1,0 +1,85 @@
+---
+title: Attributes
+description: "Custom key-value metadata on FerrisKey organizations."
+icon: tags
+order: 82
+---
+
+# Attributes
+
+Attributes are custom key-value pairs attached to an organization. They let you store arbitrary metadata on an organization without extending the core schema — useful for subscription tiers, external system IDs, feature flags, and any other business data that belongs with the organization record.
+
+## Attribute Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/attributes` | List all attributes for an organization |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Upsert an attribute by key |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Delete an attribute by key |
+
+## Upsert Semantics
+
+The `PUT` endpoint upserts by key: if the key already exists, its value is overwritten; if it does not exist, a new attribute is created. There is no separate create endpoint.
+
+```json title="PUT /realms/acme/organizations/{org_id}/attributes/plan"
+{
+  "value": "enterprise"
+}
+```
+
+Both `key` and `value` are required. An empty or missing value is rejected.
+
+## Attribute Fields
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID v7 | — | Auto-generated identifier |
+| `organization_id` | UUID | — | The organization this attribute belongs to |
+| `key` | String | 1–255 characters, required | Attribute name |
+| `value` | String | Required | Attribute value |
+| `created_at` | DateTime (UTC) | — | Creation timestamp (set on first upsert, not updated on overwrites) |
+
+## Example: Multiple Attributes
+
+A typical organization might carry several attributes:
+
+```json title="GET /realms/acme/organizations/{org_id}/attributes"
+[
+  {
+    "id": "01936b2e-aaaa-7000-abcd-000000000001",
+    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+    "key": "plan",
+    "value": "enterprise",
+    "created_at": "2026-01-15T09:00:00Z"
+  },
+  {
+    "id": "01936b2e-bbbb-7000-abcd-000000000002",
+    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+    "key": "stripe_customer_id",
+    "value": "cus_Qx8mN2kLpR4t",
+    "created_at": "2026-01-15T09:01:00Z"
+  },
+  {
+    "id": "01936b2e-cccc-7000-abcd-000000000003",
+    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+    "key": "feature_advanced_reporting",
+    "value": "true",
+    "created_at": "2026-03-01T14:30:00Z"
+  }
+]
+```
+
+## Real-World Uses
+
+| Key pattern | Example value | Use case |
+|---|---|---|
+| `plan` | `free`, `pro`, `enterprise` | Gate features by subscription tier |
+| `stripe_customer_id` | `cus_Qx8mN2kLpR4t` | Link to billing provider |
+| `salesforce_account_id` | `001Dn00000KjlHSIAZ` | Link to CRM record |
+| `feature_<name>` | `true` / `false` | Per-org feature flags |
+| `max_seats` | `50` | Enforce seat limits in application logic |
+| `onboarded_at` | `2026-01-15` | Track onboarding completion |
+
+:::callout{variant="warning" title="Values are always strings"}
+Attributes store strings only. Numeric values (`50`), booleans (`true`), and dates (`2026-01-15`) are stored as their string representations. Your application is responsible for parsing them back to the appropriate type.
+:::
