@@ -1,0 +1,239 @@
+---
+title: Email & Templates
+description: "Configure SMTP and customize transactional email templates in FerrisKey: password reset, magic link, and email verification."
+icon: mail
+order: 21
+---
+
+# Email & Templates
+
+FerrisKey sends transactional emails for password resets, magic link authentication, and email verification. Delivery is configured per realm through a dedicated SMTP setup, and each email type can be customized with your own HTML template.
+
+## Configure SMTP
+
+SMTP is stored in the database at the realm level — not as a global environment variable. Each realm can use a different mail provider independently.
+
+:::callout{variant="info" title="No global SMTP"}
+SMTP is configured per realm, not globally. See the [Configuration guide](/en/discover/guides/configuration) for the short overview. This page covers the full field reference and API.
+:::
+
+### SMTP Fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `host` | String | SMTP server hostname |
+| `port` | u16 | Port number (1–65535) |
+| `username` | String | SMTP authentication username |
+| `password` | String | SMTP authentication password — write-only, never returned by the API |
+| `from_email` | String | Sender address, must be a valid email |
+| `from_name` | String | Sender display name |
+| `encryption` | Enum | `tls` \| `starttls` \| `none` |
+
+**Encryption modes:**
+
+| Mode | Port | When to use |
+|---|---|---|
+| `tls` | 465 | Implicit TLS from the first byte — preferred for modern providers |
+| `starttls` | 587 | Plain connection upgraded to TLS — common in corporate relays |
+| `none` | 25 / any | No encryption — use only on a trusted local network or for testing |
+
+### SMTP API Endpoints
+
+All endpoints are scoped to a realm and require authentication.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/smtp-config` | Read the current config (password omitted) |
+| `PUT` | `/realms/{realm_name}/smtp-config` | Create or replace the config |
+| `DELETE` | `/realms/{realm_name}/smtp-config` | Remove the config |
+
+**Required permissions:** reading SMTP config requires view access to the realm. Creating, updating, or deleting requires `ManageRealm`. There are no dedicated SMTP permissions beyond the realm permission gates.
+
+### Configure SMTP in the Console
+
+::::step-group
+:::step{title="Open Realm Settings"}
+In the left sidebar, select the realm you want to configure. Navigate to **Realm Settings**.
+:::
+
+:::step{title="Go to the Email tab"}
+Click the **Email** tab. You will see the SMTP configuration form.
+:::
+
+:::step{title="Fill in the provider details"}
+Enter the host, port, credentials, sender address and name. Select the encryption mode that matches your provider.
+
+Common provider settings:
+
+| Provider | Host | Port | Encryption |
+|---|---|---|---|
+| Gmail (App Password) | `smtp.gmail.com` | 465 | `tls` |
+| Mailgun | `smtp.mailgun.org` | 587 | `starttls` |
+| Resend | `smtp.resend.com` | 465 | `tls` |
+| Local (MailHog / MailPit) | `localhost` | 1025 | `none` |
+:::
+
+:::step{title="Save and verify"}
+Click **Save**. Send a test email from the console to confirm delivery reaches the inbox before enabling email-gated features.
+:::
+::::
+
+:::callout{variant="warning" title="Password is write-only"}
+The API never returns the SMTP password. If you need to rotate credentials, submit a full `PUT` with the new password included.
+:::
+
+---
+
+## Transactional Emails
+
+FerrisKey sends exactly three types of transactional email. Each is tied to a realm feature toggle.
+
+| Email type | Identifier | Sent when | Realm toggle required |
+|---|---|---|---|
+| Password reset | `reset_password` | A user requests a password reset link | `forgot_password_enabled` |
+| Magic link | `magic_link` | A user requests passwordless email login | `magic_link_enabled` |
+| Email verification | `email_verification` | A user must verify their email address | `email_verification_enabled` |
+
+Enabling these toggles in Realm Settings activates the corresponding flow. FerrisKey will use the default built-in template unless you assign a custom one.
+
+---
+
+## Customizing Templates
+
+### Template Engine
+
+FerrisKey uses a lightweight custom interpolation engine — not Handlebars or Tera. Placeholders use double-brace syntax:
+
+```text
+{{variable_name}}
+```
+
+All interpolated values are HTML-escaped before insertion (`&`, `<`, `>`, `"`, `'`), which prevents injection attacks in the rendered email.
+
+:::callout{variant="info" title="HTML escaping"}
+Values inserted via `{{...}}` are always HTML-escaped. If a user's name is `Alice <script>`, it renders as `Alice &lt;script&gt;` in the final email — safe to embed in HTML.
+:::
+
+Templates are stored as a JSON `structure` that FerrisKey renders to MJML and then to HTML before sending.
+
+### Available Variables
+
+These variables are available in every template:
+
+| Variable | Description |
+|---|---|
+| `user.first_name` | User's first name |
+| `user.last_name` | User's last name |
+| `user.email` | User's email address |
+| `expiration` | Expiry time of the token or link |
+
+Each email type also provides one link variable:
+
+| Email type | Link variable | Description |
+|---|---|---|
+| `reset_password` | `reset_link` | The password-reset URL |
+| `magic_link` | `magic_link` | The passwordless login URL |
+| `email_verification` | `verification_link` | The email verification URL |
+
+You can query the available variables for any type without authentication:
+
+```
+GET /email-templates/variables/{email_type}
+```
+
+`email_type` must be one of: `reset_password`, `magic_link`, `email_verification`.
+
+Example response for `reset_password`:
+
+```json title="GET /email-templates/variables/reset_password"
+{
+  "data": [
+    { "name": "user.first_name", "description": "User's first name" },
+    { "name": "user.last_name", "description": "User's last name" },
+    { "name": "user.email", "description": "User's email address" },
+    { "name": "expiration", "description": "Expiration time" },
+    { "name": "reset_link", "description": "Password reset link" }
+  ]
+}
+```
+
+### Template API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/email-templates` | List all templates for the realm |
+| `POST` | `/realms/{realm_name}/email-templates` | Create a new template |
+| `GET` | `/realms/{realm_name}/email-templates/{template_id}` | Get a template by ID |
+| `PUT` | `/realms/{realm_name}/email-templates/{template_id}` | Update a template |
+| `DELETE` | `/realms/{realm_name}/email-templates/{template_id}` | Delete a template |
+
+**Request body for `POST`:** `name`, `email_type`, `structure`.
+
+**Request body for `PUT`:** `name`, `structure` (`email_type` cannot be changed after creation).
+
+**Required permissions:** `ViewEmailTemplates` to read. `ManageEmailTemplates` to create, update, or delete. `ManageRealm` also grants both.
+
+### Linking a Template to an Email Type
+
+Creating a template does not activate it automatically. You must link it to the realm by updating the realm settings:
+
+| Realm setting field | Applies to |
+|---|---|
+| `reset_password_template_id` | `reset_password` emails |
+| `magic_link_template_id` | `magic_link` emails |
+| `email_verification_template_id` | `email_verification` emails |
+
+Set the field to the template UUID to activate it. Set it to `null` (or leave it unset) to fall back to the built-in default.
+
+---
+
+## Example
+
+### Template snippet
+
+A minimal password-reset template body using placeholder syntax:
+
+```html title="Reset password template (body excerpt)"
+<p>Hi {{user.first_name}},</p>
+
+<p>
+  Someone requested a password reset for your account (<strong>{{user.email}}</strong>).
+  This link expires in {{expiration}}.
+</p>
+
+<p>
+  <a href="{{reset_link}}">Reset your password</a>
+</p>
+
+<p>If you did not request this, you can safely ignore this email.</p>
+```
+
+### Variables response
+
+```json title="GET /email-templates/variables/magic_link"
+{
+  "data": [
+    { "name": "user.first_name", "description": "User's first name" },
+    { "name": "user.last_name", "description": "User's last name" },
+    { "name": "user.email", "description": "User's email address" },
+    { "name": "expiration", "description": "Expiration time" },
+    { "name": "magic_link", "description": "Magic link URL" }
+  ]
+}
+```
+
+---
+
+::::card-group{cols=2}
+:::card{label="Configuration" icon="lucide:settings" href="/en/discover/guides/configuration"}
+Environment variables, deployment options, and the overview of SMTP setup.
+:::
+
+:::card{label="Magic Links" icon="lucide:mail" href="/en/modules/trident/magic-links"}
+How passwordless magic-link authentication works in FerrisKey.
+:::
+
+:::card{label="Realms" icon="lucide:layers" href="/en/discover/core-concepts/realms"}
+Realm concepts, settings, and multi-tenancy model.
+:::
+::::

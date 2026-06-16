@@ -1,4 +1,5 @@
 {
   "icon": "container",
-  "title": "Kubernetes"
+  "title": "Kubernetes",
+  "order": 4
 }

@@ -22,6 +22,8 @@ export interface ProjectInfo {
   versions: string[]
   hasVersioning: boolean
   icon?: string
+  title?: string
+  order?: number
 }
 
 export interface DocsContext {
@@ -80,12 +82,19 @@ export function getProjectsInfo(entries: CollectionEntry<'docs'>[], metaFiles?: 
     projectMap.get(project)!.add(version)
   }
 
-  return Array.from(projectMap.entries()).map(([name, versions]) => ({
-    name,
-    versions: Array.from(versions).sort(),
-    hasVersioning: versions.size > 1 || !versions.has('default'),
-    icon: metaFiles?.[name]?.icon,
-  }))
+  return Array.from(projectMap.entries())
+    .map(([name, versions]) => ({
+      name,
+      versions: Array.from(versions).sort(),
+      hasVersioning: versions.size > 1 || !versions.has('default'),
+      icon: metaFiles?.[name]?.icon,
+      title: metaFiles?.[name]?.title,
+      order: metaFiles?.[name]?.order ?? Infinity,
+    }))
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order
+      return (a.title ?? a.name).localeCompare(b.title ?? b.name)
+    })
 }
 
 /** Extract all unique locales from the collection */

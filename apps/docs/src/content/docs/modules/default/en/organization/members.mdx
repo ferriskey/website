@@ -1,0 +1,91 @@
+---
+title: Members
+description: "Manage organization membership in FerrisKey: add, remove, and list members, and look up a user's organizations."
+icon: users
+order: 81
+---
+
+# Members
+
+Membership connects a user to an organization. A user can belong to multiple organizations within the same realm, and an organization can have any number of members. Membership is flat: there are no per-member roles or permissions inside an organization.
+
+## Membership Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | List all members of an organization |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/members` | Add a user to an organization |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}` | Remove a user from an organization |
+| `GET` | `/realms/{realm_name}/users/{user_id}/organizations` | List all organizations a user belongs to |
+
+## Adding a Member
+
+Send the target `user_id` in the request body:
+
+```json title="POST /realms/acme/organizations/01936b2e-1234-7000-abcd-000000000001/members"
+{
+  "user_id": "01936b2e-5678-7000-abcd-000000000002"
+}
+```
+
+A successful addition returns the new membership record:
+
+```json
+{
+  "id": "01936b2e-9999-7000-abcd-000000000003",
+  "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+  "user_id": "01936b2e-5678-7000-abcd-000000000002",
+  "created_at": "2026-06-16T10:00:00Z"
+}
+```
+
+## Adding a Member Step by Step
+
+::::step-group
+:::step{title="Confirm the organization is enabled"}
+A disabled organization (`enabled: false`) rejects new member additions. Check the organization's `enabled` field before attempting to add members. Re-enable it with a `PUT` to the organization endpoint if needed.
+:::
+
+:::step{title="Confirm the user is in the same realm"}
+The user must belong to the same realm as the organization. Cross-realm membership is rejected. Verify `realm_id` on the organization matches the realm the user was created in.
+:::
+
+:::step{title="POST to the members endpoint"}
+Send `{ "user_id": "<uuid>" }` to `POST /realms/{realm_name}/organizations/{organization_id}/members`. The user is added immediately.
+:::
+
+:::step{title="Verify with a list call"}
+Confirm the user appears in `GET /realms/{realm_name}/organizations/{organization_id}/members` or in `GET /realms/{realm_name}/users/{user_id}/organizations`.
+:::
+::::
+
+## Behavior Rules
+
+| Situation | Result |
+|---|---|
+| User already a member of this organization | `AlreadyExists` error — duplicate membership is rejected |
+| User is in a different realm than the organization | Request rejected |
+| Organization is disabled (`enabled: false`) | Request rejected |
+| Removing a user who is not a member | `NotFound` error |
+
+## Listing a User's Organizations
+
+To find every organization a specific user belongs to across the realm:
+
+```
+GET /realms/{realm_name}/users/{user_id}/organizations
+```
+
+This returns an array of membership records — each carrying the `organization_id`, `user_id`, and `created_at` (the same `OrganizationMember` shape returned when adding a member), not full organization objects. Resolve each `organization_id` against `GET /realms/{realm_name}/organizations/{organization_id}` for full details. Use this to build a workspace switcher, enforce org-level feature access, or display the user's account context.
+
+## Removing a Member
+
+```
+DELETE /realms/{realm_name}/organizations/{organization_id}/members/{user_id}
+```
+
+Membership removal is immediate. If the user is not a member, the call returns `NotFound`. There is no cascading effect on the user's account — the user record itself is untouched.
+
+:::callout{variant="info" title="Flat membership — org-scoped roles are roadmap"}
+Every member has the same standing inside an organization. There is no `role` field on a membership record, and no way to mark a member as owner, admin, or viewer at the organization level. Organization-scoped RBAC is planned but not yet implemented. For now, use realm-level roles to differentiate access.
+:::
