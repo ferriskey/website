@@ -19,6 +19,57 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.7.1',
+    publishedAt: '2026-07-03T14:50:01Z',
+    title: 'Nginx packaging fix for the 0.7 line',
+    summary:
+      'A small patch that cherry-picks an Nginx configuration fix into the 0.7 release line so the packaged web application image keeps serving correctly.',
+    kind: 'patch',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.7.1',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.7.0...v0.7.1',
+    highlights: [
+      'Cherry-picks the Nginx fix into 0.7.1 so the packaged webapp is served correctly in the shipped image.',
+      'Bumps workspace, Helm chart, and operator chart versions together to keep artifacts aligned.',
+      'Keeps the 0.7 branch production-ready without requiring a larger upgrade.',
+    ],
+    transition:
+      'A narrow follow-up to 0.7.0 that ensures the release ships cleanly in containerized environments.',
+  },
+  {
+    version: 'v0.7.0',
+    publishedAt: '2026-06-30T22:07:13Z',
+    title: 'Device authorization flow and the portal theming builder',
+    summary:
+      'FerrisKey 0.7.0 brings the OAuth 2.0 Device Authorization Grant (RFC 8628) end to end and a full portal theming builder, letting teams onboard input-constrained devices and fully brand their login experience.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.7.0',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.6.1...v0.7.0',
+    highlights: [
+      'Implements the complete OAuth 2.0 Device Authorization Flow (RFC 8628): device authorization endpoint, device_code token grant, verification page, and CIAM console configuration.',
+      'Ships a portal theming builder with per-page layouts, design tokens, live preview, and an iframe-based editor to fully customize the hosted login portal.',
+      'Adds CIAM application management, resume-OAuth-after-password-reset, basic auth support, and several OIDC discovery and nonce compliance fixes.',
+    ],
+    transition:
+      'With operational control settled in 0.6, the 0.7 line turns toward developer-facing protocol coverage and end-user branding — making FerrisKey both more standards-complete and more customizable.',
+  },
+  {
+    version: 'v0.6.1',
+    publishedAt: '2026-06-08T17:53:03Z',
+    title: 'Authentication flow fixes and passkey configuration polish',
+    summary:
+      'A patch release for the 0.6 line that bundles a set of authentication-flow fixes across passkey configuration, OTP challenge handling, identity-provider brokering, and redirect URI handling.',
+    kind: 'patch',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.6.1',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.6.0...v0.6.1',
+    highlights: [
+      'Refines the passkey configuration experience and hardens the OTP challenge flow on the login journey.',
+      'Fixes the GitHub identity-provider broker login flow and cleans up redirect URI handling.',
+      'Smooths the login and post-authentication callback path across the frontend.',
+    ],
+    transition:
+      "Right after 0.6.0's operational features, this patch tightens the day-to-day authentication experience before the larger 0.7 work.",
+  },
+  {
     version: 'v0.6.0',
     publishedAt: '2026-05-06T00:00:00Z',
     title: 'Maintenance mode, user attributes, and OpenTelemetry tracing',
@@ -207,6 +258,42 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.7.1': {
+      title: 'Correctif de packaging Nginx pour la ligne 0.7',
+      summary:
+        "Un petit patch qui rétroporte un correctif de configuration Nginx dans la ligne de release 0.7 pour que l'image de l'application web packagée continue de servir correctement.",
+      highlights: [
+        "Rétroporte le correctif Nginx dans la 0.7.1 pour que la webapp packagée soit servie correctement dans l'image livrée.",
+        'Réaligne les versions du workspace, du chart Helm et du chart operator pour garder des artefacts cohérents.',
+        "Maintient la branche 0.7 prête pour la production sans imposer une montée de version plus large.",
+      ],
+      transition:
+        "Un suivi ciblé de la 0.7.0 qui garantit une livraison propre en environnement conteneurisé.",
+    },
+    'v0.7.0': {
+      title: "Device authorization flow et builder de thèmes du portail",
+      summary:
+        "FerrisKey 0.7.0 apporte le grant OAuth 2.0 Device Authorization (RFC 8628) de bout en bout ainsi qu'un builder de thèmes du portail complet, permettant d'embarquer des appareils à saisie limitée et de personnaliser entièrement l'expérience de connexion.",
+      highlights: [
+        "Implémente le flow OAuth 2.0 Device Authorization complet (RFC 8628): endpoint d'autorisation device, grant token device_code, page de vérification et configuration dans la console CIAM.",
+        "Livre un builder de thèmes du portail avec layouts par page, design tokens, aperçu en direct et éditeur basé sur iframe pour personnaliser entièrement le portail de login hébergé.",
+        "Ajoute la gestion des applications CIAM, la reprise du flow OAuth après reset de mot de passe, le support basic auth et plusieurs correctifs de conformité OIDC (discovery et nonce).",
+      ],
+      transition:
+        "Le contrôle opérationnel étant posé en 0.6, la ligne 0.7 se tourne vers la couverture protocolaire côté développeurs et le branding côté utilisateurs finaux — rendant FerrisKey à la fois plus conforme aux standards et plus personnalisable.",
+    },
+    'v0.6.1': {
+      title: "Correctifs des flows d'authentification et finitions passkey",
+      summary:
+        "Un patch pour la ligne 0.6 qui regroupe un ensemble de correctifs des flows d'authentification: configuration passkey, gestion du challenge OTP, brokering de fournisseurs d'identité et gestion des redirect URIs.",
+      highlights: [
+        "Affine l'expérience de configuration des passkeys et fiabilise le flow de challenge OTP sur le parcours de login.",
+        "Corrige le flow de broker login du fournisseur d'identité GitHub et nettoie la gestion des redirect URIs.",
+        "Fluidifie le parcours de login et de callback post-authentification côté frontend.",
+      ],
+      transition:
+        "Juste après les fonctionnalités opérationnelles de la 0.6.0, ce patch resserre l'expérience d'authentification au quotidien avant le travail plus large de la 0.7.",
+    },
     'v0.6.0': {
       title: "Mode maintenance, attributs utilisateur et tracing OpenTelemetry",
       summary:
