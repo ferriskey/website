@@ -1,21 +1,12 @@
 ---
+import SectionHeader from './section-header.astro'
 import { getSponsors } from '@explainer/ui/lib/sponsors'
 
-const allSponsors = getSponsors()
-const platinum   = allSponsors.filter(s => s.tier === 'platinum')
-const gold       = allSponsors.filter(s => s.tier === 'gold')
-const supporters = allSponsors.filter(s => s.tier === 'supporters')
-
-// Per-sponsor logo scale overrides (useful for square PNGs with lots of whitespace)
-const logoScale: Record<string, string> = {
-  cloudiam: 'scale-150',
-}
+const sponsors = getSponsors()
+const lead = sponsors.find(s => s.tier === 'lead')
+const partners = sponsors.filter(s => s.tier === 'partner')
 
 const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px); background-size: 20px 20px; color: var(--color-primary);'
-
-function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
-  return { light: s.logoUrlLight, dark: s.logoUrlDark, same: s.logoUrlLight === s.logoUrlDark }
-}
 ---
 
 <div class="w-full py-16 sm:py-24 lg:py-32">
@@ -28,23 +19,19 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
       aria-hidden="true"
     ></div>
 
-    <!-- Header -->
-    <div data-anim="fade-up" class="relative text-center max-w-3xl mx-auto mb-12 sm:mb-16 pt-8">
-      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center justify-center gap-2">
-        <span class="inline-block size-2 rounded-sm bg-primary"></span>
-        <span data-t="sponsors.label">Partners</span>
-      </p>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6 text-balance" data-t="sponsors.title">
-        Proudly supported by our partners
-      </h2>
-      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl mx-auto text-balance" data-t="sponsors.description">
-        These companies and projects keep Ferriskey thriving. Their support funds
-        development, maintenance, and community growth — allowing us to stay
-        independent and focused on building the best IAM we can.
-      </p>
+    <div class="relative flex flex-col items-center">
+      <SectionHeader align="center" descriptionClass="max-w-xl" class="pt-8">
+        <span slot="label" data-t="sponsors.label">Sponsoring</span>
+        <span slot="title" data-t="sponsors.title">Backed by companies who share our vision</span>
+        <span slot="description" data-t="sponsors.description">
+          Our financial partners fund full-time development, infrastructure, and the long-term roadmap. That's what keeps Ferriskey independent and moving fast.
+        </span>
+      </SectionHeader>
+
       <a
         href="mailto:contact@ferriskey.io"
-        class="inline-flex items-center gap-2 mt-8 border rounded-lg px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
+        data-anim="fade-up"
+        class="inline-flex items-center gap-2 -mt-6 mb-12 sm:mb-16 border rounded-lg px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
       >
         <span data-t="sponsors.cta">Become a partner</span>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -53,64 +40,62 @@ function logoSrcs(s: { logoUrlLight: string; logoUrlDark: string }) {
       </a>
     </div>
 
-    <div class="relative flex flex-col gap-10">
+    <div class="relative flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
-      <!-- Platinum + Gold : 2 par ligne sur mobile, 3 ensuite -->
-      {(platinum.length > 0 || gold.length > 0) && (
-        <div data-anim="fade-up" style="transition-delay:120ms" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
-          {[...platinum, ...gold].map(s => (
-            <a
-              href={s.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-center justify-center rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors px-4 sm:px-6 py-8 overflow-hidden group"
-            >
-              {logoSrcs(s).same ? (
-                <img src={logoSrcs(s).light} alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity ${logoScale[s.id] ?? ''}`} />
-              ) : (
-                <>
-                  <img src={logoSrcs(s).light} alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity dark:hidden ${logoScale[s.id] ?? ''}`} />
-                  <img src={logoSrcs(s).dark}  alt={s.name} class={`max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity hidden dark:block ${logoScale[s.id] ?? ''}`} />
-                </>
-              )}
-            </a>
-          ))}
-          <a
-            href="https://github.com/sponsors/ferriskey"
-            target="_blank"
-            class="flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-4 sm:px-6 py-8 overflow-hidden"
+      <!-- Lead sponsor: Cloud IAM -->
+      {lead && (
+        <a
+          href={lead.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-anim="fade-up"
+          style="transition-delay:80ms"
+          class="group relative flex flex-col sm:flex-row items-center gap-6 sm:gap-10 border-2 border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors px-8 py-10 sm:py-12 overflow-hidden"
+        >
+          <span
+            class="absolute top-4 right-4 sm:top-5 sm:right-5 text-[10px] font-semibold uppercase tracking-widest text-primary border border-primary/40 px-2 py-1"
+            data-t="sponsors.leadBadge"
           >
-            <span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/40" data-t="sponsors.placeholder">Your Logo</span>
-          </a>
-        </div>
-      )}
-
-      <!-- Supporters -->
-      {supporters.length > 0 && (
-        <div data-anim="fade-up" style="transition-delay:240ms">
-          <p class="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4 text-center" data-t="sponsors.supporters">Supporters</p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
-            {supporters.map(s => (
-              <a
-                href={s.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 hover:bg-muted/20 transition-colors px-4 sm:px-6 py-6 overflow-hidden group"
-              >
-                {logoSrcs(s).same ? (
-                  <img src={logoSrcs(s).light} alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity ${logoScale[s.id] ?? ''}`} />
-                ) : (
-                  <>
-                    <img src={logoSrcs(s).light} alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity dark:hidden ${logoScale[s.id] ?? ''}`} />
-                    <img src={logoSrcs(s).dark}  alt={s.name} class={`max-h-6 max-w-[110px] object-contain opacity-60 group-hover:opacity-90 transition-opacity hidden dark:block ${logoScale[s.id] ?? ''}`} />
-                  </>
-                )}
-              </a>
-            ))}
+            Lead Sponsor
+          </span>
+          <div class="shrink-0 flex items-center justify-center">
+            <img src={lead.logoUrlLight} alt={lead.name} class="max-h-12 max-w-[220px] object-contain dark:hidden" />
+            <img src={lead.logoUrlDark} alt={lead.name} class="max-h-12 max-w-[220px] object-contain hidden dark:block" />
           </div>
-        </div>
+          <p class="text-sm sm:text-base text-muted-foreground leading-relaxed text-center sm:text-left" data-t="sponsors.cloudiamTagline">
+            Strategic partner: Cloud IAM operates our managed Keycloak offering and is building toward Ferriskey as a Service.
+          </p>
+        </a>
       )}
 
+      <!-- Secondary partners -->
+      <div data-anim="fade-up" style="transition-delay:160ms" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {partners.map(s => (
+          <a
+            href={s.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center justify-center border bg-muted/10 hover:bg-muted/20 transition-colors px-4 sm:px-6 py-8 overflow-hidden group"
+          >
+            {s.logoUrlLight === s.logoUrlDark ? (
+              <img src={s.logoUrlLight} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
+            ) : (
+              <>
+                <img src={s.logoUrlLight} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity dark:hidden" />
+                <img src={s.logoUrlDark} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity hidden dark:block" />
+              </>
+            )}
+          </a>
+        ))}
+        <a
+          href="https://github.com/sponsors/ferriskey"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center justify-center border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-4 sm:px-6 py-8 overflow-hidden"
+        >
+          <span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/40" data-t="sponsors.placeholder">Your Logo</span>
+        </a>
+      </div>
     </div>
   </div>
 </div>

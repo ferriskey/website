@@ -1,4 +1,5 @@
 ---
+import SectionHeader from './section-header.astro'
 // Why Now section — fragmented IAM vs FerrisKey, side-by-side comparison
 
 const withoutServices = [
@@ -63,19 +64,16 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
   <div class="relative w-full max-w-7xl mx-auto px-5">
 
     <!-- Header -->
-    <div class="max-w-3xl mb-12 sm:mb-16" data-anim="fade-up">
-      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
-        <span class="inline-block size-2 rounded-sm bg-primary"></span>
-        <span data-t="whyNow.label">Why now</span>
-      </p>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6">
+    <SectionHeader>
+      <span slot="label" data-t="whyNow.label">Why now</span>
+      <Fragment slot="title">
         <span data-t="whyNow.title.lead">Every IAM was built for the monolith era.</span>{' '}
         <span class="text-primary" data-t="whyNow.title.accent">Cloud-native needs more.</span>
-      </h2>
-      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl" data-t="whyNow.description">
-        Wiring identity into a modern stack means stitching together password storage, MFA, OIDC, sessions, audit, federation, and policy across fragmented systems — with no unified audit trail and no consistent policy. FerrisKey unifies everything behind one Rust-native service.
-      </p>
-    </div>
+      </Fragment>
+      <span slot="description" data-t="whyNow.description">
+        Wiring identity into a modern stack means stitching together password storage, MFA, OIDC, sessions, audit, federation, and policy across fragmented systems, with no unified audit trail and no consistent policy. FerrisKey unifies everything behind one Rust-native service.
+      </span>
+    </SectionHeader>
 
     <!-- Tab switcher -->
     <div data-anim="fade-up" class="mb-4 flex flex-wrap items-center gap-3">
@@ -135,14 +133,15 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             </g>
             <text x="38" y="78" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.without.subtitle">handles every identity concern itself:</text>
 
-            {/* Internal module boxes — code paths inside the app */}
+            {/* Internal module boxes — code paths inside the app, scanned in sequence */}
             {withoutServices.map((svc, i) => {
               const y = 96 + i * 34
               return (
                 <g>
-                  <rect x="38" y={y} width="398" height="26" rx="6"
+                  <rect class="scan-box" x="38" y={y} width="398" height="26" rx="6"
                         fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.16)"
-                        stroke-width="1" stroke-dasharray="3 3" />
+                        stroke-width="1" stroke-dasharray="3 3"
+                        style={`animation-delay:-${i * 0.5}s; animation-duration:${withoutServices.length * 0.5}s`} />
                   <text x="52" y={y + 18} fill="rgba(255,255,255,0.5)" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">›</text>
                   <text x="68" y={y + 17} fill="rgba(255,255,255,0.86)" font-size="12" font-family={SVG_FONT}
                         data-t={`whyNow.without.svc.${svc.key}`}>{svc.label}</text>
@@ -150,8 +149,11 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               )
             })}
 
-            {/* Arrow from App container to Users */}
-            <path d="M 454 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#wo-arrow-head)" />
+            {/* Arrow from App container to Users, with a traveling request pulse */}
+            <path class="flow-arrow" d="M 454 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#wo-arrow-head)" />
+            <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
+              <animateMotion dur="1.8s" repeatCount="indefinite" path="M 454 190 L 502 190" />
+            </circle>
 
             {/* Users box (right) */}
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
@@ -208,7 +210,10 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             <text x="77" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
 
             {/* Arrow app → Keycloak */}
-            <path d="M 132 190 L 184 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+            <path class="flow-arrow" d="M 132 190 L 184 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+            <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
+              <animateMotion dur="1.6s" repeatCount="indefinite" path="M 132 190 L 184 190" />
+            </circle>
 
             {/* Big "Keycloak" container — core + extensions to wire (spans 190→450) */}
             <rect x="190" y="30" width="260" height="320" rx="14"
@@ -225,14 +230,15 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             </g>
             <text x="206" y="80" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.keycloak.subtitle">common needs handled by extensions:</text>
 
-            {/* Extension boxes — fit inside the narrower container */}
+            {/* Extension boxes — fit inside the narrower container, scanned in sequence */}
             {keycloakExtensions.map((ext, i) => {
               const y = 100 + i * 38
               return (
                 <g>
-                  <rect x="206" y={y} width="228" height="30" rx="6"
+                  <rect class="scan-box" x="206" y={y} width="228" height="30" rx="6"
                         fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.16)"
-                        stroke-width="1" stroke-dasharray="3 3" />
+                        stroke-width="1" stroke-dasharray="3 3"
+                        style={`animation-delay:-${i * 0.5}s; animation-duration:${keycloakExtensions.length * 0.5}s`} />
                   {/* "EXT" badge on the left */}
                   <rect x="214" y={y + 8} width="32" height="14" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.22)" stroke-width="0.8" />
                   <text x="230" y={y + 19} text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">EXT</text>
@@ -243,7 +249,10 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             })}
 
             {/* Arrow Keycloak → Users — now 52px, symmetric with the left arrow */}
-            <path d="M 450 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+            <path class="flow-arrow" d="M 450 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
+            <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
+              <animateMotion dur="1.6s" begin="0.4s" repeatCount="indefinite" path="M 450 190 L 502 190" />
+            </circle>
 
             {/* Users box (right) */}
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
@@ -308,7 +317,10 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             <text x="77" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.app">Your App</text>
 
             {/* Arrow app → Auth0 (crossing the boundary at x=160) */}
-            <path d="M 132 190 L 196 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+            <path class="flow-arrow" d="M 132 190 L 196 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+            <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
+              <animateMotion dur="1.6s" repeatCount="indefinite" path="M 132 190 L 196 190" />
+            </circle>
 
             {/* Auth0 SaaS box — centered on x=320 (spans 204→436) */}
             <rect x="204" y="110" width="232" height="160" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.32)" stroke-width="1.4" />
@@ -331,7 +343,10 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             </g>
 
             {/* Arrow Auth0 → Users (crossing the boundary at x=480) */}
-            <path d="M 436 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+            <path class="flow-arrow" d="M 436 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#a0-arrow-head)" />
+            <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
+              <animateMotion dur="1.6s" begin="0.8s" repeatCount="indefinite" path="M 436 190 L 502 190" />
+            </circle>
 
             {/* Users box */}
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
@@ -385,9 +400,12 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               </marker>
             </defs>
 
-            {/* Solid arrows */}
-            <path d="M 132 190 L 184 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
-            <path d="M 450 190 L 502 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
+            {/* Solid arrows, with a single request pulse flowing all the way through */}
+            <path class="flow-arrow" d="M 132 190 L 184 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
+            <path class="flow-arrow" d="M 450 190 L 502 190" fill="none" stroke={ARROW_STROKE} stroke-width="1.2" marker-end="url(#wi-arrow-head)" />
+            <circle class="flow-dot" r="3.5" fill={HUB_TITLE}>
+              <animateMotion dur="2.2s" repeatCount="indefinite" path="M 132 190 L 502 190" />
+            </circle>
 
             {/* App box (left) */}
             <rect x="22" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
@@ -397,11 +415,11 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
             <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
 
-            {/* FerrisKey hub — one solid block, presented as ONE thing */}
+            {/* FerrisKey hub — one solid block, presented as ONE thing, breathing gently */}
             <rect x="190" y="120" width="260" height="140" rx="16" fill={HUB_FILL} stroke={HUB_STROKE} stroke-width="1.8" />
 
-            {/* Soft inner glow */}
-            <rect x="198" y="128" width="244" height="124" rx="12" fill="none" stroke="rgba(249,115,22,0.18)" stroke-width="1" />
+            {/* Soft inner glow, pulsing like a heartbeat to feel always-on */}
+            <rect class="hub-glow" x="198" y="128" width="244" height="124" rx="12" fill="none" stroke="rgba(249,115,22,0.18)" stroke-width="1" />
 
             {/* FerrisKey logo + name, centered */}
             <g transform="translate(320 168)">
@@ -437,6 +455,71 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
     </div>
   </div>
 </section>
+
+<style>
+  /* ── Workflow animations: flowing connectors, scanning boxes, breathing hub ── */
+  .flow-arrow {
+    stroke-dasharray: 4 4;
+    animation: flow-dash 0.6s linear infinite;
+  }
+  @keyframes flow-dash {
+    to {
+      stroke-dashoffset: -8;
+    }
+  }
+
+  .scan-box {
+    animation-name: scan-pulse;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+  @keyframes scan-pulse {
+    0% {
+      stroke: rgba(249, 115, 22, 0.55);
+      fill: rgba(249, 115, 22, 0.09);
+    }
+    16% {
+      stroke: rgba(255, 255, 255, 0.16);
+      fill: rgba(255, 255, 255, 0.04);
+    }
+    100% {
+      stroke: rgba(255, 255, 255, 0.16);
+      fill: rgba(255, 255, 255, 0.04);
+    }
+  }
+
+  .hub-glow {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: hub-breathe 2.4s ease-in-out infinite;
+  }
+  @keyframes hub-breathe {
+    0%,
+    100% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.015);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-arrow {
+      animation: none;
+    }
+    .flow-dot {
+      display: none;
+    }
+    .scan-box {
+      animation: none;
+    }
+    .hub-glow {
+      animation: none;
+    }
+  }
+</style>
 
 <script>
   function initWhyNowTabs() {

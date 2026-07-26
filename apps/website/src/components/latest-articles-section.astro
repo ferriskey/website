@@ -1,6 +1,7 @@
 ---
 import { Icon } from "@iconify/react"
 import { readdirSync, readFileSync } from "node:fs"
+import SectionHeader from './section-header.astro'
 import { join } from "node:path"
 
 interface BlogPost {
@@ -78,24 +79,21 @@ function formatDate(date: Date, locale: string) {
 
 {enPosts.length > 0 && (
   <div class="w-full max-w-7xl mx-auto px-5 py-16 sm:py-24 lg:py-32">
-    <div class="text-center max-w-3xl mx-auto mb-12 sm:mb-16" data-anim="fade-up">
-      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center justify-center gap-2">
-        <span class="inline-block size-2 rounded-sm bg-primary"></span>
-        <span data-t="articles.label">Blog</span>
-      </p>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6" data-t="articles.title">
-        Latest articles
-      </h2>
-      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto text-balance" data-t="articles.description">
+    <SectionHeader align="center">
+      <span slot="label" data-t="articles.label">Blog</span>
+      <span slot="title" data-t="articles.title">Latest articles</span>
+      <span slot="description" data-t="articles.description">
         Stay up to date with the latest news and updates.
-      </p>
-    </div>
+      </span>
+    </SectionHeader>
 
     <!-- EN articles -->
     <div data-locale-articles="en" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {enPosts.map((post) => (
+      {enPosts.map((post, i) => (
         <a
           href={`${blogUrl}/en/${post.slug}`}
+          data-anim="fade-up"
+          style={`transition-delay:${i * 100}ms`}
           class="group block rounded-xl border bg-background overflow-hidden transition-colors hover:border-primary/20"
         >
           <div class="aspect-16/10 bg-muted overflow-hidden">
@@ -125,9 +123,11 @@ function formatDate(date: Date, locale: string) {
 
     <!-- FR articles -->
     <div data-locale-articles="fr" class="grid grid-cols-1 md:grid-cols-3 gap-6" style="display: none;">
-      {frPosts.map((post) => (
+      {frPosts.map((post, i) => (
         <a
           href={`${blogUrl}/fr/${post.slug}`}
+          data-anim="fade-up"
+          style={`transition-delay:${i * 100}ms`}
           class="group block rounded-xl border bg-background overflow-hidden transition-colors hover:border-primary/20"
         >
           <div class="aspect-16/10 bg-muted overflow-hidden">

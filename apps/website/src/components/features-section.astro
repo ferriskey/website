@@ -1,148 +1,425 @@
 ---
-// Features section — Why FerrisKey, sticky left + scrollable cards right
+// Features section — key FerrisKey capabilities, one big panel per feature,
+// with a sticky icon dock (bottom-left) to jump between them while scrolling.
 
 const cards = [
   {
-    key: "perf",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>`,
-    title: "Rust-native performance",
-    description: "Built in Rust from the ground up — not ported or wrapped. A ~10MB binary, sub-10ms auth latency, and a predictable memory footprint that holds under sustained load.",
-    tags: ["~10MB binary", "<10ms latency", "No GC pauses", "Memory safe"],
+    key: "sso",
+    // Same glyph as the "SSO" cell in the hero diagram — one identity, everywhere.
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H3"/>`,
+    title: "Single sign-on, everywhere.",
+    description: "Give every user one identity across every application, service, and team. Standards-based federation means your engineers stop reinventing password storage and login screens for every new product.",
+    tags: ["Identity Federation", "Single Sign-On", "Social & Enterprise Login", "Passwordless"],
+    variant: "orange",
   },
   {
-    key: "deploy",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>`,
-    title: "Deploy & manage your way",
-    description: "FerrisKey ships with first-class tooling for every ops workflow — from local testing to production GitOps pipelines. No custom scripting required.",
-    tags: ["Helm chart", "Kubernetes Operator", "ArgoCD", "Docker Compose"],
+    key: "tenancy",
+    // Same glyph as the "Organizations" cell in the hero diagram.
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>`,
+    title: "Multi-tenant by design.",
+    description: "Run one platform for every customer. Each organization gets its own isolated realm, its own admins, and its own branded login page, all without spinning up a single extra instance.",
+    tags: ["Isolated Organizations", "Custom Branding", "White-Label Ready", "Delegated Admins"],
+    variant: "navy",
   },
   {
-    key: "events",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>`,
-    title: "Event-driven extensibility",
-    description: "Every identity event — login, token issuance, policy change, realm update — emits a structured event you can consume to trigger webhooks, sync to your data lake, or drive custom workflows without patching the core.",
-    tags: ["Webhooks", "Kafka / NATS (soon)"],
+    key: "access",
+    // Same glyph as the "RBAC" cell in the hero diagram.
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>`,
+    title: "Access control that scales with you.",
+    description: "Define exactly who can do what, down to the resource. Role-based permissions and enforced multi-factor authentication keep every organization secure by default, not by configuration.",
+    tags: ["Role-Based Access", "Multi-Factor Auth", "Fine-Grained Permissions", "Zero Trust Ready"],
+    variant: "orange",
   },
   {
-    key: "cncf",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>`,
-    title: "CNCF ecosystem integration",
-    description: "FerrisKey is designed to fit naturally into cloud-native stacks. Native integrations with the tools your platform team already runs — no adapters, no workarounds.",
-    tags: ["Prometheus", "OpenTelemetry", "OPA (soon)", "AuthZen"],
+    key: "audit",
+    // Same glyph as the "Audits" cell in the hero diagram.
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"/>`,
+    title: "Every action, accounted for.",
+    description: "Every login, token, and policy change becomes a structured event, streamed in real time and kept in a tamper-evident trail. Compliance becomes a side effect, not a separate project.",
+    tags: ["Full Audit Trail", "Real-Time Webhooks", "Compliance-Ready", "SIEM Integration"],
+    variant: "navy",
   },
 ];
+
+// Per-variant palette for each panel's mosaic + connector lines. "navy" panels
+// are always dark (like the why-now diagrams); "orange" panels are always a
+// warm paper tone, independent of the site's light/dark theme — same fixed-look
+// approach the navy variant already uses.
+const PANEL = {
+  orange: {
+    bg: "#f7f2e7",
+    border: "border-black/10",
+    mosaicDark: "rgba(28,20,9,0.05)",
+    mosaicLight: "rgba(255,255,255,0.65)",
+    line: "#4a3c28",
+    lineSoft: "rgba(74,60,40,0.35)",
+  },
+  navy: {
+    bg: "#0f172a",
+    border: "border-white/10",
+    mosaicDark: "rgba(0,0,0,0.28)",
+    mosaicLight: "rgba(255,255,255,0.07)",
+    line: "rgba(255,255,255,0.7)",
+    lineSoft: "rgba(255,255,255,0.28)",
+  },
+};
+const NODE_TEXT = "#1c1409";
+const GRAD_LEFT = { from: "#fde58a", to: "#f6a72c" };
+const GRAD_MID = { from: "#fbb040", to: "#f2790a" };
+const GRAD_RIGHT = { from: "#fb923c", to: "#e2540a" };
+const MONO_FONT = 'ui-monospace, "SF Mono", "Roboto Mono", "JetBrains Mono", monospace';
+
+// Each card gets its own diagram layout — a shared visual language (sharp-cornered
+// gradient blocks, diamond joints, mono labels) rather than one template reused 4x.
+// `flows` are animated (the one thing each diagram actually says), `statics` are
+// still, decorative context — a diagram that continues to imply a bigger system.
+const DIAGRAMS = {
+  // Two blocks joined by a single elbowed connector.
+  sso: {
+    boxes: [
+      { x: 84, y: 152, w: 188, h: 96, label: ["EVERY", "LOGIN"], grad: "gradLeft" },
+      { x: 354, y: 30, w: 190, h: 108, label: ["ONE", "IDENTITY"], grad: "gradRight" },
+    ],
+    flows: ["M 272 200 L 316 200 L 316 90 L 449 90 L 449 30"],
+    statics: ["M 140 152 L 140 0", "M 84 190 L 0 190", "M 449 138 L 449 280"],
+    joints: [{ x: 272, y: 200 }, { x: 316, y: 200 }, { x: 316, y: 90 }, { x: 449, y: 90 }],
+  },
+  // A 3-block pipeline with a feedback loop over the top and a shorter one underneath.
+  tenancy: {
+    boxes: [
+      { x: 40, y: 112, w: 150, h: 88, label: ["EVERY ORG"], grad: "gradLeft" },
+      { x: 225, y: 112, w: 150, h: 88, label: ["OWN REALM"], grad: "gradMid" },
+      { x: 410, y: 112, w: 150, h: 88, label: ["OWN ADMINS"], grad: "gradRight" },
+    ],
+    flows: ["M 190 156 L 225 156", "M 375 156 L 410 156"],
+    statics: ["M 485 112 L 485 55 L 300 55 L 300 112", "M 40 156 L 15 156 L 15 245 L 300 245 L 300 200"],
+    joints: [
+      { x: 207.5, y: 156 }, { x: 392.5, y: 156 },
+      { x: 485, y: 55 }, { x: 300, y: 55 },
+      { x: 15, y: 156 }, { x: 15, y: 245 }, { x: 300, y: 245 },
+    ],
+  },
+  // A straight 3-block pipeline with an emphasized policy gate in the middle.
+  access: {
+    boxes: [
+      { x: 40, y: 120, w: 140, h: 80, label: ["REQUEST"], grad: "gradLeft" },
+      { x: 225, y: 95, w: 170, h: 130, label: ["POLICY", "CHECK"], grad: "gradMid" },
+      { x: 440, y: 120, w: 140, h: 80, label: ["RESOURCE"], grad: "gradRight" },
+    ],
+    flows: ["M 180 160 L 225 160", "M 395 160 L 440 160"],
+    statics: [],
+    joints: [{ x: 202.5, y: 160 }, { x: 417.5, y: 160 }],
+  },
+  // A monitoring ring: every event source orbiting a central, always-open trail.
+  audit: {
+    boxes: [
+      { x: 235, y: 25, w: 130, h: 60, label: ["LOGIN"], grad: "gradLeft" },
+      { x: 405, y: 110, w: 130, h: 60, label: ["TOKEN"], grad: "gradLeft" },
+      { x: 235, y: 195, w: 130, h: 60, label: ["POLICY"], grad: "gradLeft" },
+      { x: 65, y: 110, w: 130, h: 60, label: ["WEBHOOK"], grad: "gradLeft" },
+      { x: 255, y: 95, w: 90, h: 90, dotted: true, grad: "gradRight" },
+    ],
+    flows: [],
+    statics: [],
+    joints: [{ x: 420, y: 200 }, { x: 180, y: 200 }, { x: 180, y: 80 }, { x: 420, y: 80 }],
+    ring: { cx: 300, cy: 140, rx: 170, ry: 85 },
+  },
+};
+
+// Deterministic "mosaic" texture — a grid of faintly tinted squares standing in for
+// the busy neon dot-grid the panels used before. Same seed every build, no Math.random.
+function mosaicCells(cols: number, rows: number, cell: number) {
+  const cells: { x: number; y: number; dark: boolean; o: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const h = (c * 13 + r * 7 + (c % 5) * (r % 3)) % 11;
+      if (h < 5) continue;
+      cells.push({ x: c * cell, y: r * cell, dark: h % 2 === 0, o: 0.5 + (h % 3) * 0.22 });
+    }
+  }
+  return cells;
+}
+const MOSAIC = mosaicCells(26, 12, 23);
+const MOSAIC_CELL = 23;
+
+// Small line-icon set scattered across the mosaic for texture, echoing the reference's
+// tiny pixel glyphs. Kept as raw path/shape primitives rather than an icon library import.
+const DECORATIONS = [
+  { icon: "bookmark", x: 12, y: 12 },
+  { icon: "doc", x: 572, y: 12 },
+  { icon: "folder", x: 12, y: 266 },
+  { icon: "sparkle", x: 572, y: 266 },
+];
+const ICON_PATHS: Record<string, string> = {
+  bookmark: "M2.5 1.5h9v11l-4.5-2.7-4.5 2.7v-11z",
+  doc: "M3.5 1.5h5.2l3.3 3.3v9.2h-8.5v-12.5zM8.7 1.5v3.3h3.3",
+  folder: "M1.5 4.3c0-.6.5-1.1 1.1-1.1h2.7l1.2 1.4h4.9c.6 0 1.1.5 1.1 1.1v5.2c0 .6-.5 1.1-1.1 1.1H2.6c-.6 0-1.1-.5-1.1-1.1V4.3z",
+  sparkle: "M7 0.5l1 3.5 3.5 1-3.5 1-1 3.5-1-3.5-3.5-1 3.5-1 1-3.5z",
+};
 ---
 
 <div class="relative w-full py-16 sm:py-24 lg:py-32">
-  <!-- Decorative circles -->
+  <!-- Decorative grid -->
   <div class="absolute inset-0 -z-10 pointer-events-none overflow-hidden" aria-hidden="true">
-    <div class="absolute top-1/2 -left-24 w-72 h-72 rounded-full border-2 border-primary/[0.08] -translate-y-1/2">
-      <div class="absolute inset-0 m-auto w-52 h-52 rounded-full border border-primary/[0.06]"></div>
+    <div
+      class="absolute inset-0 opacity-[0.06]"
+      style="background-image: linear-gradient(to right, var(--color-primary) 1px, transparent 1px), linear-gradient(to bottom, var(--color-primary) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(ellipse 60% 70% at 15% 50%, black 0%, transparent 75%);"
+    >
     </div>
-    <div class="absolute top-16 left-[22%] size-2.5 rounded-full bg-primary/10"></div>
-    <div class="absolute bottom-20 right-[18%] size-2 rounded-full bg-primary/[0.08]"></div>
-    <div class="absolute top-1/3 right-[10%] size-1.5 rounded-full bg-primary/[0.09]"></div>
   </div>
 
   <div class="relative w-full max-w-7xl mx-auto px-5">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+    <!-- Intro -->
+    <div data-anim="fade-up" class="max-w-3xl mb-16 lg:mb-20">
+      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
+        <span class="inline-block size-2 rounded-sm bg-primary"></span>
+        <span data-t="features.label">Why FerrisKey</span>
+      </p>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6 text-balance" data-t="features.title">
+        Identity infrastructure for cloud-native platforms, without legacy IAM complexity.
+      </h2>
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed" data-t="features.desc1">
+        Identity &amp; Access Management is the backbone of any secure platform. It controls who can authenticate, what they are authorized to do, and how every access event is tracked across every service, team, and environment in your infrastructure.
+      </p>
+      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed mt-4" data-t="features.desc2">
+        Without a solid IAM foundation, teams end up with fragmented auth logic scattered across services, no unified audit trail, and security gaps that grow with every new product. FerrisKey addresses this with a unified, operator-first approach designed for distributed systems from day one.
+      </p>
+    </div>
 
-      <!-- Left: sticky label + title + description -->
-      <div class="lg:sticky lg:top-28 reveal-left">
-        <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2" data-t-host>
-          <span class="inline-block size-2 rounded-sm bg-primary"></span>
-          <span data-t="features.label">Why FerrisKey</span>
-        </p>
-        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6" data-t="features.title">
-          Identity infrastructure for cloud-native platforms, without legacy IAM complexity.
-        </h2>
-        <p class="text-base sm:text-lg text-muted-foreground leading-relaxed mb-4" data-t="features.desc1">
-          Identity &amp; Access Management is the backbone of any secure platform. It controls
-          <span class="text-foreground">who can authenticate</span>,
-          <span class="text-foreground">what they are authorized to do</span>, and
-          <span class="text-foreground">how every access event is tracked</span>
-          across every service, team, and environment in your infrastructure.
-        </p>
-        <p class="text-base sm:text-lg text-muted-foreground leading-relaxed" data-t="features.desc2">
-          Without a solid IAM foundation, teams end up with fragmented auth logic scattered across services, no unified audit trail, and security gaps that grow with every new product. FerrisKey addresses this with a
-          <span class="text-foreground">unified, operator-first approach</span>
-          designed for distributed systems from day one.
-        </p>
+    <!-- Scrolling feature blocks + sticky icon dock. The dock floats in the page's own
+         outer margin (2xl+ only, where that margin is reliably wider than the dock) instead
+         of reserving a grid column, so the feature content stays flush with every other
+         section instead of being indented by the dock's width. -->
+    <div class="relative" id="features-scroller">
+      <!-- Icon dock: pinned to the bottom-left while this section scrolls by -->
+      <div class="hidden 2xl:block 2xl:absolute 2xl:top-0 2xl:-left-16 2xl:h-full">
+        <div class="2xl:sticky 2xl:top-0 2xl:h-dvh 2xl:flex 2xl:flex-col 2xl:justify-end 2xl:pb-6">
+          <nav class="flex flex-col gap-2" aria-label="Jump to feature" data-features-nav>
+            {cards.map((card) => (
+              <a
+                href={`#feature-${card.key}`}
+                data-target={`feature-${card.key}`}
+                data-active="false"
+                aria-label={card.title}
+                class="feature-nav-btn size-10 rounded-md border border-border bg-muted/40 text-muted-foreground flex items-center justify-center transition-colors duration-300 hover:text-foreground hover:border-primary/30"
+              >
+                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" set:html={card.icon} />
+              </a>
+            ))}
+          </nav>
+        </div>
       </div>
 
-      <!-- Right: feature cards -->
-      <div class="flex flex-col gap-4">
-        {cards.map((card, i) => (
+      <!-- Feature panels -->
+      <div class="flex flex-col">
+        {cards.map((card) => { const p = PANEL[card.variant]; return (
           <div
-            class="feature-card flex flex-col gap-4 border rounded-xl p-6 bg-primary/[0.02] hover:bg-primary/[0.04] transition-colors duration-300"
-            style={`--card-index: ${i}`}
+            id={`feature-${card.key}`}
+            class="feature-block scroll-mt-20 py-10 first:pt-0 border-b border-border last:border-b-0"
+            data-anim="fade-up"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 mb-3">
               <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" set:html={card.icon} />
               </div>
-              <h3 class="text-base font-semibold text-foreground" data-t={`features.card.${card.key}.title`}>{card.title}</h3>
+              <h3 class="text-xl sm:text-2xl font-semibold text-foreground" data-t={`features.card.${card.key}.title`}>{card.title}</h3>
             </div>
-            <p class="text-sm text-muted-foreground leading-relaxed" data-t={`features.card.${card.key}.desc`}>{card.description}</p>
-            <div class="flex flex-wrap gap-2">
+            <p class="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl mb-6" data-t={`features.card.${card.key}.desc`}>
+              {card.description}
+            </p>
+
+            <!-- Visual panel -->
+            <div
+              class:list={["feature-panel relative overflow-hidden border aspect-[16/10] sm:aspect-[21/9]", p.border]}
+              style={`background-color:${p.bg};`}
+            >
+              {(() => { const diagram = DIAGRAMS[card.key]; return (
+              <svg class="absolute inset-0 w-full h-full" viewBox="0 0 600 280" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <defs>
+                  <linearGradient id={`gradLeft-${card.key}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color={GRAD_LEFT.from} />
+                    <stop offset="100%" stop-color={GRAD_LEFT.to} />
+                  </linearGradient>
+                  <linearGradient id={`gradMid-${card.key}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color={GRAD_MID.from} />
+                    <stop offset="100%" stop-color={GRAD_MID.to} />
+                  </linearGradient>
+                  <linearGradient id={`gradRight-${card.key}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color={GRAD_RIGHT.from} />
+                    <stop offset="100%" stop-color={GRAD_RIGHT.to} />
+                  </linearGradient>
+                  {diagram.boxes.map((box, bi) => (
+                    <clipPath id={`clip-${card.key}-${bi}`}>
+                      <rect x={box.x} y={box.y} width={box.w} height={box.h} />
+                    </clipPath>
+                  ))}
+                </defs>
+
+                <!-- Mosaic texture: deterministic tinted squares standing in for a busy neon grid -->
+                {MOSAIC.map((cell) => (
+                  <rect x={cell.x} y={cell.y} width={MOSAIC_CELL} height={MOSAIC_CELL} fill={cell.dark ? p.mosaicDark : p.mosaicLight} opacity={cell.o} />
+                ))}
+
+                <!-- Scattered line icons -->
+                {DECORATIONS.map((dec) => (
+                  <g transform={`translate(${dec.x} ${dec.y})`} stroke={p.line} stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5">
+                    <path d={ICON_PATHS[dec.icon]} />
+                  </g>
+                ))}
+
+                <!-- Still, decorative context: a diagram that implies a bigger system beyond the frame -->
+                {diagram.statics.map((d) => (
+                  <path d={d} stroke={p.lineSoft} stroke-width="1.2" fill="none" />
+                ))}
+
+                <!-- Monitoring ring (audit only) — the one continuously-animated shape -->
+                {diagram.ring && (
+                  <ellipse class="diagram-flow" cx={diagram.ring.cx} cy={diagram.ring.cy} rx={diagram.ring.rx} ry={diagram.ring.ry} fill="none" stroke={p.line} stroke-width="1.3" />
+                )}
+
+                <!-- Animated flow connectors: the one thing each diagram actually says -->
+                {diagram.flows.map((d) => (
+                  <path class="diagram-flow" d={d} stroke={p.line} stroke-width="1.4" fill="none" />
+                ))}
+
+                <!-- Joints -->
+                {diagram.joints.map((j) => (
+                  <rect class="joint-pulse" x={j.x - 3} y={j.y - 3} width="6" height="6" fill={p.line} transform={`rotate(45 ${j.x} ${j.y})`} />
+                ))}
+
+                <!-- Blocks -->
+                {diagram.boxes.map((box, bi) => (
+                  <>
+                    <rect x={box.x} y={box.y} width={box.w} height={box.h} fill={`url(#${box.grad}-${card.key})`} />
+                    <g clip-path={`url(#clip-${card.key}-${bi})`} opacity="0.16" stroke="#fff" stroke-width="16">
+                      <path d={`M ${box.x - 20} ${box.y + box.h} L ${box.x + box.w * 0.5} ${box.y - 20}`} />
+                      <path d={`M ${box.x + box.w * 0.3} ${box.y + box.h + 20} L ${box.x + box.w + 20} ${box.y - 10}`} />
+                    </g>
+                    {box.dotted ? (
+                      <circle cx={box.x + box.w / 2} cy={box.y + box.h / 2} r="9" fill="none" stroke={NODE_TEXT} stroke-width="1.6" stroke-dasharray="3 3" opacity="0.75" />
+                    ) : box.label.length === 1 ? (
+                      <text x={box.x + box.w / 2} y={box.y + box.h / 2 + 5} text-anchor="middle" fill={NODE_TEXT} font-size="14" font-weight="700" letter-spacing="0.03em" font-family={MONO_FONT}>{box.label[0]}</text>
+                    ) : (
+                      <>
+                        <text x={box.x + box.w / 2} y={box.y + box.h / 2 - 6} text-anchor="middle" fill={NODE_TEXT} font-size="14" font-weight="700" letter-spacing="0.03em" font-family={MONO_FONT}>{box.label[0]}</text>
+                        <text x={box.x + box.w / 2} y={box.y + box.h / 2 + 16} text-anchor="middle" fill={NODE_TEXT} font-size="14" font-weight="700" letter-spacing="0.03em" font-family={MONO_FONT}>{box.label[1]}</text>
+                      </>
+                    )}
+                  </>
+                ))}
+              </svg>
+              )})()}
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-5">
               {card.tags.map((tag) => (
-                <span class="text-xs font-mono text-primary/70 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded">
+                <span class="text-[11px] font-mono uppercase tracking-wide text-primary/70 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded">
                   {tag}
                 </span>
               ))}
             </div>
           </div>
-        ))}
+        )})}
       </div>
-
     </div>
   </div>
 </div>
 
 <style>
-  .reveal-left,
-  .feature-card {
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
+  .feature-nav-btn[data-active="true"] {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-foreground);
   }
 
-  .reveal-left {
-    transform: translateX(-16px);
+  /* Slow, quiet motion on the one connector/ring that actually carries meaning —
+     a data "current", not the old fast marching-ants. */
+  .diagram-flow {
+    stroke-dasharray: 3 7;
+    animation: diagram-flow-dash 6s linear infinite;
+  }
+  @keyframes diagram-flow-dash {
+    to {
+      stroke-dashoffset: -30;
+    }
   }
 
-  .reveal-left.is-visible,
-  .feature-card.is-visible {
-    opacity: 1;
-    transform: translate(0);
+  .joint-pulse {
+    animation: diagram-joint-pulse 3s ease-in-out infinite;
+  }
+  @keyframes diagram-joint-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
   }
 
-  .feature-card.is-visible {
-    transition-delay: calc(var(--card-index) * 100ms);
+  @media (prefers-reduced-motion: reduce) {
+    .diagram-flow {
+      animation: none;
+    }
+    .joint-pulse {
+      animation: none;
+    }
   }
 </style>
 
 <script>
-  function initFeaturesReveal() {
+  function initFeaturesNav() {
+    const scroller = document.getElementById('features-scroller')
+    if (!scroller) return
+
+    const links = Array.from(scroller.querySelectorAll<HTMLAnchorElement>('[data-target]'))
+    const blocks = Array.from(scroller.querySelectorAll<HTMLElement>('.feature-block'))
+    if (!links.length || !blocks.length) return
+
+    function setActive(id: string) {
+      links.forEach((link) => {
+        link.setAttribute('data-active', link.getAttribute('data-target') === id ? 'true' : 'false')
+      })
+    }
+
+    links.forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        const id = link.getAttribute('data-target')
+        const target = id && document.getElementById(id)
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+
+    // Track how visible each block is and activate whichever one dominates the
+    // viewport — a single entry's isIntersecting isn't enough once several
+    // tall blocks overlap the root at once.
+    const visibility = new Map<string, number>(blocks.map((b) => [b.id, 0]))
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible')
-            observer.unobserve(entry.target)
+          visibility.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0)
+        })
+
+        let bestId = ''
+        let bestRatio = 0
+        blocks.forEach((block) => {
+          const ratio = visibility.get(block.id) ?? 0
+          if (ratio > bestRatio) {
+            bestRatio = ratio
+            bestId = block.id
           }
         })
+        if (bestId) setActive(bestId)
       },
-      { threshold: 0.15 }
+      { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1], rootMargin: '-15% 0px -15% 0px' },
     )
 
-    document
-      .querySelectorAll('.reveal-left, .feature-card')
-      .forEach((el) => {
-        if (!el.classList.contains('is-visible')) observer.observe(el)
-      })
+    blocks.forEach((block) => observer.observe(block))
+    setActive(blocks[0].id)
   }
 
-  initFeaturesReveal()
-  document.addEventListener('astro:after-swap', initFeaturesReveal)
+  initFeaturesNav()
+  document.addEventListener('astro:after-swap', initFeaturesNav)
 </script>

@@ -25,6 +25,6 @@ export { LocaleSwitcher, type LocaleSwitcherProps } from './components/locale-sw
 export { MobileNavLinks } from './components/mobile-nav-links'
 export { getAppLinks, defaultAppLinks, type AppLink } from './lib/app-links'
 export { SponsorCards, type SponsorCardsProps } from './components/sponsor-cards'
-export { defaultSponsors, getSponsors, type Sponsor } from './lib/sponsors'
+export { defaultSponsors, getSponsors, defaultSupporters, getSupporters, type Sponsor, type Supporter } from './lib/sponsors'
 export { ContributorCards, type ContributorCardsProps } from './components/contributor-cards'
 export { fetchContributors, sortContributors, defaultContributors, type Contributor, type ContributorSortStrategy } from './lib/contributors'

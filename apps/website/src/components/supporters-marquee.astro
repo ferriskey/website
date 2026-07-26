@@ -1,0 +1,78 @@
+---
+import { getSponsors, getSupporters } from '@explainer/ui/lib/sponsors'
+import SectionHeader from './section-header.astro'
+
+const supporters = [...getSponsors(), ...getSupporters()]
+const loop = [...supporters, ...supporters]
+---
+
+<div class="w-full pb-16 sm:pb-24 lg:pb-32">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+    <SectionHeader align="center" descriptionClass="max-w-xl">
+      <span slot="label" data-t="supporters.label">Supporters</span>
+      <span slot="title" data-t="supporters.title">Backed by the community</span>
+      <span slot="description" data-t="supporters.description">
+        Schools, studios and programs that back Ferriskey with credits, infrastructure, and time.
+      </span>
+    </SectionHeader>
+  </div>
+
+  <div class="marquee relative w-full overflow-hidden" data-anim="fade-up" style="transition-delay:80ms">
+    <div class="marquee-track flex items-center gap-4 w-max">
+      {loop.map((s, i) => (
+        <a
+          href={s.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={s.name}
+          aria-hidden={i >= supporters.length ? 'true' : undefined}
+          tabindex={i >= supporters.length ? -1 : undefined}
+          class="shrink-0 flex items-center justify-center w-44 h-24 sm:w-52 sm:h-28 border bg-muted/10 hover:bg-muted/20 transition-colors group"
+        >
+          {s.logoUrlLight === s.logoUrlDark ? (
+            <img src={s.logoUrlLight} alt={s.name} class:list={['object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300', s.id === 'kong' ? 'h-14 sm:h-16 max-w-[80%]' : 'h-10 sm:h-12 max-w-[70%]']} loading="lazy" />
+          ) : (
+            <>
+              <img src={s.logoUrlLight} alt={s.name} class:list={['object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300 dark:hidden', s.id === 'kong' ? 'h-14 sm:h-16 max-w-[80%]' : 'h-10 sm:h-12 max-w-[70%]']} loading="lazy" />
+              <img src={s.logoUrlDark} alt={s.name} class:list={['object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300 hidden dark:block', s.id === 'kong' ? 'h-14 sm:h-16 max-w-[80%]' : 'h-10 sm:h-12 max-w-[70%]']} loading="lazy" />
+            </>
+          )}
+        </a>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+  .marquee {
+    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  }
+
+  .marquee-track {
+    animation: marquee-scroll 32s linear infinite;
+  }
+
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+
+  @keyframes marquee-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: auto;
+    }
+    .marquee {
+      mask-image: none;
+      -webkit-mask-image: none;
+      overflow: visible;
+    }
+  }
+</style>

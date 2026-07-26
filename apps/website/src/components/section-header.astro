@@ -1,0 +1,26 @@
+---
+interface Props {
+  align?: 'left' | 'center'
+  descriptionClass?: string
+  class?: string
+}
+
+const { align = 'left', descriptionClass = 'max-w-2xl', class: className = '' } = Astro.props
+const centered = align === 'center'
+---
+
+<div
+  data-anim="fade-up"
+  class:list={['relative mb-12 sm:mb-16 max-w-3xl', centered && 'text-center mx-auto', className]}
+>
+  <p class:list={['text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2', centered && 'justify-center']}>
+    <span class="inline-block size-2 bg-primary"></span>
+    <slot name="label" />
+  </p>
+  <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6 text-balance">
+    <slot name="title" />
+  </h2>
+  <p class:list={['text-base sm:text-lg text-muted-foreground leading-relaxed text-balance', descriptionClass, centered && 'mx-auto']}>
+    <slot name="description" />
+  </p>
+</div>

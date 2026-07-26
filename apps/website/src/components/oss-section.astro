@@ -1,4 +1,5 @@
 ---
+import SectionHeader from './section-header.astro'
 const GITHUB_REPO = 'ferriskey/ferriskey'
 const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO
 
@@ -79,18 +80,13 @@ const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, tr
   <div class="relative w-full max-w-7xl mx-auto px-5">
 
     <!-- Section header -->
-    <div class="text-center max-w-3xl mx-auto mb-12 sm:mb-16" data-anim="fade-up">
-      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center justify-center gap-2">
-        <span class="inline-block size-2 rounded-sm bg-primary"></span>
-        <span data-t="oss.label">Open source</span>
-      </p>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6" data-t="oss.title">
-        Released in the open, with every change in plain sight.
-      </h2>
-      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto text-balance" data-t="oss.description">
-        Public release notes, public roadmap, public contributors — no surprises in how Ferriskey grows.
-      </p>
-    </div>
+    <SectionHeader align="center">
+      <span slot="label" data-t="oss.label">Open source</span>
+      <span slot="title" data-t="oss.title">Released in the open, with every change in plain sight.</span>
+      <span slot="description" data-t="oss.description">
+        Public release notes, a public roadmap, and public contributors. Nothing about how Ferriskey grows happens behind closed doors.
+      </span>
+    </SectionHeader>
 
     <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_2fr] gap-6 items-end">
 
@@ -143,7 +139,7 @@ const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, tr
             Built in the open.<br/>Secured by design.
           </h3>
           <p class="mt-4 text-sm text-muted-foreground max-w-xs mx-auto text-balance leading-relaxed" data-t="oss.card.desc">
-            No lock-in, no black boxes. Audit the code, contribute, or fork it — Ferriskey belongs to the community.
+            No lock-in, no black boxes. Audit the code, contribute, or fork it: Ferriskey belongs to the community.
           </p>
         </div>
         <a

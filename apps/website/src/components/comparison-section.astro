@@ -1,4 +1,5 @@
 ---
+import SectionHeader from './section-header.astro'
 // Comparison section — FerrisKey vs Keycloak / Auth0 / Authentik
 
 type Cell = string | { v: 'yes' | 'no' | 'partial' | 'planned'; label?: string }
@@ -17,6 +18,10 @@ const tools = [
   { key: 'ory',       name: 'Ory'       },
 ] as const
 
+const competitors = tools.filter((t) => t.key !== 'ferriskey')
+const defaultCompetitor = competitors[0].key
+
+// Differentiators first (where FerrisKey actually stands out), parity checks last.
 const rows: Row[] = [
   {
     key: 'runtime',
@@ -24,19 +29,29 @@ const rows: Row[] = [
     cells: { ferriskey: 'Rust', keycloak: 'Java / JVM', auth0: 'SaaS only', authentik: 'Python', ory: 'Go' },
   },
   {
-    key: 'license',
-    label: 'License',
-    cells: { ferriskey: 'Apache 2.0', keycloak: 'Apache 2.0', auth0: 'Commercial', authentik: 'MIT', ory: 'Apache 2.0' },
-  },
-  {
     key: 'memory',
     label: 'Memory footprint',
-    cells: { ferriskey: '~10 MB', keycloak: '~500 MB', auth0: '—', authentik: '~200 MB', ory: '~80 MB / svc' },
+    cells: { ferriskey: '~10 MB', keycloak: '~500 MB', auth0: 'N/A', authentik: '~200 MB', ory: '~80 MB / svc' },
   },
   {
     key: 'coldstart',
     label: 'Cold start',
-    cells: { ferriskey: '< 1 s', keycloak: '10–30 s', auth0: '—', authentik: '~5 s', ory: '~2 s' },
+    cells: { ferriskey: '< 1 s', keycloak: '10-30 s', auth0: 'N/A', authentik: '~5 s', ory: '~2 s' },
+  },
+  {
+    key: 'modular',
+    label: 'Modular architecture',
+    cells: { ferriskey: { v: 'yes' }, keycloak: 'SPI extensions', auth0: { v: 'no' }, authentik: { v: 'no' }, ory: 'Split services' },
+  },
+  {
+    key: 'authzen',
+    label: 'AuthZen-ready',
+    cells: { ferriskey: { v: 'planned', label: 'planned' }, keycloak: { v: 'no' }, auth0: { v: 'no' }, authentik: { v: 'no' }, ory: { v: 'partial', label: 'Keto ReBAC' } },
+  },
+  {
+    key: 'license',
+    label: 'License',
+    cells: { ferriskey: 'Apache 2.0', keycloak: 'Apache 2.0', auth0: 'Commercial', authentik: 'MIT', ory: 'Apache 2.0' },
   },
   {
     key: 'selfhost',
@@ -53,26 +68,6 @@ const rows: Row[] = [
     label: 'Kubernetes operator',
     cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'no' }, authentik: { v: 'partial', label: 'partial' }, ory: { v: 'partial', label: 'helm only' } },
   },
-  {
-    key: 'oidc',
-    label: 'OIDC / OAuth2',
-    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'yes' }, authentik: { v: 'yes' }, ory: { v: 'yes' } },
-  },
-  {
-    key: 'mfa',
-    label: 'MFA built-in',
-    cells: { ferriskey: { v: 'yes' }, keycloak: { v: 'yes' }, auth0: { v: 'yes' }, authentik: { v: 'yes' }, ory: { v: 'yes' } },
-  },
-  {
-    key: 'modular',
-    label: 'Modular architecture',
-    cells: { ferriskey: { v: 'yes' }, keycloak: 'SPI extensions', auth0: { v: 'no' }, authentik: { v: 'no' }, ory: 'Split services' },
-  },
-  {
-    key: 'authzen',
-    label: 'AuthZen-ready',
-    cells: { ferriskey: { v: 'planned', label: 'planned' }, keycloak: { v: 'no' }, auth0: { v: 'no' }, authentik: { v: 'no' }, ory: { v: 'partial', label: 'Keto ReBAC' } },
-  },
 ]
 ---
 
@@ -80,43 +75,63 @@ const rows: Row[] = [
   <div class="relative w-full max-w-7xl mx-auto px-5">
 
     <!-- Header -->
-    <div class="max-w-3xl mb-12 sm:mb-16" data-anim="fade-up">
-      <p class="text-xs sm:text-sm font-semibold text-primary uppercase tracking-widest mb-4 font-mono flex items-center gap-2">
-        <span class="inline-block size-2 rounded-sm bg-primary"></span>
-        <span data-t="compare.label">Compare</span>
-      </p>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground leading-[1.1] mb-6">
+    <SectionHeader>
+      <span slot="label" data-t="compare.label">Compare</span>
+      <Fragment slot="title">
         <span data-t="compare.title.lead">How FerrisKey stacks up against</span>{' '}
         <span class="text-primary" data-t="compare.title.accent">the IAM you already know.</span>
-      </h2>
-      <p class="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl" data-t="compare.description">
+      </Fragment>
+      <span slot="description" data-t="compare.description">
         Quick, factual comparison with the IAM tools teams reach for first. Same protocols on the surface, very different shapes underneath.
-      </p>
+      </span>
+    </SectionHeader>
+
+    <!-- Competitor tabs: FerrisKey is always pinned, pick one challenger at a time -->
+    <div data-anim="fade-up" role="tablist" aria-label="Compare against" class="flex flex-wrap items-center gap-2 mb-6">
+      <span class="text-xs font-medium uppercase tracking-widest text-muted-foreground/70 mr-1" data-t="compare.tab.label">Compare vs</span>
+      {competitors.map((c, i) => (
+        <button
+          type="button"
+          role="tab"
+          data-compare-tab={c.key}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          class="rounded-full border px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:border-primary aria-selected:hover:bg-primary"
+        >
+          {c.name}
+        </button>
+      ))}
     </div>
 
     <!-- Table card -->
     <div data-anim="fade-up" style="transition-delay:80ms" class="rounded-2xl border bg-card overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm border-collapse min-w-[820px]">
+        <table class="w-full text-sm border-collapse">
           <thead>
             <tr class="border-b">
               <th class="text-left font-medium text-xs uppercase tracking-widest text-muted-foreground py-4 pl-6 pr-4 align-bottom" data-t="compare.header.criteria">
                 Criteria
               </th>
-              {tools.map((t) => (
-                <th class={`text-left py-4 px-4 align-bottom ${t.highlight ? 'bg-primary/[0.06]' : ''}`}>
-                  <div class="flex items-center gap-2">
-                    {t.highlight ? (
-                      <span class="inline-block size-2 rounded-full bg-primary"></span>
-                    ) : (
-                      <span class="inline-block size-2 rounded-full bg-muted-foreground/40"></span>
-                    )}
-                    <span class={`text-sm font-semibold ${t.highlight ? 'text-primary' : 'text-foreground'}`}>
-                      {t.name}
-                    </span>
-                  </div>
-                </th>
-              ))}
+              {tools.map((t) => {
+                const isCompetitor = t.key !== 'ferriskey'
+                return (
+                  <th
+                    class={`text-left py-4 px-4 align-bottom ${t.highlight ? 'bg-primary/[0.06]' : ''}`}
+                    data-compare-col={isCompetitor ? t.key : undefined}
+                    hidden={isCompetitor && t.key !== defaultCompetitor}
+                  >
+                    <div class="flex items-center gap-2">
+                      {t.highlight ? (
+                        <span class="inline-block size-2 rounded-full bg-primary"></span>
+                      ) : (
+                        <span class="inline-block size-2 rounded-full bg-muted-foreground/40"></span>
+                      )}
+                      <span class={`text-sm font-semibold ${t.highlight ? 'text-primary' : 'text-foreground'}`}>
+                        {t.name}
+                      </span>
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -128,8 +143,13 @@ const rows: Row[] = [
                 {tools.map((t) => {
                   const cell = row.cells[t.key]
                   const isHighlight = t.highlight
+                  const isCompetitor = t.key !== 'ferriskey'
                   return (
-                    <td class={`py-3.5 px-4 ${isHighlight ? 'bg-primary/[0.06]' : ''}`}>
+                    <td
+                      class={`py-3.5 px-4 ${isHighlight ? 'bg-primary/[0.06]' : ''}`}
+                      data-compare-col={isCompetitor ? t.key : undefined}
+                      hidden={isCompetitor && t.key !== defaultCompetitor}
+                    >
                       {typeof cell === 'string' ? (
                         <span class={isHighlight ? 'text-primary font-medium' : 'text-foreground/85'}>{cell}</span>
                       ) : cell.v === 'yes' ? (
@@ -169,4 +189,28 @@ const rows: Row[] = [
 
   </div>
 </section>
+
+<script>
+  function initCompareTabs(root: ParentNode) {
+    const tabs = root.querySelectorAll<HTMLButtonElement>('[data-compare-tab]')
+    const cols = root.querySelectorAll<HTMLElement>('[data-compare-col]')
+
+    function setActive(key: string) {
+      cols.forEach((el) => {
+        el.hidden = el.getAttribute('data-compare-col') !== key
+      })
+      tabs.forEach((btn) => {
+        btn.setAttribute('aria-selected', String(btn.getAttribute('data-compare-tab') === key))
+      })
+    }
+
+    tabs.forEach((btn) => {
+      btn.addEventListener('click', () => setActive(btn.getAttribute('data-compare-tab')!))
+    })
+  }
+
+  document.querySelectorAll('[role="tablist"][aria-label="Compare against"]').forEach((el) => {
+    initCompareTabs(el.closest('section') ?? document)
+  })
+</script>
 

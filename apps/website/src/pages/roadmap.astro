@@ -18,6 +18,14 @@ const statusClass = {
   planned: 'border-sky-500/25 bg-sky-500/10 text-sky-400',
   exploring: 'border-border/70 bg-muted/20 text-muted-foreground',
 } as const
+
+// One accent color per column so Now / Next / Later read apart at a glance,
+// instead of relying only on position and small status pills.
+const columnAccent = {
+  now: { dot: 'bg-emerald-500', text: 'text-emerald-500', ring: 'ring-emerald-500/15' },
+  next: { dot: 'bg-sky-500', text: 'text-sky-500', ring: 'ring-sky-500/15' },
+  later: { dot: 'bg-muted-foreground/60', text: 'text-muted-foreground', ring: 'ring-border' },
+} as const
 ---
 
 <Base
@@ -38,12 +46,11 @@ const statusClass = {
           style="clip-path: inset(0 -100vw 0 -100vw);"
           aria-hidden="true"
         >
-          <div class="absolute -top-16 -left-16 w-56 h-56 sm:-top-32 sm:-left-32 sm:w-md sm:h-112 rounded-full border-2 border-primary/10">
-            <div class="absolute inset-0 m-auto w-32 h-32 sm:w-80 sm:h-80 rounded-full border border-primary/[0.07]"></div>
+          <div
+            class="absolute inset-0 opacity-[0.07]"
+            style="background-image: linear-gradient(to right, var(--color-primary) 1px, transparent 1px), linear-gradient(to bottom, var(--color-primary) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(ellipse 75% 65% at 50% 25%, black 0%, transparent 75%);"
+          >
           </div>
-          <div class="hidden sm:block absolute -top-24 -right-24 w-80 h-80 rounded-full border-2 border-primary/10"></div>
-          <div class="hidden sm:block absolute top-1/2 -left-16 w-48 h-48 rounded-full border border-primary/8 -translate-y-1/2"></div>
-          <div class="hidden sm:block absolute -bottom-16 -right-16 w-48 h-48 rounded-full border-2 border-primary/8"></div>
         </div>
 
         <div class="absolute bottom-0 inset-x-0 h-px bg-linear-to-r from-transparent via-border to-transparent"></div>
@@ -75,7 +82,7 @@ const statusClass = {
               </div>
             </div>
 
-            <aside data-anim="fade-left" class="rounded-3xl border bg-background/75 backdrop-blur p-6 sm:p-7">
+            <aside data-anim="fade-left" class="rounded-2xl border bg-background/75 backdrop-blur p-6 sm:p-7">
               <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-t="roadmap.principles.title">Principles</p>
               <div class="mt-5 space-y-3 text-sm leading-relaxed text-muted-foreground">
                 <p data-t="roadmap.principles.one">Roadmap items are directional, not release promises.</p>
@@ -89,91 +96,45 @@ const statusClass = {
     </section>
 
     <section class="max-w-7xl mx-auto px-5 mt-20 sm:mt-24">
-      <div class="mb-8" data-anim="fade-up">
-        <p class="max-w-2xl text-sm text-muted-foreground" data-t="roadmap.scrollHint">
-          On desktop, scrolling down moves the roadmap forward from Now to Next to Later.
-        </p>
+      <div class="mb-8 flex flex-wrap items-center gap-x-6 gap-y-2" data-anim="fade-up">
+        {roadmapColumns.map((column) => (
+          <div class="flex items-center gap-2">
+            <span class={`size-2 rounded-full ${columnAccent[column.key].dot}`}></span>
+            <span class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground" data-roadmap-key={column.key} data-roadmap-field="title">{column.title}</span>
+            <span class="text-xs text-muted-foreground/50">({column.items.length})</span>
+          </div>
+        ))}
       </div>
 
-      <div class="grid grid-cols-1 gap-5 lg:hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {roadmapColumns.map((column, columnIndex) => (
-          <section data-anim="fade-up" style={`transition-delay:${columnIndex * 100}ms`} class="rounded-3xl border bg-background/70 p-6 sm:p-7">
-            <div class="mb-6">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-roadmap-key={column.key} data-roadmap-field="title">{column.title}</p>
-              <p class="mt-3 text-sm leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-field="description">{column.description}</p>
+          <section
+            data-anim="fade-up"
+            style={`transition-delay:${columnIndex * 100}ms`}
+            class:list={["rounded-2xl border bg-background/70 p-6 sm:p-7 ring-1", columnAccent[column.key].ring]}
+          >
+            <div class="mb-6 flex items-center gap-2">
+              <span class={`size-2.5 rounded-full ${columnAccent[column.key].dot}`}></span>
+              <p class={`text-xs font-semibold uppercase tracking-[0.22em] ${columnAccent[column.key].text}`} data-roadmap-key={column.key} data-roadmap-field="title">{column.title}</p>
             </div>
+            <p class="mb-6 text-sm leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-field="description">{column.description}</p>
 
-            <div class="space-y-4">
+            <div class="space-y-3">
               {column.items.map((item, itemIndex) => (
-                <article class="rounded-2xl border border-border/60 bg-muted/10 p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-lg font-semibold text-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="title">{item.title}</h2>
-                    <span class={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusClass[item.status]}`} data-t={`roadmap.status.${item.status}`}>
+                <article class="rounded-xl border border-border/60 bg-muted/10 p-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <h2 class="text-sm font-semibold text-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="title">{item.title}</h2>
+                    <span class={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] ${statusClass[item.status]}`} data-t={`roadmap.status.${item.status}`}>
                       {item.status}
                     </span>
                   </div>
-                  <p class="mt-3 text-sm leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="description">{item.description}</p>
+                  <p class="mt-2 text-xs leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="description">{item.description}</p>
                 </article>
               ))}
             </div>
           </section>
         ))}
       </div>
-
-      <section class="hidden lg:block relative" data-roadmap-scroll-section>
-        <div class="sticky top-16 h-[calc(100vh-5rem)] rounded-[2rem] border bg-background/70 backdrop-blur" data-roadmap-shell>
-          <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-linear-to-r from-transparent via-border to-transparent"></div>
-          <div class="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-linear-to-r from-background via-background/90 to-transparent"></div>
-          <div class="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-linear-to-l from-background via-background/90 to-transparent"></div>
-
-          <div class="absolute left-10 right-10 top-8 z-20">
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-t="roadmap.timelineLabel">Timeline</span>
-              <div class="relative h-px flex-1 bg-border/70">
-                <div class="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary transition-[width] duration-150" style="width:0%" data-roadmap-progress></div>
-              </div>
-            </div>
-            <div class="mt-4 grid grid-cols-3 gap-4">
-              {roadmapColumns.map((column) => (
-                <div class="flex items-center gap-3">
-                  <span class="size-3 rounded-full border border-primary/40 bg-background" data-roadmap-dot></span>
-                  <span class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground" data-roadmap-key={column.key} data-roadmap-field="title">{column.title}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div class="flex h-full items-center overflow-hidden px-10 pt-24" data-roadmap-viewport>
-            <div class="flex gap-8 will-change-transform" data-roadmap-track>
-              {roadmapColumns.map((column) => (
-                <section class="rounded-[2rem] border bg-background/90 p-8 shadow-sm" data-roadmap-panel>
-                  <div class="flex h-full flex-col">
-                    <div class="mb-8">
-                      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-roadmap-key={column.key} data-roadmap-field="title">{column.title}</p>
-                      <p class="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-field="description">{column.description}</p>
-                    </div>
-
-                    <div class="grid flex-1 grid-cols-1 gap-4 xl:grid-cols-3">
-                      {column.items.map((item, itemIndex) => (
-                          <article class="rounded-2xl border border-border/60 bg-muted/10 p-4">
-                            <div class="flex items-center justify-between gap-3">
-                              <h2 class="text-base font-semibold text-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="title">{item.title}</h2>
-                              <span class={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] ${statusClass[item.status]}`} data-t={`roadmap.status.${item.status}`}>
-                                {item.status}
-                              </span>
-                            </div>
-                            <p class="mt-3 text-xs leading-relaxed text-muted-foreground" data-roadmap-key={column.key} data-roadmap-item={itemIndex} data-roadmap-field="description">{item.description}</p>
-                          </article>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div class="pointer-events-none" data-roadmap-spacer aria-hidden="true"></div>
-      </section>
     </section>
   </main>
 </Base>
@@ -228,66 +189,7 @@ const statusClass = {
     })
   }
 
-  function initRoadmapTimeline() {
-    if (window.__roadmapCleanup) window.__roadmapCleanup()
-
-    const section = document.querySelector('[data-roadmap-scroll-section]')
-    const spacer = document.querySelector('[data-roadmap-spacer]')
-    const shell = document.querySelector('[data-roadmap-shell]')
-    const viewport = document.querySelector('[data-roadmap-viewport]')
-    const track = document.querySelector('[data-roadmap-track]')
-    const progress = document.querySelector('[data-roadmap-progress]')
-    const dots = Array.from(document.querySelectorAll('[data-roadmap-dot]'))
-    const panels = Array.from(document.querySelectorAll('[data-roadmap-panel]'))
-    if (!section || !spacer || !shell || !viewport || !track || window.innerWidth < 1024) {
-      if (track) track.style.transform = ''
-      if (progress) progress.style.width = ''
-      return
-    }
-
-    const horizontalPadding = 80
-    const gap = 32
-    const visibleWidth = Math.max(viewport.clientWidth - horizontalPadding, 320)
-    panels.forEach(function (panel) {
-      panel.style.width = `${visibleWidth}px`
-      panel.style.minWidth = `${visibleWidth}px`
-    })
-
-    const maxTranslate = Math.max((panels.length - 1) * (visibleWidth + gap), 0)
-    track.style.width = `${panels.length * visibleWidth + Math.max(0, panels.length - 1) * gap}px`
-    spacer.style.height = `${window.innerHeight + maxTranslate + 160}px`
-
-    function render() {
-      const rect = section.getBoundingClientRect()
-      const total = Math.max(spacer.offsetHeight - window.innerHeight, 1)
-      const progressRatio = Math.max(0, Math.min(1, -rect.top / total))
-      const offset = progressRatio * maxTranslate
-      track.style.transform = `translate3d(-${offset}px, 0, 0)`
-
-      const ratio = maxTranslate === 0 ? 0 : offset / maxTranslate
-      if (progress) progress.style.width = `${ratio * 100}%`
-
-      const activeIndex = Math.min(dots.length - 1, Math.round(ratio * (dots.length - 1)))
-      dots.forEach(function (dot, index) {
-        dot.classList.toggle('bg-primary', index <= activeIndex)
-        dot.classList.toggle('border-primary/70', index <= activeIndex)
-      })
-    }
-
-    render()
-    window.addEventListener('scroll', render, { passive: true })
-    window.addEventListener('resize', initRoadmapTimeline)
-
-    window.__roadmapCleanup = function () {
-      window.removeEventListener('scroll', render)
-      window.removeEventListener('resize', initRoadmapTimeline)
-    }
-  }
-
   applyTranslations()
-  initRoadmapTimeline()
   document.addEventListener('astro:after-swap', applyTranslations)
-  document.addEventListener('astro:after-swap', initRoadmapTimeline)
   window.addEventListener('ferriskey:locale-change', applyTranslations)
-  window.addEventListener('ferriskey:locale-change', initRoadmapTimeline)
 </script>

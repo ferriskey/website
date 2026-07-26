@@ -11,6 +11,7 @@ import ModulesSection from '../components/modules-section.astro'
 import OssSection from '../components/oss-section.astro'
 import CoreTeamSection from '../components/core-team-section.astro'
 import SponsorsSection from '../components/sponsors-section.astro'
+import SupportersMarquee from '../components/supporters-marquee.astro'
 import TestimonialsSection from '../components/testimonials-section.astro'
 import CtaSection from '../components/cta-section.astro'
 import LatestArticlesSection from '../components/latest-articles-section.astro'
@@ -39,13 +40,14 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
   <OssSection />
   <CoreTeamSection />
   <SponsorsSection />
+  <SupportersMarquee />
   {/* <TestimonialsSection /> */}
   <LatestArticlesSection />
   <CtaSection docsHref={appUrlOverrides.docs} />
 
   <footer class="border-t">
     <div class="mx-auto max-w-7xl px-6 py-8 text-sm text-muted-foreground text-center" data-t="footer.text">
-      © 2025 Ferriskey — Apache 2.0
+      © 2025 Ferriskey · Apache 2.0
     </div>
   </footer>
 </Base>
