@@ -234,6 +234,25 @@ const ICON_PATHS: Record<string, string> = {
               style={`background-color:${p.bg};`}
             >
               {(() => { const diagram = DIAGRAMS[card.key]; return (
+              <>
+              {/* Background layer: "slice" so the mosaic always fills the box edge-to-edge,
+                  regardless of the panel's aspect ratio at each breakpoint — a gap here would
+                  read as a bug, unlike the foreground diagram which must stay uncropped. */}
+              <svg class="absolute inset-0 w-full h-full" viewBox="0 0 600 280" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <!-- Mosaic texture: deterministic tinted squares standing in for a busy neon grid -->
+                {MOSAIC.map((cell) => (
+                  <rect x={cell.x} y={cell.y} width={MOSAIC_CELL} height={MOSAIC_CELL} fill={cell.dark ? p.mosaicDark : p.mosaicLight} opacity={cell.o} />
+                ))}
+
+                <!-- Scattered line icons -->
+                {DECORATIONS.map((dec) => (
+                  <g transform={`translate(${dec.x} ${dec.y})`} stroke={p.line} stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5">
+                    <path d={ICON_PATHS[dec.icon]} />
+                  </g>
+                ))}
+              </svg>
+
+              {/* Foreground layer: "meet" so the boxes/connectors are never cropped */}
               <svg class="absolute inset-0 w-full h-full" viewBox="0 0 600 280" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                 <defs>
                   <linearGradient id={`gradLeft-${card.key}`} x1="0" y1="0" x2="1" y2="1">
@@ -254,18 +273,6 @@ const ICON_PATHS: Record<string, string> = {
                     </clipPath>
                   ))}
                 </defs>
-
-                <!-- Mosaic texture: deterministic tinted squares standing in for a busy neon grid -->
-                {MOSAIC.map((cell) => (
-                  <rect x={cell.x} y={cell.y} width={MOSAIC_CELL} height={MOSAIC_CELL} fill={cell.dark ? p.mosaicDark : p.mosaicLight} opacity={cell.o} />
-                ))}
-
-                <!-- Scattered line icons -->
-                {DECORATIONS.map((dec) => (
-                  <g transform={`translate(${dec.x} ${dec.y})`} stroke={p.line} stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5">
-                    <path d={ICON_PATHS[dec.icon]} />
-                  </g>
-                ))}
 
                 <!-- Still, decorative context: a diagram that implies a bigger system beyond the frame -->
                 {diagram.statics.map((d) => (
@@ -308,6 +315,7 @@ const ICON_PATHS: Record<string, string> = {
                   </>
                 ))}
               </svg>
+              </>
               )})()}
             </div>
 

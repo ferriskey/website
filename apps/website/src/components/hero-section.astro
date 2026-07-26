@@ -105,65 +105,65 @@ import { Button } from "@explainer/ui";
         <!-- Right: Product diagram, IAM at the center -->
         <div class="flex justify-center lg:justify-end items-center hero-diagram hero-fade" style="--i:2">
           <div class="relative w-full max-w-md">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-border border border-border">
+            <div class="grid grid-cols-3 gap-px bg-border border border-border">
 
               <!-- Row 1 -->
-              <div class="diagram-cell diagram-cell-cascade md:col-start-1 md:row-start-1 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:0">
-                <span class="flex items-center justify-center size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-1 row-start-1 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:0">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">IdP</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">IdP</span>
               </div>
-              <div class="diagram-cell diagram-cell-cascade md:col-start-2 md:row-start-1 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:1">
-                <span class="flex items-center justify-center size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-2 row-start-1 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:1">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H3"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">SSO</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">SSO</span>
               </div>
-              <div class="diagram-cell diagram-cell-cascade md:col-start-3 md:row-start-1 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:2">
-                <span class="flex items-center justify-center size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-3 row-start-1 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:2">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">Organizations</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">Organizations</span>
               </div>
 
               <!-- Row 2 (hub centered) -->
-              <div class="diagram-cell diagram-cell-cascade md:col-start-1 md:row-start-2 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:3">
-                <span class="flex items-center justify-center size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-1 row-start-2 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:3">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">MFA</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">MFA</span>
               </div>
 
-              <div class="md:col-start-2 md:row-start-2 md:aspect-square relative bg-primary border border-foreground/10 flex items-center justify-center p-5 transition-transform duration-300 ease-out hover:-translate-y-1">
-                <img src="/logo.svg" alt="FerrisKey" class="h-16 w-16" />
+              <div class="col-start-2 row-start-2 aspect-square relative bg-primary border border-foreground/10 flex items-center justify-center p-2.5 sm:p-5 transition-transform duration-300 ease-out hover:-translate-y-1">
+                <img src="/logo.svg" alt="FerrisKey" class="h-8 w-8 sm:h-16 sm:w-16" />
               </div>
 
-              <div class="diagram-cell diagram-cell-cascade md:col-start-3 md:row-start-2 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:4">
-                <span class="flex items-center justify-center size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-3 row-start-2 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:4">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">Branding</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">Branding</span>
               </div>
 
               <!-- Row 3 -->
-              <div class="diagram-cell diagram-cell-cascade md:col-start-1 md:row-start-3 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:5">
-                <span class="flex items-center justify-center size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-1 row-start-3 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-primary/[0.03] hover:shadow-[3px_3px_0_0_rgba(249,115,22,0.35)]" style="--ci:5">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">RBAC</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">RBAC</span>
               </div>
-              <div class="diagram-cell diagram-cell-cascade md:col-start-2 md:row-start-3 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:6">
-                <span class="flex items-center justify-center size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-2 row-start-3 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:6">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">Audits</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">Audits</span>
               </div>
-              <div class="diagram-cell diagram-cell-cascade md:col-start-3 md:row-start-3 md:aspect-square group relative bg-background p-3 flex flex-col items-center justify-center gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:7">
-                <span class="flex items-center justify-center size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
+              <div class="diagram-cell diagram-cell-cascade col-start-3 row-start-3 aspect-square group relative bg-background p-1.5 sm:p-3 flex flex-col items-center justify-center gap-1 sm:gap-1.5 overflow-hidden transition-transform duration-300 ease-out hover:-translate-x-1 hover:-translate-y-1 hover:z-10 hover:bg-sky-500/[0.03] hover:shadow-[3px_3px_0_0_rgba(14,165,233,0.35)]" style="--ci:7">
+                <span class="flex items-center justify-center size-6 sm:size-7 bg-sky-500/10 text-sky-500 transition-colors duration-300 group-hover:bg-sky-500/20">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                 </span>
-                <span class="text-sm font-medium text-foreground font-mono">Webhooks</span>
+                <span class="text-[9px] sm:text-sm font-medium text-foreground font-mono text-center leading-tight">Webhooks</span>
               </div>
             </div>
 
