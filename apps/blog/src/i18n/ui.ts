@@ -4,10 +4,13 @@ export const ui = {
   en: {
     // Index page
     'index.title': 'Articles',
-    'index.heading.prefix': 'Latest',
-    'index.heading.highlight': 'articles',
+    'index.label': 'Blog',
+    'index.heading.prefix': 'Latest updates from',
+    'index.heading.highlight': 'FerrisKey.',
     'index.empty': 'No articles yet.',
     'index.noResults': 'No articles match your search.',
+    'index.filterLabel': 'Filter by category',
+    'index.articleCount': 'articles',
 
     // RSS
     'rss.title': 'Explainer Blog',
@@ -49,10 +52,13 @@ export const ui = {
   fr: {
     // Index page
     'index.title': 'Articles',
-    'index.heading.prefix': 'Derniers',
-    'index.heading.highlight': 'articles',
+    'index.label': 'Blog',
+    'index.heading.prefix': 'Les dernières nouvelles de',
+    'index.heading.highlight': 'FerrisKey.',
     'index.empty': 'Aucun article pour le moment.',
     'index.noResults': 'Aucun article ne correspond à votre recherche.',
+    'index.filterLabel': 'Filtrer par catégorie',
+    'index.articleCount': 'articles',
 
     // RSS
     'rss.title': 'Blog Explainer',

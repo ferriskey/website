@@ -3,17 +3,9 @@ import { useTranslations } from '../i18n/utils';
 
 interface TagFilterProps {
   tags: { name: string; count: number }[]
+  totalCount: number
   initialTags?: string[]
   locale?: string
-}
-
-function TagIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
-      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
-    </svg>
-  )
 }
 
 function SearchIcon({ className }: { className?: string }) {
@@ -41,7 +33,7 @@ function writeURL(selectedTags: string[], query: string) {
   window.history.replaceState(null, '', url)
 }
 
-export function TagFilter({ tags, initialTags = [], locale = 'en' }: TagFilterProps) {
+export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }: TagFilterProps) {
   const t = useTranslations(locale)
   const [selectedTags, setSelectedTags] = useState<string[]>(initialTags)
   const [query, setQuery] = useState<string>('')
@@ -88,37 +80,42 @@ export function TagFilter({ tags, initialTags = [], locale = 'en' }: TagFilterPr
 
   return (
     <>
-      <div className="mb-10 space-y-4">
-        <div className="relative">
+      <div className="mb-10 pb-6 border-b border-border flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
+          <span className="text-sm text-muted-foreground shrink-0">{t('index.filterLabel')}</span>
+          <span className="text-sm text-muted-foreground/60 shrink-0">{totalCount} {t('index.articleCount')}</span>
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+            {tags.map((tag) => {
+              const active = selectedTags.includes(tag.name)
+              return (
+                <button
+                  key={tag.name}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => toggleTag(tag.name)}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide shrink-0 transition-colors cursor-pointer ${
+                    active
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+                  }`}
+                >
+                  {tag.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="relative lg:ml-auto lg:shrink-0">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('tagFilter.placeholder')}
-            className="w-full rounded-md border border-border bg-transparent pl-10 pr-4 py-2 max-w-sm text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary/50"
+            className="w-full lg:w-64 rounded-md border border-border bg-transparent pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary/50"
           />
-        </div>
-
-        <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide">
-          {tags.map((tag) => {
-            const active = selectedTags.includes(tag.name)
-            return (
-              <button
-                key={tag.name}
-                type="button"
-                onClick={() => toggleTag(tag.name)}
-                className={`flex items-center gap-1.5 rounded-md border px-4 py-1.5 text-sm shrink-0 transition-colors cursor-pointer border-dashed ${
-                  active
-                    ? 'border-primary/50 bg-primary/5 text-primary font-medium'
-                    : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
-                }`}
-              >
-                <TagIcon className="size-3.5" />
-                {tag.name}
-              </button>
-            )
-          })}
         </div>
       </div>
 
