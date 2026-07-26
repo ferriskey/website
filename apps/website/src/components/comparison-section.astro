@@ -105,7 +105,12 @@ const rows: Row[] = [
     <!-- Table card -->
     <div data-anim="fade-up" style="transition-delay:80ms" class="rounded-2xl border bg-card overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
+        <table class="w-full text-sm border-collapse table-fixed">
+          <colgroup>
+            <col style="width:38%" />
+            <col style="width:31%" />
+            <col style="width:31%" />
+          </colgroup>
           <thead>
             <tr class="border-b">
               <th class="text-left font-medium text-xs uppercase tracking-widest text-muted-foreground py-4 pl-6 pr-4 align-bottom" data-t="compare.header.criteria">
