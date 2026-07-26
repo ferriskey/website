@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content'
 import Base from '../layouts/base.astro'
 import { TagFilter } from '../components/TagFilter'
 import PostCard from '../components/PostCard.astro'
-import { getPublishedPosts, getPostHref, getPostLocale, getLocales, getAllTags, getReadingTime } from '../lib/posts'
+import { getPublishedPosts, getPostHref, getPostLocale, getPostsByLocale, getLocales, getAllTags, getReadingTime, getFeaturedPosts, getNonFeaturedPosts } from '../lib/posts'
 import { getAuthor } from '../lib/authors'
 import { defaultLang } from '../i18n/ui'
 import { useTranslations } from '../i18n/utils'
@@ -14,35 +14,73 @@ const posts = getPublishedPosts(allPosts)
 const tags = getAllTags(posts)
 const locale = defaultLang
 const t = useTranslations(locale)
+
+// Split into featured/rest per locale, not across the mixed-locale array —
+// otherwise an EN and FR copy of the same post can both land in the 2
+// featured slots, and hiding the wrong-locale one leaves an empty grid gap.
+const postsByLocale = locales.map((loc) => {
+  const localePosts = getPostsByLocale(posts, loc)
+  return {
+    loc,
+    featured: getFeaturedPosts(localePosts, 2),
+    rest: getNonFeaturedPosts(localePosts, 2),
+  }
+})
+
+function cardProps(post: (typeof posts)[number]) {
+  return {
+    title: post.data.title,
+    description: post.data.short_description ?? post.data.description,
+    date: post.data.date,
+    tags: post.data.tags,
+    cover: post.data.cover ?? `${getPostHref(post)}/thumbnail.png`,
+    href: getPostHref(post),
+    locale,
+    readingTime: getReadingTime(post.body ?? ''),
+    author: post.data.author ? getAuthor(post.data.author) : undefined,
+  }
+}
 ---
 
 <Base title={t('index.title')} locale={locale} locales={locales}>
   <!-- Page header -->
-  <section class="mb-8">
-    <h1 class="text-4xl md:text-5xl font-bold tracking-tight">
+  <section class="mb-10">
+    <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4">
+      <span class="inline-block size-1.5 rounded-full bg-primary"></span>
+      {t('index.label')}
+    </p>
+    <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-balance">
       {t('index.heading.prefix')} <span class="text-primary">{t('index.heading.highlight')}</span>
     </h1>
   </section>
 
   <!-- Tag filter -->
-  <TagFilter tags={tags} locale={locale} client:load />
+  <TagFilter tags={tags} totalCount={posts.length} locale={locale} client:load />
 
   <!-- Articles grid -->
   {posts.length > 0 && (
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {posts.map((post) => (
-        <div data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
-          <PostCard
-            title={post.data.title}
-            description={post.data.short_description ?? post.data.description}
-            date={post.data.date}
-            tags={post.data.tags}
-            cover={post.data.cover ?? `${getPostHref(post)}/thumbnail.png`}
-            href={getPostHref(post)}
-            locale={locale}
-            readingTime={getReadingTime(post.body ?? '')}
-            author={post.data.author ? getAuthor(post.data.author) : undefined}
-          />
+    <div class="space-y-8">
+      {postsByLocale.map(({ loc, featured, rest }) => (
+        <div data-locale={loc} class="space-y-8">
+          {featured.length > 0 && (
+            <div class:list={['grid grid-cols-1 gap-6', featured.length > 1 && 'lg:grid-cols-2']}>
+              {featured.map((post) => (
+                <div data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
+                  <PostCard {...cardProps(post)} featured />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {rest.length > 0 && (
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {rest.map((post) => (
+                <div data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
+                  <PostCard {...cardProps(post)} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

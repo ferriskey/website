@@ -415,6 +415,10 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
             <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
 
+            {/* Occluder: hides the traveling dot behind the hub — the hub's own fill is
+                a near-transparent glow, so without this the dot would show straight through it */}
+            <rect x="190" y="120" width="260" height="140" rx="16" fill="#09090b" />
+
             {/* FerrisKey hub — one solid block, presented as ONE thing, breathing gently */}
             <rect x="190" y="120" width="260" height="140" rx="16" fill={HUB_FILL} stroke={HUB_STROKE} stroke-width="1.8" />
 
