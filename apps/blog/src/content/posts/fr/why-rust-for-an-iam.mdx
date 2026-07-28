@@ -1,0 +1,97 @@
+---
+title: "La vitesse n'était pas l'argument"
+description: "Tout le monde suppose qu'on a choisi Rust pour FerrisKey parce que c'est rapide. C'est vrai, mais c'est un effet de bord, pas l'argument. La vraie raison, c'est ce que le compilateur nous interdit de livrer, à quel point nos tests ne ressemblent en rien à une suite Java ou Node classique, et pourquoi ce même déterminisme fait des tests par simulation et des preuves formelles une prochaine étape réaliste plutôt qu'un vœu pieux."
+short_description: "On n'a pas choisi Rust pour la vitesse. On l'a choisi parce que le compilateur refuse de laisser exister des classes entières de bugs."
+date: 2026-07-26
+tags: [rust, architecture, security, engineering, testing, ferriskey, open-source]
+status: published
+author: nathaelb
+---
+
+Chaque fois qu'on mentionne que FerrisKey est écrit en Rust, la première réaction est toujours la même : "ah, donc c'est rapide." C'est vrai. Nos chiffres de comparaison sont publics : quelques mégaoctets de mémoire au repos, un démarrage à froid en moins d'une seconde, face à un IAM basé sur la JVM qui a besoin de centaines de mégaoctets et d'une trentaine de secondes avant de pouvoir répondre à la moindre requête.
+
+Mais si la vitesse était tout l'argument, on aurait écrit une page marketing, pas cet article. La vitesse, c'est ce qu'on remarque de l'extérieur. Ce n'est pas pour ça qu'on a parié une brique critique de sécurité sur ce langage.
+
+## La classe de bug qu'un IAM ne peut pas se permettre
+
+Un IAM se trouve là où les attaquants frappent en premier, et là où la latence compte le plus. Chaque requête authentifiée de votre infrastructure passe par lui. Il parse des tokens qu'il n'a pas générés, des headers qu'il ne contrôle pas, des payloads envoyés par des clients auxquels il n'a aucune raison de faire confiance.
+
+Historiquement, c'est exactement ce genre de code (parsers, crypto, gestion de session, écrits en C ou C++) qui a produit les pires vulnérabilités de notre industrie. Heartbleed n'était pas un défaut de conception de TLS. C'était une lecture mémoire hors limites dans la gestion mémoire d'OpenSSL : une classe de bug, pas une erreur de logique métier.
+
+Le modèle d'ownership de Rust élimine cette classe de bug à la compilation, pas par discipline, par relecture de code, ou par un fuzzer qui l'aurait trouvée le premier. Un binaire FerrisKey qui compile ne peut pas avoir de data race ou de use-after-free. Ce n'est pas un résultat de test. C'est une propriété mathématique du code qui a survécu à `cargo build`.
+
+Et ce n'est pas que le code applicatif. La stack TLS, c'est [rustls](https://github.com/rustls/rustls), pas OpenSSL : memory-safe, sans dépendance C, exactement dans la couche qui parle au réseau en premier. Le hachage des mots de passe tourne sur `argon2`. Les passkeys et le WebAuthn tournent sur `webauthn-rs`. Le code qui touche ce qu'un attaquant vous envoie est écrit dans le même langage memory-safe que le reste du système, pas greffé de l'autre côté d'une frontière FFI vers du C.
+
+## Le compilateur comme un mur, pas une suggestion
+
+C'est la partie qui n'apparaît dans aucun benchmark : Rust nous permet de faire passer une règle du statut "documentée dans un wiki, respectée si tout va bien" au statut "le code ne compile pas sinon."
+
+Prenez le flow de login. Une tentative d'authentification chez FerrisKey ne peut se terminer que d'une de ces quatre façons :
+
+```rust title="ferriskey-domain: le flow de login ne peut finir que de quatre façons"
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuthenticationStepStatus {
+    Success,
+    RequiresActions,
+    RequiresOtpChallenge,
+    Failed,
+}
+```
+
+Rien d'exotique. Mais le handler qui transforme ça en réponse HTTP doit faire un `match` dessus, et Rust refuse de compiler un `match` qui oublie une variante. Ajoutez une cinquième issue demain (disons une étape de challenge passkey) et chaque mapper de réponse qui doit en tenir compte la gère explicitement, ou la build casse. Personne n'a besoin de se souvenir de la mettre à jour. Personne ne peut l'oublier, parce qu'oublier n'est plus un chemin de code possible, c'est une erreur de compilation.
+
+C'est ce glissement qui compte : une règle cesse d'être quelque chose qu'un ingénieur senior doit penser à vérifier en review, et devient quelque chose que le système de types impose à chaque commit, de chaque contributeur, pour toujours.
+
+## Une stratégie de test qui ne ressemble à rien de connu
+
+Si les états invalides ne peuvent pas être représentés, et que les cas oubliés ne compilent pas, vos tests n'ont plus besoin de se défendre contre eux. Ça change ce que vous testez réellement, et comment.
+
+FerrisKey suit une architecture hexagonale : le domaine définit des *ports* (des traits) pour tout ce qui parle à l'extérieur, la base de données, le mailer, le dispatcher de webhooks. Plusieurs de ces crates exposent une feature `mock` :
+
+```toml title="core/Cargo.toml (extrait)"
+ferriskey-security  = { path = "../libs/ferriskey-security",  features = ["mock"] }
+ferriskey-seawatch   = { path = "../libs/ferriskey-seawatch",  features = ["mock"] }
+ferriskey-webhook    = { path = "../libs/ferriskey-webhook",   features = ["mock"] }
+```
+
+Ce mock n'est pas un substitut généré à l'exécution par réflexion, comme le font Mockito ou `jest.mock()`. C'est une vraie implémentation, séparée, du même trait exact, vérifiée par le compilateur au même titre que l'implémentation de prod. Si le contrat du port change, le mock est mis à jour en conséquence ou tout le workspace arrête de compiler. Il ne peut pas dériver silencieusement de ce que la prod appelle réellement.
+
+Le résultat, c'est une suite de tests qui consacre son énergie aux règles métier (cette transition est-elle autorisée, cette politique s'applique-t-elle, ce token est-il vraiment expiré) plutôt qu'à re-prouver, dans chaque fichier de test, que le mock ne plante pas ou ne renvoie pas la mauvaise forme. Le compilateur a déjà prouvé cette partie-là.
+
+## Capitaliser sans céder sur la sécurité
+
+Chaque module qu'on livre (Trident pour le MFA et le WebAuthn, SeaWatch pour les pistes d'audit, notre système de webhooks) est son propre crate, qui ne parle au cœur du domaine qu'à travers ces mêmes ports. Ce n'est pas une convention de dossiers qu'une PR pressée peut discrètement casser. Un module ne peut pas contourner le cœur de sécurité pour toucher quelque chose pour lequel il n'a pas de port ; il n'existe simplement aucun chemin dans le binaire compilé pour le faire.
+
+C'est ce qui nous permet de construire plus vite sans dépenser cette vitesse contre notre propre posture de sécurité. Faire grandir la surface fonctionnelle et garder la frontière de confiance intacte ne sont pas en tension ici. La seconde est déjà imposée par le compilateur pendant qu'on fait la première.
+
+## Moins de surprises, en théorie
+
+Un IAM n'est pas un service périphérique. C'est la brique dont dépend silencieusement chaque autre système de votre SI pour rester correct. Quand il se trompe, ce n'est pas une fonctionnalité dégradée. C'est chaque login en aval, chaque vérification d'autorisation en aval, en même temps.
+
+Pour les SRE qui sont réveillés quand ce n'est pas le cas : pas de garbage collector, donc pas de pause GC qui se manifeste en pic de latence sous charge. Des `match` exhaustifs sur les realms, les rôles et les états de session font qu'un cas "impossible", que Java ou Python vous laisseraient volontiers construire à l'exécution, n'existe tout simplement pas en tant que valeur ici. Rien de tout ça ne rend les incidents impossibles. Mauvais déploiement, mauvaise config, mauvaise hypothèse sur le monde restent tout à fait possibles. Mais toute une catégorie de surprises du type "comment est-ce même arrivé" est fermée avant même que le binaire soit livré. Moins d'inconnues inconnues, en théorie. Et dans un système aussi central, cette théorie mérite d'être de votre côté.
+
+## Ce que le déterminisme nous permet ensuite
+
+La sécurité mémoire fait les gros titres, mais ce n'est pas la seule propriété que ce design nous offre gratuitement. L'ownership et l'absence de garbage collector rendent aussi le runtime déterministe : pas de pause GC, pas de courbe de chauffe JIT, pas d'allocateur qui décide discrètement de compacter le heap sous charge. Donnez la même entrée au même binaire deux fois, il emprunte le même chemin les deux fois, avec les mêmes caractéristiques de timing. Ce n'est pas qu'une propriété de sécurité, c'est aussi une propriété de performance : le même déterminisme qui exclut les data races est ce qui garde la latence de queue prévisible sous charge.
+
+Ce déterminisme est aussi une fondation, pas juste un résultat, et il pointe vers deux choses qu'on veut voir grandir chez FerrisKey.
+
+La première, c'est le développement piloté par la simulation. Des systèmes comme FoundationDB et TigerBeetle font tourner toute leur suite de tests contre une horloge et un réseau simulés, en rejouant des séquences d'événements identiques au bit près tout en injectant des pannes (connexions coupées, écritures disque retardées, décalage d'horloge), et en reproduisant un bug rare à partir d'une seule seed plutôt qu'en chassant une CI capricieuse pendant une semaine. Ce genre de harnais ne fonctionne que si le programme n'a pas de non-déterminisme caché à combattre. On n'a pas encore construit ça pour FerrisKey, mais c'est une direction que Rust rend réellement atteignable, contrairement à un runtime où le timing du GC est une source de bruit de plus à simuler.
+
+La seconde, c'est la preuve formelle sur les invariants qui comptent le plus. Pas prouver tout le système correct, ce n'est pas un objectif réaliste pour un projet de cette taille, mais des affirmations précises et étroites qui valent la peine d'être vraiment prouvées plutôt que seulement testées : un token révoqué ne peut plus jamais être accepté, une frontière de realm ne peut jamais être franchie par un chemin de code qui aurait oublié de la vérifier. L'écosystème Rust a des outils de vérification construits exactement pour ça (Kani, Creusot, des crates à base de contrats), et ils sont praticables ici pour la même raison que le reste de cet article existe : le système de types exclut déjà l'aliasing et les mutations cachées qui rendent le raisonnement formel impraticable dans la plupart des autres langages. C'est sur notre feuille de route, pas en production, mais c'est un chemin bien plus court à parcourir depuis Rust que depuis un runtime où "qu'est-ce que ce pointeur peut aliaser" n'a pas de réponse propre.
+
+## Ce qu'on ne va pas prétendre
+
+Rien de tout ça n'est gratuit, et on ne va pas prétendre le contraire. La courbe d'apprentissage de Rust est réelle, en particulier pour des équipes habituées à un GC qui gère la mémoire à leur place. Le bassin de talents est plus petit que celui de Java ou de Go, même s'il grandit vite, et qu'il penche vers des ingénieurs qui sont allés chercher ces garanties activement. Les temps de compilation sont plus longs que le "on lance et on voit" d'un langage dynamique. Certaines parties de l'écosystème async sont encore plus jeunes que leurs équivalents JVM ou Node.
+
+On pense que ce compromis vaut la peine d'être fait pour exactement une catégorie de logiciel : celle qui se trouve dans le chemin critique de tout le reste, que les attaquants visent en premier, et qui doit être juste plus qu'elle ne doit être rapide à écrire le premier jour. Un IAM, c'est cette catégorie.
+
+## La partie que tout le monde a vraiment demandée
+
+Donc, retour au point de départ : oui, FerrisKey est rapide. Quelques mégaoctets au repos plutôt que des centaines. Un démarrage à froid en moins d'une seconde plutôt qu'une trentaine. Vous savez maintenant pourquoi ce n'est pas la partie intéressante. C'est l'effet de bord visible de tout ce qui précède : pas de GC à chauffer, pas de heap à faire grossir, un binaire qui prouve entièrement ce qu'il prétend ou qui ne compile pas du tout.
+
+La vitesse n'a jamais été l'argument. C'est juste ce qu'on peut mesurer de l'extérieur.
+
+---
+
+FerrisKey est open source, sous licence Apache 2.0, et le code dont on parle ici est public. Si vous voulez voir le vrai flow d'authentification, les ports réels, ou les features de mock en contexte, le repo est sur [GitHub](https://github.com/ferriskey/ferriskey). Clonez-le, lisez-le, contestez nos choix dans une issue. C'est tout l'intérêt de faire ça en public.

@@ -54,7 +54,11 @@ const contributors = sortContributors(
 )
 
 const showTabs = projects.length > 1
-const thumbnailUrl = '/assets' + (thumbnail ?? `${Astro.url.pathname.replace(/\/$/, '')}/thumbnail.png`)
+// Thumbnails are served from the site root (dist/**/thumbnail.png), not under /assets — and
+// og:image/twitter:image must be absolute, since Discord and most link-preview bots won't
+// resolve a relative path.
+const thumbnailPath = thumbnail ?? `${Astro.url.pathname.replace(/\/$/, '')}/thumbnail.png`
+const thumbnailUrl = Astro.site ? new URL(thumbnailPath, Astro.site).toString() : thumbnailPath
 
 const appUrlOverrides = {
   website: import.meta.env.PUBLIC_WEBSITE_URL,

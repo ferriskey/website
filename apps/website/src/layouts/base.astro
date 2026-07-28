@@ -9,7 +9,9 @@ interface Props {
 }
 
 const { title, description = 'Explainer v2', thumbnail } = Astro.props
-const thumbnailUrl = thumbnail ?? '/thumbnail.png'
+const thumbnailPath = thumbnail ?? '/thumbnail.png'
+// og:image/twitter:image must be absolute — Discord and most link-preview bots won't resolve a relative path.
+const thumbnailUrl = Astro.site ? new URL(thumbnailPath, Astro.site).toString() : thumbnailPath
 ---
 
 <!doctype html>
