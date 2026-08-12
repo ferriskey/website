@@ -51,6 +51,14 @@ export const defaultSponsors: Sponsor[] = [
     logoUrlDark: '/sponsors/anthropic-dark.svg',
     tier: 'partner',
   },
+  {
+    id: 'france-nuage',
+    name: 'France Nuage',
+    href: 'https://france-nuage.fr',
+    logoUrlLight: '/sponsors/france-nuage-light.png',
+    logoUrlDark: '/sponsors/france-nuage-dark.png',
+    tier: 'partner',
+  },
 ]
 
 // Supporters — in-kind support, community and academic backing (no tier/hierarchy, shown as a logo strip).
