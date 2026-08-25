@@ -6,19 +6,27 @@ ingress:
   className: nginx
   clusterIssuer: letsencrypt-prod
 
+## Gateway API disabled in this values file - legacy Ingress-only setup
+gateway:
+  enabled: false
+  name: ferris-gateway
+  namespace: default
+
 apps:
   website:
     enabled: true
     image: ghcr.io/ferriskey/ferriskey-website
     replicas: 1
     containerPort: 8080
+    host: ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
       enabled: true
-      host: ferriskey.rs
       annotations: {}
+    route:
+      enabled: false
     resources:
       requests:
         cpu: 50m
@@ -32,13 +40,15 @@ apps:
     image: ghcr.io/ferriskey/ferriskey-docs
     replicas: 1
     containerPort: 8080
+    host: docs.ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
       enabled: true
-      host: docs.ferriskey.rs
       annotations: {}
+    route:
+      enabled: false
     resources:
       requests:
         cpu: 50m
@@ -52,13 +62,15 @@ apps:
     image: ghcr.io/ferriskey/ferriskey-blog
     replicas: 1
     containerPort: 8080
+    host: blog.ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
       enabled: true
-      host: blog.ferriskey.rs
       annotations: {}
+    route:
+      enabled: false
     resources:
       requests:
         cpu: 50m

@@ -18,10 +18,10 @@ spec:
   ingressClassName: {{ $.Values.ingress.className }}
   tls:
     - hosts:
-        - {{ $app.ingress.host }}
+        - {{ $app.host }}
       secretName: {{ $.Release.Name }}-{{ $name }}-tls
   rules:
-    - host: {{ $app.ingress.host }}
+    - host: {{ $app.host }}
       http:
         paths:
           - path: /

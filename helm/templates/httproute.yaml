@@ -1,0 +1,34 @@
+{{- if .Values.gateway.enabled }}
+{{- range $name, $app := .Values.apps }}
+{{- if and $app.enabled $app.route.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ferriskey-website.labels" (dict "root" $ "app" $app) | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  hostnames:
+    - {{ $app.host }}
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ $.Values.gateway.name }}
+      namespace: {{ $.Values.gateway.namespace }}
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $.Release.Name }}-{{ $name }}
+          port: {{ $app.service.port }}
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+{{- end }}
+{{- end }}
+{{- end }}

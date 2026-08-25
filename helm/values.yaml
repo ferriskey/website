@@ -1,10 +1,18 @@
 ## Common image tag applied to all apps
 imageTag: sha-470a0fe
 
-## Ingress shared config
+## Ingress shared config (used only when an app's ingress.enabled is true)
 ingress:
   className: traefik
-  clusterIssuer: letsencrypt-prod
+  clusterIssuer: letsencrypt-internal
+
+## Gateway API shared config
+## Points at the pre-existing `ferris-gateway` (Envoy Gateway) in the `default`
+## namespace, which terminates TLS for *.ferriskey.rs / ferriskey.rs.
+gateway:
+  enabled: true
+  name: ferris-gateway
+  namespace: default
 
 apps:
   website:
@@ -12,13 +20,15 @@ apps:
     image: ghcr.io/ferriskey/ferriskey-website
     replicas: 1
     containerPort: 8080
+    host: ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
-      enabled: true
-      host: ferriskey.rs
+      enabled: false
       annotations: {}
+    route:
+      enabled: true
     resources:
       requests:
         cpu: 50m
@@ -32,13 +42,15 @@ apps:
     image: ghcr.io/ferriskey/ferriskey-docs
     replicas: 1
     containerPort: 8080
+    host: docs.ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
-      enabled: true
-      host: docs.ferriskey.rs
+      enabled: false
       annotations: {}
+    route:
+      enabled: true
     resources:
       requests:
         cpu: 50m
@@ -52,13 +64,15 @@ apps:
     image: ghcr.io/ferriskey/ferriskey-blog
     replicas: 1
     containerPort: 8080
+    host: blog.ferriskey.rs
     service:
       type: ClusterIP
       port: 80
     ingress:
-      enabled: true
-      host: blog.ferriskey.rs
+      enabled: false
       annotations: {}
+    route:
+      enabled: true
     resources:
       requests:
         cpu: 50m
