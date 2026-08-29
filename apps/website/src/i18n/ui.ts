@@ -201,6 +201,18 @@ export const ui = {
     'sponsors.cloudiamTagline': "Cloud IAM employs our founder full-time to build Ferriskey and runs it in production for their managed Keycloak customers. Together, we're working toward Ferriskey as a Service.",
     'sponsors.placeholder': 'Your Logo',
 
+    // France Nuage partnership
+    'franceNuage.label': 'Partnership',
+    'franceNuage.title': 'Managed Ferriskey, hosted in France',
+    'franceNuage.description': 'France Nuage is our cloud partner in France and runs the official managed Ferriskey offering on their infrastructure.',
+    'franceNuage.feature.sovereignty.title': 'Hosted in France',
+    'franceNuage.feature.sovereignty.desc': 'Your data stays on French soil, out of reach of the US Cloud Act.',
+    'franceNuage.feature.managed.title': 'Fully managed',
+    'franceNuage.feature.managed.desc': 'France Nuage handles updates, monitoring, and uptime, so your team can focus on using Ferriskey instead of running it.',
+    'franceNuage.feature.compliance.title': 'GDPR ready',
+    'franceNuage.feature.compliance.desc': 'Built for organizations that need to meet strict data protection requirements.',
+    'franceNuage.cta': 'Deploy a managed Ferriskey with France Nuage',
+
     // Supporters
     'supporters.label': 'Supporters',
     'supporters.title': 'Backed by the community',
@@ -412,6 +424,18 @@ export const ui = {
     'sponsors.leadBadge': 'Sponsor principal',
     'sponsors.cloudiamTagline': "Cloud IAM emploie notre fondateur à temps plein pour construire Ferriskey, et l'utilise en production pour leur offre Keycloak managé. Ensemble, on avance vers Ferriskey as a Service.",
     'sponsors.placeholder': 'Votre Logo',
+
+    // Partenariat France Nuage
+    'franceNuage.label': 'Partenariat',
+    'franceNuage.title': 'Un Ferriskey managé, hébergé en France',
+    'franceNuage.description': "France Nuage est notre partenaire cloud en France et propose l'offre Ferriskey managée officielle sur son infrastructure.",
+    'franceNuage.feature.sovereignty.title': 'Hébergé en France',
+    'franceNuage.feature.sovereignty.desc': "Vos données restent sur le territoire français, hors de portée du Cloud Act américain.",
+    'franceNuage.feature.managed.title': 'Entièrement managé',
+    'franceNuage.feature.managed.desc': "France Nuage s'occupe des mises à jour, de la supervision et de la disponibilité, pour que votre équipe se concentre sur l'usage de Ferriskey plutôt que sur son exploitation.",
+    'franceNuage.feature.compliance.title': 'Conforme RGPD',
+    'franceNuage.feature.compliance.desc': "Pensé pour les organisations soumises à des exigences fortes en matière de protection des données.",
+    'franceNuage.cta': 'Déployer un Ferriskey managé avec France Nuage',
 
     // Soutiens
     'supporters.label': 'Soutiens',
