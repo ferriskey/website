@@ -1,0 +1,83 @@
+---
+import { Icon } from '@iconify/react'
+import { Button } from '@explainer/ui'
+import SectionHeader from './section-header.astro'
+
+const features = [
+  {
+    icon: 'lucide:map-pin',
+    titleKey: 'franceNuage.feature.sovereignty.title',
+    titleDefault: 'Hosted in France',
+    descKey: 'franceNuage.feature.sovereignty.desc',
+    descDefault: 'Your data stays on French soil, out of reach of the US Cloud Act.',
+  },
+  {
+    icon: 'lucide:server-cog',
+    titleKey: 'franceNuage.feature.managed.title',
+    titleDefault: 'Fully managed',
+    descKey: 'franceNuage.feature.managed.desc',
+    descDefault: 'France Nuage handles updates, monitoring, and uptime, so your team can focus on using Ferriskey instead of running it.',
+  },
+  {
+    icon: 'lucide:shield-check',
+    titleKey: 'franceNuage.feature.compliance.title',
+    titleDefault: 'GDPR ready',
+    descKey: 'franceNuage.feature.compliance.desc',
+    descDefault: 'Built for organizations that need to meet strict data protection requirements.',
+  },
+]
+---
+
+<div class="w-full py-16 sm:py-24 lg:py-32 bg-muted/20">
+  <div class="relative w-full max-w-7xl mx-auto px-5">
+    <SectionHeader align="center" descriptionClass="max-w-xl" class="pt-8">
+      <span slot="label" data-t="franceNuage.label">Partnership</span>
+      <span slot="title" data-t="franceNuage.title">Managed Ferriskey, hosted in France</span>
+      <span slot="description" data-t="franceNuage.description">
+        France Nuage is our cloud partner in France and runs the official managed Ferriskey offering on their infrastructure.
+      </span>
+    </SectionHeader>
+
+    <div
+      data-anim="scale"
+      class="relative overflow-hidden border rounded-2xl bg-primary/[0.03] px-6 py-10 sm:px-12 sm:py-14"
+    >
+      <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div
+          class="absolute inset-0 opacity-[0.06]"
+          style="background-image: linear-gradient(to right, var(--color-primary) 1px, transparent 1px), linear-gradient(to bottom, var(--color-primary) 1px, transparent 1px); background-size: 48px 48px; mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 0%, transparent 80%);"
+        >
+        </div>
+      </div>
+
+      <div class="relative flex flex-col items-center gap-8">
+        <div class="flex items-center justify-center">
+          <img src="/sponsors/france-nuage-light.png" alt="France Nuage" class="max-h-14 max-w-[240px] object-contain dark:hidden" />
+          <img src="/sponsors/france-nuage-dark.png" alt="France Nuage" class="max-h-14 max-w-[240px] object-contain hidden dark:block" />
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-6 w-full max-w-4xl">
+          {features.map(f => (
+            <div class="flex flex-col items-center text-center gap-3 px-2">
+              <div class="flex items-center justify-center size-10 rounded-lg border border-primary/25 bg-primary/10 text-primary">
+                <Icon icon={f.icon} aria-hidden="true" className="size-5" client:load />
+              </div>
+              <p class="text-sm font-semibold text-foreground" data-t={f.titleKey}>{f.titleDefault}</p>
+              <p class="text-sm text-muted-foreground leading-relaxed" data-t={f.descKey}>{f.descDefault}</p>
+            </div>
+          ))}
+        </div>
+
+        <a
+          href="https://france-nuage.fr"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 mt-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <span data-t="franceNuage.cta">Deploy a managed Ferriskey with France Nuage</span>
+          <Icon icon="lucide:arrow-right" aria-hidden="true" className="size-4" client:load />
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
