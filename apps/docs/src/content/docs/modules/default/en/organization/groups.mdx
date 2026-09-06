@@ -1,0 +1,98 @@
+---
+title: Groups
+description: "Hierarchical groups inside a FerrisKey organization: nested membership, inherited roles, and group attributes."
+icon: network
+order: 82
+---
+
+# Groups
+
+Groups add structure inside an organization. They form a tree, and membership is recursive: a member of a group is effectively a member of every group above it, and inherits the roles mapped to each of them.
+
+That is what makes "everyone in Engineering can read the build logs, and the Platform sub-team can also deploy" expressible without assigning roles user by user.
+
+## The group tree
+
+A group belongs to one organization and points at a parent through `parent_group_id`. A `null` parent means the group sits at the top level.
+
+```
+Acme Corp (organization)
+└── Engineering              roles: build:read
+    ├── Platform             roles: deploy
+    └── Frontend
+```
+
+A user added to Platform is a member of Platform and of Engineering, and holds both `deploy` and `build:read`.
+
+## Group fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID v7 | Identifier |
+| `organization_id` | UUID | The organization the group belongs to |
+| `parent_group_id` | UUID or null | Parent group. `null` for a top-level group |
+| `name` | String | Group name, required |
+| `description` | String | Free-text description |
+| `created_at` | DateTime (UTC) | Creation timestamp |
+| `updated_at` | DateTime (UTC) | Last-modified timestamp |
+
+Updating a group can move it: sending a new `parent_group_id` reparents it, and sending `null` promotes it to the top level.
+
+## Endpoints
+
+All of them are scoped to a realm and an organization.
+
+### Groups
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups` | List the organization's groups |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups` | Create a group |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Read one group |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Update or reparent a group |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Delete a group |
+
+Listing returns the tree: each node carries the group's own fields plus a `children` array of the same shape.
+
+### Members
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `.../groups/{group_id}/members` | List the group's members, paginated |
+| `POST` | `.../groups/{group_id}/members` | Add a user to the group |
+| `DELETE` | `.../groups/{group_id}/members/{user_id}` | Remove a user from the group |
+
+The member list is enriched, so a client can render it without walking the user directory. Each entry carries `username`, `email`, `firstname`, `lastname`, and `enabled` alongside the membership ids, and the response wraps them with `total`, `limit`, and `offset` for server-side pagination.
+
+### Roles
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `.../groups/{group_id}/roles` | List the roles mapped to the group |
+| `POST` | `.../groups/{group_id}/roles` | Map a role to the group |
+| `DELETE` | `.../groups/{group_id}/roles/{role_id}` | Unmap a role |
+
+Every member of the group, and of every group below it, inherits the roles mapped here.
+
+### Attributes
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `.../groups/{group_id}/attributes` | List the group's attributes |
+| `PUT` | `.../groups/{group_id}/attributes/{key}` | Upsert an attribute |
+| `DELETE` | `.../groups/{group_id}/attributes/{key}` | Delete an attribute |
+
+Same key-value shape and same upsert behaviour as [organization attributes](/en/modules/organization/attributes).
+
+## Permissions
+
+Groups use the same realm-level gates as the rest of the organization module: `ManageRealm` or `ManageUsers` to write, and `ViewUsers` on top of those to read. There are no group-specific permissions.
+
+::::card-group{cols=2}
+:::card{label="Members" icon="lucide:users" href="/en/modules/organization/members"}
+Direct organization membership and the roles assigned to a member.
+:::
+:::card{label="Roles & Permissions" icon="lucide:shield-check" href="/en/discover/core-concepts/roles"}
+How roles and the bitwise permission system work.
+:::
+::::

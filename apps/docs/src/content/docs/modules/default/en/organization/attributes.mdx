@@ -2,14 +2,16 @@
 title: Attributes
 description: "Custom key-value metadata on FerrisKey organizations."
 icon: tags
-order: 82
+order: 83
 ---
 
 # Attributes
 
-Attributes are custom key-value pairs attached to an organization. They let you store arbitrary metadata on an organization without extending the core schema — useful for subscription tiers, external system IDs, feature flags, and any other business data that belongs with the organization record.
+Attributes are key-value pairs hanging off an organization. They hold whatever business data belongs with a customer record, subscription tier, external system ids, feature flags, without anyone extending the core schema for it.
 
-## Attribute Endpoints
+Groups carry attributes too, with the same shape and the same upsert semantics, under `/groups/{group_id}/attributes`.
+
+## Attribute endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -17,9 +19,9 @@ Attributes are custom key-value pairs attached to an organization. They let you 
 | `PUT` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Upsert an attribute by key |
 | `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Delete an attribute by key |
 
-## Upsert Semantics
+## Upsert semantics
 
-The `PUT` endpoint upserts by key: if the key already exists, its value is overwritten; if it does not exist, a new attribute is created. There is no separate create endpoint.
+`PUT` upserts by key. An existing key has its value overwritten; a new key is created. There is no separate create endpoint.
 
 ```json title="PUT /realms/acme/organizations/{org_id}/attributes/plan"
 {
@@ -29,17 +31,17 @@ The `PUT` endpoint upserts by key: if the key already exists, its value is overw
 
 Both `key` and `value` are required. An empty or missing value is rejected.
 
-## Attribute Fields
+## Attribute fields
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| `id` | UUID v7 | — | Auto-generated identifier |
-| `organization_id` | UUID | — | The organization this attribute belongs to |
-| `key` | String | 1–255 characters, required | Attribute name |
-| `value` | String | Required | Attribute value |
-| `created_at` | DateTime (UTC) | — | Creation timestamp (set on first upsert, not updated on overwrites) |
+| `id` | UUID v7 | generated | Identifier |
+| `organization_id` | UUID | generated | The organization this attribute belongs to |
+| `key` | String | 1 to 255 characters, required | Attribute name |
+| `value` | String | required | Attribute value |
+| `created_at` | DateTime (UTC) | generated | Set on the first upsert, and left alone on overwrites |
 
-## Example: Multiple Attributes
+## Several attributes at once
 
 A typical organization might carry several attributes:
 

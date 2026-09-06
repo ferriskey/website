@@ -114,9 +114,9 @@ Fetch a single flow by ID to see all its steps:
 
 This tells the complete story: the user's password was correct (85ms for Argon2 verification), but the TOTP code was wrong.
 
-## Real-World Analytics Patterns
+## Analytics people actually build
 
-### Authentication Latency Dashboard
+### Authentication latency dashboard
 
 Build a Grafana or custom dashboard that queries Compass stats periodically:
 
@@ -136,7 +136,7 @@ export default class CompassMetrics extends BaseTask {
 }
 ```
 
-### Top Failure Reasons
+### Top failure reasons
 
 Query failed flows and group by `error_code` to find the most common failure patterns:
 
@@ -170,7 +170,7 @@ Common findings:
 - `invalid_redirect_uri`. Client misconfiguration
 - `idp_error`. External provider returned an error
 
-### Slow Flow Detection
+### Finding slow flows
 
 Find flows where a specific step took unusually long:
 
@@ -185,14 +185,14 @@ limit=100" \
   jq '.[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
 ```
 
-### IdP Performance Monitoring
+### IdP performance monitoring
 
 When using [Abyss](/en/modules/abyss/overview) for external IdP federation, Compass tracks `idp_redirect` and `idp_callback` steps. These are particularly valuable because they involve network calls to third-party services:
 
 - **`idp_redirect`**: Should be < 5ms (just building a URL). If slow, check network/DNS.
 - **`idp_callback`**: Involves token exchange with the external provider. Typical: 100-500ms. If >1s, the external provider may be degraded.
 
-### User-Level Flow History
+### Per-user flow history
 
 Investigate a specific user's authentication patterns:
 
@@ -207,7 +207,7 @@ This shows their recent login attempts, useful for support tickets ("I can't log
 
 ## Data Maintenance
 
-### Purging Old Flows
+### Purging old flows
 
 Compass does not auto-delete flows. Over time, flow data grows. Use the `purge_old_flows` capability to clean up:
 

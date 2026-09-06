@@ -1,24 +1,24 @@
 ---
 title: Members
-description: "Manage organization membership in FerrisKey: add, remove, and list members, and look up a user's organizations."
+description: "Manage organization membership in FerrisKey: add, remove, and list members, assign roles inside an organization, and look up a user's organizations."
 icon: users
 order: 81
 ---
 
 # Members
 
-Membership connects a user to an organization. A user can belong to multiple organizations within the same realm, and an organization can have any number of members. Membership is flat: there are no per-member roles or permissions inside an organization.
+Membership connects a user to an organization. A user can belong to several organizations in the same realm, and an organization takes any number of members. Roles can then be assigned to a member within that organization, or inherited from a [group](/en/modules/organization/groups).
 
-## Membership Endpoints
+## Membership endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | List all members of an organization |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | List the members of an organization |
 | `POST` | `/realms/{realm_name}/organizations/{organization_id}/members` | Add a user to an organization |
 | `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}` | Remove a user from an organization |
-| `GET` | `/realms/{realm_name}/users/{user_id}/organizations` | List all organizations a user belongs to |
+| `GET` | `/realms/{realm_name}/users/{user_id}/organizations` | List the organizations a user belongs to |
 
-## Adding a Member
+## Adding a member
 
 Send the target `user_id` in the request body:
 
@@ -39,7 +39,7 @@ A successful addition returns the new membership record:
 }
 ```
 
-## Adding a Member Step by Step
+## Adding a member step by step
 
 ::::step-group
 :::step{title="Confirm the organization is enabled"}
@@ -59,33 +59,53 @@ Confirm the user appears in `GET /realms/{realm_name}/organizations/{organizatio
 :::
 ::::
 
-## Behavior Rules
+## Behavior rules
 
 | Situation | Result |
 |---|---|
-| User already a member of this organization | `AlreadyExists` error — duplicate membership is rejected |
+| User already a member of this organization | `AlreadyExists`. Duplicate membership is rejected |
 | User is in a different realm than the organization | Request rejected |
 | Organization is disabled (`enabled: false`) | Request rejected |
-| Removing a user who is not a member | `NotFound` error |
+| Removing a user who is not a member | `NotFound` |
 
-## Listing a User's Organizations
+## Listing a user's organizations
 
-To find every organization a specific user belongs to across the realm:
+To find every organization a user belongs to within the realm:
 
 ```
 GET /realms/{realm_name}/users/{user_id}/organizations
 ```
 
-This returns an array of membership records — each carrying the `organization_id`, `user_id`, and `created_at` (the same `OrganizationMember` shape returned when adding a member), not full organization objects. Resolve each `organization_id` against `GET /realms/{realm_name}/organizations/{organization_id}` for full details. Use this to build a workspace switcher, enforce org-level feature access, or display the user's account context.
+The response is an array of membership records, each with `organization_id`, `user_id`, and `created_at`. That is the same `OrganizationMember` shape you get back when adding a member, not a full organization object, so resolve each `organization_id` against `GET /realms/{realm_name}/organizations/{organization_id}` when you need the details. It is what a workspace switcher is built on.
 
-## Removing a Member
+## Removing a member
 
 ```
 DELETE /realms/{realm_name}/organizations/{organization_id}/members/{user_id}
 ```
 
-Membership removal is immediate. If the user is not a member, the call returns `NotFound`. There is no cascading effect on the user's account — the user record itself is untouched.
+Removal takes effect immediately. If the user is not a member, the call returns `NotFound`. Nothing cascades to the user's account: the user record is untouched.
 
-:::callout{variant="info" title="Flat membership — org-scoped roles are roadmap"}
-Every member has the same standing inside an organization. There is no `role` field on a membership record, and no way to mark a member as owner, admin, or viewer at the organization level. Organization-scoped RBAC is planned but not yet implemented. For now, use realm-level roles to differentiate access.
+## Member roles
+
+A membership record itself has no role field. Roles are attached to the member through a separate set of endpoints, scoped to the organization.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles` | List the roles the member holds in this organization |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles` | Assign a role to the member |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles/{role_id}` | Revoke a role from the member |
+
+Assignment takes the role id in the body and answers `204 No Content`:
+
+```json title="POST .../members/{user_id}/roles"
+{
+  "role_id": "01936b2e-7777-7000-abcd-000000000004"
+}
+```
+
+`GET` returns the full role objects, so a client can read their names and permissions without a second lookup.
+
+:::callout{variant="info" title="Roles can also come from a group"}
+Groups inside an organization carry role mappings of their own, and membership in a group is recursive: a member of a group effectively belongs to all of its ancestors, and inherits their roles. See [Groups](/en/modules/organization/groups).
 :::

@@ -7,15 +7,15 @@ order: 10
 
 # Trident: Multi-Factor Authentication
 
-Trident is FerrisKey's MFA module. It adds second-factor verification to the authentication chain, turning a password-only login into a multi-step proof of identity. Trident supports four authentication methods that can be combined depending on your security requirements.
+Trident is the MFA module. It sits in the authentication chain between a valid password and a token, and turns a single-factor login into a multi-step one. Four methods are available, and they combine.
 
-## Why MFA Matters
+## Why bother
 
-Passwords alone are not enough. Credential stuffing, phishing, and brute-force attacks make single-factor authentication a liability. MFA ensures that even if a password is compromised, an attacker cannot access the account without the second factor.
+Credential stuffing and phishing make a password on its own a liability. A second factor means a stolen password is not enough on its own to get in.
 
-FerrisKey enforces MFA through the **required actions** system. When a user has `ConfigureOtp` as a required action, they must set up a TOTP credential before gaining full access. This makes MFA enrollment mandatory rather than optional.
+Enrollment is enforced through required actions. Set `require_mfa` on the realm and users without a TOTP credential pick up `configure_otp` on their next login, which they have to clear before they get a real token.
 
-## Available Methods
+## Available methods
 
 ::::card-group{cols=2}
 :::card{label="TOTP" icon="lucide:clock" href="/en/modules/trident/totp"}
@@ -32,9 +32,9 @@ One-time backup codes for account recovery when the primary MFA device is lost.
 :::
 ::::
 
-## How Trident Fits in the Authentication Chain
+## Where Trident sits
 
-Trident operates between credential validation and token issuance:
+Between credential validation and token issuance:
 
 ```mermaid
 graph LR
@@ -46,24 +46,21 @@ graph LR
     E -->|No| F[Authentication Failed]
 ```
 
-When a user authenticates with valid credentials:
+Once the credentials check out:
 
-1. FerrisKey checks if the user has any MFA credentials (TOTP, WebAuthn)
-2. If yes, the response status is `requires_otp_challenge` with a **temporary token**
-3. The client uses the temporary token to submit the second factor
-4. On success, full access/refresh/ID tokens are issued
+1. FerrisKey looks for MFA credentials on the user, TOTP or WebAuthn.
+2. If there are any, the response comes back as `requires_otp_challenge` with a temporary token.
+3. The client submits the second factor using that temporary token.
+4. On success, the real access, refresh, and ID tokens are issued.
 
 :::callout{variant="info" title="Temporary tokens"}
-The temporary token returned during the MFA challenge is short-lived (default: 300 seconds) and can only be used to complete the MFA step or other required actions. It cannot access protected resources.
+The temporary token handed out during the challenge lives 300 seconds by default and only authorizes the MFA step and other required actions. It cannot touch a protected resource.
 :::
 
-## Real-World Deployment Patterns
+## Three ways teams use it
 
-### SaaS Application with Mandatory MFA
-Set `ConfigureOtp` as a required action for all new users in the realm. Users must configure TOTP on first login before they can access your application.
+**Mandatory MFA on a SaaS product.** Turn on `require_mfa` for the realm. Every user configures TOTP on first login before reaching the application.
 
-### Enterprise with Passwordless
-Configure WebAuthn as the primary authenticator and disable password-based login on the client. Users sign in with Touch ID or a YubiKey, no passwords to phish.
+**Passwordless in an enterprise.** Make WebAuthn the primary authenticator and turn off password login on the client. People sign in with Touch ID or a YubiKey, and there is no password left to phish.
 
-### Consumer App with Optional MFA
-Let users opt in to TOTP or WebAuthn through a self-service settings page. Don't set required actions. MFA is available but not enforced.
+**Optional MFA on a consumer app.** Leave `require_mfa` off and let users enroll TOTP or a passkey from their settings page. Available, not enforced.

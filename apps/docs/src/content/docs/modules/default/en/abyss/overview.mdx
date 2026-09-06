@@ -9,22 +9,26 @@ order: 40
 
 Abyss connects FerrisKey to external identity providers. Users can authenticate through Google, GitHub, Discord, or any custom OAuth2/OIDC provider, and FerrisKey handles the token exchange, user provisioning, account linking, and attribute mapping.
 
-## Why Federation?
+## Why federation?
 
-Federation lets you meet users where they already have an identity. Instead of forcing users to create yet another account, let them sign in with their existing Google or corporate credentials. FerrisKey becomes the identity broker, normalizing different provider formats into a consistent internal model.
+Federation meets users where they already have an identity. Rather than making them create yet another account, let them sign in with the Google or corporate credentials they already carry. FerrisKey sits in the middle as the broker, normalizing each provider's format into one internal model.
 
-## Supported Provider Types
+## Supported provider types
 
 | Type | Status | Examples |
 |---|---|---|
-| **OAuth2** | Supported | Google, GitHub, Discord, any OAuth2 provider |
-| **OIDC** | Supported | Any OpenID Connect compliant provider |
-| **SAML** | Planned | Enterprise IdPs (Okta, Azure AD via SAML) |
-| **LDAP** | Planned | Active Directory, OpenLDAP |
+| OAuth2 | Supported | Google, GitHub, Discord, any OAuth2 provider |
+| OIDC | Supported | Any OpenID Connect compliant provider |
+| SAML | Planned | Enterprise IdPs such as Okta or Entra ID |
+| LDAP | Planned | Active Directory, OpenLDAP |
 
-## Provider Configuration
+:::callout{variant="info" title="SAML in the other direction already works"}
+Signing in *through* an external SAML provider is what is planned here. FerrisKey acting *as* a SAML identity provider, so other applications can trust it, is shipped: see the [SAML module](/en/modules/saml/overview).
+:::
 
-Each provider is registered per realm with full OAuth2/OIDC configuration:
+## Provider configuration
+
+Providers are registered per realm, each with its full OAuth2 or OIDC configuration:
 
 | Field | Description |
 |---|---|
@@ -43,9 +47,9 @@ Each provider is registered per realm with full OAuth2/OIDC configuration:
 Client secrets are encrypted before storage. They are never exposed through the admin API in plaintext.
 :::
 
-## Provider Mappings
+## Provider mappings
 
-Provider mappings define how external attributes map to internal FerrisKey user fields:
+Mappings say how the provider's attributes land on FerrisKey user fields:
 
 | External Field | Internal Field | Required |
 |---|---|---|
@@ -55,18 +59,18 @@ Provider mappings define how external attributes map to internal FerrisKey user 
 | `given_name` | `firstname` | No |
 | `family_name` | `lastname` | No |
 
-Each mapping specifies whether it's required, if a required mapping is missing from the provider's response, the federation flow fails.
+A mapping can be marked required. When a required one is absent from the provider's response, the federation flow fails rather than creating a half-filled user.
 
-## Real-World Patterns
+## Common setups
 
-### "Sign in with Google" for a SaaS Product
+### Sign in with Google for a SaaS product
 Configure a Google OAuth2 provider with scopes `openid email profile`. Users click "Sign in with Google", authenticate at Google, and are redirected back to your app with FerrisKey tokens. New users are automatically provisioned.
 
-### Corporate SSO with Azure AD
-Configure an OIDC provider pointing to your Azure AD tenant's endpoints. Employees authenticate through their corporate identity and get FerrisKey tokens scoped to the correct realm.
+### Corporate SSO with Entra ID
+Configure an OIDC provider pointing at your tenant's endpoints. Employees authenticate with their corporate identity and receive FerrisKey tokens scoped to the right realm.
 
-### Multi-Provider Login
+### Several providers at once
 Configure Google, GitHub, and Discord as providers on the same realm. Users choose their preferred provider on the login page. All three paths converge into the same FerrisKey user model with unified roles and permissions.
 
-### Account Linking
-A user who first authenticated with Google can later link their GitHub account. Both external identities map to the same FerrisKey user, each tracked by a separate federated credential.
+### Account linking
+A user who first signed in with Google can link a GitHub account later. Both external identities point at the same FerrisKey user, each tracked by its own federated credential.

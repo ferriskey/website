@@ -7,37 +7,37 @@ order: 1
 
 # Modules
 
-FerrisKey is built as a collection of purpose-built modules. Each module owns a specific aspect of identity management and can be understood, configured, and extended independently.
+FerrisKey is a collection of modules. Each one owns a piece of identity management and can be read, configured, and extended on its own.
 
 ::::card-group{cols=2}
 :::card{label="Trident" icon="lucide:shield-check" href="/en/modules/trident/overview"}
-**Multi-Factor Authentication**: TOTP, WebAuthn passkeys, magic links, and recovery codes.
+Multi-factor authentication: TOTP, WebAuthn passkeys, magic links, and recovery codes.
 :::
 :::card{label="SeaWatch" icon="lucide:eye" href="/en/modules/seawatch/overview"}
-**Audit & Security Events**: Track and query every critical action across your realms.
+Audit and security events: every critical action across your realms, queryable.
 :::
 :::card{label="Compass" icon="lucide:compass" href="/en/modules/compass/overview"}
-**Authentication Flow Engine**: Orchestrate multi-step authentication with conditional logic.
+Authentication flow recording: which step broke, and how long each one took.
 :::
 :::card{label="Abyss" icon="lucide:link" href="/en/modules/abyss/overview"}
-**Identity Provider Federation**: Connect Google, GitHub, Discord, and custom OIDC providers.
+Identity provider federation: Google, GitHub, Discord, and custom OIDC providers.
 :::
 :::card{label="Aegis" icon="lucide:lock" href="/en/modules/aegis/overview"}
-**Scopes & Protocol Mappers**: Control exactly what data flows into your tokens.
+Scopes and protocol mappers, deciding exactly what goes into a token.
 :::
 :::card{label="Webhooks" icon="lucide:webhook" href="/en/modules/webhooks/overview"}
-**Event-Driven Extensibility**: Subscribe to lifecycle events and push notifications to external systems.
+Event-driven integrations: subscribe to lifecycle events and push them outward.
 :::
 :::card{label="Organizations" icon="lucide:building-2" href="/en/modules/organization/overview"}
-**B2B Tenancy**: Group users into organizations with membership and custom attributes.
+B2B tenancy: organizations, groups, membership, roles, and custom attributes.
+:::
+:::card{label="SAML" icon="lucide:file-badge" href="/en/modules/saml/overview"}
+FerrisKey as a SAML 2.0 identity provider, for applications that speak nothing else.
 :::
 ::::
 
-## Module Architecture
+## How a module is built
 
-Each module is implemented as either:
+A module lives either as a domain module under `core/src/domain/`, close to the core, or as its own crate under `libs/` when it is worth testing and versioning separately. Several are in the middle of moving from the first to the second.
 
-- **A domain module** within `core/src/domain/`, tightly integrated with the core domain
-- **A standalone library crate** in `libs/`, reusable and independently testable
-
-All modules follow FerrisKey's hexagonal architecture: business logic is pure, dependencies are injected through ports (traits), and infrastructure concerns are handled at the boundary.
+Either way the shape is the same, and it follows the hexagonal architecture: the business logic is pure, its dependencies arrive through ports, and the infrastructure sits at the boundary. `ferriskey-api-*` crates carry the HTTP layer for the modules that have been extracted.

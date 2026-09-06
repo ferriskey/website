@@ -9,7 +9,7 @@ order: 14
 
 Recovery codes are one-time backup credentials generated when MFA is first configured. They serve as a last resort when the user loses access to their primary MFA device, a lost phone, a broken hardware key, or a wiped authenticator app.
 
-## How They Work
+## How they work
 
 When a user configures TOTP or WebAuthn for the first time, FerrisKey generates a set of recovery codes. Each code is a random byte sequence that can be used exactly once to bypass the normal MFA challenge.
 
@@ -53,7 +53,7 @@ Recovery codes grant full account access. Users should store them with the same 
 ### Prompt Regeneration
 After a user consumes a recovery code, prompt them to generate a fresh set. Each used code reduces the safety net.
 
-### Display Code Count
+### Show how many are left
 Show users how many recovery codes they have remaining. If the count is low (1-2 remaining), warn them to regenerate.
 
 ### Secure Display

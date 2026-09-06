@@ -115,7 +115,7 @@ Protocol mappers execute in the order they appear within their scope. When multi
 If two mappers target the same claim name, the later one overwrites the earlier one. Be intentional about claim names across scopes to avoid unintended overrides.
 :::
 
-## Token Generation Pipeline
+## Token generation pipeline
 
 When a token is generated, Aegis follows this pipeline:
 
@@ -126,7 +126,7 @@ When a token is generated, Aegis follows this pipeline:
 5. **Filter by token type**: Include only claims marked for the target token type (access token vs ID token)
 6. **Sign**: Sign the JWT with the realm's signing key
 
-## Creating Custom Mappers
+## Creating custom mappers
 
 To add a custom claim to your tokens:
 
