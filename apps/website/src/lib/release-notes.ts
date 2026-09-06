@@ -50,7 +50,7 @@ export const releaseNotes: ReleaseNote[] = [
       'Adds CIAM application management, resume-OAuth-after-password-reset, basic auth support, and several OIDC discovery and nonce compliance fixes.',
     ],
     transition:
-      'With operational control settled in 0.6, the 0.7 line turns toward developer-facing protocol coverage and end-user branding — making FerrisKey both more standards-complete and more customizable.',
+      'With operational control settled in 0.6, the 0.7 line turns toward developer-facing protocol coverage and end-user branding, making FerrisKey both more standards-complete and more customizable.',
   },
   {
     version: 'v0.6.1',
@@ -74,16 +74,16 @@ export const releaseNotes: ReleaseNote[] = [
     publishedAt: '2026-05-06T00:00:00Z',
     title: 'Maintenance mode, user attributes, and OpenTelemetry tracing',
     summary:
-      'FerrisKey 0.6.0 introduces two major platform capabilities — a built-in maintenance mode and extensible user attributes — alongside full OpenTelemetry tracing support for production observability.',
+      'FerrisKey 0.6.0 introduces two major platform capabilities, a built-in maintenance mode and extensible user attributes, alongside full OpenTelemetry tracing support for production observability.',
     kind: 'major',
     githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.6.0',
     highlights: [
       'Ships a first-class maintenance mode across the full stack, letting administrators halt user-facing operations gracefully during upgrades or incidents while retaining admin access.',
       'Adds user attributes support so realms can store arbitrary key-value metadata on users and propagate them into tokens via protocol mappers.',
-      'Integrates OpenTelemetry tracing and OTLP log bridge for seamless compatibility with observability stacks such as Grafana Tempo and Jaeger.',
+      'Integrates OpenTelemetry tracing and an OTLP log bridge, so traces and logs land in observability stacks such as Grafana Tempo and Jaeger without extra glue.',
     ],
     transition:
-      'Building on the passwordless and multi-tenant foundations of 0.5.0, this release shifts focus to operational control and extensibility — giving platform teams the tools to manage identity infrastructure with greater confidence.',
+      'Building on the passwordless and multi-tenant foundations of 0.5.0, this release shifts focus to operational control and extensibility, giving platform teams the tools to manage identity infrastructure with more confidence.',
   },
   {
     version: 'v0.5.0',
@@ -280,7 +280,7 @@ export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteT
         "Ajoute la gestion des applications CIAM, la reprise du flow OAuth après reset de mot de passe, le support basic auth et plusieurs correctifs de conformité OIDC (discovery et nonce).",
       ],
       transition:
-        "Le contrôle opérationnel étant posé en 0.6, la ligne 0.7 se tourne vers la couverture protocolaire côté développeurs et le branding côté utilisateurs finaux — rendant FerrisKey à la fois plus conforme aux standards et plus personnalisable.",
+        "Le contrôle opérationnel étant posé en 0.6, la ligne 0.7 se tourne vers la couverture protocolaire côté développeurs et le branding côté utilisateurs finaux, rendant FerrisKey à la fois plus conforme aux standards et plus personnalisable.",
     },
     'v0.6.1': {
       title: "Correctifs des flows d'authentification et finitions passkey",
@@ -297,7 +297,7 @@ export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteT
     'v0.6.0': {
       title: "Mode maintenance, attributs utilisateur et tracing OpenTelemetry",
       summary:
-        "FerrisKey 0.6.0 introduit deux grandes capacités plateforme — un mode maintenance natif et des attributs utilisateur extensibles — ainsi qu'un support complet du tracing OpenTelemetry pour l'observabilité en production.",
+        "FerrisKey 0.6.0 introduit deux grandes capacités plateforme, un mode maintenance natif et des attributs utilisateur extensibles, ainsi qu'un support complet du tracing OpenTelemetry pour l'observabilité en production.",
       highlights: [
         "Livre un mode maintenance de bout en bout permettant aux administrateurs de suspendre les opérations utilisateur de façon contrôlée lors d'une mise à jour ou d'un incident, tout en conservant l'accès admin.",
         "Ajoute le support des attributs utilisateur pour stocker des métadonnées clé-valeur arbitraires sur les utilisateurs et les propager dans les tokens via les protocol mappers.",

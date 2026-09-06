@@ -1,6 +1,6 @@
 ---
 import SectionHeader from './section-header.astro'
-// Why Now section — fragmented IAM vs FerrisKey, side-by-side comparison
+// Why Now section: fragmented IAM vs FerrisKey, side-by-side comparison
 
 const withoutServices = [
   { key: 'passwords', label: 'Password hashing' },
@@ -12,7 +12,7 @@ const withoutServices = [
   { key: 'rbac',      label: 'Permission rules' },
 ]
 
-// Keycloak variant — extensions / themes you'll wire or maintain for common needs
+// Keycloak variant: extensions / themes you'll wire or maintain for common needs
 const keycloakExtensions = [
   { key: 'magiclink', label: 'Magic link login (SPI)' },
   { key: 'email',     label: 'Email templates (theme)' },
@@ -22,7 +22,7 @@ const keycloakExtensions = [
   { key: 'ratelimit', label: 'Rate limiting (proxy)' },
 ]
 
-// Auth0 variant — what you delegate to the vendor
+// Auth0 variant: what you delegate to the vendor
 const auth0Facts = [
   { key: 'hosted',   label: 'Hosted by the vendor' },
   { key: 'mau',      label: 'Pricing scales with MAU' },
@@ -120,7 +120,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               </marker>
             </defs>
 
-            {/* Big "Your App" container — holds every identity concern internally */}
+            {/* Big "Your App" container: holds every identity concern internally */}
             <rect x="22" y="30" width="430" height="320" rx="14"
                   fill="rgba(255,255,255,0.02)"
                   stroke="rgba(255,255,255,0.22)"
@@ -133,7 +133,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             </g>
             <text x="38" y="78" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.without.subtitle">handles every identity concern itself:</text>
 
-            {/* Internal module boxes — code paths inside the app, scanned in sequence */}
+            {/* Internal module boxes: code paths inside the app, scanned in sequence */}
             {withoutServices.map((svc, i) => {
               const y = 96 + i * 34
               return (
@@ -215,7 +215,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               <animateMotion dur="1.6s" repeatCount="indefinite" path="M 132 190 L 184 190" />
             </circle>
 
-            {/* Big "Keycloak" container — core + extensions to wire (spans 190→450) */}
+            {/* Big "Keycloak" container: core + extensions to wire (spans 190→450) */}
             <rect x="190" y="30" width="260" height="320" rx="14"
                   fill="rgba(255,255,255,0.02)"
                   stroke="rgba(255,255,255,0.22)"
@@ -230,7 +230,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             </g>
             <text x="206" y="80" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.keycloak.subtitle">common needs handled by extensions:</text>
 
-            {/* Extension boxes — fit inside the narrower container, scanned in sequence */}
+            {/* Extension boxes: fit inside the narrower container, scanned in sequence */}
             {keycloakExtensions.map((ext, i) => {
               const y = 100 + i * 38
               return (
@@ -248,7 +248,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               )
             })}
 
-            {/* Arrow Keycloak → Users — now 52px, symmetric with the left arrow */}
+            {/* Arrow Keycloak → Users: now 52px, symmetric with the left arrow */}
             <path class="flow-arrow" d="M 450 190 L 502 190" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" marker-end="url(#kc-arrow-head)" />
             <circle class="flow-dot" r="3" fill="rgba(255,255,255,0.9)">
               <animateMotion dur="1.6s" begin="0.4s" repeatCount="indefinite" path="M 450 190 L 502 190" />
@@ -308,7 +308,7 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               </pattern>
             </defs>
 
-            {/* "Outside your network" zone — centered on x=320 */}
+            {/* "Outside your network" zone: centered on x=320 */}
             <rect x="160" y="20" width="320" height="340" rx="18" fill="url(#a0-outside)" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="2 6" />
             <text x="320" y="46" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.4" data-t="whyNow.auth0.zone">OUTSIDE YOUR NETWORK</text>
 
@@ -322,21 +322,21 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
               <animateMotion dur="1.6s" repeatCount="indefinite" path="M 132 190 L 196 190" />
             </circle>
 
-            {/* Auth0 SaaS box — centered on x=320 (spans 204→436) */}
+            {/* Auth0 SaaS box: centered on x=320 (spans 204→436) */}
             <rect x="204" y="110" width="232" height="160" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.32)" stroke-width="1.4" />
 
-            {/* Cloud icon centered at (320, 146) — Heroicons cloud */}
+            {/* Cloud icon centered at (320, 146): Heroicons cloud */}
             <g transform="translate(320 146)">
               <path d="M4.5 9.75a6 6 0 0111.573-2.226 3.75 3.75 0 014.133 4.303A4.5 4.5 0 0118 20.25H6.75a5.25 5.25 0 01-2.25-10.5z"
                     transform="translate(-12 -14)"
                     fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.6)" stroke-width="1.4" stroke-linejoin="round" />
             </g>
 
-            {/* "Auth0" title — centered on x=320 */}
+            {/* "Auth0" title: centered on x=320 */}
             <text x="320" y="190" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-size="15" font-weight="700" font-family={SVG_FONT}>Auth0</text>
             <text x="320" y="208" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="11" font-family={SVG_FONT} data-t="whyNow.auth0.subtitle">managed identity service</text>
 
-            {/* Pricing tag — wider, more padding (centered on x=320, y=240) */}
+            {/* Pricing tag: wider, more padding (centered on x=320, y=240) */}
             <g transform="translate(320 240)">
               <rect x="-96" y="-14" width="192" height="28" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.2)" stroke-width="0.9" />
               <text x="0" y="4" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.6" data-t="whyNow.auth0.billing">per MAU · billed monthly</text>
@@ -415,11 +415,11 @@ const ARROW_FILL    = 'rgba(255,255,255,0.55)'
             <rect x="508" y="170" width="110" height="40" rx="8" fill={ANCHOR_FILL} stroke={ANCHOR_STROKE} stroke-width="1" />
             <text x="563" y="195" text-anchor="middle" fill={TEXT_COLOR} font-size="13" font-family={SVG_FONT} data-t="whyNow.diagram.users">Users</text>
 
-            {/* Occluder: hides the traveling dot behind the hub — the hub's own fill is
+            {/* Occluder: hides the traveling dot behind the hub: the hub's own fill is
                 a near-transparent glow, so without this the dot would show straight through it */}
             <rect x="190" y="120" width="260" height="140" rx="16" fill="#09090b" />
 
-            {/* FerrisKey hub — one solid block, presented as ONE thing, breathing gently */}
+            {/* FerrisKey hub: one solid block, presented as ONE thing, breathing gently */}
             <rect x="190" y="120" width="260" height="140" rx="16" fill={HUB_FILL} stroke={HUB_STROKE} stroke-width="1.8" />
 
             {/* Soft inner glow, pulsing like a heartbeat to feel always-on */}

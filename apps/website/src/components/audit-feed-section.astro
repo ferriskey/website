@@ -1,5 +1,5 @@
 ---
-// Live audit feed — a self-animating mock of FerrisKey audit events
+// Live audit feed: a self-animating mock of FerrisKey audit events
 // No backend; deterministic-ish rotation driven by a small JS loop.
 
 interface AuditEvent {
@@ -92,7 +92,7 @@ const stats = [
       <div data-anim="fade-up" style="transition-delay:120ms" class="relative">
         <div class="rounded-2xl border bg-card overflow-hidden shadow-xl">
 
-          <!-- Feed header — just 3 dots + connected indicator -->
+          <!-- Feed header: just 3 dots + connected indicator -->
           <div class="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
             <div class="flex items-center gap-2">
               <span class="size-2.5 rounded-full bg-rose-400/70"></span>
@@ -154,7 +154,7 @@ const stats = [
     will-change: transform;
   }
 
-  /* Initial staggered entry of pre-rendered rows — pure fade, no layout shift */
+  /* Initial staggered entry of pre-rendered rows: pure fade, no layout shift */
   .audit-row {
     opacity: 0;
     animation: audit-fade-in 0.45s ease forwards;

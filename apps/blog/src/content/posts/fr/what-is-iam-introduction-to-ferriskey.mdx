@@ -1,6 +1,6 @@
 ---
 title: "Qui es-tu, et qu'est-ce que tu fais là ?"
-description: "L'IAM (Identity & Access Management) est au cœur de la sécurité de presque toutes les applications modernes. Mais qu'est-ce que c'est vraiment, à quoi ça sert, et pourquoi c'est si difficile à bien faire ? On démêle tout — et on vous présente FerrisKey."
+description: "L'IAM (Identity & Access Management) est au cœur de la sécurité de presque toutes les applications modernes. Mais qu'est-ce que c'est vraiment, à quoi ça sert, et pourquoi c'est si difficile à bien faire ? On démêle tout, et on vous présente FerrisKey."
 short_description: "Comprendre l'IAM de zéro, et découvrir FerrisKey."
 date: 2026-03-19
 tags: [iam, identity, access-management, ferriskey, rust, open-source]
@@ -16,7 +16,7 @@ Une question trompeusement simple. Mais derrière elle se cache toute une discip
 
 ## Le problème, en clair
 
-Imaginez une grande entreprise. Des centaines d'employés. Des dizaines d'applications — comptabilité, RH, CRM, outils de dev, serveurs de production. Chaque matin, les gens se connectent. Chaque soir, ils se déconnectent. Entre-temps, ils accèdent à des données, déclenchent des processus, lisent des documents.
+Imaginez une grande entreprise. Des centaines d'employés. Des dizaines d'applications : comptabilité, RH, CRM, outils de dev, serveurs de production. Chaque matin, les gens se connectent. Chaque soir, ils se déconnectent. Entre-temps, ils accèdent à des données, déclenchent des processus, lisent des documents.
 
 Quelques questions simples :
 
@@ -43,7 +43,7 @@ Il sait qui existe. Chaque utilisateur humain, chaque application, chaque servic
 :::
 
 :::card{label="Authentification" icon="lucide:key-round"}
-Il vérifie que vous êtes bien qui vous prétendez être — mot de passe, TOTP, clé matérielle, magic link. Quand vous faites « Se connecter avec Google », Google est l'IAM.
+Il vérifie que vous êtes bien qui vous prétendez être, par mot de passe, TOTP, clé matérielle ou magic link. Quand vous faites « Se connecter avec Google », Google est l'IAM.
 :::
 
 :::card{label="Autorisation" icon="lucide:shield-check"}
@@ -51,7 +51,7 @@ Une fois votre identité confirmée, il décide ce que vous avez le droit de fai
 :::
 
 :::card{label="Protocoles standards" icon="lucide:globe"}
-Un bon IAM parle OAuth2 et OpenID Connect (OIDC) — les langages universels du web. Les applications peuvent déléguer l'authentification sans jamais toucher aux mots de passe.
+Un bon IAM parle OAuth2 et OpenID Connect, les deux langages que tout le web comprend déjà. Les applications peuvent déléguer l'authentification sans jamais toucher aux mots de passe.
 :::
 
 :::card{label="Audit" icon="lucide:scroll-text"}
@@ -73,7 +73,7 @@ L'IAM paraît simple. C'est juste une table `users` avec un `password_hash`, non
 Gérer des identités sérieusement, c'est faire face à des dizaines de problèmes qui s'accumulent vite :
 rotation des secrets, révocation de tokens, expiration de sessions, comptes de service, multi-tenancy, stratégies MFA, webhooks, journaux d'audit infalsifiables…
 
-Et tout ça doit tenir sous charge. Un IAM est un **point de passage obligatoire** — chaque requête authentifiée le traverse. S'il est lent ou tombe, toute votre infrastructure s'arrête.
+Et tout ça doit tenir sous charge. Un IAM est un point de passage obligatoire : chaque requête authentifiée le traverse. S'il ralentit ou tombe, tout ce qu'il y a derrière s'arrête.
 :::
 
 C'est pourquoi les grandes entreprises paient des fortunes pour des solutions comme Okta, Auth0 ou Azure AD. Côté open source, Keycloak existe depuis longtemps et fait le travail, mais il embarque une complexité de configuration significative et une empreinte JVM qui ne convient pas à tout le monde.
@@ -87,10 +87,10 @@ FerrisKey ne prétend pas être la solution définitive. C'est une alternative, 
 FerrisKey est un système IAM open source, construit en **Rust**, avec une architecture hexagonale.
 
 :::callout{variant="info" title="Pourquoi Rust ?"}
-La performance et la fiabilité ne sont pas négociables pour un composant aussi critique. Rust offre une vitesse comparable au C sans les pièges — pas de garbage collector, pas de data races, pas de surprises mémoire. Pour un service qui gère des millions d'authentifications, c'est exactement ce qu'il faut.
+La performance et la fiabilité ne sont pas négociables pour un composant aussi critique. Rust offre une vitesse comparable au C sans les pièges : pas de garbage collector, pas de data races, pas de surprises mémoire. Pour un service qui gère des millions d'authentifications, c'est exactement ce qu'il faut.
 :::
 
-L'architecture hexagonale garantit que la logique métier reste pure et découplée de l'infrastructure. La base de données peut changer, le framework HTTP peut évoluer — le cœur du domaine reste stable et testable.
+L'architecture hexagonale garantit que la logique métier reste pure et découplée de l'infrastructure. La base de données peut changer et le framework HTTP évoluer, le cœur du domaine reste stable et testable.
 
 Voici à quoi ressemble un ID token OIDC décodé émis par FerrisKey :
 
@@ -112,23 +112,23 @@ En pratique, FerrisKey vous offre :
 
 ::::card-group{cols=2}
 :::card{label="Realms" icon="lucide:layers"}
-Des espaces totalement isolés. Chaque organisation, projet ou environnement dispose de son propre realm — ses propres utilisateurs, rôles et clients. Zéro contamination croisée possible.
+Des espaces totalement isolés. Chaque organisation, projet ou environnement dispose de son propre realm, avec ses utilisateurs, ses rôles et ses clients. Rien ne traverse.
 :::
 
 :::card{label="OAuth2 & OIDC" icon="lucide:lock-keyhole"}
 Les standards du web, implémentés correctement, pour que vos applications puissent déléguer l'authentification sans friction.
 :::
 
-:::card{label="Trident — MFA" icon="lucide:shield"}
+:::card{label="Trident, pour le MFA" icon="lucide:shield"}
 Le module MFA de FerrisKey : TOTP, WebAuthn (clés matérielles, passkeys), magic links et codes de récupération.
 :::
 
-:::card{label="SeaWatch — Audit" icon="lucide:eye"}
+:::card{label="SeaWatch, pour l'audit" icon="lucide:eye"}
 Un système d'audit complet, interrogeable depuis la console, traçant chaque événement de sécurité dans vos realms.
 :::
 
 :::card{label="Webhooks" icon="lucide:webhook"}
-Connectez FerrisKey à vos systèmes existants et réagissez aux événements du cycle de vie — création d'utilisateur, révocation d'accès, et plus encore.
+Connectez FerrisKey à vos systèmes existants et réagissez aux événements du cycle de vie : création d'utilisateur, révocation d'accès, et le reste.
 :::
 
 :::card{label="Cloud-native" icon="lucide:cloud"}
@@ -136,7 +136,7 @@ Un chart Helm officiel, un Kubernetes Operator et le support Docker Compose pour
 :::
 ::::
 
-:::callout{variant="success" title="Apache 2.0 — entièrement ouvert"}
+:::callout{variant="success" title="Apache 2.0, entièrement ouvert"}
 Pas de paywall. Pas de tier « enterprise » qui cache des fonctionnalités critiques derrière un formulaire de contact. Le code est ouvert, la communauté est là.
 :::
 
@@ -146,7 +146,7 @@ Pas de paywall. Pas de tier « enterprise » qui cache des fonctionnalités crit
 
 ::::card-group{cols=3}
 :::card{label="Équipes SaaS" icon="lucide:rocket"}
-Vous construisez une plateforme et voulez une auth robuste sans repartir de zéro — ni payer au nombre d'utilisateurs actifs mensuels.
+Vous construisez une plateforme et voulez une auth solide sans repartir de zéro, ni payer au nombre d'utilisateurs actifs mensuels.
 :::
 
 :::card{label="Ingénieurs plateforme" icon="lucide:server"}

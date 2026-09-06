@@ -35,7 +35,7 @@ export function getPostLocale(post: Post): string {
 }
 
 export function getPostSlug(post: Post): string {
-  // id is "en/my-post.mdx" or "en/my-post" — strip locale prefix and extension
+  // id is "en/my-post.mdx" or "en/my-post": strip locale prefix and extension
   const withoutLocale = post.id.includes('/') ? post.id.split('/').slice(1).join('/') : post.id
   return withoutLocale.replace(/\.mdx$/, '')
 }

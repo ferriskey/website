@@ -16,7 +16,7 @@ interface Props {
 const { title, description = 'Explainer Blog', thumbnail, locale = 'en', locales = ['en'], localeSwitchUrls = {} } = Astro.props
 const t = useTranslations(locale)
 const thumbnailPath = thumbnail ?? `${Astro.url.pathname.replace(/\/$/, '')}/thumbnail.png`
-// og:image/twitter:image must be absolute — Discord and most link-preview bots won't resolve a relative path.
+// og:image/twitter:image must be absolute: Discord and most link-preview bots won't resolve a relative path.
 const thumbnailUrl = Astro.site ? new URL(thumbnailPath, Astro.site).toString() : thumbnailPath
 
 const appUrlOverrides = {
@@ -41,7 +41,7 @@ const appUrlOverrides = {
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={thumbnailUrl} />
-    <title>{title} — Blog</title>
+    <title>{title} | Blog</title>
     <ClientRouter />
     <script is:inline>
       (function () {
