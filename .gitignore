@@ -11,3 +11,6 @@ dist/
 !.env.example
 
 .DS_Store
+
+# local, per-developer agent preferences: never versioned
+.claude/*.local.md
