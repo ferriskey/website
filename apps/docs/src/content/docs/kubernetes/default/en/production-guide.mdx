@@ -7,92 +7,84 @@ order: 4
 
 # Production Guide
 
-This checklist covers everything you need to harden a FerrisKey deployment for production use.
+What to change before a FerrisKey deployment carries real users.
 
 ## Database
 
-:::callout{variant="danger" title="Do not use embedded PostgreSQL in production"}
-Always use a managed PostgreSQL service or a properly operated PostgreSQL cluster.
+:::callout{variant="danger" title="Turn off the embedded PostgreSQL"}
+The chart ships with `postgresql.enabled: true` so a first install works with no prerequisites. It stores data in a single StatefulSet with no replication and no backup. Set `postgresql.enabled: false` and point at a real database.
 :::
 
-- **Use a managed PostgreSQL**: AWS RDS, Google Cloud SQL, Azure Database for PostgreSQL, or a self-managed HA cluster
-- **Enable SSL**: Set `sslMode: require` (or `verify-full` for certificate validation)
-- **Dedicated database**: Run FerrisKey in its own database, not a shared instance
-- **Regular backups**: Configure automated backups with point-in-time recovery
-- **Connection pooling**: Consider PgBouncer for high-traffic deployments
+- Use a managed service (RDS, Cloud SQL, Azure Database for PostgreSQL) or a PostgreSQL cluster someone actually operates.
+- Require TLS. `sslMode: require` at minimum, `verify-full` when you can validate the certificate chain.
+- Give FerrisKey its own database rather than a schema inside a shared one.
+- Set up automated backups with point-in-time recovery, and restore one at least once to prove it works.
+- Put PgBouncer in front of it if the deployment sees heavy traffic.
 
-## TLS & Ingress
+## TLS and exposure
 
-- **Terminate TLS at the ingress**: Use cert-manager with Let's Encrypt or your organization's CA
-- **Force HTTPS**: Redirect all HTTP traffic to HTTPS
-- **Set `ALLOWED_ORIGINS`**: Restrict CORS to your actual frontend domain(s)
+Let the chart render the routing. It puts `/` on the console and `api.server.rootPath` on the API, on one hostname, which is what the console expects by default.
 
-Example ingress configuration:
+```yaml title="values.yaml"
+publicHost: iam.yourorg.com
 
-```yaml title="ingress.yaml"
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ferriskey
+ingress:
+  enabled: true
+  class: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-spec:
-  ingressClassName: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
   tls:
     - hosts:
         - iam.yourorg.com
       secretName: ferriskey-tls
-  rules:
-    - host: iam.yourorg.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: ferriskey-api
-                port:
-                  number: 3333
+
+api:
+  server:
+    allowedOrigins:
+      - https://iam.yourorg.com
 ```
 
-## Admin Credentials
+`allowedOrigins` applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Per-client web origins only cover realm-scoped routes, so a console served from a different origin than the API must have its origin listed here.
 
-- **Change default credentials immediately**: Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` via Kubernetes Secrets
-- **Use strong passwords**: Minimum 16 characters, generated randomly
-- **Rotate regularly**: Establish a rotation schedule for admin credentials
+If your cluster uses Gateway API, swap the Ingress block for `gatewayAPI.httpRoute` with the parent references of your gateway. `publicHost` is required either way.
 
-```yaml title="admin-secret.yaml"
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ferriskey-admin
-  namespace: ferriskey
-type: Opaque
-stringData:
-  username: "admin"
-  password: "your-strong-random-password"
-  email: "admin@yourorg.com"
-```
+## Admin credentials
 
-## Resource Limits
-
-Set CPU and memory requests/limits to prevent resource starvation:
+The chart generates an admin password into a Secret on first install. In production, create the Secret yourself so the value comes from wherever you keep secrets, and point the chart at it:
 
 ```yaml title="values.yaml"
-common:
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "256Mi"
-    limits:
-      cpu: "1000m"
-      memory: "512Mi"
+api:
+  admin:
+    username: admin
+    email: admin@yourorg.com
+    passwordSecret:
+      create: false
+      name: ferriskey-admin
+      key: password
 ```
 
-## Scaling
+Generate the password randomly, at least 16 characters, and rotate it on a schedule you actually keep.
 
-- **Horizontal scaling**: Increase `replicas` to handle more concurrent requests. FerrisKey API pods are stateless.
-- **Pod disruption budgets**: Ensure availability during cluster maintenance:
+## Resources and scaling
+
+The API pods are stateless, so scaling out is a replica count. Resources are set per workload; there is no global override.
+
+```yaml title="values.yaml"
+api:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+webapp:
+  replicas: 2
+```
+
+Add a PodDisruptionBudget so a node drain does not take every replica at once:
 
 ```yaml title="pdb.yaml"
 apiVersion: policy/v1
@@ -104,37 +96,54 @@ spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: ferriskey-api
+      app.kubernetes.io/name: ferriskey-api
 ```
+
+Check the label on your own pods with `kubectl get pod -n ferriskey --show-labels` before applying it.
 
 ## Monitoring
 
-FerrisKey exposes a Prometheus metrics endpoint at `/metrics`:
+The API serves Prometheus metrics on `/metrics`. With the Prometheus Operator installed, the chart can create the ServiceMonitor for you:
 
-- **Scrape configuration**: Point your Prometheus instance at the FerrisKey service on port `3333`, path `/metrics`
-- **Key metrics**: Request latency, error rates, active sessions, token issuance rates
-- **Alerting**: Set alerts for error rate spikes, high latency, and database connection failures
-- **Distributed tracing**: Enable OpenTelemetry OTLP export for end-to-end request tracing
+```yaml title="values.yaml"
+api:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+```
 
-## Security Hardening
+Alert on error rate, request latency, and database connection failures. For traces, turn on the OTLP exporter:
 
-- **Network policies**: Restrict pod-to-pod traffic. FerrisKey API pods only need to reach PostgreSQL and external IdPs (if using Abyss)
-- **Pod security**: Run containers as non-root, read-only filesystem where possible
-- **Secret management**: Use an external secrets operator (AWS Secrets Manager, HashiCorp Vault) for sensitive values
-- **Image scanning**: Scan FerrisKey container images for vulnerabilities in your CI pipeline
-- **Audit logging**: Enable SeaWatch and forward events to your SIEM
+```yaml title="values.yaml"
+opentelemetry:
+  enabled: true
+  otlpEndpoint: http://tempo.observability.svc.cluster.local:4317
+```
+
+That sets `ACTIVE_OBSERVABILITY` and `OTLP_ENDPOINT` on the API.
+
+## Security hardening
+
+The chart already runs every container as non-root with a read-only root filesystem, all capabilities dropped, and the `RuntimeDefault` seccomp profile. What is left to you:
+
+- Network policies. The API needs PostgreSQL, plus outbound access to external identity providers if you use Abyss and to your SMTP relay.
+- External secret management. Feed `database.passwordSecret` and `api.admin.passwordSecret` from Vault, an external secrets operator, or your cloud's secret manager, instead of letting the chart generate them.
+- Image scanning in CI, on the images you actually deploy.
+- Audit forwarding. Enable SeaWatch and ship its events to your SIEM.
+- Log format. Set `api.log.json: true` so structured logs land in your aggregator intact.
 
 ## Checklist
 
 | Item | Status |
 |---|---|
-| External PostgreSQL with SSL | |
-| TLS termination at ingress | |
-| Admin credentials changed from defaults | |
-| CORS origins restricted | |
-| Resource requests and limits set | |
-| Pod disruption budget configured | |
-| Prometheus scraping enabled | |
+| `postgresql.enabled: false`, external database with TLS | |
+| Database backups configured and a restore tested | |
+| TLS terminated, HTTP redirected | |
+| `api.server.allowedOrigins` restricted to real origins | |
+| Admin password supplied from an existing Secret | |
+| Resource requests and limits set per workload | |
+| PodDisruptionBudget applied | |
+| ServiceMonitor enabled and alerts wired up | |
 | Network policies applied | |
-| Secrets managed externally | |
-| Backup strategy documented and tested | |
+| Secrets sourced externally | |
+| SeaWatch events forwarded | |
