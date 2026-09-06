@@ -16,7 +16,7 @@ const translations = ui.fr
 const firstRelease = releaseNotes[releaseNotes.length - 1]
 
 // One flat, chronological list (newest first) instead of a nested
-// milestone/patch grouping — every release gets the same card shape, told
+// milestone/patch grouping: every release gets the same card shape, told
 // apart only by its badge, title weight, and a colored accent for milestones.
 const kindKey = {
   patch: 'releaseNotes.patch',
@@ -46,7 +46,7 @@ function formatDate(date: string, locale = 'en-US') {
 ---
 
 <Base
-  title="Release Notes — Ferriskey"
+  title="Release Notes | Ferriskey"
   description="A curated timeline of Ferriskey releases, from the first stable baseline to federation, observability, and recovery flows."
 >
   <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />

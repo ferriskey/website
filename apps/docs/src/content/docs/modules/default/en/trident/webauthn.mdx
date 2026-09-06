@@ -9,7 +9,7 @@ order: 12
 
 WebAuthn enables passwordless authentication using hardware security keys, platform biometrics (Touch ID, Face ID, Windows Hello), or synced passkeys (iCloud Keychain, Google Password Manager). The private key never leaves the user's device. FerrisKey only stores the public key.
 
-## How It Works
+## How it works
 
 WebAuthn uses public-key cryptography. During registration, the user's device creates a key pair. The public key is sent to FerrisKey; the private key stays on the device. During authentication, the device signs a challenge with the private key, and FerrisKey verifies the signature with the stored public key.
 
@@ -67,7 +67,7 @@ FerrisKey verifies the signed assertion against the stored public key. If valid,
 ### Passwordless Login
 Combine WebAuthn with the authorization code flow. The user clicks "Sign in with passkey", authenticates with their device, and receives tokens, no password involved. This is the most phishing-resistant flow available.
 
-### Second Factor with Hardware Keys
+### Second factor with hardware keys
 For high-security environments (finance, healthcare, government), require a hardware security key as the second factor after password authentication. Users carry a YubiKey and tap it when prompted.
 
 ### Progressive Enhancement

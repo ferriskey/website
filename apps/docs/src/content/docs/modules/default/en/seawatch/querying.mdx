@@ -26,21 +26,21 @@ The admin API exposes endpoints to list and filter security events within a real
 | `ip_address` | Events from a specific IP |
 | Time range | Events within a date/time window |
 
-### Example: Find All Login Failures for a User
+### Example: every login failure for one user
 
 ```bash
 curl -X GET "http://localhost:3333/admin/realms/my-app/events?event_type=login_failure&target_id=USER_UUID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### Example: Recent Admin Actions
+### Example: recent admin actions
 
 ```bash
 curl -X GET "http://localhost:3333/admin/realms/my-app/events?actor_type=admin" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-## Integration with External Systems
+## Integration with external systems
 
 ### SIEM Forwarding
 
@@ -67,7 +67,7 @@ Use [Webhooks](/en/modules/webhooks/overview) to react to SeaWatch-tracked event
 - Notify a Slack channel on `user_created` events
 - Lock accounts after N consecutive `login_failure` events (via an external service)
 
-## Compliance Use Cases
+## Compliance use cases
 
 ### SOC 2 Type II
 SeaWatch provides the audit trail required for the "Security" and "Availability" trust service criteria. Export events by time range to produce evidence for auditors.

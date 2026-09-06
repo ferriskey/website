@@ -11,7 +11,7 @@ FerrisKey's default scopes cover standard OIDC claims. But real applications nee
 
 ## Common Patterns
 
-### Realm Roles in the Access Token
+### Realm roles in the access token
 
 Your API gateway needs to enforce role-based access control. Add a `user_realm_role_mapper` to include roles directly in the access token.
 
@@ -34,7 +34,7 @@ Your API gateway needs to enforce role-based access control. Add a `user_realm_r
 
 Your API gateway reads `roles` from the token and allows/denies routes without calling FerrisKey.
 
-### Tenant Identifier for Multi-Tenant SaaS
+### Tenant identifier for multi-tenant SaaS
 
 Each realm represents a tenant. Inject the realm name as a claim so your backend knows which tenant database to query.
 
@@ -72,7 +72,7 @@ FerrisKey uses bitwise permissions internally. Expose the resolved permission bi
 
 Your backend performs bitwise AND checks against the `permissions` integer, fast and efficient.
 
-### Audience for Multiple Resource Servers
+### Audience for several resource servers
 
 Your tokens need to be accepted by both `api.yourapp.com` and `admin.yourapp.com`:
 
@@ -103,7 +103,7 @@ Inject feature flags into tokens so your frontend knows which features to enable
 }
 ```
 
-## Scope Assignment Strategy
+## Scope assignment strategy
 
 ### Default vs Optional
 
@@ -113,7 +113,7 @@ Inject feature flags into tokens so your frontend knows which features to enable
 | The claim is needed for authorization decisions | The claim is large (increases token size) |
 | Missing the claim would break the client | Only specific flows need the data |
 
-### Per-Client Scope Overrides
+### Per-client scope overrides
 
 The same scope can have different types per client:
 

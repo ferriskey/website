@@ -48,7 +48,7 @@ try {
     const match = link.match(/page=(\d+)>; rel="last"/)
     contributorCount = match ? parseInt(match[1]) * 100 : data.length
 
-    // Build avatar list — pad to exactly 39 for the grid layout
+    // Build avatar list, padded to exactly 39 for the grid layout
     // Layout: rows 1-2 corners + 6 middle | rows 3-5 full (27) | rows 6-7 corners + 6 middle
     const contributors: Contributor[] = data
       .filter((c: any) => !c.login?.includes('[bot]'))

@@ -72,7 +72,7 @@ Pour les SRE qui sont réveillés quand ce n'est pas le cas : pas de garbage col
 
 ## Ce que le déterminisme nous permet ensuite
 
-La sécurité mémoire fait les gros titres, mais ce n'est pas la seule propriété que ce design nous offre gratuitement. L'ownership et l'absence de garbage collector rendent aussi le runtime déterministe : pas de pause GC, pas de courbe de chauffe JIT, pas d'allocateur qui décide discrètement de compacter le heap sous charge. Donnez la même entrée au même binaire deux fois, il emprunte le même chemin les deux fois, avec les mêmes caractéristiques de timing. Ce n'est pas qu'une propriété de sécurité, c'est aussi une propriété de performance : le même déterminisme qui exclut les data races est ce qui garde la latence de queue prévisible sous charge.
+La sécurité mémoire fait les gros titres, mais ce n'est pas la seule propriété que ce design nous offre gratuitement. L'ownership et l'absence de garbage collector rendent aussi le runtime déterministe : pas de pause GC, pas de courbe de chauffe JIT, pas d'allocateur qui décide discrètement de compacter le heap sous charge. Donnez la même entrée au même binaire deux fois, il emprunte le même chemin les deux fois, avec les mêmes caractéristiques de timing. Ce déterminisme rapporte plus que de la sûreté. La même propriété qui exclut les data races est celle qui garde la latence de queue prévisible sous charge.
 
 Ce déterminisme est aussi une fondation, pas juste un résultat, et il pointe vers deux choses qu'on veut voir grandir chez FerrisKey.
 

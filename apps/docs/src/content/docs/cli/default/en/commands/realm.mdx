@@ -1,13 +1,13 @@
 ---
 title: realm
-description: "Create, inspect, delete, and import realms."
+description: "Create, inspect, delete, and import realms, and manage realm and client roles."
 icon: layers
 order: 2
 ---
 
 # `realm`
 
-Manage realms, the isolated tenants that contain clients, users, roles, and credentials.
+Manage realms, the isolated tenants that hold clients, users, roles, and credentials.
 
 ```bash
 ferris-ctl realm <subcommand>
@@ -65,6 +65,69 @@ ferris-ctl realm delete <name> [--force]
 :::callout{variant="warning" title="Confirmation in scripts"}
 Without `--force`, the command refuses to run in a non-interactive shell rather than deleting silently. Pass `--force` (or `-f`) in CI and automation.
 :::
+
+## `realm role`
+
+Manage the roles of a realm, or the roles scoped to one of its clients. Every subcommand takes `--realm` to target a realm other than the context default, and `--client <client_id>` to work on that client's roles instead of the realm's.
+
+### `realm role create`
+
+```bash
+ferris-ctl realm role create <name> [--description <text>] [--permission <name>]... [--realm <realm>] [--client <client_id>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Role name |
+| `--description` | no | Free-text description |
+| `--permission` | no | A permission granted by the role. Repeat the flag for several |
+| `--realm` | no | Realm (defaults to the context realm) |
+| `--client` | no | Create a client role scoped to this client id, instead of a realm role |
+
+Permissions are passed by their snake_case name, for example `manage_users`. See the [permissions reference](/en/discover/core-concepts/roles#permissions-reference) for the full list.
+
+```bash title="A realm role that can manage users"
+ferris-ctl realm role create user-admin \
+  --description "Create and update users" \
+  --permission manage_users \
+  --permission query_users \
+  --permission view_users
+```
+
+```bash title="A role scoped to one client"
+ferris-ctl realm role create service-reader --client backend
+```
+
+:::callout{variant="warning" title="Unknown permission names are dropped"}
+A permission name FerrisKey does not recognize is ignored rather than rejected, so a typo produces a role that grants nothing. Check the created role with `realm role get` after creating it.
+:::
+
+### `realm role list`
+
+```bash
+ferris-ctl realm role list [--realm <realm>] [--client <client_id>]
+```
+
+Lists realm roles, or the roles of `--client` when given. Table columns: NAME, ID.
+
+### `realm role get`
+
+```bash
+ferris-ctl realm role get <name> [--realm <realm>] [--client <client_id>]
+```
+
+### `realm role delete`
+
+```bash
+ferris-ctl realm role delete <name> [--realm <realm>] [--client <client_id>] [--force]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<name>` | yes | Role name |
+| `--realm` | no | Realm (defaults to the context realm) |
+| `--client` | no | Delete a client role instead of a realm role |
+| `--force` / `-f` | no | Skip the confirmation prompt (required in non-interactive shells) |
 
 ## `realm import`
 

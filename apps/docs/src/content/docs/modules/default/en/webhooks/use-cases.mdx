@@ -9,7 +9,7 @@ order: 63
 
 Webhooks unlock powerful integrations between FerrisKey and external systems. Here are concrete patterns you can implement today.
 
-## Slack Notifications on User Registration
+## Slack notification on user registration
 
 Notify your team in Slack when a new user signs up.
 
@@ -131,7 +131,7 @@ export default class CrmSyncController {
 If your CRM has rate limits, queue webhook payloads and process them in batches rather than sending one API call per event. AdonisJS Jobs or Tokio tasks are good fits for this.
 :::
 
-## Security Alert on Secret Rotation
+## Security alert on secret rotation
 
 Alert your security team when a client is modified outside of scheduled maintenance.
 
@@ -187,7 +187,7 @@ async fn security_alert(
 ```
 :::
 
-## User Provisioning in External Systems
+## User provisioning in external systems
 
 When a user is created in FerrisKey, automatically provision them in other systems:
 
@@ -250,7 +250,7 @@ export default class ProvisioningController {
 }
 ```
 
-## Role Change Notifications
+## Role change notifications
 
 Notify users when their permissions change.
 
@@ -284,7 +284,7 @@ export default class RoleNotificationController {
 }
 ```
 
-## Realm Configuration Audit
+## Realm configuration audit
 
 Track all changes to realm settings for compliance.
 

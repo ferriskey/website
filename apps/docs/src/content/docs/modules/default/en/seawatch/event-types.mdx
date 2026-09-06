@@ -1,13 +1,13 @@
 ---
 title: Event Types
-description: "Complete reference of the 16 SeaWatch security event types in FerrisKey."
+description: "Complete reference of the SeaWatch security event types in FerrisKey."
 icon: list
 order: 21
 ---
 
 # Event Types
 
-SeaWatch tracks 16 security event types organized into five categories. Each event type captures a specific action with its success or failure status.
+SeaWatch writes 24 event types, grouped below by what they are about. Each carries a success or failure status alongside its details.
 
 ## Authentication
 
@@ -53,9 +53,10 @@ These three events trace the full password reset lifecycle. A `password_reset_re
 | Event | Description | Actor | Target |
 |---|---|---|---|
 | `user_created` | New user account created | Admin or System | User |
+| `user_email_verified` | A user confirmed their email address | User | User |
 | `user_deleted` | User account deleted | Admin | User |
 
-User creation events include whether the user was created by an admin, through self-registration, or as a service account for a client.
+User creation events record whether the account came from an admin, from self-registration, or from a client's service account.
 
 ## Role
 
@@ -75,8 +76,40 @@ Role events are critical for access control audits. They answer: "Who granted th
 | `client_created` | New OAuth2 client registered | Admin | Client |
 | `client_deleted` | Client removed | Admin | Client |
 | `client_secret_rotated` | Client secret was regenerated | Admin | Client |
+| `client_secret_viewed` | Someone read a client's secret | Admin | Client |
 
-**`client_secret_rotated`** is particularly important, it means the old secret is invalidated. If this happens unexpectedly, it could indicate a compromised admin account.
+`client_secret_rotated` invalidates the old secret, so an unexpected one is worth a look. `client_secret_viewed` is the quieter sibling: nothing changed, but a credential left the system, and that is exactly the trail you want during an incident.
+
+## Sessions
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `session_created` | A user session was established | User | User |
+| `session_revoked` | A session was revoked | Admin or User | User |
+
+## Maintenance
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `client_maintenance_enabled` | Maintenance mode was turned on | Admin | Client |
+| `client_maintenance_disabled` | Maintenance mode was turned off | Admin | Client |
+
+Maintenance mode blocks access while it is on, subject to a whitelist. Both transitions are recorded, so a window that stayed open longer than intended is visible after the fact.
+
+## Email
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `email_sent` | A transactional email was handed to the SMTP server | System | User |
+| `email_not_sent` | Delivery failed | System | User |
+
+`email_not_sent` is the one to alert on. A password reset that never left the building looks identical to a user ignoring it, unless you are watching this event.
+
+## Federation
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `identity_provider_link_removed` | A federated identity was unlinked from a user | Admin or User | User |
 
 ## Configuration
 
@@ -84,4 +117,8 @@ Role events are critical for access control audits. They answer: "Who granted th
 |---|---|---|---|
 | `realm_config_changed` | Realm settings were modified | Admin | Realm |
 
-Configuration changes can have wide-reaching effects (enabling/disabling registration, changing token lifetimes). SeaWatch captures the full details of what changed.
+Configuration changes reach far: turning registration on, changing a token lifetime, lowering a lockout threshold. SeaWatch records what changed, not just that something did.
+
+:::callout{variant="info" title="The `unknown` type"}
+Reading an event whose stored type matches no known variant yields `unknown` rather than a guess. A row written by a newer version, or a corrupt one, can never be misread as a successful login.
+:::

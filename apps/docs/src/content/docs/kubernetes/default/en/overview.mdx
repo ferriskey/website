@@ -7,14 +7,14 @@ order: 1
 
 # FerrisKey on Kubernetes
 
-FerrisKey is designed to run natively on Kubernetes. Choose between two deployment methods depending on your operational needs.
+FerrisKey runs natively on Kubernetes. There are two ways in, and which one fits depends on how you already operate clusters.
 
 ::::card-group{cols=2}
 :::card{label="Helm Chart" icon="lucide:package" href="/en/kubernetes/helm-chart"}
-Install FerrisKey with a standard Helm chart. Full control over values, familiar workflow.
+A standard Helm chart with the full Kubernetes surface exposed in its values. The familiar workflow.
 :::
 :::card{label="Operator" icon="lucide:bot" href="/en/kubernetes/operator"}
-Declarative management with the FerrisKey Operator and the `FerrisKeyCluster` CRD.
+Declarative management through the `FerrisKeyCluster` custom resource, itself installed with a Helm chart.
 :::
 ::::
 
@@ -34,14 +34,16 @@ graph TD
     MIG --> PG
 ```
 
-A typical FerrisKey deployment consists of:
+A deployment is four pieces:
 
-- **API pods**: The FerrisKey backend handling authentication, token issuance, and administration
-- **Web UI pods**: The React-based admin console
-- **Migration job**: Runs database migrations on deploy
-- **PostgreSQL**: The backing database (managed or self-hosted)
+- API pods, handling authentication, token issuance, and administration
+- Console pods, serving the React admin interface
+- A migration job that applies pending schema changes on deploy
+- PostgreSQL, managed or self-hosted
 
-## Next Steps
+The chart bundles a PostgreSQL StatefulSet so a first install works with nothing else in place. It is not meant for production.
+
+## Next steps
 
 ::::card-group{cols=2}
 :::card{label="Helm Chart" icon="lucide:package" href="/en/kubernetes/helm-chart"}

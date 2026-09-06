@@ -9,7 +9,7 @@ order: 10
 
 A realm is the top-level isolation boundary in FerrisKey. Users, clients, roles, credentials, scopes, and sessions each belong to exactly one realm. Realms make multi-tenancy possible: one FerrisKey deployment can serve many independent organizations.
 
-## What a Realm Isolates
+## What a realm isolates
 
 Each realm is a self-contained identity domain:
 
@@ -21,7 +21,7 @@ Each realm is a self-contained identity domain:
 - **Sessions**: active user sessions
 - **Configuration**: token lifetimes, registration policies, feature toggles
 
-There is no data leakage between realms. A user in realm A cannot authenticate to a client in realm B.
+Nothing leaks between realms. A user in realm A cannot authenticate against a client in realm B.
 
 ```mermaid
 graph TD
@@ -42,37 +42,74 @@ graph TD
     R3 --> C3[Staging Clients]
 ```
 
-## The Master Realm
+## The master realm
 
-Every FerrisKey deployment includes a **master** realm. This is a protected realm that:
-
-- Is created automatically on first boot
-- Contains the initial admin user
-- Cannot be deleted
-- Manages cross-realm administration
+Every deployment has a `master` realm. It is created on first boot, holds the initial admin user, cannot be deleted, and is where cross-realm administration happens.
 
 :::callout{variant="warning" title="Do not use master for applications"}
-The master realm is for administration only. Create dedicated realms for your applications.
+Keep `master` for administration. Give each application its own realm.
 :::
 
-## Realm Settings
+## Realm settings
 
-Each realm has configurable settings that control authentication behavior:
+Every realm carries its own settings. They control how sign-in behaves, how long tokens live, and which optional features are on.
+
+### Sign-in and registration
+
+| Setting | Default | Description |
+|---|---|---|
+| `user_registration_enabled` | `false` | Allow self-service registration |
+| `forgot_password_enabled` | `false` | Enable the password reset flow |
+| `remember_me_enabled` | `false` | Support remember-me sessions |
+| `magic_link_enabled` | `false` | Enable magic link sign-in by email |
+| `magic_link_ttl_minutes` | `15` | How long a magic link stays valid |
+| `passkey_enabled` | `false` | Allow passkey (WebAuthn) sign-in |
+| `require_mfa` | `false` | Force every user in the realm to enroll in MFA |
+| `login_aliases` | `[email, username]` | Ordered list of identifiers accepted at login. Must be non-empty and free of duplicates |
+| `edit_username_enabled` | `false` | Let users change their own username |
+| `email_verification_enabled` | `false` | Require users to verify their email |
+| `email_verification_ttl_hours` | `24` | How long a verification link stays valid |
+| `compass_enabled` | `true` | Record authentication flows with Compass |
+
+### Token lifetimes
 
 | Setting | Default | Description |
 |---|---|---|
 | `default_signing_algorithm` | `RS256` | JWT signing algorithm |
-| `user_registration_enabled` | `false` | Allow self-service user registration |
-| `forgot_password_enabled` | `false` | Enable password reset flow |
-| `remember_me_enabled` | `false` | Support remember-me sessions |
-| `magic_link_enabled` | `false` | Enable email-based magic link login |
-| `magic_link_ttl` | `15` min | Magic link expiration time |
-| `compass_enabled` | `true` | Enable the Compass authentication flow engine |
-| `access_token_lifetime` | `300`s (5 min) | Default access token TTL |
-| `refresh_token_lifetime` | `86400`s (24 hr) | Default refresh token TTL |
-| `id_token_lifetime` | `300`s (5 min) | Default ID token TTL |
-| `temporary_token_lifetime` | `300`s (5 min) | Temporary token TTL (for required actions) |
+| `access_token_lifetime_secs` | `300` | Access token TTL |
+| `refresh_token_lifetime_secs` | `86400` | Refresh token TTL |
+| `id_token_lifetime_secs` | `300` | ID token TTL |
+| `temporary_token_lifetime_secs` | `300` | Temporary token TTL, used while required actions are pending |
 
-## SMTP Configuration
+### Lockout
 
-Each realm can configure its own SMTP settings for email delivery (magic links, password resets, email verification). This allows different realms to use different mail providers or sender addresses.
+After too many failed attempts, an account is locked for a fixed window.
+
+| Setting | Default | Description |
+|---|---|---|
+| `lockout_threshold` | `10` | Failed attempts before the account locks |
+| `lockout_duration_seconds` | `900` | How long the lock lasts |
+
+### Audit privacy
+
+SeaWatch can strip or pseudonymise personal data before an event is stored.
+
+| Setting | Default | Description |
+|---|---|---|
+| `seawatch_pii_mode` | `off` | One of `off`, `mask`, `pseudonymise` |
+| `seawatch_pseudo_key` | unset | HMAC key used when the mode is `pseudonymise` |
+
+### Branding and email templates
+
+| Setting | Default | Description |
+|---|---|---|
+| `portal_theme_id` | unset | Theme applied to the login portal |
+| `reset_password_template_id` | unset | Template used for password reset emails |
+| `magic_link_template_id` | unset | Template used for magic link emails |
+| `email_verification_template_id` | unset | Template used for verification emails |
+
+Leave a template id unset and FerrisKey falls back to the built-in default for that email type.
+
+## SMTP configuration
+
+SMTP lives on the realm too, so two realms in the same deployment can send from different providers and different addresses. The [Email & Templates guide](/en/discover/guides/email) covers the fields and the API.

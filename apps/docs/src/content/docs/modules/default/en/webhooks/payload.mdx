@@ -101,7 +101,7 @@ Common patterns:
 - **HMAC signature**: Compute a signature over the payload for verification (implement in your handler)
 - **Custom identifiers**: Tag the source for routing in multi-webhook architectures
 
-## Handling Best Practices
+## Handling a delivery well
 
 ### Respond Quickly
 Return a `2xx` status code as fast as possible. Process the payload asynchronously, enqueue it for background processing rather than doing heavy work in the request handler.
@@ -112,7 +112,7 @@ Your handler may receive the same event more than once (retries, network issues)
 ### Validate the Source
 Check custom headers (e.g., a shared secret in `Authorization`) to verify the request comes from FerrisKey. Don't process payloads from unknown sources.
 
-### Handle Missing Data
+### Handle missing data
 The `data` field may be `null` for deletion events. Always check before accessing nested fields.
 
 ### Log Everything

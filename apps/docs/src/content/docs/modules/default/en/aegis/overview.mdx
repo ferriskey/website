@@ -7,15 +7,13 @@ order: 50
 
 # Aegis: Scopes & Protocol Mappers
 
-Aegis is the system that controls what information appears in your tokens. It manages **client scopes** (named collections of claims) and **protocol mappers** (rules that extract data and inject it into JWTs). Together, they form the contract between your application and FerrisKey: "Grant me this scope, and I guarantee these claims in the token."
+Aegis decides what information ends up in a token. It owns client scopes, which are named collections of claims, and protocol mappers, which are the rules that pull data out and write it into the JWT. Together they are the contract between an application and FerrisKey: grant me this scope, and these claims will be in the token.
 
-## Why Scopes Matter
+## Why scopes matter
 
-Without scopes, every token would contain the same set of claims for every client. Aegis gives you fine-grained control:
+Without them, every client would get identical claims. With them, a public mobile app gets `sub` and `email` while an internal admin tool gets roles, and neither sees more than it needs.
 
-- **Minimize data exposure**: A public mobile app gets `sub` and `email`. An internal admin tool gets `realm_roles` and `permissions`. Different clients, different claims.
-- **Standard compliance**: OIDC defines standard scopes (`openid`, `profile`, `email`). Aegis implements them out of the box.
-- **Custom claims**: Add your own business-specific claims (department, plan tier, feature flags) through custom protocol mappers.
+The standard OIDC scopes (`openid`, `profile`, `email`) are seeded into every realm. Anything specific to your business, a department, a plan tier, a feature flag, goes in through a custom protocol mapper.
 
 ## Architecture
 
@@ -28,22 +26,22 @@ graph TD
     U[User] --> PM
 ```
 
-The data flow:
+How data moves:
 
-1. A **client** has **client scope mappings**: links to specific scopes with a type (Default/Optional)
-2. Each **scope** contains one or more **protocol mappers**
-3. During token generation, mappers extract data from the **user** and produce **JWT claims**
-4. Claims are assembled into the final token
+1. A client carries client scope mappings, each linking it to a scope as default or optional.
+2. Each scope holds one or more protocol mappers.
+3. At token generation, the mappers read from the user and produce claims.
+4. The claims are assembled into the token.
 
-## Scope Types
+## Scope types
 
-| Type | Behavior | When to Use |
+| Type | Behavior | When to use |
 |---|---|---|
-| **Default** | Automatically included in every token for assigned clients | Core claims your app always needs (email, roles) |
-| **Optional** | Only included when requested via the `scope` parameter | Sensitive data the client requests on demand |
+| Default | Included in every token for the clients it is assigned to | Claims the app always needs, like email or roles |
+| Optional | Included only when the request asks for it in `scope` | Data the client should have to ask for |
 | **None** | Available in the system but not assigned to any client | Shared scope definitions waiting to be assigned |
 
-## Standard OIDC Scopes
+## Standard OIDC scopes
 
 FerrisKey ships with the standard OpenID Connect scopes pre-configured:
 
@@ -59,7 +57,7 @@ FerrisKey ships with the standard OpenID Connect scopes pre-configured:
 
 ## Real-World Patterns
 
-### API Gateway with Role-Based Access
+### API gateway with role-based access
 Create a custom scope `api_access` with a `user_realm_role_mapper` that includes `realm_roles` in the token. Your API gateway reads the roles claim and enforces route-level authorization without calling back to FerrisKey.
 
 ### Multi-Tenant SaaS

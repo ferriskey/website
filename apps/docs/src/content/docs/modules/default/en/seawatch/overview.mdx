@@ -7,18 +7,11 @@ order: 20
 
 # SeaWatch: Audit & Security Events
 
-SeaWatch records every security-relevant action in FerrisKey. Every login, password reset, user creation, role assignment, and configuration change produces a structured event with full context, who did it, what they did, when, from where, and why it succeeded or failed.
+SeaWatch records the security-relevant actions in FerrisKey. A login, a password reset, a user creation, a role assignment, a settings change: each produces a structured event carrying who did it, what they touched, when, from where, and why it worked or did not.
 
-## Why Audit Logging Matters
+Without it, a compromised account is a mystery. With it, you can trace one back to the exact login attempt, IP address, and user agent. The same trail is what SOC 2, ISO 27001, GDPR, and HIPAA audits ask for, and what makes "repeated failures from one IP" a query rather than a hunch.
 
-Without audit logs, you're blind to what's happening inside your identity system. SeaWatch gives you:
-
-- **Incident investigation**: Trace a compromised account back to the exact login attempt, IP address, and user agent
-- **Compliance**: SOC 2, ISO 27001, GDPR, and HIPAA all require audit trails for access management systems
-- **Anomaly detection**: Spot patterns like repeated login failures from the same IP, or unexpected configuration changes
-- **Operational visibility**: Know when admins create clients, rotate secrets, or modify realm settings
-
-## Event Structure
+## Event structure
 
 Every SeaWatch event captures a complete picture:
 
@@ -58,7 +51,7 @@ Every SeaWatch event captures a complete picture:
 | `details` | Event-specific JSON payload |
 | `timestamp` | When the event occurred (UTC) |
 
-## Actor Types
+## Actor types
 
 | Actor | When Used |
 |---|---|
@@ -67,13 +60,22 @@ Every SeaWatch event captures a complete picture:
 | `admin` | An administrator performed the action via the admin console |
 | `system` | FerrisKey itself (automated processes, scheduled tasks) |
 
-## Real-World Patterns
+## What people do with it
 
-### Security Operations
-Forward SeaWatch events to your SIEM (Splunk, Elastic, Datadog) for correlation with other security signals. Use `trace_id` to link authentication events to downstream API requests.
+**Security operations.** Forward events to your SIEM, Splunk, Elastic, Datadog, and correlate them with the rest of your signals. `trace_id` is what links an authentication event to the API requests that followed it.
 
-### Compliance Reporting
-Query events by time range and event type to generate compliance reports. SeaWatch's structured format makes it straightforward to produce SOC 2 evidence. "here are all admin actions on the identity system in Q1".
+**Compliance reporting.** Query by time range and event type. The structured format makes "every admin action on the identity system in Q1" a query result rather than a project.
 
-### Anomaly Alerting
-Combine SeaWatch with [Webhooks](/en/modules/webhooks/overview) to trigger alerts on suspicious patterns, multiple `login_failure` events from the same IP, `client_secret_rotated` events outside of maintenance windows, or `realm_config_changed` events from unexpected actors.
+**Alerting.** Pair SeaWatch with [Webhooks](/en/modules/webhooks/overview) to fire on the patterns that matter: repeated `login_failure` from one IP, a `client_secret_rotated` outside a maintenance window, a `realm_config_changed` from an actor nobody expected.
+
+## Privacy
+
+Events carry IP addresses and user agents, which are personal data in some jurisdictions. The realm setting `seawatch_pii_mode` decides what is stored:
+
+| Mode | Behaviour |
+|---|---|
+| `off` | Store events as they are. The default |
+| `mask` | Truncate the IP address and reduce the user agent before storing |
+| `pseudonymise` | Replace the identifying fields with an HMAC, keyed by `seawatch_pseudo_key` |
+
+Pseudonymisation keeps events correlatable, the same source produces the same value, without keeping the raw address. Set `seawatch_pseudo_key` on the realm when you use that mode.

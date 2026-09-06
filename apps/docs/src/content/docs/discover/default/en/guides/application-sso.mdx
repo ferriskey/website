@@ -7,9 +7,9 @@ order: 19
 
 # Connect an Application with SSO
 
-Use this guide when an application supports OpenID Connect and you want FerrisKey to handle sign-in.
+Use this guide when an application speaks OpenID Connect and you want FerrisKey to handle sign-in.
 
-By the end, you will have:
+By the end you will have:
 
 - One FerrisKey realm dedicated to the application or organization
 - One OpenID Connect client
@@ -17,7 +17,7 @@ By the end, you will have:
 - The redirect URI registered in FerrisKey
 - The issuer URL and discovery endpoint your application needs
 
-## Before You Start
+## Before you start
 
 Before opening FerrisKey, find these values in the application you want to connect:
 
@@ -31,7 +31,7 @@ Before opening FerrisKey, find these values in the application you want to conne
 The redirect URI must match what the application sends during login. If the application says the callback is `/identity/connect/oidc-signin`, do not replace it with the application homepage.
 :::
 
-## Example Values
+## Example values
 
 The walkthrough uses these values. Replace them with your own domains and realm name.
 
@@ -44,7 +44,7 @@ The walkthrough uses these values. Replace them with your own domains and realm 
 | Redirect URI | `https://vault.example.com/identity/connect/oidc-signin` |
 | Scopes | `openid profile email` |
 
-## Create or Select the Realm
+## Create or select the realm
 
 A realm keeps users, clients, roles, and scopes together. Avoid using `master` for applications.
 
@@ -60,7 +60,7 @@ After switching, check the realm indicator before creating the client. The clien
 :::
 ::::
 
-## Create the Client
+## Create the client
 
 The client is the application entry in FerrisKey. It tells FerrisKey which app is asking users to sign in.
 
@@ -85,7 +85,7 @@ Enable **Client Authentication** for server-side applications. FerrisKey will tr
 :::
 ::::
 
-## Configure the Redirect URI
+## Configure the redirect URI
 
 The redirect URI is where FerrisKey sends the browser after a successful login.
 
@@ -109,7 +109,7 @@ Keep **Direct Access Grants** disabled unless the application explicitly asks fo
 :::
 ::::
 
-## Copy the Client Secret
+## Copy the client secret
 
 ::::step-group
 :::step{title="Open Credentials"}
@@ -127,7 +127,7 @@ Copy the **Client Secret** and put it in the application's OIDC configuration. T
 If a client secret is pasted into a public issue, log, screenshot, or repository, rotate it and update the application immediately.
 :::
 
-## Check the Client Scopes
+## Check the client scopes
 
 Most OIDC applications need `openid`, `profile`, and `email`.
 
@@ -149,7 +149,7 @@ If the application needs roles, also assign `roles`.
 :::
 ::::
 
-## Configure the Application
+## Configure the application
 
 Paste these values into the application.
 
@@ -162,9 +162,9 @@ Paste these values into the application.
 | Scopes | `openid profile email` |
 | Redirect URI | `https://vault.example.com/identity/connect/oidc-signin` |
 
-### What the Discovery Endpoint Does
+### What the discovery endpoint does
 
-The discovery endpoint is the URL an OpenID Connect application uses to learn how to talk to FerrisKey.
+The discovery endpoint is where an OpenID Connect application learns how to talk to FerrisKey.
 
 ```text
 https://sso.example.com/realms/home/.well-known/openid-configuration
@@ -178,13 +178,13 @@ When the application opens that URL, FerrisKey returns a JSON document with the 
 - Where to fetch the public keys used to verify token signatures
 - Which scopes and response types are supported
 
-This is why many applications only ask for an **issuer**, **authority**, or **discovery URL** instead of asking you to configure every endpoint manually.
+That is why so many applications only ask for an issuer, an authority, or a discovery URL, instead of making you fill in every endpoint by hand.
 
-:::callout{variant="info" title="Authority vs discovery endpoint"}
-Some applications ask for the issuer or authority URL. Others ask directly for the discovery endpoint. If the application asks for the authority, usually use the realm URL without `/.well-known/openid-configuration`.
+:::callout{variant="info" title="Authority or discovery endpoint"}
+Some applications ask for the issuer or authority URL, others for the discovery endpoint. When it asks for the authority, give it the realm URL without the `/.well-known/openid-configuration` suffix.
 :::
 
-## Test the Login
+## Test the login
 
 1. Open the application in a private browser window.
 2. Click the SSO or OpenID Connect login button.
@@ -192,7 +192,7 @@ Some applications ask for the issuer or authority URL. Others ask directly for t
 4. Sign in with a user from the same realm.
 5. Confirm that FerrisKey redirects back to the application.
 
-If the user can sign in but the application says the account is not allowed, check the application's own signup, domain, group, or role rules. FerrisKey has authenticated the user, but the application can still decide whether that user may enter.
+If the user signs in but the application says the account is not allowed, look at the application's own signup, domain, group, or role rules. FerrisKey authenticated the user; the application still gets to decide whether that user is welcome.
 
 ## Troubleshooting
 

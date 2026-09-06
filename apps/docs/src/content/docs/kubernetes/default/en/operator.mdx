@@ -7,11 +7,11 @@ order: 3
 
 # FerrisKey Operator
 
-The FerrisKey Operator manages FerrisKey instances declaratively through a Kubernetes Custom Resource Definition (CRD). Define your desired state in a `FerrisKeyCluster` manifest and the operator handles the rest.
+The operator manages FerrisKey instances declaratively, through a custom resource. You describe the cluster you want in a `FerrisKeyCluster` manifest, and the operator reconciles towards it.
 
-## FerrisKeyCluster CRD
+## The FerrisKeyCluster resource
 
-The operator introduces the `FerrisKeyCluster` resource (API version `ferriskey.rs/v1alpha1`):
+The CRD is `ferriskeyclusters.ferriskey.rs`, API version `ferriskey.rs/v1alpha1`, namespaced, with the short name `fkcl`. `kubectl get fkcl` prints the version, the replica count, readiness, and the current phase.
 
 ```yaml title="ferriskey-cluster.yaml"
 apiVersion: ferriskey.rs/v1alpha1
@@ -22,7 +22,7 @@ metadata:
 spec:
   name: my-ferriskey
   replicas: 3
-  version: "latest"
+  version: "0.7.0"
   api:
     apiUrl: "https://api.iam.yourorg.com"
     webappUrl: "https://iam.yourorg.com"
@@ -36,35 +36,41 @@ spec:
     sslMode: require
 ```
 
-## Spec Reference
+## Spec reference
+
+Every field below is required unless the description says otherwise.
 
 ### Root
 
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | Cluster name |
-| `replicas` | `integer` | Number of API pod replicas |
+| `replicas` | `integer` | Number of API replicas |
 | `version` | `string` | FerrisKey version to deploy |
+| `api` | `object` | API configuration |
+| `database` | `object` | Database configuration |
 
-### API Configuration (`spec.api`)
-
-| Field | Type | Description |
-|---|---|---|
-| `apiUrl` | `string` | Public URL of the FerrisKey API |
-| `webappUrl` | `string` | Public URL of the web UI |
-| `allowedOrigins` | `string[]` | Allowed CORS origins |
-
-### Database Configuration (`spec.database`)
+### `spec.api`
 
 | Field | Type | Description |
 |---|---|---|
-| `secretRef.name` | `string` | Kubernetes Secret containing database credentials |
-| `secretRef.namespace` | `string` | Secret namespace (optional, defaults to resource namespace) |
-| `databaseName` | `string` | Database name override |
-| `sslMode` | `string` | PostgreSQL SSL mode (`disable`, `require`, `verify-ca`, `verify-full`) |
+| `apiUrl` | `string` | Public URL of the API |
+| `webappUrl` | `string` | Public URL of the console |
+| `allowedOrigins` | `string[]` | Optional. Browser origins allowed on every route |
+
+As with the standalone deployment, per-client web origins only cover realm-scoped routes. `/config`, the health probes, and the API documentation carry no realm, so a console served from a different origin than the API has to keep its origin in `allowedOrigins`.
+
+### `spec.database`
+
+| Field | Type | Description |
+|---|---|---|
+| `secretRef.name` | `string` | Secret holding the database credentials |
+| `secretRef.namespace` | `string` | Optional. Defaults to the resource's namespace |
+| `databaseName` | `string` | Optional. Overrides the database name from the Secret |
+| `sslMode` | `string` | Optional. `disable`, `prefer`, `require`, `verify-ca`, or `verify-full` |
 
 :::callout{variant="info" title="Database Secret format"}
-The referenced Secret should contain the standard PostgreSQL connection fields: `host`, `port`, `user`, `password`, and optionally `database`.
+The referenced Secret must carry `host`, `port`, `user`, and `password`. `database` is optional and can be supplied through `databaseName` instead.
 :::
 
 ## Status
@@ -101,8 +107,12 @@ status:
 
 ::::step-group
 :::step{title="Install the operator"}
+The operator ships as its own Helm chart, which installs the CRD, the operator Deployment, and the RBAC it needs:
+
 ```bash
-kubectl apply -f https://github.com/ferriskey/ferriskey/releases/latest/download/operator.yaml
+helm install ferriskey-operator oci://ghcr.io/ferriskey/charts/ferriskey-operator \
+  --namespace ferriskey-system \
+  --create-namespace
 ```
 :::
 
@@ -125,7 +135,25 @@ kubectl apply -f ferriskey-cluster.yaml
 
 :::step{title="Check status"}
 ```bash
-kubectl get ferriskeyclusters -n ferriskey
+kubectl get fkcl -n ferriskey
 ```
 :::
 ::::
+
+## CRD and RBAC ownership
+
+By default the chart installs the CRD and annotates it with `helm.sh/resource-policy: keep`, so `helm uninstall` leaves it, and your clusters, alone. It also creates a ClusterRole and ClusterRoleBinding letting the operator manage `FerrisKeyCluster` resources across namespaces.
+
+If either is managed elsewhere, for example through GitOps or a dedicated CRD chart, turn the chart's copy off:
+
+```yaml title="values.yaml"
+crds:
+  install: false
+
+rbac:
+  create: false
+```
+
+:::callout{variant="warning" title="Keep the CRD on uninstall"}
+Leave `crds.keep` at `true` in production. Deleting the CRD deletes every `FerrisKeyCluster` in the cluster along with it.
+:::

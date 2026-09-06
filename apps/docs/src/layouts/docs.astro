@@ -54,7 +54,7 @@ const contributors = sortContributors(
 )
 
 const showTabs = projects.length > 1
-// Thumbnails are served from the site root (dist/**/thumbnail.png), not under /assets — and
+// Thumbnails are served from the site root (dist/**/thumbnail.png), not under /assets, and
 // og:image/twitter:image must be absolute, since Discord and most link-preview bots won't
 // resolve a relative path.
 const thumbnailPath = thumbnail ?? `${Astro.url.pathname.replace(/\/$/, '')}/thumbnail.png`
@@ -82,7 +82,7 @@ const appUrlOverrides = {
     <meta name="twitter:title" content={title} />
     {description && <meta name="twitter:description" content={description} />}
     <meta name="twitter:image" content={thumbnailUrl} />
-    <title>{title} — Explainer</title>
+    <title>{title} | Explainer</title>
 
     <ClientRouter />
     <script is:inline>

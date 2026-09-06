@@ -72,7 +72,7 @@ For the SREs who get paged when it isn't: no garbage collector means no GC pause
 
 ## What determinism buys us next
 
-Memory safety gets the headlines, but it's not the only property this design gives us for free. Ownership and the absence of a garbage collector also make the runtime deterministic: no GC pause, no JIT warm-up curve, no allocator quietly deciding to compact the heap under load. Feed the same input to the same binary twice and it takes the same path both times, with the same timing characteristics. That's not just a safety property, it's a performance one too: the same determinism that rules out data races is what keeps tail latency boring under load.
+Memory safety gets the headlines, but it's not the only property this design gives us for free. Ownership and the absence of a garbage collector also make the runtime deterministic: no GC pause, no JIT warm-up curve, no allocator quietly deciding to compact the heap under load. Feed the same input to the same binary twice and it takes the same path both times, with the same timing characteristics. That determinism buys you more than safety. The same property that rules out data races is what keeps tail latency boring under load.
 
 That determinism is also a foundation, not just an outcome, and it points at two things we want FerrisKey to grow into.
 

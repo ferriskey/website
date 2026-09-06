@@ -7,7 +7,7 @@ order: 2
 
 # Import from a file
 
-`--from config` imports a realm from a FerrisKey-native description file. The format is detected from the extension: `.yaml`, `.yml`, or `.toml`. No external system or credentials are involved.
+`--from config` imports a realm from a FerrisKey-native description file. The format comes from the extension: `.yaml`, `.yml`, or `.toml`. No external system and no credentials are involved.
 
 ```bash
 ferris-ctl realm import --from config --file realm.yaml
@@ -21,7 +21,7 @@ ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
 
 ## Format
 
-A description has a `name` and optional `settings`, `roles`, `clients`, and `users` sections.
+A description carries a `name`, plus optional `settings`, `roles`, `clients`, and `users` sections. The repository ships a working example at [`cli/examples/realm.yaml`](https://github.com/ferriskey/ferriskey/blob/main/cli/examples/realm.yaml).
 
 ```yaml title="realm.yaml"
 name: acme
@@ -36,9 +36,13 @@ roles:
   - name: admin
     description: Realm administrators
     permissions:
-      - realm:manage
+      - manage_realm
+      - manage_users
   - name: viewer
     description: Read-only access
+    permissions:
+      - view_users
+      - view_clients
 
 clients:
   - client_id: web-app
@@ -73,7 +77,7 @@ users:
 
 ## Settings
 
-All settings are optional; omitted fields keep the FerrisKey default.
+Every setting is optional. Anything you leave out keeps the FerrisKey default.
 
 | Field | Description |
 |-------|-------------|
@@ -91,12 +95,60 @@ All settings are optional; omitted fields keep the FerrisKey default.
 | `email_verification_enabled` | Require email verification |
 | `email_verification_ttl_hours` | Email verification link TTL (hours) |
 
-## Roles, clients, users
+## Roles
 
-- **roles:** `name`, optional `description`, optional `permissions` list.
-- **clients:** `client_id`, optional `name`, `client_type` (`public` / `confidential` / `system`), `public_client`, `service_account_enabled`, `direct_access_grants_enabled`, `protocol`, `enabled`, `redirect_uris`, and per-client `roles`.
-- **users:** `username`, optional `email`, `firstname`, `lastname`, `email_verified`, and a `roles` list referencing realm role names.
+| Field | Default | Description |
+|-------|---------|-------------|
+| `name` | required | Role name |
+| `description` | none | Free-text description |
+| `permissions` | `[]` | Permission names, in snake_case |
+
+Permissions use the names from the [permissions reference](/en/discover/core-concepts/roles#permissions-reference), so `manage_realm`, not `ManageRealm` and not `realm:manage`. Unrecognized names are dropped silently when the role is created.
+
+## Clients
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `client_id` | required | Client identifier |
+| `name` | none | Display name |
+| `client_type` | `public` | `public`, `confidential`, or `system` |
+| `protocol` | `openid-connect` | Protocol used by the client |
+| `enabled` | `true` | Whether the client can be used |
+| `public_client` | `false` | Public client, no secret |
+| `service_account_enabled` | `false` | Create a linked service account user |
+| `direct_access_grants_enabled` | `false` | Allow the password grant |
+| `device_authorization_grant_enabled` | `false` | Allow the device code grant |
+| `redirect_uris` | `[]` | Allowed redirect URIs |
+| `post_logout_redirect_uris` | `[]` | Allowed post-logout redirect URIs |
+| `web_origins` | `[]` | Browser origins allowed on this client's realm-scoped routes |
+| `require_pkce` | inherit | Require PKCE on the authorization code flow |
+| `access_token_lifetime` | inherit | Override the realm access token TTL, in seconds |
+| `refresh_token_lifetime` | inherit | Override the realm refresh token TTL |
+| `id_token_lifetime` | inherit | Override the realm ID token TTL |
+| `temporary_token_lifetime` | inherit | Override the realm temporary token TTL |
+| `roles` | `[]` | Roles scoped to this client, same shape as realm roles |
+
+## Users
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `username` | required | Username |
+| `email` | none | Email address |
+| `firstname` | none | First name |
+| `lastname` | none | Last name |
+| `email_verified` | none | Mark the email as already verified |
+| `roles` | `[]` | Roles to assign |
+
+A plain name in `roles` refers to a realm role. Prefix it with a client id to pick a role scoped to that client:
+
+```yaml
+users:
+  - username: alice
+    roles:
+      - admin              # realm role
+      - backend:service-reader   # role of the "backend" client
+```
 
 :::callout{variant="note" title="Passwords are not in the blueprint"}
-User credentials are never part of an import. Users are created without a password; set one afterward via the admin console or a recovery flow.
+Credentials are never part of an import. Users come out without a password: set one afterwards with [`ferris-ctl user set-password`](/en/cli/commands/user#user-set-password), from the admin console, or through a recovery flow.
 :::

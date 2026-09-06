@@ -7,107 +7,250 @@ order: 2
 
 # Helm Chart
 
-The official FerrisKey Helm chart is published as an OCI artifact. It deploys the API server, web UI, database migrations, and optionally an embedded PostgreSQL instance.
+The FerrisKey chart is published as an OCI artifact at `oci://ghcr.io/ferriskey/charts/ferriskey`. It deploys the API, the web console, the database migration job, and, unless you turn it off, an embedded PostgreSQL.
 
-## Installation
+## Install
 
 ::::step-group
 :::step{title="Install the chart"}
-The chart is available as an OCI artifact, no `helm repo add` needed:
+The chart is an OCI artifact, so there is no `helm repo add` step:
 
 ```bash
 helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
   --namespace ferriskey \
   --create-namespace
 ```
+
+Out of the box this brings up an embedded PostgreSQL and generates the database and admin passwords into Secrets.
 :::
 
-:::step{title="Verify the deployment"}
+:::step{title="Check the rollout"}
 ```bash
 kubectl get pods -n ferriskey
 ```
 
-Wait for all pods to reach `Running` status and the migration job to complete.
+Wait for the migration job to complete and the API and webapp pods to reach `Running`.
 :::
 
-:::step{title="Access the UI"}
-Port-forward to the web UI:
+:::step{title="Reach the console"}
+The webapp service listens on port 80:
 
 ```bash
-kubectl port-forward -n ferriskey svc/ferriskey-webapp 5555:5555
+kubectl port-forward -n ferriskey svc/ferriskey-webapp 5555:80
 ```
 
-Open `http://localhost:5555` and log in with the default admin credentials.
+Open `http://localhost:5555` and sign in with the admin account.
 :::
 ::::
 
-## Configuration
+:::callout{variant="warning" title="The embedded PostgreSQL is for trying things out"}
+`postgresql.enabled` defaults to `true` so a fresh install works with no dependencies. Do not ship that to production. Point `database.host` at a managed instance and set `postgresql.enabled: false`.
+:::
 
-Override default values by creating a `values.yaml` file:
-
-```yaml title="values.yaml"
-database:
-  host: "postgres.database.svc.cluster.local"
-  port: 5432
-  name: "ferriskey"
-  user: "ferriskey"
-  passwordSecret:
-    name: "ferriskey-db-credentials"
-    key: "password"
-
-common:
-  env:
-    - name: ADMIN_USERNAME
-      value: "admin"
-    - name: ADMIN_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: ferriskey-admin
-          key: password
-    - name: ADMIN_EMAIL
-      value: "admin@yourorg.com"
-    - name: ALLOWED_ORIGINS
-      value: "https://iam.yourorg.com"
-```
-
-Then install with your values:
+## Install against an external PostgreSQL
 
 ```bash
 helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
-  --namespace ferriskey \
-  --create-namespace \
-  -f values.yaml
+  --namespace ferriskey --create-namespace \
+  --set postgresql.enabled=false \
+  --set database.host=postgres.database.svc.cluster.local \
+  --set database.passwordSecret.create=false \
+  --set database.passwordSecret.name=ferriskey-db-credentials
 ```
 
-## Values Reference
+With `database.passwordSecret.create=false`, the chart reads the password from the Secret you name, at the key given by `database.passwordSecret.key` (`password` by default).
+
+## Exposing the deployment
+
+The chart can render either an Ingress or a Gateway API HTTPRoute. Both need `publicHost`, which is the hostname the console and the API are reached at. Rendering fails with a clear message when it is missing.
+
+```yaml title="values.yaml, Ingress"
+publicHost: iam.yourorg.com
+
+ingress:
+  enabled: true
+  class: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+```
+
+```yaml title="values.yaml, Gateway API"
+publicHost: iam.yourorg.com
+
+gatewayAPI:
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - name: my-gateway
+        namespace: gateway-system
+```
+
+Both route `/` to the webapp and `api.server.rootPath` (`/api` by default) to the API, on a single hostname. `api.webapp.url` and `webapp.api.url` are derived from that configuration, so you only set them when you serve the two on separate hosts.
+
+## Values reference
+
+The chart exposes the full Kubernetes surface for every workload: probes, security contexts, affinity, tolerations, topology spread, extra volumes, and so on. The table below covers the values specific to FerrisKey. The [chart README](https://github.com/ferriskey/ferriskey/blob/main/charts/ferriskey/README.md) has the exhaustive list.
+
+### Top level
+
+| Key | Default | Description |
+|---|---|---|
+| `nameOverride` | `nil` | Override the release-derived resource name |
+| `publicHost` | `nil` | Public hostname. Required when an Ingress or HTTPRoute is enabled |
 
 ### Database
 
 | Key | Default | Description |
 |---|---|---|
-| `database.host` | None | PostgreSQL host |
+| `database.host` | `nil` | PostgreSQL host. Defaults to the embedded instance when it is enabled |
 | `database.port` | `5432` | PostgreSQL port |
 | `database.name` | `ferriskey` | Database name |
 | `database.user` | `ferriskey` | Database user |
-| `database.passwordSecret.name` | None | Kubernetes Secret name containing the password |
-| `database.passwordSecret.key` | None | Key within the Secret |
+| `database.passwordSecret.create` | `true` | Generate the password Secret |
+| `database.passwordSecret.name` | `nil` | Existing Secret to read the password from |
+| `database.passwordSecret.key` | `password` | Key inside that Secret |
 
-### Common Settings
+### API
 
 | Key | Default | Description |
 |---|---|---|
-| `common.image.tag` | Chart appVersion | Container image tag |
-| `common.image.pullPolicy` | `IfNotPresent` | Image pull policy |
-| `common.env` | `[]` | Environment variables for all workloads |
-| `common.envFrom` | `[]` | Environment sources (ConfigMaps, Secrets) |
-| `common.volumeMounts` | `[]` | Volume mounts for all containers |
-| `common.volumes` | `[]` | Volumes for all pods |
-| `common.serviceAccount.create` | `true` | Create a ServiceAccount |
-| `common.serviceAccount.name` | None | ServiceAccount name override |
-| `common.affinity` | `{}` | Pod affinity rules |
-| `common.tolerations` | `[]` | Pod tolerations |
-| `common.topologySpreadConstraints` | `[]` | Topology spread |
+| `api.replicas` | `1` | API replica count |
+| `api.image.repository` | `ghcr.io/ferriskey/ferriskey-api` | API image |
+| `api.image.tag` | chart appVersion | API image tag |
+| `api.admin.username` | `admin` | Initial admin username |
+| `api.admin.email` | `admin@cluster.local` | Initial admin email |
+| `api.admin.passwordSecret.create` | `true` | Generate the admin password Secret |
+| `api.admin.passwordSecret.name` | `nil` | Existing Secret holding the admin password |
+| `api.admin.passwordSecret.key` | `password` | Key inside that Secret |
+| `api.server.port` | `3333` | Port the API listens on |
+| `api.server.rootPath` | `/api` | Path prefix. Change it and the probes need updating too |
+| `api.server.allowedOrigins` | `[]` | Browser origins allowed on every route |
+| `api.webapp.url` | `nil` | Console URL. Computed from the exposure configuration when unset |
+| `api.log.filter` | `info` | Log filter directives |
+| `api.log.json` | `false` | JSON log output |
+| `api.serviceMonitor.enabled` | `false` | Create a Prometheus Operator ServiceMonitor |
+| `api.resources` | 128Mi request / 512Mi limit | API container resources |
 
-:::callout{variant="info" title="External PostgreSQL recommended"}
-For production, use a managed PostgreSQL service (RDS, Cloud SQL, Azure Database) rather than running PostgreSQL inside the cluster.
-:::
+### Web console
+
+| Key | Default | Description |
+|---|---|---|
+| `webapp.replicas` | `1` | Console replica count |
+| `webapp.image.repository` | `ghcr.io/ferriskey/ferriskey-webapp` | Console image |
+| `webapp.api.url` | `nil` | API URL the browser calls. Computed from the exposure configuration when unset |
+| `webapp.resources` | 32Mi request / 64Mi limit | Console container resources |
+
+### Database migrations
+
+| Key | Default | Description |
+|---|---|---|
+| `databaseMigrations.image.repository` | API image | Image running `sqlx migrate run` |
+| `databaseMigrations.backoffLimit` | `nil` | Job backoff limit |
+| `databaseMigrations.ttlSecondsAfterFinished` | `nil` | Set to `0` outside of ArgoCD to clean the job up |
+
+Under Helm the migration job runs as a `post-install` and `pre-upgrade` hook, so it is recreated on every upgrade rather than patched in place.
+
+### Embedded PostgreSQL
+
+| Key | Default | Description |
+|---|---|---|
+| `postgresql.enabled` | `true` | Deploy the bundled PostgreSQL |
+| `postgresql.image.repository` | `postgres` | PostgreSQL image |
+| `postgresql.image.tag` | `17` | PostgreSQL image tag |
+| `postgresql.persistence.enabled` | `true` | Back the instance with a PVC |
+| `postgresql.persistence.resources.requests.storage` | `5Gi` | PVC size |
+| `postgresql.persistence.storageClass` | `nil` | Storage class |
+
+### Observability
+
+| Key | Default | Description |
+|---|---|---|
+| `opentelemetry.enabled` | `false` | Set `ACTIVE_OBSERVABILITY` and export traces |
+| `opentelemetry.otlpEndpoint` | `http://tempo:4317` | OTLP collector endpoint |
+
+## A production values file
+
+```yaml title="values.yaml"
+publicHost: iam.yourorg.com
+
+postgresql:
+  enabled: false
+
+database:
+  host: postgres.database.svc.cluster.local
+  name: ferriskey
+  user: ferriskey
+  passwordSecret:
+    create: false
+    name: ferriskey-db-credentials
+    key: password
+
+api:
+  replicas: 3
+  admin:
+    username: admin
+    email: admin@yourorg.com
+    passwordSecret:
+      create: false
+      name: ferriskey-admin
+      key: password
+  server:
+    allowedOrigins:
+      - https://iam.yourorg.com
+  log:
+    json: true
+  serviceMonitor:
+    enabled: true
+
+webapp:
+  replicas: 2
+
+databaseMigrations:
+  ttlSecondsAfterFinished: 0
+
+ingress:
+  enabled: true
+  class: nginx
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+```
+
+```bash
+helm upgrade --install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey --create-namespace \
+  -f values.yaml
+```
+
+## Installing with ArgoCD
+
+ArgoCD does not run Helm hooks, so the ordering has to be expressed with sync waves. Give the Secrets and PostgreSQL wave 0 and the migration job wave 1:
+
+```yaml title="values.yaml, ArgoCD"
+database:
+  passwordSecret:
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/sync-wave: "0"
+
+databaseMigrations:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "1"
+```
+
+ArgoCD regenerates the admin password Secret on every sync, which shows up as permanent drift. Tell it to ignore that field:
+
+```yaml
+ignoreDifferences:
+  - group: ""
+    kind: Secret
+    name: ferriskey-api-admin
+    jsonPointers:
+      - /data/password
+```

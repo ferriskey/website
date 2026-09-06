@@ -7,54 +7,65 @@ order: 61
 
 # Trigger Events
 
-Webhook subscribers listen for specific trigger events. FerrisKey supports 26 trigger events organized by resource type.
+A webhook subscribes to the triggers it cares about. There are 38, grouped here by the resource they concern.
 
-## User Events
+## User
 
 | Trigger | Description |
 |---|---|
 | `user.created` | A new user account was created |
 | `user.updated` | A user's profile was modified |
 | `user.deleted` | A user account was deleted |
-| `user.bulk_deleted` | Multiple users were deleted in a batch operation |
+| `user.bulk_deleted` | Several users were deleted in one batch |
+| `user.email_verified` | A user confirmed their email address |
 | `user.credentials.deleted` | A user's credentials were removed |
 | `user.role.assigned` | A role was assigned to a user |
 | `user.role.unassigned` | A role was removed from a user |
 
-## Authentication Events
+## Authentication
 
 | Trigger | Description |
 |---|---|
 | `auth.reset_password` | A password reset was performed |
+| `auth.device_flow.initiated` | A device authorization flow was started |
+| `auth.device_flow.denied` | The user refused a device authorization |
+| `auth.device_flow.expired` | A device code expired before anyone approved it |
 
-## Client Events
+## Client
 
 | Trigger | Description |
 |---|---|
 | `client.created` | A new OAuth2 client was registered |
 | `client.updated` | A client's configuration was modified |
 | `client.deleted` | A client was removed |
-| `client.role.created` | A client-specific role was created |
-| `client.role.updated` | A client-specific role was modified |
+| `client.role.created` | A client-scoped role was created |
+| `client.role.updated` | A client-scoped role was modified |
+| `client.maintenance.enabled` | Maintenance mode was turned on for the client |
+| `client.maintenance.disabled` | Maintenance mode was turned off |
+| `client.saml_config.updated` | The client's SAML configuration changed |
+| `client.saml_attribute_mapper.created` | A SAML attribute mapper was added |
+| `client.saml_attribute_mapper.deleted` | A SAML attribute mapper was removed |
 
-## Redirect URI Events
+## Redirect URIs and web origins
 
 | Trigger | Description |
 |---|---|
 | `redirect_uri.created` | A redirect URI was added to a client |
 | `redirect_uri.updated` | A redirect URI was modified |
 | `redirect_uri.deleted` | A redirect URI was removed |
+| `web_origin.created` | A web origin was added to a client |
+| `web_origin.deleted` | A web origin was removed |
 
-## Role Events
+## Roles
 
 | Trigger | Description |
 |---|---|
 | `role.created` | A new role was created |
 | `role.updated` | A role was modified |
 | `role.deleted` | A role was deleted |
-| `role.permission.updated` | A role's permissions bitmask was changed |
+| `role.permission.updated` | A role's permission bitmask changed |
 
-## Realm Events
+## Realms
 
 | Trigger | Description |
 |---|---|
@@ -63,7 +74,7 @@ Webhook subscribers listen for specific trigger events. FerrisKey supports 26 tr
 | `realm.deleted` | A realm was deleted |
 | `realm.settings.updated` | Realm settings were changed |
 
-## Webhook Events
+## Webhooks
 
 | Trigger | Description |
 |---|---|
@@ -71,17 +82,17 @@ Webhook subscribers listen for specific trigger events. FerrisKey supports 26 tr
 | `webhook.updated` | A webhook was modified |
 | `webhook.deleted` | A webhook was removed |
 
-:::callout{variant="info" title="Webhook events are meta"}
-Yes, you can subscribe to webhook lifecycle events, useful for auditing changes to your webhook configuration itself.
+:::callout{variant="info" title="Yes, webhooks about webhooks"}
+Subscribing to webhook lifecycle events is allowed, and it is the only way to audit changes to your webhook configuration from outside.
 :::
 
-## Choosing Which Events to Subscribe To
+## Choosing what to subscribe to
 
-### Start Narrow
-Subscribe only to the events you need. Each subscription adds a network call on every matching event. Start with the critical ones (`user.created`, `user.deleted`, `client.deleted`) and expand as needed.
+### Start narrow
+Subscribe to what you need and nothing more. Every subscription is a network call on every matching event. `user.created`, `user.deleted`, and `client.deleted` are a reasonable starting set.
 
-### Combine with SeaWatch
-Webhook triggers overlap with [SeaWatch event types](/en/modules/seawatch/event-types) but are not identical. SeaWatch tracks security audit events (login success/failure). Webhooks track resource lifecycle events. Use both for complete coverage.
+### Pair it with SeaWatch
+Triggers and [SeaWatch event types](/en/modules/seawatch/event-types) overlap without matching. SeaWatch records security audit events, including logins that failed. Webhooks push resource lifecycle events outward. You want both.
 
-### Event Ordering
-Events are delivered in the order they occur within the realm. However, network delivery is asynchronous, if your endpoint is slow, later events may arrive before earlier ones are acknowledged. Design your handlers to be idempotent.
+### Ordering
+Events fire in the order they happen within the realm, but delivery is asynchronous. A slow endpoint can receive a later event before it has acknowledged an earlier one, so write your handlers to be idempotent.
