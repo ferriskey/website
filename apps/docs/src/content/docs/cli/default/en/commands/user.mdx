@@ -1,13 +1,13 @@
 ---
 title: user
-description: "Create, inspect, and delete users within a realm."
+description: "Create, inspect, and delete users, set passwords, and manage role assignments."
 icon: users
 order: 4
 ---
 
 # `user`
 
-Manage users within a realm.
+Manage the users of a realm, their passwords, and the roles assigned to them.
 
 ```bash
 ferris-ctl user <subcommand>
@@ -64,8 +64,72 @@ ferris-ctl user create alice \
 ```
 
 :::callout{variant="note" title="Setting a password"}
-`user create` does not set credentials. Set the user's password from the FerrisKey admin console, or have the user complete a recovery flow.
+`user create` does not set credentials. Give the new account a password with [`user set-password`](#user-set-password), or let the user go through a recovery flow.
 :::
+
+## `user set-password`
+
+Set a user's password.
+
+```bash
+ferris-ctl user set-password <username> (--password <value> | --stdin) [--temporary] [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<username>` | yes | Username |
+| `--password` | one of the two | The new password, inline |
+| `--stdin` | one of the two | Read the password from stdin, trailing newline trimmed |
+| `--temporary` | no | Force the user to change this password at next login |
+| `--realm` | no | Realm (defaults to context realm) |
+
+Exactly one of `--password` and `--stdin` must be given; passing both, or neither, is an error.
+
+```bash title="Prefer stdin"
+printf '%s' "$NEW_PASSWORD" | ferris-ctl user set-password alice --stdin --temporary
+```
+
+:::callout{variant="warning" title="--password leaks into history"}
+A value passed to `--password` ends up in your shell history and in the process list, where anyone on the machine can read it. Use `--stdin` outside of throwaway environments.
+:::
+
+## `user assign-role`
+
+Assign a realm role, or a role of one client, to a user.
+
+```bash
+ferris-ctl user assign-role <username> <role> [--client <client_id>] [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<username>` | yes | Username |
+| `<role>` | yes | Role name |
+| `--client` | no | Resolve the role among this client's roles instead of the realm's |
+| `--realm` | no | Realm (defaults to context realm) |
+
+```bash
+ferris-ctl user assign-role alice user-admin
+ferris-ctl user assign-role alice service-reader --client backend
+```
+
+## `user remove-role`
+
+The inverse of `assign-role`, with the same arguments.
+
+```bash
+ferris-ctl user remove-role <username> <role> [--client <client_id>] [--realm <realm>]
+```
+
+## `user roles`
+
+List the roles assigned to a user.
+
+```bash
+ferris-ctl user roles <username> [--realm <realm>]
+```
+
+Table columns: NAME, ID.
 
 ## `user delete`
 

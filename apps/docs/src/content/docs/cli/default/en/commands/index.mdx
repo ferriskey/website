@@ -8,7 +8,7 @@ order: 0
 
 # Commands
 
-`ferris-ctl` exposes seven top-level commands. Every one of them accepts the [global flags](/en/cli/overview#global-flags), and every one resolves where to connect, who you are, and which realm to act on before it sends anything — see [Authentication](/en/cli/authentication).
+`ferris-ctl` has seven top-level commands. All of them accept the [global flags](/en/cli/overview#global-flags), and all of them resolve where to connect, who you are, and which realm to act on before sending anything. [Authentication](/en/cli/authentication) explains how.
 
 ## Connect and authenticate
 
@@ -28,13 +28,13 @@ Drop the stored session by deleting the credentials file.
 
 ::::card-group{cols=3}
 :::card{label="realm" icon="lucide:layers" href="/en/cli/commands/realm"}
-Create, inspect, and delete realms — and import one from an external source.
+Create, inspect, and delete realms, manage their roles, and import one from an external source.
 :::
 :::card{label="client" icon="lucide:box" href="/en/cli/commands/client"}
 Create, inspect, and delete OAuth2 clients within a realm.
 :::
 :::card{label="user" icon="lucide:users" href="/en/cli/commands/user"}
-Create, inspect, and delete users within a realm.
+Create, inspect, and delete users, set their passwords, and assign roles.
 :::
 ::::
 
@@ -54,9 +54,9 @@ The import guide: from a description file, a live Keycloak, or a live Zitadel in
 | Command | Purpose |
 |---------|---------|
 | [`context`](/en/cli/commands/context) | Manage connection contexts |
-| [`realm`](/en/cli/commands/realm) | Manage realms |
+| [`realm`](/en/cli/commands/realm) | Manage realms, their roles, and realm imports |
 | [`client`](/en/cli/commands/client) | Manage OAuth2 clients |
-| [`user`](/en/cli/commands/user) | Manage users |
+| [`user`](/en/cli/commands/user) | Manage users, their passwords, and their role assignments |
 | [`source`](/en/cli/commands/source) | Manage reusable import sources |
 | [`login`](/en/cli/commands/login) | Sign in via the OAuth 2.0 Device Authorization Grant |
 | [`logout`](/en/cli/commands/logout) | Remove the stored login session |
