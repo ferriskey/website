@@ -7,65 +7,68 @@ order: 17
 
 # Tokens
 
-FerrisKey issues JSON Web Tokens (JWTs) as the result of successful authentication. Each token type serves a specific purpose in the OAuth2/OIDC protocol.
+A successful authentication produces JSON Web Tokens. Each type has one job in the OAuth2 and OIDC protocol.
 
-## Token Types
+## Token types
 
-| Token | Purpose | Typical Lifetime |
+| Token | Purpose | Default lifetime |
 |---|---|---|
-| **Access Token** | Authorize API requests to resource servers | 300s (5 min) |
-| **Refresh Token** | Obtain new access tokens without re-authentication | 86400s (24 hr) |
-| **ID Token** | Convey user identity to the client (OIDC) | 300s (5 min) |
-| **Temporary Token** | Authorize required action completion only | 300s (5 min) |
+| Access token | Authorize API requests against a resource server | 300s |
+| Refresh token | Get new access tokens without asking the user again | 86400s |
+| ID token | Carry the user's identity to the client, per OIDC | 300s |
+| Temporary token | Authorize the completion of required actions, nothing else | 300s |
 
-## JWT Structure
+## JWT structure
 
-Every FerrisKey token is a signed JWT with three parts: header, payload, and signature.
+Every token is a signed JWT: header, payload, signature.
 
-### Standard Claims
+### Standard claims
 
 | Claim | Description |
 |---|---|
-| `sub` | Subject, the user's unique ID |
-| `aud` | Audience, the client ID |
-| `iss` | Issuer, the realm's token endpoint URL |
+| `sub` | Subject, the user's id |
+| `aud` | Audience, a list of client ids |
+| `azp` | Authorized party, the client that requested the token |
+| `iss` | Issuer, the realm URL |
+| `typ` | Token type |
 | `exp` | Expiration timestamp |
 | `iat` | Issued-at timestamp |
-| `nbf` | Not-before timestamp |
-| `jti` | JWT ID, unique token identifier |
+| `jti` | Unique token identifier |
 | `scope` | Space-separated list of granted scopes |
+| `sid` | OIDC session id, the user session this token was issued against |
 
-### Custom Claims
+`sid` is absent for flows that establish no SSO session, `client_credentials` among them. Treat a missing `sid` as "not session-bound", not as an invalid token.
 
-Protocol mappers (configured through [client scopes](/en/discover/core-concepts/client-scopes)) inject additional claims:
+### Identity and mapper claims
+
+`preferred_username` and `email` are written directly when the matching scope is granted. Everything else comes from protocol mappers configured on [client scopes](/en/discover/core-concepts/client-scopes), and is flattened into the payload:
 
 | Claim | Source |
 |---|---|
-| `realm_roles` | User's realm role names |
-| `client_roles` | User's client-specific role names |
-| `permissions` | Resolved permission bitmask |
-| `preferred_username` | Username |
-| `email` | Email address |
-| `given_name` | First name |
-| `family_name` | Last name |
+| `preferred_username` | `profile` scope |
+| `given_name`, `family_name` | `profile` scope |
+| `email`, `email_verified` | `email` scope |
+| `realm_access.roles` | `roles` scope, through `oidc-usermodel-realm-role-mapper` |
 
-## Token Lifetimes
+Because mappers are configurable, the exact claim set depends on the scopes assigned to the client.
 
-Token lifetimes are configured at two levels:
+## Token lifetimes
 
-1. **Realm defaults**: Apply to all clients in the realm
-2. **Client overrides**: Take precedence when set
+Lifetimes come from two places:
 
-| Token | Realm Default | Client Override |
+1. Realm defaults, which apply to every client in the realm.
+2. Client overrides, which win when they are set.
+
+| Token | Realm default | Client override |
 |---|---|---|
-| Access Token | `access_token_lifetime` (300s) | `access_token_lifetime` |
-| Refresh Token | `refresh_token_lifetime` (86400s) | `refresh_token_lifetime` |
-| ID Token | `id_token_lifetime` (300s) | `id_token_lifetime` |
-| Temporary Token | `temporary_token_lifetime` (300s) | `temporary_token_lifetime` |
+| Access token | `access_token_lifetime_secs` (300s) | `access_token_lifetime` |
+| Refresh token | `refresh_token_lifetime_secs` (86400s) | `refresh_token_lifetime` |
+| ID token | `id_token_lifetime_secs` (300s) | `id_token_lifetime` |
+| Temporary token | `temporary_token_lifetime_secs` (300s) | `temporary_token_lifetime` |
 
-The resolution rule is simple: if the client defines an override, use it. Otherwise, fall back to the realm default.
+The rule: if the client sets an override, use it, otherwise fall back to the realm.
 
-## Token Generation Chain
+## Token generation chain
 
 ```mermaid
 graph LR
@@ -83,9 +86,9 @@ graph LR
 5. The token is signed using the realm's signing key and algorithm
 6. Access, refresh, and (optionally) ID tokens are returned
 
-## Token Introspection
+## Token introspection
 
-Resource servers can validate tokens by calling the introspection endpoint:
+A resource server validates a token by calling the introspection endpoint:
 
 ```bash
 curl -X POST http://localhost:3333/realms/{realm}/protocol/openid-connect/token/introspect \
@@ -95,4 +98,4 @@ curl -X POST http://localhost:3333/realms/{realm}/protocol/openid-connect/token/
   -d "client_secret=my-secret"
 ```
 
-The response includes `active: true/false` and the full set of token claims when active.
+The response carries `active: true` or `active: false`, plus the full claim set when the token is still live.

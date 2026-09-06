@@ -7,24 +7,24 @@ order: 21
 
 # Email & Templates
 
-FerrisKey sends transactional emails for password resets, magic link authentication, and email verification. Delivery is configured per realm through a dedicated SMTP setup, and each email type can be customized with your own HTML template.
+FerrisKey sends transactional email for password resets, magic link sign-in, and email verification. Delivery is configured per realm, and each email type can be pointed at a template of your own.
 
 ## Configure SMTP
 
-SMTP is stored in the database at the realm level — not as a global environment variable. Each realm can use a different mail provider independently.
+SMTP settings live in the database, on the realm, not in a global environment variable. Two realms in the same deployment can use completely different mail providers.
 
 :::callout{variant="info" title="No global SMTP"}
 SMTP is configured per realm, not globally. See the [Configuration guide](/en/discover/guides/configuration) for the short overview. This page covers the full field reference and API.
 :::
 
-### SMTP Fields
+### SMTP fields
 
 | Field | Type | Notes |
 |---|---|---|
 | `host` | String | SMTP server hostname |
 | `port` | u16 | Port number (1–65535) |
 | `username` | String | SMTP authentication username |
-| `password` | String | SMTP authentication password — write-only, never returned by the API |
+| `password` | String | SMTP authentication password. Write-only: the API never returns it |
 | `from_email` | String | Sender address, must be a valid email |
 | `from_name` | String | Sender display name |
 | `encryption` | Enum | `tls` \| `starttls` \| `none` |
@@ -33,11 +33,11 @@ SMTP is configured per realm, not globally. See the [Configuration guide](/en/di
 
 | Mode | Port | When to use |
 |---|---|---|
-| `tls` | 465 | Implicit TLS from the first byte — preferred for modern providers |
-| `starttls` | 587 | Plain connection upgraded to TLS — common in corporate relays |
-| `none` | 25 / any | No encryption — use only on a trusted local network or for testing |
+| `tls` | 465 | Implicit TLS from the first byte. What most modern providers want |
+| `starttls` | 587 | Plain connection upgraded to TLS. Common on corporate relays |
+| `none` | 25 / any | No encryption. Only on a trusted local network, or for testing |
 
-### SMTP API Endpoints
+### SMTP API endpoints
 
 All endpoints are scoped to a realm and require authentication.
 
@@ -47,9 +47,9 @@ All endpoints are scoped to a realm and require authentication.
 | `PUT` | `/realms/{realm_name}/smtp-config` | Create or replace the config |
 | `DELETE` | `/realms/{realm_name}/smtp-config` | Remove the config |
 
-**Required permissions:** reading SMTP config requires view access to the realm. Creating, updating, or deleting requires `ManageRealm`. There are no dedicated SMTP permissions beyond the realm permission gates.
+**Required permissions:** reading the SMTP config requires view access to the realm. Creating, updating, or deleting it requires `ManageRealm`. There are no SMTP-specific permissions beyond the realm gates.
 
-### Configure SMTP in the Console
+### Configure SMTP in the console
 
 ::::step-group
 :::step{title="Open Realm Settings"}
@@ -84,9 +84,9 @@ The API never returns the SMTP password. If you need to rotate credentials, subm
 
 ---
 
-## Transactional Emails
+## Transactional emails
 
-FerrisKey sends exactly three types of transactional email. Each is tied to a realm feature toggle.
+There are three types of transactional email, each gated by a realm toggle.
 
 | Email type | Identifier | Sent when | Realm toggle required |
 |---|---|---|---|
@@ -94,29 +94,29 @@ FerrisKey sends exactly three types of transactional email. Each is tied to a re
 | Magic link | `magic_link` | A user requests passwordless email login | `magic_link_enabled` |
 | Email verification | `email_verification` | A user must verify their email address | `email_verification_enabled` |
 
-Enabling these toggles in Realm Settings activates the corresponding flow. FerrisKey will use the default built-in template unless you assign a custom one.
+Turning a toggle on in Realm Settings activates the matching flow. Until you assign a template of your own, FerrisKey uses the built-in default.
 
 ---
 
-## Customizing Templates
+## Customizing templates
 
-### Template Engine
+### Template engine
 
-FerrisKey uses a lightweight custom interpolation engine — not Handlebars or Tera. Placeholders use double-brace syntax:
+Templates are rendered by a small interpolation engine written for the purpose, not Handlebars or Tera. Placeholders use double braces:
 
 ```text
 {{variable_name}}
 ```
 
-All interpolated values are HTML-escaped before insertion (`&`, `<`, `>`, `"`, `'`), which prevents injection attacks in the rendered email.
+Every interpolated value is HTML-escaped before insertion (`&`, `<`, `>`, `"`, `'`), so a template cannot be turned into an injection vector.
 
 :::callout{variant="info" title="HTML escaping"}
-Values inserted via `{{...}}` are always HTML-escaped. If a user's name is `Alice <script>`, it renders as `Alice &lt;script&gt;` in the final email — safe to embed in HTML.
+Values inserted via `{{...}}` are always HTML-escaped. If a user's name is `Alice <script>`, it renders as `Alice &lt;script&gt;` in the final email, safe to embed in HTML.
 :::
 
 Templates are stored as a JSON `structure` that FerrisKey renders to MJML and then to HTML before sending.
 
-### Available Variables
+### Available variables
 
 These variables are available in every template:
 
@@ -157,7 +157,7 @@ Example response for `reset_password`:
 }
 ```
 
-### Template API Endpoints
+### Template API endpoints
 
 | Method | Path | Description |
 |---|---|---|
@@ -173,9 +173,9 @@ Example response for `reset_password`:
 
 **Required permissions:** `ViewEmailTemplates` to read. `ManageEmailTemplates` to create, update, or delete. `ManageRealm` also grants both.
 
-### Linking a Template to an Email Type
+### Linking a template to an email type
 
-Creating a template does not activate it automatically. You must link it to the realm by updating the realm settings:
+Creating a template does not activate it. Point the realm at it by updating realm settings:
 
 | Realm setting field | Applies to |
 |---|---|

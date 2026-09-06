@@ -7,9 +7,9 @@ order: 16
 
 # Authentication
 
-FerrisKey implements the OAuth 2.0 and OpenID Connect specifications. Authentication always produces tokens, the grant type determines how the user (or client) proves their identity.
+FerrisKey implements OAuth 2.0 and OpenID Connect. Authentication always ends in tokens; the grant type decides how the user, or the client, proves who they are.
 
-## OpenID Connect Discovery
+## OpenID Connect discovery
 
 OpenID Connect applications need to know where the authorization server lives and which endpoints it exposes. FerrisKey publishes that information through the discovery endpoint:
 
@@ -34,69 +34,69 @@ This endpoint returns a JSON document that OIDC clients can read automatically. 
 | `jwks_uri` | Where public signing keys are exposed so tokens can be verified |
 | `scopes_supported` | Which scopes can be requested, such as `openid`, `profile`, and `email` |
 
-Most applications use discovery so you do not have to paste every endpoint by hand. You give the application either the discovery endpoint or the issuer URL, and it learns the rest from FerrisKey.
+Most applications support discovery, so you rarely paste endpoints by hand. Give the application the discovery URL or the issuer, and it reads the rest from FerrisKey.
 
-:::callout{variant="info" title="Issuer and discovery are not always the same setting"}
-If an application asks for the **issuer** or **authority**, use the realm URL, for example `https://sso.example.com/realms/home`. If it asks for the **discovery endpoint** or **OpenID configuration URL**, use the full `/.well-known/openid-configuration` URL.
+:::callout{variant="info" title="Issuer and discovery are not the same setting"}
+When an application asks for the issuer or the authority, give it the realm URL, for example `https://sso.example.com/realms/home`. When it asks for the discovery endpoint or the OpenID configuration URL, give it the full `/.well-known/openid-configuration` address.
 :::
 
-## Grant Types
+## Grant types
 
-### Authorization Code
+### Authorization code
 
-The most secure flow for web applications. The user is redirected to FerrisKey, authenticates, and is sent back to the client with an authorization code that gets exchanged for tokens.
+The safest flow for web applications. The user is redirected to FerrisKey, authenticates there, and comes back to the client with a code that the client exchanges for tokens.
 
-**Flow:**
+The steps:
 1. Client redirects user to `/realms/{realm}/protocol/openid-connect/auth`
 2. User authenticates (credentials, MFA if required)
 3. FerrisKey redirects back with a `code` parameter
 4. Client exchanges the code at the token endpoint (server-side)
 5. FerrisKey returns access, refresh, and ID tokens
 
-**Best for:** Web applications, SPAs with a backend.
+Best for web applications and single-page apps with a backend.
 
-### Password (Resource Owner)
+### Password (resource owner)
 
-The client collects credentials directly and sends them to the token endpoint. Simple but less secure, the client handles the user's password.
+The client collects the credentials itself and posts them to the token endpoint. Simpler, and weaker: the client sees the user's password.
 
-**Flow:**
+The steps:
 1. Client sends `grant_type=password`, `username`, `password` to the token endpoint
 2. FerrisKey validates credentials
 3. If MFA is required, returns a temporary token with `requires_otp_challenge` status
 4. Client completes MFA challenge with the temporary token
 5. FerrisKey returns full tokens
 
-**Best for:** Trusted first-party applications, testing, CLI tools.
+Best for trusted first-party applications, testing, and CLI tools.
 
 :::callout{variant="warning" title="Direct access grants required"}
-The client must have `direct_access_grants_enabled` to use this flow.
+The client needs `direct_access_grants_enabled` for this flow to work.
 :::
 
-### Client Credentials
+### Client credentials
 
-Machine-to-machine authentication. The client authenticates with its own credentials (client ID + secret), no user involved.
+Machine to machine. The client authenticates with its own client id and secret, and no user is involved.
 
-**Flow:**
+The steps:
 1. Client sends `grant_type=client_credentials`, `client_id`, `client_secret`
 2. FerrisKey validates client credentials
 3. Returns an access token (no refresh token, no ID token)
 
-**Best for:** Backend services, cron jobs, microservice communication.
+Best for backend services, cron jobs, and calls between microservices.
 
-### Refresh Token
+### Refresh token
 
-Renew an expired access token without re-authentication.
+Renew an expired access token without sending the user back through login.
 
-**Flow:**
+The steps:
 1. Client sends `grant_type=refresh_token` with the refresh token
 2. FerrisKey validates the refresh token
 3. Returns new access and refresh tokens
 
-**Best for:** Any flow that issued a refresh token and needs to maintain a session.
+Best for any flow that issued a refresh token and needs to keep a session alive.
 
-## Authentication Chain
+## Authentication chain
 
-When a user authenticates, FerrisKey follows a strict chain:
+Every user authentication runs through the same chain:
 
 ```mermaid
 graph TD
@@ -112,14 +112,14 @@ graph TD
     MFA -->|No| T
 ```
 
-1. **Credential Validation**: Username and password are verified
-2. **Required Actions Check**: If the user has pending actions (ConfigureOtp, VerifyEmail, UpdatePassword), a temporary token is returned
-3. **MFA Check**: If TOTP or WebAuthn is configured, the user must complete the challenge
-4. **Token Issuance**: Full access, refresh, and ID tokens are generated
+1. Credential validation. The username and password are verified.
+2. Required actions. If any are pending (`configure_otp`, `verify_email`, `update_password`, `configure_passkey`), a temporary token comes back instead of the real thing.
+3. MFA. If TOTP or WebAuthn is configured, the challenge has to be answered.
+4. Token issuance. Access, refresh, and ID tokens are generated.
 
-## Auth Sessions
+## Auth sessions
 
-An **auth session** tracks the state of an in-progress authentication. It holds:
+An auth session tracks a login in progress. It holds:
 
 - The client and realm context
 - The redirect URI and OAuth2 parameters (`state`, `nonce`, `scope`)
@@ -127,4 +127,4 @@ An **auth session** tracks the state of an in-progress authentication. It holds:
 - WebAuthn challenge data (if applicable)
 - The linked Compass flow (if the flow engine is enabled)
 
-Auth sessions are short-lived and expire automatically.
+Auth sessions are short-lived and expire on their own.

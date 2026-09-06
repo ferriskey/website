@@ -7,7 +7,7 @@ order: 2
 
 # Getting Started
 
-This guide gets you to a working FerrisKey instance with your first authenticated user. You will start the Docker stack, create a realm, register a client, create a user, and request tokens.
+This guide takes you from nothing to a working FerrisKey instance with an authenticated user. You will start the Docker stack, create a realm, register a client, create a user, and request tokens.
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ Open `http://localhost:5555` in your browser and sign in with the default creden
 - **Username:** `admin`
 - **Password:** `admin`
 
-You'll land in the **master** realm, the built-in realm that manages all other realms.
+You land in the `master` realm, the built-in realm that manages all the others.
 :::
 ::::
 
@@ -54,9 +54,9 @@ You'll land in the **master** realm, the built-in realm that manages all other r
 The default admin credentials are for local development only. Change them immediately in any non-local environment by setting the `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables.
 :::
 
-## Deploy Without Cloning the Repository
+## Deploy without cloning the repository
 
-The quickstart above clones the repository, but you don't need the source code to run FerrisKey. The API, web app, and database migrations all ship as published images on `ghcr.io/ferriskey`. To deploy on a server, save the following as `docker-compose.yml` and start it directly — no checkout required:
+The quickstart above clones the repository, but you don't need the source to run FerrisKey. The API, web app, and database migrations all ship as published images on `ghcr.io/ferriskey`. To deploy on a server, save the following as `docker-compose.yml` and start it directly, with no checkout involved:
 
 ```yaml title="docker-compose.yml"
 services:
@@ -122,12 +122,39 @@ docker compose up -d
 The migration files are baked into the `ferriskey-api` image (under `/usr/local/src/ferriskey/migrations`), so the `db-migrations` service applies the schema without any checked-out source. These are the same images the repository's `registry` profile uses, extracted into a self-contained file you can drop onto any host or convert to a Docker Swarm stack.
 
 :::callout{variant="info" title="Pin a version for production"}
-The images above track the latest tag. For reproducible deployments, pin an explicit tag — for example `ghcr.io/ferriskey/ferriskey-api:vX.Y.Z` — on both the `api` and `db-migrations` services so they always run the same binary and schema.
+The images above track the latest tag. For reproducible deployments, pin an explicit tag (for example `ghcr.io/ferriskey/ferriskey-api:v0.7.0`) on both the `api` and `db-migrations` services, so they always run the same binary and schema.
 :::
+
+## Run everything in one container
+
+There is a third image, `ghcr.io/ferriskey/ferriskey-standalone`, that bundles the API and the web app behind a single nginx process. It is the quickest way to get an instance up on one host, and it is what the repository's `standalone` profile starts:
+
+```bash
+docker compose --profile standalone-registry up -d
+```
+
+Everything is served from `http://localhost:8090`, with the API mounted under `/api`:
+
+```yaml title="Standalone service"
+standalone:
+  image: ghcr.io/ferriskey/ferriskey-standalone
+  environment:
+    DATABASE_HOST: db
+    DATABASE_NAME: ferriskey
+    DATABASE_USER: ferriskey
+    DATABASE_PASSWORD: ferriskey
+    SERVER_ROOT_PATH: /api
+    ALLOWED_ORIGINS: http://localhost:8090
+    WEBAPP_URL: http://localhost:8090
+  ports:
+    - 8090:80
+```
+
+The standalone image runs its own migrations at startup, so there is no separate migration service. It still needs an external PostgreSQL.
 
 ## Upgrading FerrisKey
 
-Schema changes ship inside the API image, so upgrading a running stack is "pull, migrate, restart":
+Schema changes ship inside the API image, so upgrading a running stack means pull, migrate, restart.
 
 ::::step-group
 :::step{title="Pull the new images"}
@@ -137,7 +164,7 @@ docker compose pull
 :::
 
 :::step{title="Apply new migrations"}
-The `db-migrations` service runs `sqlx migrate run`, which only applies migrations that have not run yet — so it is safe to run on every upgrade:
+The `db-migrations` service runs `sqlx migrate run`, which only applies migrations that have not run yet, so it is safe on every upgrade:
 
 ```bash
 docker compose up -d db-migrations
@@ -154,10 +181,10 @@ docker compose up -d api webapp
 ::::
 
 :::callout{variant="warning" title="Keep api and migrations on the same tag"}
-Always pull the `api` and `db-migrations` services from the **same image tag**. Running a newer API against an older schema — or an older API against a newer schema — can fail at startup.
+Always pull the `api` and `db-migrations` services from the same image tag. A newer API against an older schema, or an older API against a newer one, can fail at startup.
 :::
 
-## Create Your First Realm
+## Create your first realm
 
 A realm is an isolated tenant. Users, clients, roles, and credentials all live inside a realm.
 
@@ -171,7 +198,7 @@ Use the realm selector in the sidebar to switch to `my-app`. All subsequent oper
 :::
 ::::
 
-## Register a Client
+## Register a client
 
 A client represents an application that uses FerrisKey for authentication.
 
@@ -191,7 +218,7 @@ If you want to test authentication directly via the API (password grant), enable
 :::
 ::::
 
-## Create a User
+## Create a user
 
 ::::step-group
 :::step{title="Create a user"}
@@ -223,15 +250,15 @@ curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
   -d "password=your-password"
 ```
 
-The response contains an `access_token`, `refresh_token`, and optionally an `id_token`. That means the user authenticated successfully.
+A response containing an `access_token`, a `refresh_token`, and optionally an `id_token` means the user authenticated.
 
-## Connect a Real Application
+## Connect a real application
 
-The password grant above is useful for a quick API test. For real applications, use browser-based SSO with the OpenID Connect authorization code flow.
+The password grant above is fine for a quick API test. Real applications should use browser-based SSO with the OpenID Connect authorization code flow.
 
-If you want to connect a dashboard, internal service, or self-hosted tool, follow the application SSO guide next. It shows which dashboard screens to use, what values to copy, and how to debug common setup mistakes.
+To connect a dashboard, an internal service, or a self-hosted tool, follow the application SSO guide next. It walks through which console screens to use, what values to copy, and how to debug the usual setup mistakes.
 
-## What's Next?
+## What's next?
 
 ::::card-group{cols=2}
 :::card{label="Core Concepts" icon="lucide:layers" href="/en/discover/core-concepts/realms"}

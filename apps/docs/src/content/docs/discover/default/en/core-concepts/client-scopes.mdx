@@ -7,57 +7,63 @@ order: 15
 
 # Client Scopes
 
-Client scopes control what information appears in tokens. A scope groups a set of **protocol mappers**: rules that extract user or client data and inject it as JWT claims.
+A client scope decides what ends up inside a token. It groups protocol mappers, which are the rules that pull data off a user or a client and write it into the JWT as claims.
 
-## Scope Types
+## Scope types
 
 | Type | Behavior |
 |---|---|
-| **Default** | Automatically included in every token issued for a client |
-| **Optional** | Only included when explicitly requested in the `scope` parameter |
-| **None** | Not assigned to any client by default |
+| Default | Included in every token issued for the client |
+| Optional | Included only when the client asks for it in the `scope` parameter |
+| None | Not assigned to the client at all |
 
-## Standard OIDC Scopes
+The same scope can be default for one client and optional for another. That is decided by the client scope mapping, not by the scope itself.
 
-FerrisKey includes the standard OpenID Connect scopes:
+## Scopes seeded by default
 
-| Scope | Claims |
+Every realm is seeded with a standard set of OIDC scopes, and every client in the realm gets them assigned.
+
+| Scope | Assigned as | Claims it produces |
+|---|---|---|
+| `openid` | default | none of its own; marks the request as OIDC |
+| `profile` | default | `given_name`, `family_name`, `preferred_username` |
+| `email` | default | `email`, `email_verified` |
+| `roles` | default | `realm_access.roles` |
+| `offline_access` | optional | none of its own |
+| `phone` | optional | `phone_number` |
+| `address` | optional | `address` |
+
+## Protocol mappers
+
+A mapper is identified by a `mapper_type` string. FerrisKey keeps the Keycloak names, so configuration written for Keycloak is recognizable here.
+
+| `mapper_type` | What it does |
 |---|---|
-| `openid` | `sub` (subject identifier) |
-| `profile` | `name`, `family_name`, `given_name`, `preferred_username` |
-| `email` | `email`, `email_verified` |
-| `address` | `address` |
-| `phone` | `phone_number`, `phone_number_verified` |
-| `offline_access` | Enables refresh token issuance |
-| `introspect` | Allows token introspection |
+| `oidc-usermodel-property-mapper` | Maps a built-in user property (username, email, first name) to a claim |
+| `oidc-usermodel-attribute-mapper` | Maps a custom user attribute to a claim |
+| `oidc-usermodel-realm-role-mapper` | Writes the user's realm roles into the token |
+| `oidc-usermodel-client-role-mapper` | Writes the user's client roles into the token |
+| `oidc-group-membership-mapper` | Writes the user's group memberships |
+| `oidc-organization-membership-mapper` | Writes the user's organization memberships |
+| `oidc-organization-detail-mapper` | Writes details of the active organization |
+| `oidc-organization-role-mapper` | Writes the user's roles within an organization |
+| `oidc-audience-mapper` | Adds a value to the `aud` claim |
+| `oidc-hardcoded-claim-mapper` | Adds a fixed value as a claim |
 
-## Protocol Mappers
+Each mapper carries a JSON `config`. The keys follow the Keycloak convention:
 
-Protocol mappers define how data flows into tokens. Each mapper has a type that determines its behavior:
+```json title="Mapping the username into preferred_username"
+{
+  "user.attribute": "username",
+  "claim.name": "preferred_username",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
 
-| Mapper Type | Description |
-|---|---|
-| `user_attribute` | Maps a custom user attribute to a token claim |
-| `user_property` | Maps a built-in user property (username, email, etc.) to a claim |
-| `user_realm_role_mapper` | Includes the user's realm roles in the token |
-| `user_client_role_mapper` | Includes the user's client-specific roles in the token |
-| `audience_mapper` | Adds an audience (`aud`) value to the token |
-| `hardcoded_claim_mapper` | Adds a static value as a claim |
+`claim.name` supports dotted paths, so `realm_access.roles` produces a nested object rather than a flat key with a dot in its name.
 
-Each mapper is configured with a JSON object specifying the source property, target claim name, and claim type.
-
-## Client Scope Mapping
-
-Scopes are linked to clients through **client scope mappings**. Each mapping specifies:
-
-- Which client the scope applies to
-- The scope type for that client (Default, Optional, or None)
-
-This means the same scope can be a default for one client and optional for another.
-
-## How Scopes Shape Tokens
-
-The token generation chain:
+## How scopes shape a token
 
 ```mermaid
 graph LR
@@ -68,12 +74,12 @@ graph LR
     J --> T[Sign Token]
 ```
 
-1. User authenticates to a client
-2. FerrisKey resolves which scopes apply (default + requested optional scopes)
-3. Protocol mappers from each active scope execute in order
-4. Mapper outputs become JWT claims
-5. The token is signed with the realm's signing key
+1. The user authenticates against a client.
+2. FerrisKey resolves which scopes apply: the client's default scopes, plus any optional ones the request asked for.
+3. The mappers on each active scope run.
+4. Their output becomes JWT claims, alongside the standard ones.
+5. The token is signed with the realm's key.
 
-:::callout{variant="info" title="Scope = claim contract"}
-Think of a scope as a contract between the client and the authorization server: "If you grant me the `profile` scope, I expect to receive the user's name and username in the token."
+:::callout{variant="info" title="A scope is a claim contract"}
+Read a scope as an agreement between the client and the authorization server: grant me `profile`, and I expect the user's name and username to come back in the token.
 :::

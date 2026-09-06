@@ -7,11 +7,15 @@ order: 20
 
 # Configuration
 
-FerrisKey is configured through environment variables. Every setting has a sensible default for local development, override only what you need.
+The FerrisKey API is configured entirely through command-line flags, each of which has a matching environment variable. Every setting has a default that works for local development, so you only override what your deployment needs.
 
-## Environment Variables
+Run `ferriskey-api --help` to see the flags and their long descriptions straight from the binary.
+
+## Environment variables
 
 ### Admin
+
+The admin account is created on first boot in the `master` realm.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -36,29 +40,57 @@ FerrisKey is configured through environment variables. Every setting has a sensi
 |---|---|---|
 | `SERVER_HOST` | `0.0.0.0` | Bind address |
 | `SERVER_PORT` | `3333` | HTTP port |
-| `SERVER_ROOT_PATH` | None | URL path prefix (for reverse proxies) |
-| `ALLOWED_ORIGINS` | None | Comma-separated CORS origins |
-| `WEBAPP_URL` | None | Frontend URL (used for redirects) |
+| `SERVER_ROOT_PATH` | empty | URL path prefix, for deployments behind a reverse proxy. A leading `/` is added if you omit it |
+| `SERVER_PUBLIC_URL` | unset | The origin browsers and service providers reach this deployment at, as `scheme://host[:port]` |
+| `ALLOWED_ORIGINS` | empty | Comma-separated browser origins allowed on every route |
+| `WEBAPP_URL` | `http://localhost:5555` | URL of the admin console, used when building links |
+| `ENV` | `development` | Deprecated. Kept for compatibility and ignored by new code |
+
+`ALLOWED_ORIGINS` deserves a note of its own. Each entry must be a serialized origin (`scheme://host[:port]`), with no path and no wildcard. It applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Clients also declare their own web origins per realm, but those only cover realm-scoped routes, so a console served from a different origin than the API still needs its origin listed here.
+
+:::callout{variant="warning" title="SERVER_PUBLIC_URL and SAML"}
+Leave `SERVER_PUBLIC_URL` unset and FerrisKey derives the public origin from each request's `Host` header, which is the historical behaviour. SAML needs it set: the entity id is signed into every assertion, so it must not change when a request arrives through a different hostname.
+:::
 
 ### TLS
 
+Both variables are required together. Set neither to serve plain HTTP and terminate TLS at your proxy.
+
 | Variable | Default | Description |
 |---|---|---|
-| `TLS_CERT_PATH` | None | Path to TLS certificate |
-| `TLS_KEY_PATH` | None | Path to TLS private key |
+| `SERVER_TLS_CERT` | unset | Path to the certificate file, in PEM format |
+| `SERVER_TLS_KEY` | unset | Path to the private key file, in PEM format |
 
 ### Logging
 
 | Variable | Default | Description |
 |---|---|---|
-| `LOG_FILTER` | `info` | Log level filter (trace, debug, info, warn, error) |
-| `LOG_JSON` | `false` | Output logs in JSON format |
+| `LOG_FILTER` | `info` | [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) directives, for example `info,ferriskey_core=debug` |
+| `LOG_JSON` | `false` | Emit structured JSON logs instead of human-readable lines |
 
-## Deployment Examples
+### Observability
+
+| Variable | Default | Description |
+|---|---|---|
+| `ACTIVE_OBSERVABILITY` | `false` | Turn on tracing and metrics export |
+| `OTLP_ENDPOINT` | unset | OTLP collector endpoint for traces |
+| `METRICS_ENDPOINT` | unset | Collector endpoint for metrics |
+
+Prometheus metrics are also exposed directly on `/metrics`, with no collector needed.
+
+## Generating the OpenAPI spec
+
+The API binary carries a subcommand that prints its OpenAPI document without touching the database:
+
+```bash
+ferriskey-api gen-api --output openapi.json
+```
+
+Omit `--output` to write the spec to stdout.
+
+## Deployment examples
 
 ### Docker Compose
-
-Configure FerrisKey by setting environment variables in your `docker-compose.yaml`:
 
 ```yaml title="docker-compose.override.yaml"
 services:
@@ -73,12 +105,13 @@ services:
       - ADMIN_PASSWORD=a-strong-admin-password
       - ADMIN_EMAIL=admin@yourorg.com
       - ALLOWED_ORIGINS=https://iam.yourorg.com
+      - WEBAPP_URL=https://iam.yourorg.com
       - LOG_FILTER=info
 ```
 
-### Bare Metal
+### Bare metal
 
-Set environment variables directly or use a `.env` file alongside the binary:
+Set the variables directly, or drop a `.env` file next to the binary:
 
 ```bash title=".env"
 DATABASE_HOST=localhost
@@ -90,25 +123,21 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=a-strong-admin-password
 ADMIN_EMAIL=admin@yourorg.com
 ALLOWED_ORIGINS=https://iam.yourorg.com
+WEBAPP_URL=https://iam.yourorg.com
 SERVER_PORT=3333
 LOG_FILTER=info
 ```
 
-Then run the API server:
+Then run the server:
 
 ```bash
 ./ferriskey-api
 ```
 
-## SMTP Configuration
+## SMTP configuration
 
-Email delivery (magic links, password reset, email verification) is configured per-realm through the admin console. Navigate to **Realm Settings → Email** and configure:
-
-- **SMTP Host** and **Port**
-- **From address**
-- **Authentication credentials** (if required)
-- **TLS/STARTTLS** settings
+Email delivery for magic links, password resets, and email verification is configured per realm, in the database, not through environment variables. Open the admin console, go to **Realm Settings → Email**, and fill in the host, port, sender address, credentials, and encryption mode.
 
 :::callout{variant="info" title="No global SMTP"}
-SMTP is configured at the realm level, not globally. Each realm can use a different mail provider.
+Every realm carries its own SMTP configuration and can point at a different mail provider. The [Email & Templates guide](/en/discover/guides/email) has the full field reference and the API endpoints.
 :::
