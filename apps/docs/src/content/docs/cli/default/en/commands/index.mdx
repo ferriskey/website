@@ -1,0 +1,69 @@
+---
+title: Overview
+description: "Index of every ferris-ctl command: what each one is for, and where its reference page lives."
+icon: square-terminal
+permalink: /en/cli/commands
+order: 0
+---
+
+# Commands
+
+`ferris-ctl` exposes seven top-level commands. Every one of them accepts the [global flags](/en/cli/overview#global-flags), and every one resolves where to connect, who you are, and which realm to act on before it sends anything — see [Authentication](/en/cli/authentication).
+
+## Connect and authenticate
+
+::::card-group{cols=3}
+:::card{label="context" icon="lucide:server" href="/en/cli/commands/context"}
+Named connection profiles storing a server URL, a client, and a default realm. Switch environments without retyping flags.
+:::
+:::card{label="login" icon="lucide:log-in" href="/en/cli/commands/login"}
+Sign in with the OAuth 2.0 Device Authorization Grant and persist the session for every later command.
+:::
+:::card{label="logout" icon="lucide:log-out" href="/en/cli/commands/logout"}
+Drop the stored session by deleting the credentials file.
+:::
+::::
+
+## Administer a realm
+
+::::card-group{cols=3}
+:::card{label="realm" icon="lucide:layers" href="/en/cli/commands/realm"}
+Create, inspect, and delete realms — and import one from an external source.
+:::
+:::card{label="client" icon="lucide:box" href="/en/cli/commands/client"}
+Create, inspect, and delete OAuth2 clients within a realm.
+:::
+:::card{label="user" icon="lucide:users" href="/en/cli/commands/user"}
+Create, inspect, and delete users within a realm.
+:::
+::::
+
+## Import
+
+::::card-group{cols=2}
+:::card{label="source" icon="lucide:database" href="/en/cli/commands/source"}
+Store reusable import sources, so credentials and URLs are not repeated on every import.
+:::
+:::card{label="Importing realms" icon="lucide:import" href="/en/cli/import/overview"}
+The import guide: from a description file, a live Keycloak, or a live Zitadel instance.
+:::
+::::
+
+## At a glance
+
+| Command | Purpose |
+|---------|---------|
+| [`context`](/en/cli/commands/context) | Manage connection contexts |
+| [`realm`](/en/cli/commands/realm) | Manage realms |
+| [`client`](/en/cli/commands/client) | Manage OAuth2 clients |
+| [`user`](/en/cli/commands/user) | Manage users |
+| [`source`](/en/cli/commands/source) | Manage reusable import sources |
+| [`login`](/en/cli/commands/login) | Sign in via the OAuth 2.0 Device Authorization Grant |
+| [`logout`](/en/cli/commands/logout) | Remove the stored login session |
+
+Each command carries its own help, down to the subcommand:
+
+```bash
+ferris-ctl <command> --help
+ferris-ctl <command> <subcommand> --help
+```
