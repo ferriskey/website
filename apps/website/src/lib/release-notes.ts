@@ -19,6 +19,24 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.8.0',
+    publishedAt: '2026-09-15T23:02:24Z',
+    title: 'SAML 2.0, a rebuilt administration console, and a reworked codebase',
+    summary:
+      'FerrisKey 0.8.0 adds a complete SAML 2.0 identity provider next to OIDC and rebuilds the entire administration interface, but most of the cycle went into the foundations: the workspace was split from 10 crates into 36 and the test suite grew from 395 to 1245 tests.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.8.0',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.7.0...v0.8.0',
+    highlights: [
+      'Ships a complete SAML 2.0 identity provider alongside OIDC: AuthnRequest parsing, HTTP bindings, exclusive XML canonicalisation, enveloped XML-DSig signatures, a self-signed X509 certificate derived from the realm signing key, and service provider configuration from the console.',
+      'Rebuilds the whole administration interface in the FerrisKey style, covering 15 IAM screens and 5 console sections, replaces the two user interfaces that used to coexist, and adds light, dark, and system themes.',
+      'Splits the workspace from 10 crates into 36 with explicit boundaries, grows the test suite from 395 to 1245 tests, and wires the integration suites that continuous integration had never actually run.',
+      'Anchors SSO on the user session rather than the access token so revoking a session also invalidates its refresh tokens, chains the SeaWatch audit log with hashes to make tampering visible, and lands around twenty security fixes including PKCE, refresh token rotation with reuse detection, account lockout, and signed webhook deliveries.',
+    ],
+    transition:
+      'Where 0.7 pushed outward on protocol coverage and branding, 0.8 turns inward. The release spends as much effort on crate boundaries, tests, and continuous integration as on features, so the surface built up over the previous releases now rests on something that can be verified.',
+  },
+  {
     version: 'v0.7.1',
     publishedAt: '2026-07-03T14:50:01Z',
     title: 'Nginx packaging fix for the 0.7 line',
@@ -258,6 +276,20 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.8.0': {
+      title:
+        "SAML 2.0, une console d'administration reconstruite et une codebase reprise en profondeur",
+      summary:
+        "FerrisKey 0.8.0 ajoute un fournisseur d'identité SAML 2.0 complet à côté d'OIDC et reconstruit toute l'interface d'administration, mais l'essentiel du cycle est passé dans les fondations : le workspace est découpé de 10 crates en 36 et la suite de tests passe de 395 à 1245 tests.",
+      highlights: [
+        "Livre un fournisseur d'identité SAML 2.0 complet à côté d'OIDC : parsing des AuthnRequest, bindings HTTP, canonicalisation XML exclusive, signatures XML-DSig enveloppées, certificat X509 auto-signé dérivé de la clé de signature du realm et configuration des service providers depuis la console.",
+        "Reconstruit toute l'interface d'administration au style FerrisKey, sur 15 écrans IAM et 5 sections de console, remplace les deux interfaces qui cohabitaient et ajoute les thèmes clair, sombre et système.",
+        "Découpe le workspace de 10 crates en 36 aux frontières explicites, fait passer la suite de tests de 395 à 1245 tests et branche les suites d'intégration que l'intégration continue n'avait jamais réellement exécutées.",
+        "Ancre le SSO sur la session utilisateur plutôt que sur l'access token, si bien que révoquer une session invalide aussi ses refresh tokens, chaîne le journal d'audit SeaWatch par hash pour rendre toute altération visible, et livre une vingtaine de correctifs de sécurité dont PKCE, la rotation des refresh tokens avec détection de réutilisation, le verrouillage de compte et la signature des livraisons webhook.",
+      ],
+      transition:
+        "Là où la 0.7 poussait vers l'extérieur sur la couverture protocolaire et le branding, la 0.8 se tourne vers l'intérieur. Elle consacre autant d'effort aux frontières entre crates, aux tests et à l'intégration continue qu'aux fonctionnalités, pour que la surface accumulée au fil des releases repose enfin sur quelque chose de vérifiable.",
+    },
     'v0.7.1': {
       title: 'Correctif de packaging Nginx pour la ligne 0.7',
       summary:
