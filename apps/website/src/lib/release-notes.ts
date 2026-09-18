@@ -37,6 +37,23 @@ export const releaseNotes: ReleaseNote[] = [
       'Where 0.7 pushed outward on protocol coverage and branding, 0.8 turns inward. The release spends as much effort on crate boundaries, tests, and continuous integration as on features, so the surface built up over the previous releases now rests on something that can be verified.',
   },
   {
+    version: 'v0.7.2',
+    publishedAt: '2026-07-30T21:27:37Z',
+    title: 'Realm roles restored in issued tokens on the 0.7 line',
+    summary:
+      'A patch for the 0.7 line that backports a token assembly fix: realm roles assigned directly to a user were dropped while claims were built, so realm_access.roles came back empty even with the default roles client scope and a realm role mapper in place.',
+    kind: 'patch',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.7.2',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.7.1...v0.7.2',
+    highlights: [
+      'Backports the claim assembly fix for realm roles assigned directly to a user, which were silently skipped and never reached the realm role mapper.',
+      'Restores realm_access.roles for users whose roles come from a direct assignment rather than from a group, which previously required inheriting the role through a group to work at all.',
+      'Realigns the workspace, Helm chart, and operator chart versions so the published artifacts stay consistent.',
+    ],
+    transition:
+      'A single backported commit onto the 0.7 line, so deployments that rely on realm roles inside tokens did not have to wait for the 0.8 cycle to land.',
+  },
+  {
     version: 'v0.7.1',
     publishedAt: '2026-07-03T14:50:01Z',
     title: 'Nginx packaging fix for the 0.7 line',
@@ -289,6 +306,18 @@ export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteT
       ],
       transition:
         "Là où la 0.7 poussait vers l'extérieur sur la couverture protocolaire et le branding, la 0.8 se tourne vers l'intérieur. Elle consacre autant d'effort aux frontières entre crates, aux tests et à l'intégration continue qu'aux fonctionnalités, pour que la surface accumulée au fil des releases repose enfin sur quelque chose de vérifiable.",
+    },
+    'v0.7.2': {
+      title: 'Rôles de realm rétablis dans les tokens émis sur la ligne 0.7',
+      summary:
+        "Un patch pour la ligne 0.7 qui rétroporte un correctif d'assemblage des tokens : les rôles de realm assignés directement à un utilisateur étaient perdus lors de la construction des claims, si bien que realm_access.roles revenait vide même avec le client scope roles par défaut et un mapper de rôles de realm configuré.",
+      highlights: [
+        "Rétroporte le correctif d'assemblage des claims pour les rôles de realm assignés directement à un utilisateur, qui étaient ignorés en silence et n'atteignaient jamais le mapper de rôles de realm.",
+        "Rétablit realm_access.roles pour les utilisateurs dont les rôles viennent d'une assignation directe et non d'un groupe, ce qui obligeait jusque-là à passer par un groupe pour que le rôle remonte.",
+        'Réaligne les versions du workspace, du chart Helm et du chart operator pour garder des artefacts cohérents.',
+      ],
+      transition:
+        "Un unique commit rétroporté sur la ligne 0.7, pour que les déploiements qui s'appuient sur les rôles de realm dans les tokens n'aient pas à attendre la fin du cycle 0.8.",
     },
     'v0.7.1': {
       title: 'Correctif de packaging Nginx pour la ligne 0.7',
