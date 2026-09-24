@@ -7,36 +7,59 @@ order: 22
 
 # Querying & Integration
 
-SeaWatch events are stored in PostgreSQL and queryable through the FerrisKey admin API. You can filter, paginate, and export events for compliance reporting, incident investigation, or SIEM integration.
+SeaWatch events are stored in PostgreSQL and read back through one endpoint. You can filter, paginate, and export them for compliance reporting, incident investigation, or SIEM integration.
 
-## Querying Events
+## The endpoint
 
-The admin API exposes endpoints to list and filter security events within a realm:
+```
+GET /realms/{realm_name}/seawatch/v1/security-events
+```
 
-### Available Filters
+Reading events needs `view_events`, `manage_events` or `manage_realm`.
 
-| Filter | Description |
-|---|---|
-| `event_type` | Filter by specific event type (e.g., `login_failure`) |
-| `status` | Filter by `success` or `failure` |
-| `actor_id` | Events triggered by a specific user |
-| `actor_type` | Events by actor classification (`user`, `admin`, `system`, `service_account`) |
-| `target_type` | Events affecting a specific resource type |
-| `target_id` | Events affecting a specific resource |
-| `ip_address` | Events from a specific IP |
-| Time range | Events within a date/time window |
+:::callout{variant="warning" title="Mind the root path"}
+Paths here are written as the server exposes them with no root path, which is the default. Set `SERVER_ROOT_PATH` — the Helm chart sets `/api` — and every path below gains that prefix.
+:::
 
-### Example: every login failure for one user
+### Query parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `event_types` | `String` | Comma-separated list of event types. Note the plural |
+| `actor_id` | `UUID` | Events triggered by this account |
+| `client_id` | `UUID` | Events attributed to this client |
+| `ip_address` | `String` | Events from this address |
+| `from_timestamp` | `DateTime` | Events at or after this instant, RFC 3339 |
+| `to_timestamp` | `DateTime` | Events at or before this instant |
+| `limit` | `u32` | Page size |
+| `offset` | `u32` | Pagination offset |
+
+:::callout{variant="info" title="Fields you can read but not filter on"}
+An event carries more than you can query: `actor_type`, `status`, `target_type`, `target_id`, `resource`, `user_agent`, `trace_id` and a free-form `details` object are all in the payload, but none of them is a query parameter. Filter on them in your SIEM after ingestion, or narrow with `event_types` first.
+:::
+
+### Example: recent failed logins
 
 ```bash
-curl -X GET "http://localhost:3333/admin/realms/my-app/events?event_type=login_failure&target_id=USER_UUID" \
+curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?event_types=login_failure&limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### Example: recent admin actions
+### Example: everything one account did in a window
 
 ```bash
-curl -X GET "http://localhost:3333/admin/realms/my-app/events?actor_type=admin" \
+curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?\
+actor_id=USER_UUID&\
+from_timestamp=2026-09-01T00:00:00Z&\
+to_timestamp=2026-09-30T23:59:59Z" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### Example: several event types at once
+
+```bash
+curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?\
+event_types=client_secret_viewed,client_secret_rotated,role_permission_updated" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -73,7 +96,7 @@ Use [Webhooks](/en/modules/webhooks/overview) to react to SeaWatch-tracked event
 SeaWatch provides the audit trail required for the "Security" and "Availability" trust service criteria. Export events by time range to produce evidence for auditors.
 
 ### GDPR
-Track when user data is accessed (`login_success`), modified (`user_updated`), or deleted (`user_deleted`). SeaWatch makes it possible to answer data subject access requests with precise records.
+Track when an account is created (`user_created`), when its email is confirmed (`user_email_verified`), when its roles change (`role_assigned`, `role_unassigned`) and when it is deleted (`user_deleted`). SeaWatch makes it possible to answer data subject access requests with precise records.
 
 ### PCI DSS
 For environments handling payment data, SeaWatch captures all authentication and authorization events needed for PCI DSS Requirement 10 (Track and monitor all access to network resources and cardholder data).

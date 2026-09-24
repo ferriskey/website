@@ -1,137 +1,183 @@
 ---
 title: Custom Claims
-description: "Add business-specific claims to your tokens: real-world examples and patterns."
+description: "Real patterns for putting business data in a FerrisKey token, with working mapper configs."
 icon: plus
 order: 52
 ---
 
 # Custom Claims
 
-FerrisKey's default scopes cover standard OIDC claims. But real applications need more, user roles, tenant identifiers, subscription tiers, feature flags. Custom claims let you put exactly the data your application needs into the token, so your backend can make decisions without additional API calls.
+FerrisKey's default scopes cover the standard OIDC claims. Real applications need more: roles a gateway can enforce, a tenant identifier, a plan tier, feature flags. Custom claims put exactly that data in the token so your backend decides without a second call.
 
-## Common Patterns
+Every config below uses the dotted Keycloak-style keys the mappers actually read. See [Protocol Mappers](/en/modules/aegis/protocol-mappers) for the full key reference.
 
-### Realm roles in the access token
+## Realm roles for an API gateway
 
-Your API gateway needs to enforce role-based access control. Add a `user_realm_role_mapper` to include roles directly in the access token.
+Your gateway enforces role-based access on routes. The realm role mapper already writes roles into the token; the only decision is where.
 
-**Scope:** `roles` (Default)
-**Mapper:** `user_realm_role_mapper`
+**Scope:** `roles` (default, seeded in every realm)
+**Mapper:** `oidc-usermodel-realm-role-mapper`
+
 ```json
 {
-  "claim_name": "roles",
-  "add_to_id_token": false,
-  "add_to_access_token": true
+  "claim.name": "realm_access.roles",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
 }
 ```
 
-**Resulting token claim:**
-```json
+```json title="Resulting claim"
 {
-  "roles": ["admin", "editor", "viewer"]
+  "realm_access": {
+    "roles": ["admin", "editor", "viewer"]
+  }
 }
 ```
 
-Your API gateway reads `roles` from the token and allows/denies routes without calling FerrisKey.
+The gateway reads `realm_access.roles` and allows or denies the route without calling back to FerrisKey. Setting `id.token.claim` to `false` keeps roles out of the ID token, which the browser can read — the gateway is the only party that needs them.
 
-### Tenant identifier for multi-tenant SaaS
-
-Each realm represents a tenant. Inject the realm name as a claim so your backend knows which tenant database to query.
-
-**Scope:** `tenant` (Default)
-**Mapper:** `hardcoded_claim_mapper`
-```json
-{
-  "claim_name": "tenant",
-  "claim_value": "acme-corp",
-  "claim_type": "String",
-  "add_to_id_token": false,
-  "add_to_access_token": true
-}
-```
-
-:::callout{variant="info" title="One scope per realm"}
-Since the tenant value is realm-specific, you'll create this scope within each realm with the appropriate hardcoded value. Alternatively, use a `user_attribute` mapper if the tenant is stored as a user attribute.
+:::callout{variant="info" title="Flat claim instead of nested"}
+`claim.name` supports dotted paths, so `realm_access.roles` nests. If your gateway expects a flat array under `roles`, set `claim.name` to `roles` instead. The default is the nested form because that is what Keycloak-compatible libraries look for.
 :::
 
-### Permissions Bitmask
+## Tenant identifier for a multi-tenant backend
 
-FerrisKey uses bitwise permissions internally. Expose the resolved permission bitmask as a claim for fine-grained authorization:
+Each realm is a tenant, and the backend needs to know which tenant database to query.
 
-**Scope:** `permissions` (Default)
-**Mapper:** `user_attribute`
+**Scope:** a `tenant` scope, assigned as default
+**Mapper:** `oidc-hardcoded-claim-mapper`
+
 ```json
 {
-  "attribute": "permissions_bitmask",
-  "claim_name": "permissions",
-  "claim_type": "Integer",
-  "add_to_id_token": false,
-  "add_to_access_token": true
+  "claim.name": "tenant",
+  "claim.value": "acme-corp",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
 }
 ```
 
-Your backend performs bitwise AND checks against the `permissions` integer, fast and efficient.
+Since the value is realm-specific, you create this scope in each realm with the right value.
 
-### Audience for several resource servers
+:::callout{variant="info" title="When the tenant is per-user, not per-realm"}
+Store it as a user attribute and use `oidc-usermodel-attribute-mapper` with `"user.attribute": "tenant"` instead. And if tenancy is modelled with the [Organizations module](/en/modules/organization/overview), skip both: `oidc-organization-membership-mapper` writes the user's organizations, by alias, with no per-realm setup.
+:::
 
-Your tokens need to be accepted by both `api.yourapp.com` and `admin.yourapp.com`:
+## A numeric claim from a user attribute
 
-**Scope:** `multi-audience` (Default)
-**Mapper 1:** `audience_mapper` → `api.yourapp.com`
-**Mapper 2:** `audience_mapper` → `admin.yourapp.com`
+User attributes are stored as strings. `jsonType.label` casts on the way into the token, so the consumer gets a number rather than a string holding a number.
 
-**Resulting token claim:**
+**Mapper:** `oidc-usermodel-attribute-mapper`
+
 ```json
+{
+  "user.attribute": "seat_limit",
+  "claim.name": "seat_limit",
+  "jsonType.label": "Integer",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+`Boolean` works the same way, turning the string `"true"` into a real JSON boolean.
+
+## Audience for several resource servers
+
+Your tokens have to be accepted at both `api.yourapp.com` and `admin.yourapp.com`. Add one mapper per audience.
+
+**Mapper:** `oidc-audience-mapper`, twice
+
+```json title="Mapper 1"
+{
+  "included.client.audience": "api.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Mapper 2"
+{
+  "included.client.audience": "admin.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim"
 {
   "aud": ["my-client", "api.yourapp.com", "admin.yourapp.com"]
 }
 ```
 
-### Feature Flags
+:::callout{variant="warning" title="aud needs this mapper specifically"}
+`aud` is a reserved claim name: it is stripped after mappers run, so a hardcoded claim mapper pointed at `aud` silently does nothing. The audience mapper contributes audiences through a separate channel, which is why it works.
+:::
 
-Inject feature flags into tokens so your frontend knows which features to enable:
+## Feature flags in the ID token
 
-**Scope:** `features` (Optional, client requests it when needed)
-**Mapper:** `hardcoded_claim_mapper`
+The frontend decides which features to render, so the flags belong in the ID token it can read — not in the access token the API validates.
+
+**Scope:** a `features` scope, assigned as **optional** so only the clients that ask for it pay the token size
+**Mapper:** `oidc-hardcoded-claim-mapper`
+
 ```json
 {
-  "claim_name": "features",
-  "claim_value": "{\"new_dashboard\": true, \"beta_export\": false}",
-  "claim_type": "JSON",
-  "add_to_id_token": true,
-  "add_to_access_token": false
+  "claim.name": "features.new_dashboard",
+  "claim.value": "true",
+  "jsonType.label": "Boolean",
+  "access.token.claim": "false",
+  "id.token.claim": "true"
 }
 ```
 
+```json title="Resulting claim"
+{
+  "features": {
+    "new_dashboard": true
+  }
+}
+```
+
+The dotted `claim.name` nests each flag under one `features` object, so a second mapper writing `features.beta_export` merges into the same object instead of overwriting it.
+
+## Group membership for a hierarchy-aware app
+
+**Mapper:** `oidc-group-membership-mapper`
+
+```json
+{
+  "claim.name": "groups",
+  "membership": "direct",
+  "full.path": "true",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+`direct` emits only the groups the user is a direct member of. The default, `effective`, also emits every ancestor path — pick that one when the consumer checks for a parent group without reconstructing the hierarchy itself, and `direct` when you want smaller tokens and less org structure in them.
+
 ## Scope assignment strategy
 
-### Default vs Optional
-
-| Assign as Default when... | Assign as Optional when... |
+| Assign as Default when… | Assign as Optional when… |
 |---|---|
-| Every request from this client needs the claim | The claim contains sensitive data |
-| The claim is needed for authorization decisions | The claim is large (increases token size) |
-| Missing the claim would break the client | Only specific flows need the data |
+| Every request from this client needs the claim | The claim carries sensitive data |
+| The claim is needed for an authorization decision | The claim is large and would bloat every token |
+| Missing the claim would break the client | Only some flows need the data |
 
-### Per-client scope overrides
+## Before you debug the claim, check the key
 
-The same scope can have different types per client:
+A mapper whose config key is misspelled is accepted by the API and then ignored at token time — the `config` field is free-form JSON and nothing validates it. When a claim does not show up:
 
-- `roles` scope is **Default** for your admin dashboard (always needs roles)
-- `roles` scope is **Optional** for your public API (only needs roles for specific endpoints)
-- `roles` scope is **None** for a third-party integration (never gets roles)
+1. Check the keys are the dotted ones (`claim.name`, not `claim_name`).
+2. Check the claim name is not [reserved](/en/modules/aegis/protocol-mappers#reserved-claim-names).
+3. Check the scope is actually active on the client, default or requested by name.
+4. Use `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` to see the claims a client would get, without a full login.
 
-This lets you define scopes once and control exposure per client.
-
-## Debugging Claims
-
-To verify which claims end up in your tokens:
-
-1. Authenticate through the client
-2. Decode the access token (it's a JWT, use `jwt.io` or `base64 -d`)
-3. Check which claims are present
-4. If a claim is missing, verify:
-   - The scope is assigned to the client (as Default or Optional)
-   - If Optional, the client requested it in the `scope` parameter
-   - The mapper is configured with `add_to_access_token: true` (or `add_to_id_token` for ID tokens)
-   - The mapper's source data exists on the user (e.g., the attribute is set)
+::::card-group{cols=2}
+:::card{label="Protocol Mappers" icon="lucide:arrow-right-left" href="/en/modules/aegis/protocol-mappers"}
+All ten mapper types and every config key they read.
+:::
+:::card{label="JWT Claims" icon="lucide:file-json" href="/en/learn/jwt/claims"}
+What the standard claims mean before you add your own.
+:::
+::::

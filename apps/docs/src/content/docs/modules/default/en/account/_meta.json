@@ -1,0 +1,6 @@
+{
+  "icon": "user-cog",
+  "title": "Account",
+  "type": "group",
+  "order": 10
+}

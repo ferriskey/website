@@ -18,6 +18,11 @@ With Compass you get this instead:
 > Flow `01914b3c-...` for client `my-frontend` via `authorization_code`:
 > ✓ authorize (12ms) → ✓ credential_validation (85ms) → ✗ mfa_challenge (0ms, error: `invalid_otp`) → Flow failed at 97ms
 
+<img class="only-light" src="/dashboard/compass-light.jpg" alt="FerrisKey Compass dashboard listing authentication executions with grant type, outcome, step count and duration" />
+<img class="only-dark" src="/dashboard/compass-dark.jpg" alt="FerrisKey Compass dashboard listing authentication executions with grant type, outcome, step count and duration" />
+
+Each row is one authentication execution: its grant type, its outcome, how many steps it went through and how long it took. A `pending` row with zero steps is an authorization request that was started and never completed — normal in small numbers, and a signal when it is not.
+
 ## How it works
 
 With Compass on, every authentication request opens a `CompassFlow`. As the request moves through credential validation, the MFA challenge, token exchange, and finalization, each step is written as a `CompassFlowStep` with its own status and duration.

@@ -2,7 +2,7 @@
 title: Client Scopes
 description: "OAuth2 scopes, protocol mappers, and token claim control in FerrisKey."
 icon: scan
-order: 15
+order: 16
 ---
 
 # Client Scopes
@@ -28,10 +28,20 @@ Every realm is seeded with a standard set of OIDC scopes, and every client in th
 | `openid` | default | none of its own; marks the request as OIDC |
 | `profile` | default | `given_name`, `family_name`, `preferred_username` |
 | `email` | default | `email`, `email_verified` |
+| `organization` | default | `organizations` |
 | `roles` | default | `realm_access.roles` |
 | `offline_access` | optional | none of its own |
 | `phone` | optional | `phone_number` |
 | `address` | optional | `address` |
+
+<img class="only-light" src="/dashboard/client_scopes-light.jpg" alt="FerrisKey client scopes list showing the eight seeded scopes with their assignment and mapper counts" />
+<img class="only-dark" src="/dashboard/client_scopes-dark.jpg" alt="FerrisKey client scopes list showing the eight seeded scopes with their assignment and mapper counts" />
+
+:::callout{variant="info" title="openid and offline_access carry no mapper"}
+Two of the eight seeded scopes write no claim of their own. `openid` marks the request as OIDC and `offline_access` unlocks refresh-token issuance — both act on the flow, not on the payload. A scope with zero mappers is not necessarily misconfigured.
+:::
+
+The `organization` scope is the newest, and the only one whose two mappers deliberately target the **same** claim: the membership mapper contributes each organization's `id`, `name` and `alias`, the role mapper contributes `roles` and `clients.<id>.roles`, and the two deep-merge into one `organizations` object.
 
 ## Protocol mappers
 
@@ -62,6 +72,40 @@ Each mapper carries a JSON `config`. The keys follow the Keycloak convention:
 ```
 
 `claim.name` supports dotted paths, so `realm_access.roles` produces a nested object rather than a flat key with a dot in its name.
+
+## Managing scopes
+
+```
+GET    /realms/{realm_name}/client-scopes
+POST   /realms/{realm_name}/client-scopes
+GET    /realms/{realm_name}/client-scopes/{scope_id}
+PATCH  /realms/{realm_name}/client-scopes/{scope_id}
+DELETE /realms/{realm_name}/client-scopes/{scope_id}
+```
+
+Mappers live under their scope:
+
+```
+POST   /realms/{realm_name}/client-scopes/{scope_id}/protocol-mappers
+PATCH  /realms/{realm_name}/client-scopes/{scope_id}/protocol-mappers/{mapper_id}
+DELETE /realms/{realm_name}/client-scopes/{scope_id}/protocol-mappers/{mapper_id}
+```
+
+### Assigning a scope to a client
+
+```
+GET    /realms/{realm_name}/clients/{client_id}/client-scopes
+PUT    /realms/{realm_name}/clients/{client_id}/default-client-scopes/{scope_id}
+DELETE /realms/{realm_name}/clients/{client_id}/default-client-scopes/{scope_id}
+PUT    /realms/{realm_name}/clients/{client_id}/optional-client-scopes/{scope_id}
+DELETE /realms/{realm_name}/clients/{client_id}/optional-client-scopes/{scope_id}
+```
+
+A **default** scope applies to every request from that client. An **optional** scope applies only when the request names it in its `scope` parameter. The two lists are separate: assigning a scope as default does not remove it from the optional list, so move a scope by unassigning it from one and assigning it to the other.
+
+**Required permissions:** `view_client_scopes` or `manage_client_scopes` to read, `manage_client_scopes` to write. `manage_realm` grants both.
+
+`POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` previews the claims a client's current assignment produces, without a login.
 
 ## How scopes shape a token
 

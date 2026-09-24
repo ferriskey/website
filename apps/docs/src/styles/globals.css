@@ -112,3 +112,24 @@ pre .highlighted-word {
 .prose tbody td code {
   font-size: 0.8125rem;
 }
+
+/* Theme-paired screenshots.
+   Publish two files, `name-light.jpg` and `name-dark.jpg`, and mark the <img>
+   tags with .only-light / .only-dark so the reader sees the capture matching
+   the theme they are reading in. The theme is a `dark` class on <html>, so
+   these rules work without relying on Tailwind scanning MDX content. */
+.only-light {
+  display: block;
+}
+
+.only-dark {
+  display: none;
+}
+
+.dark .only-light {
+  display: none;
+}
+
+.dark .only-dark {
+  display: block;
+}

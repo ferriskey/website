@@ -50,9 +50,10 @@ A realm keeps users, clients, roles, and scopes together. Avoid using `master` f
 
 ::::step-group
 :::step{title="Open the realm selector"}
-Click the current realm name in the left sidebar. Select the realm that will own this application, or click **Create Realm** if you need a new one.
+Click the realm name in the **top bar**, next to the FerrisKey logo. Pick the realm that will own this application, or **Create realm** if you need a new one. The selector is searchable, which matters once a deployment holds more than a handful.
 
-<img src="/dashboard/realm_switch.png" alt="FerrisKey realm selector showing existing realms and the Create Realm action" />
+<img class="only-light" src="/dashboard/realm_switch-light.jpg" alt="FerrisKey realm selector open in the top bar, listing the realms and the Create realm action" />
+<img class="only-dark" src="/dashboard/realm_switch-dark.jpg" alt="FerrisKey realm selector open in the top bar, listing the realms and the Create realm action" />
 :::
 
 :::step{title="Stay in the application realm"}
@@ -66,9 +67,23 @@ The client is the application entry in FerrisKey. It tells FerrisKey which app i
 
 ::::step-group
 :::step{title="Open Clients"}
-In the sidebar, click **Clients**, then click **New Client**.
+In the sidebar, click **Clients**, then **New client**.
 
-<img src="/dashboard/list_clients.png" alt="FerrisKey clients list with the New Client button" />
+<img class="only-light" src="/dashboard/list_clients-light.jpg" alt="FerrisKey clients list with counters for total, active, public and confidential clients, and the New client button" />
+<img class="only-dark" src="/dashboard/list_clients-dark.jpg" alt="FerrisKey clients list with counters for total, active, public and confidential clients, and the New client button" />
+
+The banner at the top of that list is worth reading before you add anything: it names every client that has **no redirect URI**, because the authorization code flow cannot work without one.
+:::
+
+:::step{title="Choose the protocol"}
+Creation starts by asking which protocol the application speaks: **OpenID Connect** for anything token-based, or **SAML 2.0** for applications that speak nothing else.
+
+<img class="only-light" src="/dashboard/client_protocol-light.jpg" alt="FerrisKey client protocol dialog offering OpenID Connect or SAML 2.0" />
+<img class="only-dark" src="/dashboard/client_protocol-dark.jpg" alt="FerrisKey client protocol dialog offering OpenID Connect or SAML 2.0" />
+
+:::callout{variant="warning" title="This choice is final"}
+It decides how the application signs its users in and **cannot be changed after creation**. An application that later moves from SAML to OIDC needs a new client, not an edited one. See [Authentication](/en/discover/core-concepts/authentication#saml-20) for what each protocol gives you.
+:::
 :::
 
 :::step{title="Fill the client details"}
@@ -76,12 +91,15 @@ Use a stable client ID. In this example:
 
 - **Client ID:** `vaultwarden`
 - **Name:** `Vaultwarden`
-- **Client Enabled:** enabled
-- **Client Authentication:** enabled
+- **Client enabled:** Enabled
+- **Client authentication:** Confidential
 
-Enable **Client Authentication** for server-side applications. FerrisKey will treat the client as confidential and generate a client secret.
+**Client authentication is a choice between Confidential and Public, and it is also final.** Pick Confidential for a server-side application that can hold a secret — FerrisKey then generates one. Pick Public for an SPA, a mobile app or a CLI, where a secret would end up in the user's hands and PKCE carries the protection instead.
 
-<img src="/dashboard/create_client.png" alt="FerrisKey new client form with client ID, name, enabled switch, and client authentication switch" />
+Leave both capability switches off for browser SSO: **Direct access grants** is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner--deprecated), and the **device authorization grant** is for browserless clients.
+
+<img class="only-light" src="/dashboard/create_client-light.jpg" alt="FerrisKey new client form with client ID, name, enabled state, the confidential/public choice and the capability switches" />
+<img class="only-dark" src="/dashboard/create_client-dark.jpg" alt="FerrisKey new client form with client ID, name, enabled state, the confidential/public choice and the capability switches" />
 :::
 ::::
 
@@ -95,7 +113,7 @@ Open the client you just created and stay on the **Settings** tab.
 :::
 
 :::step{title="Add the redirect URI"}
-In **Access Settings**, add the exact callback URL from your application.
+Scroll to the **Access** section and add the exact callback URL from your application. Every entry is saved as you add it — there is no separate save button for this list.
 
 For the example:
 
@@ -103,9 +121,13 @@ For the example:
 https://vault.example.com/identity/connect/oidc-signin
 ```
 
-Keep **Direct Access Grants** disabled unless the application explicitly asks for the password grant. Normal browser SSO should use the authorization code flow.
+<img class="only-light" src="/dashboard/client_access-light.jpg" alt="FerrisKey client Access section with redirect URIs, web origins and post-logout redirect URIs" />
+<img class="only-dark" src="/dashboard/client_access-dark.jpg" alt="FerrisKey client Access section with redirect URIs, web origins and post-logout redirect URIs" />
 
-<img src="/dashboard/client_settings.png" alt="FerrisKey client settings showing client authentication, direct access grants, and redirect URIs" />
+Two neighbours in the same area matter as much as the redirect URI:
+
+- **Web origins** — the origins this application may call FerrisKey from in a browser. The `+` button derives them from the redirect URIs you just entered, but only from **literal** ones: regex patterns are skipped. Removing an origin takes a few minutes to clear browser preflight caches, and up to 30 seconds to propagate to the other API replicas.
+- **Post-logout redirect URIs**, under **Logout** — where the user lands once the session closes. With no entry, logout ends on the FerrisKey page rather than back in your application.
 :::
 ::::
 
@@ -117,14 +139,19 @@ Open the client's **Credentials** tab.
 :::
 
 :::step{title="Copy the secret"}
-Copy the **Client Secret** and put it in the application's OIDC configuration. Treat it like a password.
+The secret is masked. Click **Reveal** to read it, then copy it into the application's OIDC configuration and treat it like a password.
 
-<img src="/dashboard/client_secret.png" alt="FerrisKey client credentials tab showing the client ID and client secret fields" />
+<img class="only-light" src="/dashboard/client_secret-light.jpg" alt="FerrisKey client credentials tab showing the client ID and the masked client secret with a Reveal action" />
+<img class="only-dark" src="/dashboard/client_secret-dark.jpg" alt="FerrisKey client credentials tab showing the client ID and the masked client secret with a Reveal action" />
+
+Revealing a secret is **recorded as a security event** — `client_secret_viewed` in [SeaWatch](/en/modules/seawatch/event-types) — which is intentional: it means an unexplained reveal is visible in the audit trail.
 :::
 ::::
 
-:::callout{variant="warning" title="Rotate leaked secrets"}
-If a client secret is pasted into a public issue, log, screenshot, or repository, rotate it and update the application immediately.
+:::callout{variant="danger" title="A leaked secret cannot be rotated through the API yet"}
+Rotating a client secret is **not exposed by the administration API** at this version, as the Credentials tab states. So if a secret is pasted into a public issue, a log, a screenshot or a repository, there is no rotate call to make.
+
+Until it ships, the containment path is to create a replacement client, move the application over, and delete the compromised one. Plan for that being slower than a rotation, and treat client secrets accordingly — in a secret manager, never in a screenshot.
 :::
 
 ## Check the client scopes
@@ -137,15 +164,18 @@ Open the client's **Client Scopes** tab.
 :::
 
 :::step{title="Confirm required scopes"}
-Make sure these scopes are assigned as **Default**:
+Each assigned scope carries a **default / optional** switch. Make sure these three are on **default**, which means every token gets them without the application asking:
 
 - `openid`
 - `profile`
 - `email`
 
-If the application needs roles, also assign `roles`.
+If the application needs roles, set `roles` to default too. A new realm seeds eight scopes, and the remaining ones — `address`, `phone`, `offline_access` — arrive as **optional**, applied only when a request names them in its `scope` parameter.
 
-<img src="/dashboard/client_scopes.png" alt="FerrisKey client scopes tab showing openid, profile, email, and roles as default scopes" />
+<img class="only-light" src="/dashboard/client_client_scopes-light.jpg" alt="FerrisKey client Client Scopes tab listing the assigned scopes with their default and optional switches" />
+<img class="only-dark" src="/dashboard/client_client_scopes-dark.jpg" alt="FerrisKey client Client Scopes tab listing the assigned scopes with their default and optional switches" />
+
+The **Evaluate** sub-tab next to the assigned list answers the question this step is really about: it shows the claims this client would receive, without you having to run a login first.
 :::
 ::::
 

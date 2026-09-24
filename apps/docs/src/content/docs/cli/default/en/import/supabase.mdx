@@ -1,0 +1,159 @@
+---
+title: From Supabase
+description: "Import users from a Supabase project, carry their password hashes over, and keep their ids so tokens survive."
+icon: database
+order: 5
+---
+
+# From Supabase
+
+Supabase is the one source that is **users only**. It has no client catalogue and no role catalogue to read, so an import brings the accounts across and nothing else — you create the clients and the realm settings yourself afterwards.
+
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --target-realm acme
+```
+
+Accounts are read through the project's **Auth (GoTrue) Admin API**, which is why `--source-token` wants the project's `service_role` key rather than the anon key.
+
+## What gets carried over
+
+| FerrisKey field | Comes from |
+|---|---|
+| `username` | The email. Falling back to the phone number, then to the Supabase id |
+| `email` | The email, when there is one |
+| `email_verified` | Whether `email_confirmed_at` is set — only computed for users who have an email |
+| `firstname` / `lastname` | `user_metadata`, trying `first_name`, `firstName`, `given_name` and the matching last-name keys; failing that, `full_name` or `name` split in two |
+| Roles | `app_metadata.roles` (an array) and `app_metadata.role` (a single string), merged and de-duplicated |
+| Password | Only from `--source-passwords`, below |
+
+Roles are created in the target realm as they are encountered, so a `roles` array in `app_metadata` is enough to rebuild a role catalogue Supabase never had.
+
+:::callout{variant="warning" title="A role name cannot contain a colon"}
+FerrisKey reserves `:` to separate a client from its role, so a Supabase role like `billing:admin` is refused rather than silently reinterpreted. The import stops and names both the role and the user carrying it. Rename it in `app_metadata` before re-running.
+:::
+
+## Three kinds of row are dropped by default
+
+Supabase's `auth.users` holds rows that are not really accounts you want. All three filters are **off** by default, and turning one on is a deliberate act:
+
+| Flag | What it lets in | Why it is off by default |
+|---|---|---|
+| `--source-include-deleted` | Users an operator soft-deleted | Their `deleted_at` is set but the row survives. A plain import would resurrect accounts somebody removed on purpose |
+| `--source-include-anonymous` | Anonymous sign-in sessions | They are real rows with neither an email nor a phone number |
+| `--source-include-unconfirmed` | Users who never confirmed an email or a phone | Nothing proves the address or the number belongs to them |
+
+A user counts as confirmed when **either** `email_confirmed_at` or `phone_confirmed_at` is set.
+
+:::callout{variant="info" title="Count before you commit"}
+Run the import with `--dry-run` first, then again with a filter added, and compare the user counts. That difference is exactly how many soft-deleted, anonymous or unconfirmed rows your project is carrying — usually more than anyone expects.
+:::
+
+## Carrying the passwords over
+
+The Auth Admin API **never serves password hashes**. Exporting the table is the only way to get them, so `--source-passwords` takes a CSV file rather than reading the API:
+
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-passwords auth_users.csv \
+  --target-realm acme
+```
+
+### Producing the export
+
+The connection string is behind the project's **Connect** button:
+
+```bash
+psql "<connection string>" -c \
+  "\copy (select id, encrypted_password from auth.users) to 'auth_users.csv' with (format csv, header)"
+```
+
+:::callout{variant="warning" title="The backslash on \\copy matters"}
+`\copy` runs client-side and writes the file on **your** machine. A plain `COPY TO` would try to write on the database server, where you have no filesystem access.
+:::
+
+Or run `select id, encrypted_password from auth.users;` in the dashboard's SQL editor and use the download button above the results.
+
+Only `id` and `encrypted_password` are read and extra columns are ignored, so a plain `select *` export works too. Rows join onto users by **`auth.users.id`, never by email** — which is what makes the join safe when an address has changed on one side.
+
+:::callout{variant="danger" title="That file holds every password hash in your directory"}
+Keep it to yourself, never commit it, and delete it once the import has run. It is the single most sensitive artefact a migration produces.
+:::
+
+### What survives, and what does not
+
+Only **bcrypt** hashes that FerrisKey accepts are imported. Every other account arrives without credentials and needs a password reset — so plan the reset emails for that subset rather than for everyone.
+
+An imported hash is re-encoded as argon2id the first time that user signs in successfully. See [Export & Import](/en/discover/guides/portability#password-hashes) for what that means on the FerrisKey side, including the `password_imported` audit event that lets you measure migration progress.
+
+## Keeping the user ids
+
+```bash
+ferris-ctl realm import --from supabase … --source-preserve-ids
+```
+
+Creates each user with the id it already has in Supabase, so the **`sub` claim of every token survives the migration**. Supabase only.
+
+Reach for it when anything downstream stores the Supabase user id as a foreign key — your own tables, an analytics warehouse, a billing system. Without it those references all break and you are writing a mapping table.
+
+## A realistic migration
+
+::::step-group
+:::step{title="Preview, and read the counts"}
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --target-realm acme --dry-run -o yaml
+```
+
+No FerrisKey call is made. Check the user count and the roles that were derived from `app_metadata`.
+:::
+
+:::step{title="Decide on the filtered rows"}
+Re-run the preview with each `--source-include-*` flag to see what you are leaving behind, and make that a decision rather than a default.
+:::
+
+:::step{title="Export the passwords"}
+Only once you are about to run the real import — the file should exist for as short a time as possible.
+:::
+
+:::step{title="Import"}
+Add `--source-passwords` and, if anything references the Supabase ids, `--source-preserve-ids`. Delete the CSV afterwards.
+:::
+
+:::step{title="Build what Supabase did not have"}
+Clients, redirect URIs, scopes and realm settings. [Connect an Application with SSO](/en/discover/guides/application-sso) is the path for each application.
+:::
+::::
+
+:::callout{variant="info" title="Re-running is safe"}
+Like every source, a Supabase import is idempotent: accounts that already exist are skipped with a warning, so you can fix the source and run it again.
+:::
+
+## Storing the connection
+
+Typing the service_role key on every run is how it ends up in a shell history. Store the source once:
+
+```bash
+ferris-ctl source add supabase-prod --kind supabase \
+  --url https://abcdefgh.supabase.co \
+  --token "$SUPABASE_SERVICE_ROLE_KEY"
+
+ferris-ctl realm import --source-ref supabase-prod --target-realm acme
+```
+
+Inline `--source-*` flags still override individual fields of a stored source, so the stored entry can hold the connection while the run decides the filters. See [`source`](/en/cli/commands/source).
+
+::::card-group{cols=2}
+:::card{label="Import overview" icon="lucide:download" href="/en/cli/import/overview"}
+How imports resolve, dry runs, and idempotency.
+:::
+:::card{label="realm import" icon="lucide:layers" href="/en/cli/commands/realm"}
+Every flag, for all four sources.
+:::
+::::
