@@ -122,7 +122,7 @@ docker compose up -d
 The migration files are baked into the `ferriskey-api` image (under `/usr/local/src/ferriskey/migrations`), so the `db-migrations` service applies the schema without any checked-out source. These are the same images the repository's `registry` profile uses, extracted into a self-contained file you can drop onto any host or convert to a Docker Swarm stack.
 
 :::callout{variant="info" title="Pin a version for production"}
-The images above track the latest tag. For reproducible deployments, pin an explicit tag (for example `ghcr.io/ferriskey/ferriskey-api:v0.7.0`) on both the `api` and `db-migrations` services, so they always run the same binary and schema.
+The images above track the latest tag. For reproducible deployments, pin an explicit tag (for example `ghcr.io/ferriskey/ferriskey-api:v0.9.0`) on both the `api` and `db-migrations` services, so they always run the same binary and schema.
 :::
 
 ## Run everything in one container
@@ -254,7 +254,7 @@ A response containing an `access_token`, a `refresh_token`, and optionally an `i
 
 ## Connect a real application
 
-The password grant above is fine for a quick API test. Real applications should use browser-based SSO with the OpenID Connect authorization code flow.
+The password grant above is fine for a quick API test, and nothing else: it is [deprecated](/en/discover/core-concepts/authentication#password-resource-owner--deprecated). Real applications use browser-based SSO with the authorization code flow, and a CLI uses the device code grant.
 
 To connect a dashboard, an internal service, or a self-hosted tool, follow the application SSO guide next. It walks through which console screens to use, what values to copy, and how to debug the usual setup mistakes.
 

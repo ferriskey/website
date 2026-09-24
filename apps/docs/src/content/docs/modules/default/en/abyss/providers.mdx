@@ -15,7 +15,7 @@ This guide walks through setting up specific identity providers with Abyss. Each
 :::step{title="Create a Google OAuth2 app"}
 Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID with:
 - **Application type:** Web application
-- **Authorized redirect URI:** `https://your-ferriskey.com/realms/{realm}/broker/google/callback`
+- **Authorized redirect URI:** `https://your-ferriskey.com/realms/{realm}/broker/google/endpoint`
 :::
 
 :::step{title="Register in FerrisKey"}
@@ -39,7 +39,7 @@ In the FerrisKey admin console, navigate to **Identity Providers → Add Provide
 ::::step-group
 :::step{title="Create a GitHub OAuth App"}
 Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**:
-- **Authorization callback URL:** `https://your-ferriskey.com/realms/{realm}/broker/github/callback`
+- **Authorization callback URL:** `https://your-ferriskey.com/realms/{realm}/broker/github/endpoint`
 :::
 
 :::step{title="Register in FerrisKey"}
@@ -62,7 +62,7 @@ Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth 
 ::::step-group
 :::step{title="Create a Discord Application"}
 Go to the [Discord Developer Portal](https://discord.com/developers/applications), create an application, and add an OAuth2 redirect:
-- **Redirect URL:** `https://your-ferriskey.com/realms/{realm}/broker/discord/callback`
+- **Redirect URL:** `https://your-ferriskey.com/realms/{realm}/broker/discord/endpoint`
 :::
 
 :::step{title="Register in FerrisKey"}
@@ -94,6 +94,36 @@ For any OpenID Connect compliant provider (Okta, Auth0, Azure AD, Keycloak):
 :::callout{variant="info" title="OIDC Discovery"}
 Most OIDC providers publish their configuration at `https://provider.com/.well-known/openid-configuration`. Use this to find all the endpoint URLs you need.
 :::
+
+## API reference
+
+```
+GET    /realms/{realm_name}/identity-providers
+POST   /realms/{realm_name}/identity-providers
+GET    /realms/{realm_name}/identity-providers/{alias}
+PUT    /realms/{realm_name}/identity-providers/{alias}
+DELETE /realms/{realm_name}/identity-providers/{alias}
+```
+
+Providers are addressed by their **alias**, not by a uuid — the alias is also the segment that appears in the broker URLs, which is why changing it breaks the redirect URI registered at the provider.
+
+The two broker endpoints are the flow itself, and neither is called by you:
+
+```
+GET  /realms/{realm_name}/broker/{alias}/login
+GET  /realms/{realm_name}/broker/{alias}/endpoint
+```
+
+### Links on a user
+
+```
+GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
+DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
+```
+
+A link binds one external identity to one local account. Deleting it leaves the account intact and simply removes that sign-in route; the removal is audited as `identity_provider_link_removed`.
+
+**Required permissions:** `view_identity_providers` or `manage_identity_providers` to read, `manage_identity_providers` to write. `manage_realm` grants both.
 
 ## Provider Management
 

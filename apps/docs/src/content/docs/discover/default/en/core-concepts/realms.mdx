@@ -62,7 +62,7 @@ Every realm carries its own settings. They control how sign-in behaves, how long
 | `forgot_password_enabled` | `false` | Enable the password reset flow |
 | `remember_me_enabled` | `false` | Support remember-me sessions |
 | `magic_link_enabled` | `false` | Enable magic link sign-in by email |
-| `magic_link_ttl_minutes` | `15` | How long a magic link stays valid |
+| `magic_link_ttl` | `15` | How long a magic link stays valid |
 | `passkey_enabled` | `false` | Allow passkey (WebAuthn) sign-in |
 | `require_mfa` | `false` | Force every user in the realm to enroll in MFA |
 | `login_aliases` | `[email, username]` | Ordered list of identifiers accepted at login. Must be non-empty and free of duplicates |
@@ -76,10 +76,10 @@ Every realm carries its own settings. They control how sign-in behaves, how long
 | Setting | Default | Description |
 |---|---|---|
 | `default_signing_algorithm` | `RS256` | JWT signing algorithm |
-| `access_token_lifetime_secs` | `300` | Access token TTL |
-| `refresh_token_lifetime_secs` | `86400` | Refresh token TTL |
-| `id_token_lifetime_secs` | `300` | ID token TTL |
-| `temporary_token_lifetime_secs` | `300` | Temporary token TTL, used while required actions are pending |
+| `access_token_lifetime` | `300` | Access token TTL |
+| `refresh_token_lifetime` | `86400` | Refresh token TTL |
+| `id_token_lifetime` | `300` | ID token TTL |
+| `temporary_token_lifetime` | `300` | Temporary token TTL, used while required actions are pending |
 
 ### Lockout
 
@@ -99,16 +99,47 @@ SeaWatch can strip or pseudonymise personal data before an event is stored.
 | `seawatch_pii_mode` | `off` | One of `off`, `mask`, `pseudonymise` |
 | `seawatch_pseudo_key` | unset | HMAC key used when the mode is `pseudonymise` |
 
+### Locales
+
+| Setting | Default | Description |
+|---|---|---|
+| `default_locale` | unset | Locale used when the user has expressed no preference |
+| `supported_locales` | unset | Locales the login portal and emails may be rendered in |
+
+A user's own choice is stored on the user and set through `PUT /realms/{realm_name}/users/@me/locale`.
+
+### Webhook retries
+
+Leave these unset and the realm uses the server defaults.
+
+| Setting | Default | Description |
+|---|---|---|
+| `webhook_retry_max_attempts` | unset | How many times a failed delivery is retried |
+| `webhook_retry_base_delay_ms` | unset | Delay before the first retry, in milliseconds |
+| `webhook_retry_max_delay_ms` | unset | Ceiling for a single backoff interval |
+| `webhook_retry_max_total_delay_ms` | unset | Ceiling for the whole retry sequence |
+
 ### Branding and email templates
 
 | Setting | Default | Description |
 |---|---|---|
-| `portal_theme_id` | unset | Theme applied to the login portal |
 | `reset_password_template_id` | unset | Template used for password reset emails |
 | `magic_link_template_id` | unset | Template used for magic link emails |
 | `email_verification_template_id` | unset | Template used for verification emails |
 
 Leave a template id unset and FerrisKey falls back to the built-in default for that email type.
+
+:::callout{variant="info" title="The portal theme is not set here"}
+A realm does carry an active portal theme, but it is not a field on this endpoint. Activate one with `POST /realms/{realm_name}/portal/themes/{theme_id}/activate` — see [Portal](/en/modules/portal/overview).
+:::
+
+## Reading settings from the login page
+
+```
+GET /realms/{name}/login-settings
+```
+
+The login-facing subset of a realm's settings, which is what the portal reads to know which sign-in methods to offer — whether registration is open, whether magic links and passkeys are enabled, which identifiers are accepted. Use it rather than the full settings read when all you need is to render a login page.
 
 ## SMTP configuration
 

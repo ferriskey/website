@@ -1,8 +1,8 @@
 ---
-title: Overview
+title: SAML 2.0
 description: "FerrisKey as a SAML 2.0 identity provider: the SSO endpoints, IdP metadata, and how an assertion is built."
 icon: file-badge
-order: 60
+order: 18
 ---
 
 # SAML 2.0
@@ -12,8 +12,10 @@ FerrisKey speaks SAML 2.0 as an identity provider. A service provider sends it a
 This is what gets an application that only supports SAML, and there are plenty of them, onto the same realm, the same users, and the same audit trail as everything else.
 
 :::callout{variant="info" title="Identity provider, not broker"}
-This module makes FerrisKey the IdP that other applications trust. Signing in *through* an external SAML provider is a different problem, handled by federation in [Abyss](/en/modules/abyss/overview), and it is not shipped yet.
+This page is about FerrisKey being the IdP that other applications trust. Signing in *through* an external SAML provider is the opposite direction, handled by federation in [Abyss](/en/modules/abyss/overview), and it is not shipped yet.
 :::
+
+The sign-in itself is not SAML-specific: a SAML request runs the same [authentication chain](/en/discover/core-concepts/authentication#authentication-chain) as an OIDC one — same login, same MFA, same lockout, same audit events — and only the front door and the response format differ. That page also sets the two protocols side by side if you are deciding which one an application should use.
 
 ## Endpoints
 

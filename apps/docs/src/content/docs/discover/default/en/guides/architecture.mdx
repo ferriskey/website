@@ -2,7 +2,7 @@
 title: Architecture
 description: "Hexagonal architecture, domain modules, and the ports & adapters pattern in FerrisKey."
 icon: boxes
-order: 22
+order: 23
 ---
 
 # Architecture
@@ -57,6 +57,7 @@ core/src/domain/
 ├── authentication/       # OAuth2 / OIDC flows
 ├── user/                 # User lifecycle and required actions
 ├── account/              # Self-service account operations
+├── account_security/     # Password, MFA and passkey self-service
 ├── client/               # OAuth2 clients
 ├── realm/                # Multi-tenant realms and settings
 ├── credential/           # Passwords, OTP, WebAuthn
@@ -90,6 +91,7 @@ Feature crates hold domain and infrastructure logic for one module:
 ```
 libs/
 ├── ferriskey-domain/           # Shared domain types
+├── ferriskey-authz/            # Authorization engine and action catalogue
 ├── ferriskey-security/         # Hashing and crypto primitives
 ├── ferriskey-trident/          # MFA
 ├── ferriskey-abyss/            # Identity provider federation

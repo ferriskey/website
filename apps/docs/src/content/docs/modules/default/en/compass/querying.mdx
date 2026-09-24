@@ -13,13 +13,15 @@ Compass stores every authentication flow in PostgreSQL, making them queryable th
 
 The stats endpoint returns aggregate metrics for a realm at a glance:
 
-```json title="GET /admin/realms/{realm}/compass/stats"
+```json title="GET /realms/{realm_name}/compass/v1/stats"
 {
-  "total": 15234,
-  "success_count": 14102,
-  "failure_count": 987,
-  "pending_count": 145,
-  "avg_duration_ms": 142.5
+  "data": {
+    "total": 15234,
+    "success_count": 14102,
+    "failure_count": 987,
+    "pending_count": 145,
+    "avg_duration_ms": 142.5
+  }
 }
 ```
 
@@ -43,31 +45,33 @@ The flows endpoint supports rich filtering to narrow down to exactly the flows y
 | `user_id` | `UUID` | Flows for a specific user |
 | `grant_type` | `String` | Filter by grant type (`password`, `authorization_code`, etc.) |
 | `status` | `String` | Filter by outcome (`success`, `failure`, `pending`, `expired`) |
-| `from_timestamp` | `DateTime` | Flows started after this time |
-| `to_timestamp` | `DateTime` | Flows started before this time |
 | `limit` | `u32` | Maximum results (default: 50) |
 | `offset` | `u32` | Pagination offset (default: 0) |
 
+:::callout{variant="warning" title="No time range on this endpoint"}
+`GET /compass/v1/flows` takes no `from_timestamp` or `to_timestamp`: the handler always queries the full history and paginates it, newest first. Narrow with `limit`, or use `GET /compass/v1/activity/daily` when you need a window.
+:::
+
 ### Example Queries
 
-**All failed flows in the last hour:**
+**The most recent failed flows:**
 ```bash
-curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
 status=failure&\
-from_timestamp=2026-03-17T13:30:00Z" \
+limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 **All flows for a specific user:**
 ```bash
-curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
 user_id=01914b3c-5678-7f5a-b456-000000000002" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 **Password grant flows for a specific client:**
 ```bash
-curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
 client_id=my-frontend&\
 grant_type=password&\
 limit=10" \
@@ -78,41 +82,69 @@ limit=10" \
 
 Fetch a single flow by ID to see all its steps:
 
-```json title="GET /admin/realms/{realm}/compass/flows/{flow_id}"
+```json title="GET /realms/{realm_name}/compass/v1/flows/{flow_id}"
 {
-  "id": "01914b3c-7e8a-7f5a-b456-789012345678",
-  "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
-  "client_id": "my-frontend",
-  "user_id": "01914b3c-5678-7f5a-b456-000000000002",
-  "grant_type": "password",
-  "status": "failure",
-  "ip_address": "203.0.113.42",
-  "user_agent": "Mozilla/5.0 ...",
-  "started_at": "2026-03-17T14:30:00.000Z",
-  "completed_at": "2026-03-17T14:30:00.097Z",
-  "duration_ms": 97,
-  "steps": [
-    {
-      "step_name": "credential_validation",
-      "status": "success",
-      "duration_ms": 85,
-      "error_code": null,
-      "error_message": null,
-      "started_at": "2026-03-17T14:30:00.000Z"
-    },
-    {
-      "step_name": "mfa_challenge",
-      "status": "failure",
-      "duration_ms": 12,
-      "error_code": "invalid_otp",
-      "error_message": "The provided TOTP code is invalid",
-      "started_at": "2026-03-17T14:30:00.085Z"
-    }
-  ]
+  "data": {
+    "id": "01914b3c-7e8a-7f5a-b456-789012345678",
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+    "client_id": "my-frontend",
+    "user_id": "01914b3c-5678-7f5a-b456-000000000002",
+    "grant_type": "password",
+    "status": "failure",
+    "ip_address": "203.0.113.42",
+    "user_agent": "Mozilla/5.0 ...",
+    "started_at": "2026-03-17T14:30:00.000Z",
+    "completed_at": "2026-03-17T14:30:00.097Z",
+    "duration_ms": 97,
+    "steps": [
+      {
+        "step_name": "credential_validation",
+        "status": "success",
+        "duration_ms": 85,
+        "error_code": null,
+        "error_message": null,
+        "started_at": "2026-03-17T14:30:00.000Z"
+      },
+      {
+        "step_name": "mfa_challenge",
+        "status": "failure",
+        "duration_ms": 12,
+        "error_code": "invalid_otp",
+        "error_message": "The provided TOTP code is invalid",
+        "started_at": "2026-03-17T14:30:00.085Z"
+      }
+    ]
+  }
 }
 ```
 
 This tells the complete story: the user's password was correct (85ms for Argon2 verification), but the TOTP code was wrong.
+
+## Daily activity
+
+The third read endpoint aggregates per day, and it is the one that takes a date window.
+
+```
+GET /realms/{realm_name}/compass/v1/activity/daily
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `from_date` | `Date` | First day in the window, `YYYY-MM-DD` |
+| `to_date` | `Date` | Last day in the window |
+| `client_id` | `String` | Restrict to one client |
+| `user_id` | `UUID` | Restrict to one account |
+| `grant_type` | `String` | Restrict to one grant type |
+
+```json title="GET /realms/my-app/compass/v1/activity/daily?from_date=2026-09-01&to_date=2026-09-03"
+{
+  "data": [
+    { "date": "2026-09-01", "signups": 12, "logins": 431 },
+    { "date": "2026-09-02", "signups": 9, "logins": 402 },
+    { "date": "2026-09-03", "signups": 14, "logins": 455 }
+  ]
+}
+```
 
 ## Analytics people actually build
 
@@ -144,7 +176,6 @@ Query failed flows and group by `error_code` to find the most common failure pat
 async function getTopFailureReasons(realmName: string) {
   const flows = await ferriskey.getCompassFlows(realmName, {
     status: 'failure',
-    from_timestamp: subDays(new Date(), 7).toISOString(),
     limit: 500,
   })
 
@@ -177,12 +208,11 @@ Find flows where a specific step took unusually long:
 ```bash
 # Find flows where credential_validation took > 500ms
 # (might indicate database performance issues)
-curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
 status=success&\
-from_timestamp=2026-03-17T00:00:00Z&\
 limit=100" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | \
-  jq '.[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
+  jq '.data[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
 ```
 
 ### IdP performance monitoring
@@ -197,7 +227,7 @@ When using [Abyss](/en/modules/abyss/overview) for external IdP federation, Comp
 Investigate a specific user's authentication patterns:
 
 ```bash
-curl "http://localhost:3333/admin/realms/my-app/compass/flows?\
+curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
 user_id=USER_UUID&\
 limit=20" \
   -H "Authorization: Bearer $ADMIN_TOKEN"

@@ -151,6 +151,92 @@ The resulting access token has `sub` set to the service account user's `id`, and
 
 See [Authentication, client credentials](/en/discover/core-concepts/authentication#client-credentials) for the full grant.
 
+## Administering a user
+
+The console groups everything about one account behind five tabs: overview, credentials, role mapping, organizations and attributes.
+
+<img class="only-light" src="/dashboard/user_credentials-light.jpg" alt="FerrisKey user credentials tab showing the registered password, the reset form and its validity choice" />
+<img class="only-dark" src="/dashboard/user_credentials-dark.jpg" alt="FerrisKey user credentials tab showing the registered password, the reset form and its validity choice" />
+
+### Credentials
+
+```
+GET    /realms/{realm_name}/users/{user_id}/credentials
+DELETE /realms/{realm_name}/users/{user_id}/credentials/{credential_id}
+PUT    /realms/{realm_name}/users/{user_id}/reset-password
+POST   /realms/{realm_name}/users/{user_id}/credentials/import
+```
+
+A read lists the authentication methods registered on the account — password, authenticator, passkeys — never the secrets. The stored password is not displayed anywhere: it can only be replaced.
+
+A reset takes a **validity**:
+
+| Validity | Effect |
+|---|---|
+| Temporary | The user must change it at their next sign-in. Sets the `update_password` required action |
+| Permanent | It stays valid until the user changes it themselves |
+
+:::callout{variant="warning" title="Two asymmetries worth knowing"}
+Resetting a password replaces it immediately but **leaves open sessions valid** — an administrative reset alone does not cut access, so revoke the sessions too when that is the intent. And deleting a credential is immediate, irreversible, and the user is **not notified**: they discover it at their next sign-in.
+:::
+
+`credentials/import` is the migration path for hashes coming from another IAM — see [Export & Import](/en/discover/guides/portability#password-hashes).
+
+### Roles
+
+<img class="only-light" src="/dashboard/user_role_mapping-light.jpg" alt="FerrisKey user role mapping tab listing assigned roles with their permission counts" />
+<img class="only-dark" src="/dashboard/user_role_mapping-dark.jpg" alt="FerrisKey user role mapping tab listing assigned roles with their permission counts" />
+
+```
+GET    /realms/{realm_name}/users/{user_id}/roles
+POST   /realms/{realm_name}/users/{user_id}/roles/{role_id}
+DELETE /realms/{realm_name}/users/{user_id}/roles/{role_id}
+GET    /realms/{realm_name}/users/{user_id}/permissions
+GET    /realms/{realm_name}/users/{user_id}/organizations
+```
+
+`permissions` is the resolved set — the union of every role the account holds — which is what to read when you are debugging "why can this user do that". `roles` is the assignment list; `permissions` is the consequence.
+
+### Attributes
+
+```
+GET    /realms/{realm_name}/users/{user_id}/attributes
+PUT    /realms/{realm_name}/users/{user_id}/attributes
+DELETE /realms/{realm_name}/users/{user_id}/attributes/{key}
+```
+
+Free-form key-value metadata. Attributes reach tokens only through a [protocol mapper](/en/modules/aegis/protocol-mappers#oidc-usermodel-attribute-mapper) on an active scope — storing one changes nothing on its own.
+
+### Lifecycle operations
+
+```
+DELETE /realms/{realm_name}/users/bulk
+POST   /realms/{realm_name}/users/{user_id}/unlock
+```
+
+`bulk` deletes several accounts in one call, and it reports the batch as a batch: **one** `user.bulk_deleted` webhook carrying the id list, and **one** `user_deleted` audit event whose details hold `user_ids`. Neither produces one record per account, so a consumer that counts rows will undercount a bulk delete.
+
+`unlock` clears a lockout before its window expires. See below.
+
+### Identity provider links
+
+```
+GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
+DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
+```
+
+The external identities [brokered](/en/modules/abyss/providers) onto this account. Deleting a link does not delete the account; the user simply can no longer sign in through that provider, and removal raises `identity_provider_link_removed` in the audit log.
+
+**Required permissions:** `view_users` or `manage_users` to read, `manage_users` to write. `manage_realm` grants both.
+
+## Lockout
+
+After too many failed attempts an account locks itself, governed by two realm settings: `lockout_threshold` (default 10 attempts) and `lockout_duration_seconds` (default 900, so fifteen minutes).
+
+The user carries the state: `failed_login_attempts` and `locked_until`. A locked account authenticates again on its own once the window passes — or immediately, if an administrator calls `unlock`.
+
+Failed attempts are recorded as `login_failure` in [SeaWatch](/en/modules/seawatch/event-types), which is what makes "one IP, forty accounts, nine attempts each" visible before the threshold quietly absorbs it.
+
 ## Sessions
 
 A user can hold several sessions at once, one per browser, device, or service holding a valid refresh token.
@@ -162,6 +248,19 @@ A user can hold several sessions at once, one per browser, device, or service ho
 | **Access token** | Minutes | Short-lived bearer token derived from a user session. |
 
 Revoking a refresh token ends the user session immediately. Access tokens issued from it cannot be refreshed and simply expire on their own. [Tokens](/en/discover/core-concepts/tokens) and [Authentication, auth sessions](/en/discover/core-concepts/authentication#auth-sessions) have the details.
+
+### Listing and revoking
+
+```
+GET    /realms/{realm_name}/users/{user_id}/sessions
+DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}
+```
+
+:::callout{variant="info" title="API only"}
+These two have no screen in the admin console — a user's sessions are reachable through the API only. The user's own [account page](/en/modules/account/overview) does have a sessions tab, so the person can review their own.
+:::
+
+Session creation and revocation are both audited, as `session_created` and `session_revoked`.
 
 ## Security considerations
 
