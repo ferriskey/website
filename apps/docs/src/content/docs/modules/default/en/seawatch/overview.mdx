@@ -11,6 +11,11 @@ SeaWatch records the security-relevant actions in FerrisKey. A login, a password
 
 Without it, a compromised account is a mystery. With it, you can trace one back to the exact login attempt, IP address, and user agent. The same trail is what SOC 2, ISO 27001, GDPR, and HIPAA audits ask for, and what makes "repeated failures from one IP" a query rather than a hunch.
 
+<img class="only-light" src="/dashboard/seawatch-light.jpg" alt="FerrisKey SeaWatch dashboard showing event counters, the authentication traffic chart and the event stream" />
+<img class="only-dark" src="/dashboard/seawatch-dark.jpg" alt="FerrisKey SeaWatch dashboard showing event counters, the authentication traffic chart and the event stream" />
+
+The dashboard leads with what you would otherwise have to query for: failures over the window, the success rate, the number of distinct actors, and an authentication traffic curve. The banners above it call out the two things worth interrupting you for — failed events, and events whose actor could not be identified.
+
 ## Event structure
 
 Every SeaWatch event captures a complete picture:
@@ -67,6 +72,18 @@ Every SeaWatch event captures a complete picture:
 **Compliance reporting.** Query by time range and event type. The structured format makes "every admin action on the identity system in Q1" a query result rather than a project.
 
 **Alerting.** Pair SeaWatch with [Webhooks](/en/modules/webhooks/overview) to fire on the patterns that matter: repeated `login_failure` from one IP, a `client_secret_rotated` outside a maintenance window, a `realm_config_changed` from an actor nobody expected.
+
+## Tamper evidence
+
+Every event carries two hashes: `event_hash`, computed over the event's own fields, and `prev_hash`, the `event_hash` of the event before it in that realm's chain. The first event of a realm chains from a fixed genesis value.
+
+That makes the log append-only in a way you can check rather than trust. Edit a stored event and its hash no longer matches its contents; delete one and the chain breaks at the gap. Either way, verification points at the exact position where the log stopped being consistent.
+
+The hash covers the actor, the event type, the target, the resource, the timestamp and the `trace_id` — the fields an attacker would want to rewrite.
+
+:::callout{variant="info" title="What this does and does not give you"}
+The chain detects tampering by anyone who can write to the database, including someone who edits rows directly. It does not prevent it, and it is not a notary: an attacker able to recompute the whole chain from the point of the edit forward can produce a consistent log. Anchoring the head hash somewhere outside the database — your SIEM, a WORM bucket — is what closes that gap, and is worth doing where the log is evidence.
+:::
 
 ## Privacy
 

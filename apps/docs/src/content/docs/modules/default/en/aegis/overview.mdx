@@ -50,18 +50,19 @@ FerrisKey ships with the standard OpenID Connect scopes pre-configured:
 | `openid` | `sub` | Default |
 | `profile` | `preferred_username`, `given_name`, `family_name` | Default |
 | `email` | `email`, `email_verified` | Default |
+| `roles` | `realm_access.roles` | Default |
 | `address` | `address` | Optional |
-| `phone` | `phone_number`, `phone_number_verified` | Optional |
+| `phone` | `phone_number` | Optional |
 | `offline_access` | Enables refresh token issuance | Optional |
 | `introspect` | Allows token introspection | Optional |
 
 ## Real-World Patterns
 
 ### API gateway with role-based access
-Create a custom scope `api_access` with a `user_realm_role_mapper` that includes `realm_roles` in the token. Your API gateway reads the roles claim and enforces route-level authorization without calling back to FerrisKey.
+Create a custom scope `api_access` with an `oidc-usermodel-realm-role-mapper` that writes `realm_access.roles` into the token. Your API gateway reads the roles claim and enforces route-level authorization without calling back to FerrisKey.
 
 ### Multi-Tenant SaaS
-Create a custom scope with a `hardcoded_claim_mapper` that injects the realm name as a `tenant` claim. Your backend uses this to route requests to the correct tenant database.
+Create a custom scope with an `oidc-hardcoded-claim-mapper` that injects the realm name as a `tenant` claim. Your backend uses this to route requests to the correct tenant database.
 
 ### Third-Party Integrations
 Assign only `openid` and `email` as default scopes for third-party clients. They get the minimum data needed. Your first-party clients get `profile`, `roles`, and custom scopes as defaults.

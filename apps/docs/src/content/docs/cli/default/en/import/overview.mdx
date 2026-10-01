@@ -7,7 +7,7 @@ order: 1
 
 # Import
 
-`ferris-ctl realm import` brings a realm (its settings, roles, clients, and users) into FerrisKey from three kinds of source:
+`ferris-ctl realm import` brings a realm (its settings, roles, clients, and users) into FerrisKey from four kinds of source:
 
 ::::card-group{cols=3}
 :::card{label="Config file" icon="lucide:file-text" href="/en/cli/import/config-file"}
@@ -19,6 +19,9 @@ Read a realm live from a Keycloak Admin REST API.
 :::card{label="Zitadel" icon="lucide:server" href="/en/cli/import/zitadel"}
 Read organizations and projects live from a Zitadel instance.
 :::
+:::card{label="Supabase" icon="lucide:database" href="/en/cli/import/supabase"}
+Read users live from a Supabase project. Users only, with optional password and id carry-over.
+:::
 ::::
 
 ## How it works
@@ -26,13 +29,13 @@ Read organizations and projects live from a Zitadel instance.
 Each source is resolved into a **blueprint** (a normalized description of the realm) which is then applied to FerrisKey.
 
 ```
-source (file | keycloak | zitadel) → blueprint → apply to FerrisKey
+source (file | keycloak | zitadel | supabase) → blueprint → apply to FerrisKey
 ```
 
 Apply order: realm → settings → realm roles → clients (with redirect URIs and client roles) → users (with role assignments).
 
 ```bash title="Basic shape"
-ferris-ctl realm import --from <config|keycloak|zitadel> [source flags] [--target-realm <name>]
+ferris-ctl realm import --from <config|keycloak|zitadel|supabase> [source flags] [--target-realm <name>]
 ```
 
 See the full flag list on the [`realm import`](/en/cli/commands/realm) reference.

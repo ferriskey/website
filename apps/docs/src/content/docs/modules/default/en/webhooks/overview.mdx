@@ -70,3 +70,16 @@ On `user.updated` and `user.deleted`, sync changes to your CRM, data warehouse, 
 Forward all events to Splunk, Elastic, or a custom SIEM for long-term storage and compliance reporting.
 :::
 ::::
+
+## Then watch what actually happens
+
+Wiring a webhook is the easy half. [Deliveries & Retries](/en/modules/webhooks/deliveries) covers the other one: every attempt is recorded with the status code it got back, failures retry with exponential backoff and jitter, and a delivery that exhausted its attempts can be replayed by hand once you have fixed the endpoint.
+
+::::card-group{cols=2}
+:::card{label="Deliveries & Retries" icon="lucide:repeat" href="/en/modules/webhooks/deliveries"}
+Status codes, error codes, automatic backoff, manual replay, secret rotation.
+:::
+:::card{label="Triggers" icon="lucide:webhook" href="/en/modules/webhooks/triggers"}
+The 38 events a webhook can subscribe to.
+:::
+::::

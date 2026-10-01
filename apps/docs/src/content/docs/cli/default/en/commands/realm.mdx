@@ -1,5 +1,5 @@
 ---
-title: realm
+title: Realm
 description: "Create, inspect, delete, and import realms, and manage realm and client roles."
 icon: layers
 order: 2
@@ -131,7 +131,7 @@ ferris-ctl realm role delete <name> [--realm <realm>] [--client <client_id>] [--
 
 ## `realm import`
 
-Import a realm (its settings, roles, clients, and users) from a description file, a live Keycloak, or a live Zitadel instance.
+Import a realm (its settings, roles, clients, and users) from a description file, a live Keycloak, a live Zitadel, or a Supabase project.
 
 ```bash
 ferris-ctl realm import --from <kind> [source flags] [--target-realm <name>] [--dry-run]
@@ -139,17 +139,31 @@ ferris-ctl realm import --from <kind> [source flags] [--target-realm <name>] [--
 
 | Flag | Description |
 |------|-------------|
-| `--from` | Source kind: `config`, `keycloak`, or `zitadel` (optional if `--source-ref` is given) |
+| `--from` | Source kind: `config`, `keycloak`, `zitadel`, or `supabase` (optional if `--source-ref` is given) |
 | `--source-ref` | Name of a stored [source](/en/cli/commands/source); inline flags below override its values |
 | `--file` | Path to a realm description file (required for `--from config`); `.yaml`, `.yml`, or `.toml` |
-| `--source-url` | Base URL of the source instance (Keycloak / Zitadel) |
+| `--source-url` | Base URL of the source instance (Keycloak, Zitadel, Supabase project) |
 | `--source-realm` | Source realm name (Keycloak) |
 | `--source-org` | Source organization id (Zitadel); sent as the `x-zitadel-orgid` header |
 | `--source-client-id` | Client id for source authentication (Keycloak client credentials) |
 | `--source-client-secret` | Client secret for source authentication (Keycloak) |
-| `--source-token` | Bearer token / personal access token (Zitadel PAT, or a ready Keycloak token) |
+| `--source-token` | Bearer token / personal access token (Zitadel PAT, Supabase `service_role` key, or a ready Keycloak token) |
 | `--target-realm` | Override the name of the realm created in FerrisKey (defaults to the source realm name) |
 | `--dry-run` | Resolve and print the planned realm without calling the FerrisKey API |
+
+### Supabase-only flags
+
+These five are refused on any other source rather than silently ignored:
+
+| Flag | Description |
+|------|-------------|
+| `--source-include-deleted` | Import users an operator soft-deleted. Dropped by default: their `deleted_at` is set but the row survives |
+| `--source-include-anonymous` | Import anonymous sign-in sessions. Dropped by default: rows with neither an email nor a phone |
+| `--source-include-unconfirmed` | Import users who never confirmed an email or a phone. Dropped by default |
+| `--source-passwords <FILE>` | Carry passwords over, read from a CSV export of `auth.users`. The Auth API never serves hashes |
+| `--source-preserve-ids` | Create each user with its existing Supabase id, so the `sub` of every token survives |
+
+Each one is covered in [From Supabase](/en/cli/import/supabase).
 
 ```bash title="Preview a realm from a file (no network writes)"
 ferris-ctl realm import --from config --file examples/realm.yaml --dry-run -o yaml
@@ -161,6 +175,15 @@ ferris-ctl realm import --from keycloak \
   --source-realm acme \
   --source-client-id admin-cli \
   --source-client-secret "$KC_SECRET" \
+  --target-realm acme
+```
+
+```bash title="Import a Supabase project, passwords and ids included"
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-passwords auth_users.csv \
+  --source-preserve-ids \
   --target-realm acme
 ```
 

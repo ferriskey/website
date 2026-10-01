@@ -101,6 +101,21 @@ spec:
 
 Check the label on your own pods with `kubectl get pod -n ferriskey --show-labels` before applying it.
 
+## Health probes
+
+```
+GET /health/live
+GET /health/ready
+```
+
+Liveness answers whether the process is up; readiness whether it can serve, which includes reaching the database. The chart wires both by default, at `/api/health/live` and `/api/health/ready` because it sets `rootPath: /api`.
+
+:::callout{variant="info" title="They are not in the OpenAPI document"}
+Both probes are real routes but carry no OpenAPI annotation, so they do not appear in the generated spec or in the API documentation UIs. They are part of the deployment contract rather than the API contract — do not go looking for them in `/scalar`.
+:::
+
+Keep readiness pointed at `/health/ready` rather than at a realm route: a realm-scoped URL makes the probe depend on a realm existing, and a readiness probe that fails because someone renamed a realm will take the pods down with it.
+
 ## Monitoring
 
 The API serves Prometheus metrics on `/metrics`. With the Prometheus Operator installed, the chart can create the ServiceMonitor for you:

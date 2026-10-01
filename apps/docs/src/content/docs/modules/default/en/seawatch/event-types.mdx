@@ -45,6 +45,7 @@ When a login fails, the user is not yet authenticated, so `actor_id` is typicall
 | `password_reset` | Password was reset by an admin | Admin | User |
 | `password_reset_requested` | User requested a password reset email | System | User |
 | `password_reset_completed` | User completed the password reset flow | User | User |
+| `password_imported` | A password hash was imported from another IAM and re-hashed to argon2id on first login | System | User |
 
 These three events trace the full password reset lifecycle. A `password_reset_requested` without a matching `password_reset_completed` might indicate a user who abandoned the flow, or an attacker testing email enumeration.
 
@@ -66,6 +67,8 @@ User creation events record whether the account came from an admin, from self-re
 | `role_unassigned` | Role removed from a user | Admin | User |
 | `role_created` | New role created | Admin | Role |
 | `role_removed` | Role deleted | Admin | Role |
+| `role_updated` | A role's name or description changed | Admin | Role |
+| `role_permission_updated` | A role's permission set changed | Admin | Role |
 
 Role events are critical for access control audits. They answer: "Who granted this user admin permissions, and when?"
 

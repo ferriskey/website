@@ -1,0 +1,112 @@
+---
+title: Login Actions
+description: "The endpoints the portal itself calls — what you need if you replace its UI with your own."
+icon: terminal
+order: 91
+---
+
+# Login Actions
+
+Everything else in this documentation is the surface an *application* integrates with: the OIDC endpoints, the admin API. This page is the other kind. `login-actions` is the family the **portal itself** calls — the 21 endpoints behind the login page, the MFA challenge, the password reset and the passkey prompts.
+
+You do not touch them when you connect an application. You touch them when you **replace the portal** with your own UI and need to drive the same flows.
+
+:::callout{variant="warning" title="This is an internal contract, not a stable public API"}
+These endpoints exist to serve FerrisKey's own portal, and they move with it. If a themed portal gets you where you need to go, use [themes and layouts](/en/modules/portal/overview) instead — you get the flows for free and they keep working across upgrades. Reach for this family only when theming genuinely cannot express what you need.
+:::
+
+Paths below are relative to `/realms/{realm_name}`.
+
+## Password sign-in
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/login-actions/authenticate` | Authenticate a user in the realm |
+| `POST` | `/login-actions/update-password` | Set a new password, for the `update_password` required action |
+
+`authenticate` is the entry point. When the realm or the user requires a second factor, it does not return full tokens — it returns a temporary token and a status saying which challenge to run. That temporary token authorizes the challenge and nothing else.
+
+## MFA challenge
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/login-actions/setup-otp` | Start authenticator enrolment: returns the secret to render as a QR code |
+| `POST` | `/login-actions/verify-otp` | Verify the code during enrolment |
+| `POST` | `/login-actions/challenge-otp` | Ask for an authenticator code during sign-in |
+| `POST` | `/login-actions/generate-recovery-codes` | Generate recovery codes that let the user bypass a challenge |
+| `POST` | `/login-actions/burn-recovery-code` | Spend one recovery code instead of the challenge |
+
+Recovery codes are issued **here**, during the flow — not from the account page. See [Recovery Codes](/en/modules/trident/recovery-codes).
+
+## Passkeys and WebAuthn
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/login-actions/passkey-request-options` | Start passkey sign-in. With a username, the challenge is scoped to that user's passkeys; without one, it is discoverable and the browser proposes what it has |
+| `POST` | `/login-actions/passkey-authenticate` | Submit the browser's assertion. On success returns a login URL carrying an authorization code |
+| `POST` | `/login-actions/webauthn-public-key-create-options` | Full `PublicKeyCredentialCreationOptions`, challenge in base64url |
+| `POST` | `/login-actions/webauthn-public-key-create` | Store a new WebAuthn public key |
+| `POST` | `/login-actions/webauthn-public-key-request-options` | Full `PublicKeyCredentialRequestOptions` |
+| `POST` | `/login-actions/webauthn-public-key-authenticate` | Authenticate with a `WebAuthnAssertionResponse` |
+
+The discoverable variant of `passkey-request-options` is what makes usernameless sign-in possible: no identifier is submitted, so the page cannot be used to probe which accounts exist.
+
+## Password reset
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/login-actions/forgot-password` | Send a reset email if the address exists |
+| `POST` | `/login-actions/verify-reset-token` | Check a token is valid and unexpired, **without consuming it** |
+| `POST` | `/login-actions/reset-password` | Complete the reset and return tokens, signing the user straight in |
+
+:::callout{variant="info" title="Two deliberate details"}
+`forgot-password` **always answers 204**, whether the address exists or not — that is what stops the endpoint being an account-enumeration oracle. Do not "improve" your UI by reporting unknown addresses.
+
+`verify-reset-token` exists so a reset page can render its form knowing the token is good, without spending it. Check on load, consume on submit.
+:::
+
+## Email verification
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/login-actions/verify-email` | Verify an address with the token from the email |
+| `POST` | `/login-actions/resend-verification-email` | Resend the link. Requires a Bearer token |
+
+## Magic links
+
+| Method | Path | What it does |
+|---|---|---|
+| `POST` | `/login-actions/send-magic-link` | Email a one-time sign-in link |
+| `GET` | `/login-actions/verify-magic-link` | Consume the token and return the redirect URL with an authorization code |
+
+## Device flow
+
+The [device code grant](/en/discover/core-concepts/authentication#device-code) needs three endpoints beyond the token endpoint, and they are the pages the *user* visits rather than the device:
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/device` | The `verification_uri` itself. Redirects to the web app, pre-filling the code when passed as `?user_code=` |
+| `GET` | `/device/preview` | The client and scopes a pending device session is asking for, so the page can show what is being approved (RFC 8628 §5.3) |
+| `POST` | `/device/verify` | Approve or deny, once the user is authenticated |
+
+Both `preview` and `verify` need the `FERRISKEY_IDENTITY` cookie. When it is absent, `verify` answers `401` with a `redirect_uri` hint pointing back at the verification page — so a custom page can send the user to sign in and return, rather than dead-ending.
+
+`preview` also refuses codes belonging to another session, which is what stops one user approving a device code that was displayed to someone else.
+
+## What you still get for free
+
+Replacing the portal does not mean reimplementing the whole IAM. These keep working underneath, whatever UI calls them:
+
+- The [authentication chain](/en/discover/core-concepts/authentication#authentication-chain) — lockout, required actions, realm policy.
+- [Compass](/en/modules/compass/overview) flow recording, step by step, including the steps your UI drove.
+- [SeaWatch](/en/modules/seawatch/overview) audit events and [webhooks](/en/modules/webhooks/overview).
+- The [password policy](/en/discover/core-concepts/password-policy), including its public endpoint so your form can evaluate the rules as the user types.
+
+::::card-group{cols=2}
+:::card{label="Portal themes" icon="lucide:palette" href="/en/modules/portal/overview"}
+The supported way to change what the login pages look like.
+:::
+:::card{label="Trident" icon="lucide:shield-check" href="/en/modules/trident/overview"}
+What each MFA challenge means before you drive it yourself.
+:::
+::::

@@ -44,7 +44,7 @@ The admin account is created on first boot in the `master` realm.
 | `SERVER_PUBLIC_URL` | unset | The origin browsers and service providers reach this deployment at, as `scheme://host[:port]` |
 | `ALLOWED_ORIGINS` | empty | Comma-separated browser origins allowed on every route |
 | `WEBAPP_URL` | `http://localhost:5555` | URL of the admin console, used when building links |
-| `ENV` | `development` | Deprecated. Kept for compatibility and ignored by new code |
+| `ENV` | `development` | Reported back by `/config` and otherwise unused. Kept for compatibility |
 
 `ALLOWED_ORIGINS` deserves a note of its own. Each entry must be a serialized origin (`scheme://host[:port]`), with no path and no wildcard. It applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Clients also declare their own web origins per realm, but those only cover realm-scoped routes, so a console served from a different origin than the API still needs its origin listed here.
 
@@ -67,6 +67,12 @@ Both variables are required together. Set neither to serve plain HTTP and termin
 |---|---|---|
 | `LOG_FILTER` | `info` | [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) directives, for example `info,ferriskey_core=debug` |
 | `LOG_JSON` | `false` | Emit structured JSON logs instead of human-readable lines |
+
+### Webhooks
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS` | `false` | Allow webhook endpoints to resolve to loopback or private addresses. For local development only. Link-local addresses stay refused regardless |
 
 ### Observability
 
@@ -133,6 +139,10 @@ Then run the server:
 ```bash
 ./ferriskey-api
 ```
+
+## Moving configuration between realms
+
+Portal themes, portal layouts and email templates export and import as files, and password hashes from another IAM can be imported per user. See [Export & Import](/en/discover/guides/portability).
 
 ## SMTP configuration
 

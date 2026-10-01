@@ -1,0 +1,89 @@
+---
+title: Overview
+description: "The self-service account surface: what a user can change about themselves, without an administrator."
+icon: user-cog
+order: 70
+---
+
+# Account
+
+Everything else in FerrisKey is an administrator acting on someone. The account module is the opposite: it is the surface a user operates on **themselves**, and the only one where the caller and the target are the same person by construction.
+
+That distinction is the whole design. These endpoints live under `/users/me`, they resolve the subject from the caller's own token, and they take no user id — so there is no id to tamper with and no permission to hold. A user needs no `manage_users` to change their own password, and holding `manage_users` grants nothing extra here.
+
+## What a user can do
+
+| Area | Operations |
+|---|---|
+| Profile | Read and update their own name and email, set their locale |
+| Password | Change it, against the realm's [password policy](/en/discover/core-concepts/password-policy) |
+| Authenticator app | Enrol a TOTP authenticator, confirm it, remove it |
+| Passkeys | Register a passkey, list credentials, delete one |
+| Sessions | Review their active sessions |
+
+<img class="only-light" src="/dashboard/account_security-light.jpg" alt="FerrisKey account security tab showing password change with live policy feedback, authenticator app and passkeys sections" />
+<img class="only-dark" src="/dashboard/account_security-dark.jpg" alt="FerrisKey account security tab showing password change with live policy feedback, authenticator app and passkeys sections" />
+
+## Profile
+
+```
+GET /realms/{realm_name}/users/me
+PUT /realms/{realm_name}/users/me
+```
+
+What a user may change about their own profile is not fixed: the realm decides. `edit_username_enabled` governs whether the username field is writable, and the console shows it as locked when the realm says no.
+
+Email is the field to think about, because it is also the recovery address. When `email_verification_enabled` is on, changing it puts the account back through verification rather than trusting the new address immediately.
+
+### Locale
+
+```
+PUT /realms/{realm_name}/users/@me/locale
+```
+
+Sets the locale used for this user's login portal and emails, from the realm's `supported_locales`. With no preference stored, the realm's `default_locale` applies.
+
+:::callout{variant="warning" title="This one path says @me, not me"}
+Every other account endpoint is spelled `/users/me`. The locale endpoint is `/users/@me/locale`, as is `GET /users/@me/realms`. It is an inconsistency in the current API, not a typo in this page — code against it as written.
+:::
+
+## Sensitive operations need an elevation
+
+Reading your profile needs nothing beyond a valid token. Changing a credential needs proof that the person at the keyboard is still the account holder, and not someone who found an unlocked laptop.
+
+```
+POST /realms/{realm_name}/users/me/reauthenticate
+```
+
+Supply **exactly one** of `password` or `otp_code`. The response carries an `elevation_id` and an `expires_at`; the elevation lives **five minutes** and is bound to the calling session. Every sensitive operation then takes that `elevation_id`.
+
+```json title="Response"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "expires_at": "2026-09-24T18:42:11Z"
+}
+```
+
+:::callout{variant="info" title="A second factor cannot rotate the factors"}
+Adding, replacing or removing a sign-in credential requires the elevation to have been proved **with a password**, not with an OTP code. Otherwise a stolen second factor could enrol itself as the only factor and lock the owner out — a factor must not be able to rotate the set it belongs to, including itself.
+
+Changing the password is the exception: it carries the current password in the request body, which is the same proof by another route.
+:::
+
+[Security](/en/modules/account/security) covers each operation and the order to call them in.
+
+## What this surface deliberately does not do
+
+- **No credential reset for someone else.** That stays an administrative operation, under `manage_users`.
+- **No role or organization changes.** A user cannot grant themselves anything.
+- **No account deletion.** Self-service deletion is not exposed.
+- **No recovery-code generation.** Recovery codes are issued during the [MFA challenge](/en/modules/trident/recovery-codes), not from the account page.
+
+::::card-group{cols=2}
+:::card{label="Account Security" icon="lucide:shield-check" href="/en/modules/account/security"}
+Password, authenticator and passkey operations, endpoint by endpoint.
+:::
+:::card{label="Trident" icon="lucide:shield" href="/en/modules/trident/overview"}
+The other side of MFA: what happens during the login challenge.
+:::
+::::

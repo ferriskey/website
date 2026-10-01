@@ -23,6 +23,24 @@ There are three:
 Pick confidential when your application has a backend that can hold the secret safely. Pick public for anything running in a browser or on a device, where the secret would end up in the user's hands anyway.
 :::
 
+## Capability config
+
+Which flows a client may take is set on its settings screen, and two of the choices are permanent.
+
+<img class="only-light" src="/dashboard/client_settings-light.jpg" alt="FerrisKey client settings showing general fields and the capability config with public/confidential and grant switches" />
+<img class="only-dark" src="/dashboard/client_settings-dark.jpg" alt="FerrisKey client settings showing general fields and the capability config with public/confidential and grant switches" />
+
+**Client authentication is set at creation and final.** A client cannot move between confidential and public afterwards. Pick confidential when a backend can hold a secret server-side, public for SPAs, mobile apps and CLIs where a secret would end up in the user's hands anyway.
+
+The grant switches are not permanent, and each one widens the attack surface:
+
+| Switch | Turn it on when |
+|---|---|
+| Direct access grants | Never, for anything new — it is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner--deprecated) |
+| OAuth 2.0 device authorization grant | The client is browserless: a CLI, an IoT device, a TV app |
+
+A disabled client keeps its whole configuration and rejects every request — which is what makes it different from [maintenance mode](/en/modules/maintenance/overview), where a whitelist still gets through.
+
 ## Client properties
 
 | Property | Description |
@@ -32,7 +50,10 @@ Pick confidential when your application has a backend that can hold the secret s
 | `protocol` | Protocol type (e.g., `openid-connect`) |
 | `enabled` | Whether the client can initiate authentication |
 | `redirect_uris` | Allowed redirect URIs after authentication |
-| `direct_access_grants_enabled` | Allow the password grant type |
+| `direct_access_grants_enabled` | Allow the deprecated password grant type |
+| `oauth_device_code_grant_enabled` | Allow the device code grant, used by CLIs and other browserless clients |
+| `require_pkce` | Require PKCE on the authorization code flow |
+| `public_client` | Public client: no secret, so PKCE carries the protection |
 | `service_account_enabled` | Enable client credentials grant |
 
 ## Token lifetime overrides
@@ -51,6 +72,31 @@ A value set on the client wins over the realm default. Leave it `null` and the r
 ## Direct access grants
 
 With this enabled, a client can use the resource owner password credentials grant, sending a username and password straight to the token endpoint. It is handy for trusted first-party applications and for testing. Do not enable it for third-party clients.
+
+## Sub-resources
+
+A client is not one object: several of its properties are collections with their own endpoints.
+
+| Collection | Endpoints | What it controls |
+|---|---|---|
+| Redirect URIs | `GET POST` `…/{client_id}/redirects`, `PUT DELETE` `…/redirects/{uri_id}` | Where FerrisKey may send the browser back after login |
+| Post-logout redirects | `GET POST` `…/{client_id}/post-logout-redirects`, `PUT DELETE` `…/post-logout-redirects/{uri_id}` | Where it may send the browser after logout |
+| Web origins | `GET POST` `…/{client_id}/web-origins`, `DELETE` `…/web-origins/{web_origin_id}` | Browser origins allowed to call realm-scoped routes |
+| Client roles | `GET POST` `…/{client_id}/roles` | Roles scoped to this client |
+| Client secret | `GET` `…/{client_id}/client-secret` | Reading it raises `client_secret_viewed` in the audit log |
+| Scope assignment | `PUT DELETE` `…/default-client-scopes/{scope_id}` and `…/optional-client-scopes/{scope_id}` | See [Client Scopes](/en/discover/core-concepts/client-scopes) |
+
+:::callout{variant="info" title="Web origins are per realm-scoped route only"}
+A client's web origins cover the realm-scoped routes. They do **not** cover `/config`, the health probes or the API documentation, which carry no realm — those need the server-wide `ALLOWED_ORIGINS`. A console served from a different origin than the API needs both.
+:::
+
+### Previewing the token a client would get
+
+```
+POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes
+```
+
+Returns the claims this client's active scopes would produce, without a login. It is the fastest way to check a [protocol mapper](/en/modules/aegis/protocol-mappers) before wiring an application to it.
 
 ## Service accounts
 

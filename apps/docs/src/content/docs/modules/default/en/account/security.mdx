@@ -1,0 +1,138 @@
+---
+title: Security
+description: "Self-service password, authenticator and passkey operations, and the elevation each one needs."
+icon: shield-check
+order: 71
+---
+
+# Account Security
+
+The credential operations a user performs on their own account. Each one needs an [elevation](/en/modules/account/overview#sensitive-operations-need-an-elevation) — a five-minute proof, bound to the calling session, obtained from `POST /users/me/reauthenticate`.
+
+Throughout this page, `{realm}` stands for `/realms/{realm_name}`.
+
+## Changing the password
+
+```
+PUT {realm}/users/me/password
+```
+
+The body carries the current password and the new one. This is the one sensitive operation that does not need a password-proved elevation first, because verifying the current password in the body *is* that proof.
+
+The new password is checked against the realm's [password policy](/en/discover/core-concepts/password-policy). The console evaluates the same rules as you type, against `GET {realm}/password-policy/public`, so the failure is visible before submitting rather than after.
+
+:::callout{variant="warning" title="Other sessions are signed out"}
+A successful change revokes the account's other sessions and keeps the current one. That is the intended behaviour for a password change — if the reason for changing it is that someone else has it, leaving their session alive would defeat the exercise. Warn the user in your own UI if you build one; a silent sign-out of their phone reads as a bug.
+:::
+
+## Listing credentials
+
+```
+GET {realm}/users/me/credentials
+```
+
+Returns the sign-in credentials attached to the account — password, authenticator, each passkey — so a UI can show what exists before offering to add or remove anything. Secrets are never returned: a passkey comes back as its metadata and its id, which is what `DELETE` takes.
+
+## Authenticator app (TOTP)
+
+Enrolment is two calls, because the server must not trust that the user successfully stored the secret until they prove they can read a code from it.
+
+::::step-group
+:::step{title="Start the enrolment"}
+```
+POST {realm}/users/me/mfa/otp
+```
+
+Returns the secret and the `otpauth://` URI to render as a QR code. The parameters are fixed: SHA-1, six digits, a thirty-second period — see [TOTP](/en/modules/trident/totp).
+
+Needs a password-proved elevation.
+:::
+
+:::step{title="Confirm with a code"}
+```
+PUT {realm}/users/me/mfa/otp
+```
+
+The user types the current code from their app. Until this call succeeds, the authenticator is not active and the account's sign-in is unchanged — an abandoned enrolment leaves nothing behind.
+:::
+
+:::step{title="Remove it, later"}
+```
+DELETE {realm}/users/me/mfa/otp
+```
+
+Also needs a password-proved elevation. An OTP code is not accepted as the proof for removing OTP.
+:::
+::::
+
+## Passkeys
+
+Passkey registration follows WebAuthn, so it is also two calls: the browser needs a server challenge, and the server needs the browser's attestation back.
+
+::::step-group
+:::step{title="Ask for registration options"}
+```
+POST {realm}/users/me/passkeys/options
+```
+
+Returns the `PublicKeyCredentialCreationOptions` to hand to `navigator.credentials.create()`. The challenge is stored server-side against the session, so it cannot be replayed.
+
+Needs a password-proved elevation.
+:::
+
+:::step{title="Send the credential back"}
+```
+POST {realm}/users/me/passkeys
+```
+
+Post the browser's response. The server checks it against the stored challenge and the relying-party id, then attaches the passkey to the account.
+:::
+
+:::step{title="Delete one"}
+```
+DELETE {realm}/users/me/passkeys/{credential_id}
+```
+
+`credential_id` comes from the credentials listing. Needs a password-proved elevation.
+:::
+::::
+
+:::callout{variant="info" title="Passkeys have to be enabled on the realm"}
+`passkey_enabled` governs whether passkeys are offered at sign-in. Registering one on a realm where the setting is off stores a credential the login flow will not use.
+:::
+
+## Endpoint summary
+
+| Method | Path | Elevation required |
+|---|---|---|
+| `GET` | `{realm}/users/me` | None |
+| `PUT` | `{realm}/users/me` | None |
+| `PUT` | `{realm}/users/@me/locale` | None |
+| `POST` | `{realm}/users/me/reauthenticate` | — it *is* the elevation |
+| `PUT` | `{realm}/users/me/password` | Current password, in the body |
+| `GET` | `{realm}/users/me/credentials` | None |
+| `POST` | `{realm}/users/me/mfa/otp` | Password-proved |
+| `PUT` | `{realm}/users/me/mfa/otp` | Password-proved |
+| `DELETE` | `{realm}/users/me/mfa/otp` | Password-proved |
+| `POST` | `{realm}/users/me/passkeys/options` | Password-proved |
+| `POST` | `{realm}/users/me/passkeys` | Password-proved |
+| `DELETE` | `{realm}/users/me/passkeys/{credential_id}` | Password-proved |
+
+No permission governs any of these. The token identifies the subject, and the subject is the target.
+
+## What gets recorded
+
+:::callout{variant="warning" title="These operations are not in the audit log yet"}
+The self-service credential operations do not currently write a [SeaWatch](/en/modules/seawatch/overview) security event. A user rotating their own password, enrolling an authenticator or deleting a passkey leaves no entry in the realm's audit trail, and no [webhook](/en/modules/webhooks/overview) fires.
+
+The administrative equivalents do: an admin resetting a password raises `password_reset`, and deleting a user's credential fires the `user.credentials.deleted` webhook trigger. If you need self-service credential changes on the audit trail today, capture them at your own edge.
+:::
+
+::::card-group{cols=2}
+:::card{label="Password Policy" icon="lucide:key-round" href="/en/discover/core-concepts/password-policy"}
+The rules a new password is checked against, and the public endpoint that exposes them.
+:::
+:::card{label="WebAuthn" icon="lucide:fingerprint" href="/en/modules/trident/webauthn"}
+Passkeys at sign-in, rather than at enrolment.
+:::
+::::

@@ -2,7 +2,7 @@
 title: Roles & Permissions
 description: "Bitwise role system in FerrisKey: permission bundles, bitmask operations, and role mappings."
 icon: shield-check
-order: 14
+order: 15
 ---
 
 # Roles & Permissions
@@ -20,7 +20,7 @@ ManageClients       = 0b0000...0100  (bit 2)
 ...
 ```
 
-A role stores its permissions as a single `u64` bitmask, the OR of all included permission bits. Checking whether a user has a permission is a single AND operation:
+A role stores its permissions as a single `u64` bitmask, the OR of all included permission bits. Checking one permission is a single AND:
 
 ```rust title="Permission check"
 fn has_permission(user_permissions: u64, required: u64) -> bool {
@@ -28,7 +28,39 @@ fn has_permission(user_permissions: u64, required: u64) -> bool {
 }
 ```
 
+:::callout{variant="info" title="An operation accepts several permissions, and any one of them grants"}
+Most operations are guarded by a *set* of permissions rather than a single one, and holding **any** member of the set is enough. Reading a federation provider, for example, accepts either `manage_realm` or `view_realm`. So a `manage_*` permission generally implies the matching `view_*` and you do not need to grant both.
+:::
+
 ## Permissions reference
+
+The console groups the 29 permissions into eleven families, which is also the most convenient way to reason about them — you rarely grant one permission, you grant a family's worth of read or a family's worth of write.
+
+<img class="only-light" src="/dashboard/role_permissions-light.jpg" alt="FerrisKey role permissions editor showing permission families with their enabled counts" />
+<img class="only-dark" src="/dashboard/role_permissions-dark.jpg" alt="FerrisKey role permissions editor showing permission families with their enabled counts" />
+
+| Family | Permissions |
+|---|---|
+| User Management | 3 |
+| Client Management | 4 |
+| Role & Authorization | 4 |
+| Realm Management | 3 |
+| Identity Providers | 2 |
+| Events & Audit | 2 |
+| Groups | 1 |
+| Client Scopes | 3 |
+| Webhooks | 3 |
+| Email Templates | 2 |
+| Organizations | 2 |
+
+Editing a role's permission set is one call:
+
+```
+PATCH /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+It replaces the set rather than merging into it, so send the full list you want the role to end up with.
+
 
 The API and the CLI both take permissions by their snake_case name, so `manage_realm`, not `ManageRealm` and not `realm:manage`. An unrecognized name is dropped silently when a role is saved, which is worth remembering when a role looks like it granted nothing.
 
@@ -47,6 +79,7 @@ The API and the CLI both take permissions by their snake_case name, so `manage_r
 | `manage_webhooks` | Configure webhook subscriptions |
 | `manage_client_scopes` | Manage client scopes and protocol mappers |
 | `manage_email_templates` | Create, update, and delete email templates |
+| `manage_organizations` | Create, update, and delete organizations, their groups and their members |
 
 ### Query
 
@@ -73,6 +106,22 @@ The API and the CLI both take permissions by their snake_case name, so `manage_r
 | `view_webhooks` | View webhook details |
 | `view_client_scopes` | View client scope details |
 | `view_email_templates` | View email templates |
+| `view_organizations` | View organizations, their groups and their members |
+
+## Actions, and how a check is resolved
+
+Permissions are what a role stores. They are not how the code names an operation.
+
+Every authorization-guarded operation has a stable action id of the form `resource_type:verb` — `client:create`, `user_role:assign`, `security_event:read`. There are 95 of them, and the names are a public contract: an authorization engine resolves an action to the set of permissions that grant it, and the mapping is kept in one decision table rather than scattered across call sites.
+
+Two things follow that matter when you design roles:
+
+- **The vocabulary you grant and the vocabulary the code checks are different layers.** You assign `manage_users`; the code asks whether `user:update` is allowed. The engine bridges the two.
+- **Some checks short-circuit on identity.** A handful of operations allow the subject when the subject *is* the target, whatever their permissions — which is how a user reads their own profile without holding `view_users`. Self-service goes through [its own endpoints](/en/modules/account/security) rather than the admin ones.
+
+:::callout{variant="info" title="Not the AuthZen API"}
+This catalogue is internal: FerrisKey resolves it in-process and does not yet expose an [AuthZen](/en/learn/authzen/overview) decision endpoint. It is the vocabulary such a facade would speak if and when it ships.
+:::
 
 ## Role mappings
 
@@ -84,6 +133,27 @@ Take a user with two roles:
 - User Manager, holding `manage_users | query_users` = `0b...01010`
 
 The effective mask is `0b...11110`: they can view and manage users, view clients, and query users.
+
+## Managing roles
+
+```
+GET    /realms/{realm_name}/roles
+POST   /realms/{realm_name}/roles
+GET    /realms/{realm_name}/roles/{role_id}
+PUT    /realms/{realm_name}/roles/{role_id}
+DELETE /realms/{realm_name}/roles/{role_id}
+PATCH  /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+A client role is created under its client instead: `POST /realms/{realm_name}/clients/{client_id}/roles`.
+
+:::callout{variant="warning" title="A role's scope is fixed, and deletion is not retroactive"}
+A role is attached to the realm or to a client at creation, and **moving it between scopes is not supported** — recreate it instead.
+
+Deleting a role permanently removes every user assignment it had, but **tokens already issued stay valid until they expire**. The window between the two is the access token lifetime, so revoke the sessions as well when you are removing a role because it should never have been granted.
+:::
+
+**Required permissions:** `view_roles`, `manage_roles` or `manage_users` to read — `manage_users` is on the list because assigning a role requires seeing it. `manage_roles` to write. `manage_realm` grants everything.
 
 ## Realm and client roles
 
