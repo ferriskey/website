@@ -42,13 +42,10 @@ This endpoint returns a JSON document that OIDC clients can read automatically. 
 | `userinfo_endpoint` | Where the application can fetch profile information |
 | `jwks_uri` | Where public signing keys are exposed so tokens can be verified |
 | `grant_types_supported` | Which grant types this realm accepts |
+| `device_authorization_endpoint` | Where a browserless device starts the [device flow](#device-code) |
 | `code_challenge_methods_supported` | Which PKCE methods are available |
 
 Most applications support discovery, so you rarely paste endpoints by hand. Give the application the discovery URL or the issuer, and it reads the rest from FerrisKey.
-
-:::callout{variant="warning" title="The document under-reports the grants"}
-`grant_types_supported` currently advertises `authorization_code`, `refresh_token`, `client_credentials` and `password` only. The [device code grant](#device-code) is served but not listed, and the document carries no `device_authorization_endpoint`, so a client that configures itself purely from discovery will not find the device flow. Configure that one by hand.
-:::
 
 :::callout{variant="info" title="Issuer and discovery are not the same setting"}
 When an application asks for the issuer or the authority, give it the realm URL, for example `https://sso.example.com/realms/home`. When it asks for the discovery endpoint or the OpenID configuration URL, give it the full `/.well-known/openid-configuration` address.
@@ -149,17 +146,13 @@ The client needs `oauth_device_code_grant_enabled`. Without it the first call is
 
 The flow is also observable: [webhooks](/en/modules/webhooks/triggers) fire `auth.device_flow.initiated`, `auth.device_flow.denied` and `auth.device_flow.expired`.
 
-### Token exchange — not served yet
+### Token exchange
 
 ```
 urn:ietf:params:oauth:grant-type:token-exchange
 ```
 
-RFC 8693 token exchange is **modelled but not implemented**. The grant type parses, the request and response shapes exist, and a `token_exchange_policies` table is in the schema carrying a target audience, allowed scopes, and impersonation and delegation switches per client. None of it is wired: the token endpoint answers `invalid_request` for this grant.
-
-Do not build on it, and do not read the presence of the policy table as a feature. When it does ship, the shape it will take is the RFC's: a `subject_token` plus its `subject_token_type`, an optional `requested_token_type`, `audience`, `resource` and `scope`, with the issued scope constrained to a subset of the subject token's.
-
-If what you need today is one service calling another under its own identity, use [client credentials](#client-credentials). If you need to carry the end user's identity across a service boundary, pass the access token itself and validate it at each hop.
+A confidential client trades an access token it holds for a new one: fewer scopes, a token meant for another service, or a token that names who acts for the user (RFC 8693). The client needs `token_exchange_enabled`, and targeting another service needs a delegation policy. See [Token Exchange](/en/discover/core-concepts/token-exchange).
 
 ## The OIDC endpoints
 
@@ -169,7 +162,7 @@ These are the integration surface: what an application, a resource server or a g
 |---|---|---|
 | `GET` | `/auth` | Start the authorization code flow |
 | `POST` | `/auth/device` | Start the device flow (RFC 8628 §3.1) |
-| `POST` | `/token` | Exchange a code, refresh token or device code for tokens |
+| `POST` | `/token` | Exchange a code, refresh token or device code for tokens, or swap an access token ([token exchange](/en/discover/core-concepts/token-exchange)) |
 | `POST` | `/token/introspect` | Token introspection (RFC 7662) |
 | `GET` | `/userinfo` | Profile claims for the bearer of an access token |
 | `POST` | `/revoke` | Revoke an access or refresh token (RFC 7009) |

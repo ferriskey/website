@@ -109,12 +109,13 @@ Each step records:
 | `authorize` | OAuth2 authorization request validation, checks redirect URI, scope, response type, CSRF state | &lt;5ms |
 | `credential_validation` | Username lookup + password hash verification (Argon2) | 50-200ms |
 | `mfa_challenge` | TOTP code validation or WebAuthn assertion verification | 5-50ms |
-| `token_exchange` | Authorization code → token exchange (code lookup + token generation) | 10-30ms |
+| `token_exchange` | The token endpoint issuing tokens for a grant: code lookup for the authorization code, then token generation. Not RFC 8693, see `subject_token_exchange` | 10-30ms |
 | `idp_redirect` | Building and recording the redirect to an external identity provider | &lt;5ms |
 | `idp_callback` | Processing the callback from an external IdP (token exchange + user lookup) | 100-500ms |
 | `finalize` | Session creation, SeaWatch event emission, and cleanup | 5-15ms |
 | `saml_authn_request` | Parsing an incoming SAML `AuthnRequest` and resolving the service provider | &lt;5ms |
 | `saml_assertion` | Building and signing the SAML assertion sent back to the service provider | 5-20ms |
+| `subject_token_exchange` | An RFC 8693 [token exchange](/en/discover/core-concepts/token-exchange): subject and actor checks, policy lookup, mappers and signing | 10-40ms |
 
 ### Step status values
 

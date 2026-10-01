@@ -1,0 +1,169 @@
+---
+title: Token Exchange
+description: "Swap an access token for a narrower one, for another service, or on someone's behalf (RFC 8693)."
+icon: arrow-left-right
+order: 20
+---
+
+# Token Exchange
+
+Token exchange lets a client trade an access token it already holds for a new one. FerrisKey implements [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) for three jobs:
+
+| Job | What the client asks for | Example |
+|---|---|---|
+| **Downscoping** | The same token with fewer scopes | A gateway passes a `profile`-only token to a less trusted component |
+| **Audience** | A token meant for another service | The orders API calls the billing API as the signed-in user |
+| **Delegation** | A token that says who acts for the user | A support agent works on a customer's account, and the token names both |
+
+The issued token is a plain access token. Resource servers validate it like any other.
+
+:::callout{variant="info" title="Not in 0.8.0"}
+Token exchange ships with the release after FerrisKey 0.8.0.
+:::
+
+## Before you start
+
+1. The requesting client is **confidential**. Public clients are always refused, because they cannot keep the secret that proves who is asking.
+2. Turn on **token exchange** on that client: the toggle in its settings, or `token_exchange_enabled: true` through the API. It is off by default.
+3. To target another service, add a [delegation policy](#delegation-policies) for that audience. Downscoping without an audience needs no policy.
+
+## The request
+
+`POST /realms/{realm}/protocol/openid-connect/token`, form-encoded. The client authenticates with HTTP Basic (`client_secret_basic`) or `client_id` + `client_secret` in the body (`client_secret_post`).
+
+| Parameter | Required | Value |
+|---|---|---|
+| `grant_type` | yes | `urn:ietf:params:oauth:grant-type:token-exchange` |
+| `subject_token` | yes | The access token being exchanged |
+| `subject_token_type` | yes | `urn:ietf:params:oauth:token-type:access_token` |
+| `requested_token_type` | no | Only `urn:ietf:params:oauth:token-type:access_token`, the default |
+| `scope` | no | Space-separated subset of the subject token's scope |
+| `audience` | no | `client_id` of a client of the same realm |
+| `actor_token` | no | Access token of the party acting for the user, see [delegation](#delegation-the-act-claim) |
+| `actor_token_type` | with `actor_token` | `urn:ietf:params:oauth:token-type:access_token` |
+| `resource` | no | Not supported yet, answers `invalid_target` |
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
+```
+
+The requesting client must be a party to the subject token: its `azp`, or listed in its `aud`. A client cannot exchange a token it intercepted.
+
+## The response
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "orders:read"
+}
+```
+
+- `scope` is omitted when it equals the subject token's scope.
+- No refresh token and no ID token. When the new token expires, exchange again.
+- No cookie, and the response carries `Cache-Control: no-store`.
+
+## What the issued token contains
+
+| Claim | Where it comes from |
+|---|---|
+| `iss`, `sub`, `sid` | The subject token. They never change |
+| `azp` | The requesting client, which now holds the token |
+| `aud` | The `audience` parameter when set, otherwise the subject token's `aud` |
+| `scope` | The narrowed scope, see [scope rules](#scope-rules) |
+| `exp` | The client's access token lifetime, capped at the subject token's `exp` |
+| Mapped claims | Recomputed by the [protocol mappers](/en/modules/aegis/protocol-mappers) of the client that consumes the token |
+| `act` | Set on a delegated exchange, see [below](#delegation-the-act-claim) |
+
+Mapped claims are not copied from the subject token. FerrisKey runs the protocol mappers again, those of the `audience` client when one is set, otherwise those of the requesting client, and only for the scopes the new token carries. Ask for `scope=profile` and the `email` claim is gone, even if the subject token had it.
+
+Because the new token keeps the subject's `sid`, it lives and dies with the user's session. Log the user out or revoke the session, and the exchanged token stops working at introspection too.
+
+## Scope rules
+
+- A requested `scope` must be a subset of the subject token's scope, otherwise `invalid_scope`.
+- With a policy, it must also fit within the policy's `allowed_scopes`, when that list is set.
+- With no `scope` requested, the token gets what both allow: the subject's scope, intersected with `allowed_scopes`.
+- `offline_access` is never granted, since an exchange issues no refresh token.
+
+## Delegation policies
+
+A policy lets one client target one audience. Without a matching policy, an exchange with `audience` answers `invalid_target`.
+
+| Field | Meaning |
+|---|---|
+| `target_audience` | `client_id` of the client the issued token is for |
+| `allowed_scopes` | Scope ceiling. Empty or `null` means no extra cap |
+| `allow_impersonation` | The client may exchange with no actor, acting as the user |
+| `allow_delegation` | The client may exchange with an `actor_token`, and the token names the actor |
+
+The two switches are independent. A policy that allows only delegation refuses a plain exchange, and the reverse.
+
+Manage policies from the client page, tab **Token exchange**, or through the admin API:
+
+| Method | Path |
+|---|---|
+| `GET` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` |
+| `POST` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` |
+| `DELETE` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies/{policy_id}` |
+
+```json
+{
+  "target_audience": "orders-api",
+  "allowed_scopes": ["orders:read"],
+  "allow_impersonation": true,
+  "allow_delegation": false
+}
+```
+
+A client can hold one policy per audience: a second one answers `409`. Deleting a policy takes effect on the next exchange.
+
+## Delegation: the act claim
+
+With impersonation, the issued token looks as if the user called the audience directly. With delegation, it also says who acted. The client sends an `actor_token`, and the issued token carries an `act` claim ([RFC 8693 §4.1](https://datatracker.ietf.org/doc/html/rfc8693#section-4.1)):
+
+```json
+{
+  "sub": "1b0e…",
+  "azp": "support-desk",
+  "aud": ["orders-api"],
+  "act": { "sub": "7c4f…", "client_id": "support-desk" }
+}
+```
+
+- The actor token must be a live access token of the realm, issued to the requesting client (`azp`). A `client_credentials` token of the client itself works, and so does a token of the agent signed in to that client.
+- Delegation needs a policy with `allow_delegation`. An `actor_token` without `audience` is refused, because only a policy can grant delegation.
+- When the subject token already carries an `act`, the new actor wraps it: `act.act` holds the previous one. The chain reads from the current actor down to the first.
+- A plain exchange of a delegated token keeps its `act` untouched. An exchange never erases who acted before.
+
+## Errors
+
+Errors follow the [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) shape: `{ "error": "...", "error_description": "..." }`.
+
+| `error` | Status | Cause |
+|---|---|---|
+| `invalid_client` | 401 | Unknown or public client, or wrong secret. Comes with `WWW-Authenticate: Basic` |
+| `unauthorized_client` | 400 | Token exchange off on the client, client not a party to the subject token, or the policy does not allow this kind of exchange |
+| `invalid_request` | 400 | Subject or actor token missing, malformed, expired, revoked, a refresh token, from another realm, or an actor token of another client. Also `actor_token` without `actor_token_type`, or the reverse |
+| `unsupported_token_type` | 400 | A token type other than `access_token` |
+| `invalid_scope` | 400 | Scope wider than the subject token or the policy ceiling |
+| `invalid_target` | 400 | Unknown or disabled audience, no policy for it, or `resource` set |
+
+## Discovery and observability
+
+- The [discovery document](/en/discover/core-concepts/authentication#openid-connect-discovery) lists `urn:ietf:params:oauth:grant-type:token-exchange` in `grant_types_supported`.
+- Every exchange by an authenticated client is a [Compass](/en/modules/compass/overview) flow with a `subject_token_exchange` step, and a [SeaWatch](/en/modules/seawatch/event-types) `token_exchanged` event naming the client, the subject, the audience, the policy and the actor.
+- Requests that fail client authentication leave no trace, so an unknown `client_id` cannot fill those tables.
+
+## When not to use it
+
+- **A service calling another under its own identity**: use [client credentials](/en/discover/core-concepts/authentication#client-credentials). No user is involved.
+- **One backend passing the user's token to the next hop unchanged**: forward the token and validate it at each hop. Exchange when the next hop should get less, or should know who acts.

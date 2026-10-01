@@ -90,6 +90,14 @@ Role events are critical for access control audits. They answer: "Who granted th
 | `session_created` | A user session was established | User | User |
 | `session_revoked` | A session was revoked | Admin or User | User |
 
+## Token exchange
+
+| Event | Description | Actor | Target |
+|---|---|---|---|
+| `token_exchanged` | A client swapped a user's access token for a new one ([RFC 8693](/en/discover/core-concepts/token-exchange)) | User (the token's subject) | Client |
+
+`details` carries the `client_id`, the requested `audience`, the `policy_id` that allowed it and the `actor` on a delegated exchange, plus `error_code` on failure. Only exchanges by an authenticated client are recorded: a wrong secret leaves no event.
+
 ## Maintenance
 
 | Event | Description | Actor | Target |
