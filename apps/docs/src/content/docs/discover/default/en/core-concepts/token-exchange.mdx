@@ -43,6 +43,19 @@ Token exchange ships with the release after FerrisKey 0.8.0.
 | `actor_token_type` | with `actor_token` | `urn:ietf:params:oauth:token-type:access_token` |
 | `resource` | no | Not supported yet, answers `invalid_target` |
 
+Narrow the scope of a token, with no audience and no policy:
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d scope=profile
+```
+
+Get a token for another service, which needs a [policy](#delegation-policies) for `orders-api`:
+
 ```bash
 curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
   -u 'gateway:<client secret>' \
@@ -126,6 +139,20 @@ Manage policies from the client page, tab **Token exchange**, or through the adm
 
 A client can hold one policy per audience: a second one answers `409`. Deleting a policy takes effect on the next exchange.
 
+Create a policy that allows delegation, with an admin token. `$CLIENT_UUID` is the id of the requesting client, not its `client_id`:
+
+```bash
+curl -X POST https://sso.example.com/realms/home/clients/$CLIENT_UUID/token-exchange-policies \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "target_audience": "orders-api",
+    "allowed_scopes": ["orders:read"],
+    "allow_impersonation": false,
+    "allow_delegation": true
+  }'
+```
+
 ## Delegation: the act claim
 
 With impersonation, the issued token looks as if the user called the audience directly. With delegation, it also says who acted. The client sends an `actor_token`, and the issued token carries an `act` claim ([RFC 8693 §4.1](https://datatracker.ietf.org/doc/html/rfc8693#section-4.1)):
@@ -137,6 +164,20 @@ With impersonation, the issued token looks as if the user called the audience di
   "aud": ["orders-api"],
   "act": { "sub": "7c4f…", "client_id": "support-desk" }
 }
+```
+
+Run a delegated exchange. `$ACTOR_TOKEN` is the access token of the party acting for the user:
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'support-desk:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$CUSTOMER_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d actor_token="$ACTOR_TOKEN" \
+  -d actor_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
 ```
 
 - The actor token must be a live access token of the realm, issued to the requesting client (`azp`). A `client_credentials` token of the client itself works, and so does a token of the agent signed in to that client.
