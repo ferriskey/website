@@ -19,6 +19,25 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.9.0',
+    publishedAt: '2026-10-03T00:00:00Z',
+    title: 'Token exchange, back-channel logout, and realm isolation enforced by the type system',
+    summary:
+      'FerrisKey 0.9.0 adds RFC 8693 token exchange with delegation policies, OIDC Back-Channel Logout and a consent screen, and carries password hashes over from other systems. Underneath, every repository port now takes a realm scope, which closed a whole class of cross-realm access bugs.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.9.0',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.8.0...v0.9.0',
+    highlights: [
+      'Implements RFC 8693 token exchange for downscoping, targeting another service, and delegation: per-client opt-in, delegation policies with a scope ceiling and separate impersonation and delegation switches, actor tokens, the act claim with chained actors, a console tab to manage policies, and an entry in the discovery document.',
+      'Adds OIDC Back-Channel Logout with its console settings, the prompt and max_age parameters, a remember-me setting that now changes the SSO cookie lifetime, an SSO session handed out on the MFA login steps, and a themable consent screen for a client\'s optional scopes.',
+      'Makes migrations from other identity systems keep their users: bcrypt password hashes are imported and re-encoded as argon2id on first sign-in, and a user can be created with a caller-supplied id so the sub claim survives. With the CLI, this lets teams import users from Supabase together with their passwords.',
+      'Rebuilds webhook delivery on a persisted outbox with retry policies per realm and per webhook, delivery history, manual replay and signing secret regeneration, and translates the console into English and Simplified Chinese with API errors localised from a stable reason code.',
+      'Threads the realm through every repository port with a RealmScope type, which turned a series of cross-realm access bugs into compile errors, and fixes around fifteen of them: login sessions, passkeys, roles, credentials, maintenance whitelists and delegated realm-admin roles are now confined to the realm in the URL, and the access token is no longer handed out in a cookie.',
+    ],
+    transition:
+      'Where 0.8 turned inward to build foundations that could be verified, 0.9 spends them: the realm boundary is now checked by the compiler, and the protocol surface grows with token exchange, back-channel logout and consent on top of it.',
+  },
+  {
     version: 'v0.8.0',
     publishedAt: '2026-09-15T23:02:24Z',
     title: 'SAML 2.0, a rebuilt administration console, and a reworked codebase',
@@ -293,6 +312,21 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.9.0': {
+      title:
+        "Token exchange, back-channel logout et isolation des realms garantie par le système de types",
+      summary:
+        "FerrisKey 0.9.0 ajoute le token exchange RFC 8693 avec des policies de délégation, l'OIDC Back-Channel Logout et un écran de consentement, et reprend les hashes de mots de passe d'autres systèmes. En dessous, chaque port de dépôt prend désormais un scope de realm, ce qui a fermé toute une classe de bugs d'accès entre realms.",
+      highlights: [
+        "Implémente le token exchange RFC 8693 pour réduire un scope, viser un autre service et déléguer : activation par client, policies de délégation avec plafond de scope et interrupteurs séparés pour l'impersonation et la délégation, actor tokens, claim act avec chaîne d'acteurs, onglet de console pour gérer les policies et entrée dans le document de discovery.",
+        "Ajoute l'OIDC Back-Channel Logout avec ses réglages dans la console, les paramètres prompt et max_age, un réglage remember me qui change désormais la durée du cookie SSO, une session SSO remise aux étapes de connexion MFA et un écran de consentement thémable pour les scopes optionnels d'un client.",
+        "Fait que les migrations depuis d'autres systèmes d'identité gardent leurs utilisateurs : les hashes bcrypt sont importés puis ré-encodés en argon2id à la première connexion, et un utilisateur peut être créé avec un id fourni par l'appelant pour que le claim sub survive. Avec la CLI, les équipes peuvent importer leurs utilisateurs Supabase avec leurs mots de passe.",
+        "Reconstruit la livraison des webhooks sur une outbox persistée avec des politiques de retry par realm et par webhook, un historique des livraisons, le rejeu manuel et la régénération du secret de signature, et traduit la console en anglais et en chinois simplifié, avec des erreurs d'API localisées à partir d'un code de raison stable.",
+        "Fait passer le realm par chaque port de dépôt avec un type RealmScope, ce qui a transformé une série de bugs d'accès entre realms en erreurs de compilation, et corrige une quinzaine d'entre eux : sessions de login, passkeys, rôles, credentials, whitelists de maintenance et rôles realm-admin délégués sont désormais confinés au realm de l'URL, et l'access token n'est plus donné dans un cookie.",
+      ],
+      transition:
+        "Là où la 0.8 se tournait vers l'intérieur pour bâtir des fondations vérifiables, la 0.9 les met à profit : la frontière entre realms est maintenant contrôlée par le compilateur, et la surface protocolaire s'élargit avec le token exchange, le back-channel logout et le consentement.",
+    },
     'v0.8.0': {
       title:
         "SAML 2.0, une console d'administration reconstruite et une codebase reprise en profondeur",
