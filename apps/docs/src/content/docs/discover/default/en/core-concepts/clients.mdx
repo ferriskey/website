@@ -38,6 +38,7 @@ The grant switches are not permanent, and each one widens the attack surface:
 |---|---|
 | Direct access grants | Never, for anything new — it is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner--deprecated) |
 | OAuth 2.0 device authorization grant | The client is browserless: a CLI, an IoT device, a TV app |
+| Token exchange | A confidential client must swap user tokens for narrower ones or for another service. Off by default. See [Token Exchange](/en/discover/core-concepts/token-exchange) |
 
 A disabled client keeps its whole configuration and rejects every request — which is what makes it different from [maintenance mode](/en/modules/maintenance/overview), where a whitelist still gets through.
 
@@ -52,6 +53,7 @@ A disabled client keeps its whole configuration and rejects every request — wh
 | `redirect_uris` | Allowed redirect URIs after authentication |
 | `direct_access_grants_enabled` | Allow the deprecated password grant type |
 | `oauth_device_code_grant_enabled` | Allow the device code grant, used by CLIs and other browserless clients |
+| `token_exchange_enabled` | Allow the [token exchange](/en/discover/core-concepts/token-exchange) grant (RFC 8693) |
 | `require_pkce` | Require PKCE on the authorization code flow |
 | `public_client` | Public client: no secret, so PKCE carries the protection |
 | `service_account_enabled` | Enable client credentials grant |
@@ -85,6 +87,7 @@ A client is not one object: several of its properties are collections with their
 | Client roles | `GET POST` `…/{client_id}/roles` | Roles scoped to this client |
 | Client secret | `GET` `…/{client_id}/client-secret` | Reading it raises `client_secret_viewed` in the audit log |
 | Scope assignment | `PUT DELETE` `…/default-client-scopes/{scope_id}` and `…/optional-client-scopes/{scope_id}` | See [Client Scopes](/en/discover/core-concepts/client-scopes) |
+| Token exchange policies | `GET POST` `…/{client_id}/token-exchange-policies`, `DELETE` `…/token-exchange-policies/{policy_id}` | Which audiences this client may exchange tokens for, see [Token Exchange](/en/discover/core-concepts/token-exchange#delegation-policies) |
 
 :::callout{variant="info" title="Web origins are per realm-scoped route only"}
 A client's web origins cover the realm-scoped routes. They do **not** cover `/config`, the health probes or the API documentation, which carry no realm — those need the server-wide `ALLOWED_ORIGINS`. A console served from a different origin than the API needs both.
