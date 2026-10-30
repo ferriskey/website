@@ -1,0 +1,197 @@
+---
+title: Overview
+description: "Authz makes a realm a policy decision point: you write Cedar policies for your own applications, and FerrisKey answers AuthZEN access requests."
+icon: scale
+order: 110
+---
+
+# Authz: access decisions for your applications
+
+Authz lets a realm answer "may this subject perform this action on this resource?" for the applications you build. You describe your application's types and actions in a Cedar schema and write policies against it. Each application that enforces access, called a policy enforcement point (PEP), asks FerrisKey over the [AuthZEN](/en/learn/authzen/overview) 1.0 evaluation API. FerrisKey is the policy decision point (PDP): it evaluates the realm's rules and answers `true` or `false`.
+
+## Not the same as role permissions
+
+FerrisKey already checks permissions, the bits a [role](/en/discover/core-concepts/roles) carries, before it lets someone call its admin API. Authz is a different system. It decides about the objects of your own applications (a document, an invoice, an MCP tool) with rules your realm writes and owns.
+
+The two meet in two places. A policy can test the roles, groups and organizations FerrisKey holds for a user, and a few permissions control who edits the rules and who may ask for decisions.
+
+## How a decision is made
+
+1. The PEP, authenticated as a service account, posts a subject, an action, a resource and an optional context.
+2. For a `FerrisKey::User` or `FerrisKey::Client` subject, FerrisKey reads the subject's roles, groups, organizations and attributes from the database. Any other subject is described by the request itself.
+3. FerrisKey checks the request against the realm's schema, then Cedar evaluates the realm's enabled policies. A request is allowed only when a `permit` policy matches and no `forbid` policy does.
+4. The response carries `"decision": true` or `"decision": false`.
+
+Anything the rules do not permit is a deny, so a realm with no policy permits nothing.
+
+## The gates
+
+Three conditions have to hold before a PEP gets a decision.
+
+| Gate | Setting | When it is closed |
+|---|---|---|
+| The instance serves the module | `AUTHZ_ENABLED=true` (default `false`) | Every route of the module answers 404, as if it did not exist |
+| The realm has the module on | `PUT /realms/{realm_name}/authz/state` with `{"enabled": true}` | Evaluation answers 404 with the reason `authorization_not_enabled`. The management routes keep working, so you can prepare the rules first |
+| The caller may ask | A service account holding `evaluate_authorization` | 403, or 401 when there is no valid token |
+
+`AUTHZ_ENABLED` mounts the whole module, not only the evaluation endpoint: the management routes under `/realms/{realm_name}/authz`, the evaluation routes under `/realms/{realm_name}/authzen`, and the metadata document under `/.well-known/authzen-configuration`. The variable is described with the others in [Configuration](/en/discover/guides/configuration).
+
+## Permissions
+
+Four permissions decide who can do what. All of them are granted through [roles](/en/discover/core-concepts/roles#permissions-reference).
+
+| Permission | What it allows |
+|---|---|
+| `evaluate_authorization` | Call the two evaluation endpoints. Only a service account is accepted |
+| `view_authorization` | Read the schema, policies, templates and state, validate and simulate policies, and see which policies decided (`context.reason_admin`) in evaluation responses |
+| `manage_authorization` | Everything `view_authorization` allows, plus writing the schema, policies, templates and state |
+| `manage_realm` | The same as `manage_authorization`. For evaluation it also satisfies the permission check, but only for a service account |
+
+:::callout{variant="warning" title="A human administrator cannot evaluate"}
+The evaluation endpoints refuse any caller that is not a service account, whatever permissions it holds. An administrator with `manage_realm` who calls them with their own token gets a 403. Give the PEP its own confidential client, and use an administrator for the management routes.
+:::
+
+## Quick start
+
+The example protects a `document:read` action with a role. It uses a realm named `acme`. Steps 2 to 4 need the token of an administrator holding `manage_authorization` or `manage_realm`. Step 6 uses the token of the PEP built in step 5. Every call carries `Authorization: Bearer <token>`.
+
+::::step-group
+:::step{title="Turn the module on for the instance"}
+Set `AUTHZ_ENABLED=true` and restart the API. Until you do, none of the routes below exist.
+:::
+
+:::step{title="Describe your application"}
+Upload a Cedar schema. Without a `namespace` it is stored under `App`.
+
+```http
+PUT /realms/acme/authz/schema
+```
+
+```json title="Request body"
+{
+  "source": "namespace App {\n  entity Document = {\n    classification: String,\n  };\n\n  action \"document:read\" appliesTo {\n    principal: [FerrisKey::User],\n    resource: [Document],\n  };\n}"
+}
+```
+
+The same schema, unescaped:
+
+```text
+namespace App {
+  entity Document = {
+    classification: String,
+  };
+
+  action "document:read" appliesTo {
+    principal: [FerrisKey::User],
+    resource: [Document],
+  };
+}
+```
+:::
+
+:::step{title="Write a policy"}
+The policy permits the holders of one role to read documents. Roles are named by their UUID, so replace the one below with the id of a role of your realm (`GET /realms/acme/roles` lists them) and give that role to the user you will test with.
+
+```http
+POST /realms/acme/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "editors-can-read",
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+The answer is a 201 with the stored policy. A policy that does not validate against the schema is refused with a 422.
+:::
+
+:::step{title="Turn the realm on"}
+```http
+PUT /realms/acme/authz/state
+```
+
+```json title="Request body"
+{ "enabled": true }
+```
+
+```json title="Response"
+{ "enabled": true, "version": 2 }
+```
+
+`version` counts the writes to the schema, the policies and the templates. Turning the realm on does not change it.
+:::
+
+:::step{title="Create the PEP"}
+Create a confidential client with `service_account_enabled` (see [service accounts](/en/discover/core-concepts/clients#service-accounts)). Then create a role that carries the permission and give it to the client's service account user.
+
+```text
+POST /realms/acme/roles
+GET  /realms/acme/users?service_account=true
+POST /realms/acme/users/{user_id}/roles/{role_id}
+```
+
+```json title="Body of the role"
+{ "name": "pdp-caller", "permissions": ["evaluate_authorization"] }
+```
+
+The `client_id` field of a user in the list is the UUID of its client. Finally, request a token for the client with the [client credentials grant](/en/discover/core-concepts/authentication#client-credentials).
+:::
+
+:::step{title="Ask for a decision"}
+With the PEP's token, ask whether a user may read a document. The user is identified by their UUID.
+
+```http
+POST /realms/acme/authzen/access/v1/evaluation
+```
+
+```json title="Request body"
+{
+  "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" },
+  "action": { "name": "document:read" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "public" }
+  }
+}
+```
+
+```json title="Response"
+{ "decision": true }
+```
+
+If the user does not hold the role, the same call returns `{ "decision": false }` with a 200. A refusal is not an error. If the PEP also holds `view_authorization`, the response adds the policies that decided:
+
+```json title="Response with view_authorization"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["editors-can-read"] } }
+}
+```
+:::
+::::
+
+The user's roles are read from the database on every request, so changing them takes effect on the next decision. Only the compiled rules are cached, and no replica serves rules that are more than a second out of date.
+
+The console has no screen for Authz. Every step above goes through the API.
+
+## In this module
+
+::::card-group{cols=2}
+:::card{label="Schema, policies and templates" icon="lucide:file-code-2" href="/en/modules/authz/policies"}
+Write the rules: the Cedar schema, static and linked policies, validation, simulation and the limits.
+:::
+:::card{label="Evaluation" icon="lucide:list-checks" href="/en/modules/authz/evaluation"}
+The AuthZEN endpoints: subjects, batches, failure behaviour and the agent and MCP types.
+:::
+:::card{label="AuthZEN" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
+The standard behind the evaluation API, and the problem it solves.
+:::
+:::card{label="Roles and permissions" icon="lucide:shield" href="/en/discover/core-concepts/roles"}
+The permissions that control who edits rules and who asks for decisions.
+:::
+::::

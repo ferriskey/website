@@ -1,0 +1,290 @@
+---
+title: Schema, policies and templates
+description: "How a realm describes its application in a Cedar schema, writes policies and templates, validates and simulates them, and what happens when two writes collide."
+icon: file-code-2
+order: 111
+---
+
+# Schema, policies and templates
+
+A realm's rules are three kinds of object: a Cedar schema, policies, and policy templates that policies can link to. They all live under `/realms/{realm_name}/authz`, which exists only when the instance runs with `AUTHZ_ENABLED=true` (see [the gates](/en/modules/authz/overview#the-gates)). Reading needs `view_authorization`, writing needs `manage_authorization`, and `manage_realm` does both.
+
+| Method and path | Purpose | Needs |
+|---|---|---|
+| `GET /authz/state` | Whether the realm answers evaluations, and the rules `version` | view |
+| `PUT /authz/state` | Turn the realm on or off | manage |
+| `GET /authz/schema` | The realm's own schema. 404 when none is stored | view |
+| `PUT /authz/schema` | Replace the schema | manage |
+| `GET /authz/schema/builtin` | The built-in `FerrisKey` schema | view |
+| `GET /authz/policies` | List the policies | view |
+| `POST /authz/policies` | Create a policy | manage |
+| `GET /authz/policies/{policy_id}` | Read a policy | view |
+| `PUT /authz/policies/{policy_id}` | Replace a policy | manage |
+| `DELETE /authz/policies/{policy_id}` | Delete a policy | manage |
+| `POST /authz/policies/validate` | Check policies without storing them | view |
+| `GET /authz/templates` | List the templates | view |
+| `POST /authz/templates` | Create a template | manage |
+| `GET /authz/templates/{template_id}` | Read a template | view |
+| `PUT /authz/templates/{template_id}` | Replace a template | manage |
+| `DELETE /authz/templates/{template_id}` | Delete a template | manage |
+| `POST /authz/simulate` | Decide a request against a rule set without storing anything | view |
+
+None of these routes needs the realm to be switched on, so you can build and test the rules before the first PEP calls.
+
+## The schema
+
+A schema is Cedar schema text. It declares the entity types and the actions of your application. FerrisKey validates every policy against it and checks every evaluation request against it, so a misspelled action or a resource attribute of the wrong type is reported instead of silently denying.
+
+```http
+PUT /realms/{realm_name}/authz/schema
+```
+
+```json title="Request body"
+{
+  "namespace": "App",
+  "source": "namespace App {\n  entity Document = {\n    classification: String,\n  };\n\n  action \"document:read\" appliesTo {\n    principal: [FerrisKey::User],\n    resource: [Document],\n  };\n}"
+}
+```
+
+`source` is required. `namespace` is optional and defaults to `App`. The response holds `namespace`, `source` and `updated_at`.
+
+A realm has one schema in one namespace, and every type and action in it must be declared in that namespace. Declaring anything in another namespace is refused with a 422 that names the namespace to use. The namespace is a Cedar identifier of at most 64 characters, and `FerrisKey` is reserved: that namespace holds the types FerrisKey resolves itself, and a realm that declared it could shadow them.
+
+`namespace App {}` is a valid schema. It declares nothing of your own, and it is enough to bring the built-in types in.
+
+### The built-in schema
+
+FerrisKey merges its own `FerrisKey` namespace into the realm's schema. Your types can refer to it (`principal: [FerrisKey::User]`, an attribute of type `FerrisKey::User`), and your policies can use it. `GET /authz/schema/builtin` returns it as `{ "namespace": "FerrisKey", "source": "..." }`, which is what an editor needs to validate policies on the client side. `GET /authz/schema` returns only the realm's own part. The built-in types are described in [Evaluation](/en/modules/authz/evaluation).
+
+Replacing the schema is refused with a 422 when an enabled policy or template would stop validating against the new one, so a schema change never leaves the realm with rules that cannot compile.
+
+:::callout{variant="info" title="A realm without a schema"}
+A realm can run with no schema at all. FerrisKey then only parses its policies, does not type-check them, does not check requests, and does not merge the built-in `FerrisKey` types. Upload a schema, even an empty one, before you rely on the rules.
+:::
+
+## Policies
+
+A policy is a name, a body and a few flags.
+
+```http
+POST /realms/{realm_name}/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "editors-can-read",
+  "description": "Holders of the editors role may read documents",
+  "enabled": true,
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `name` | required | 1 to 128 characters from `A-Z`, `a-z`, `0-9`, `_`, `-`, `.` and `:`. Unique among the realm's policies |
+| `description` | none | Free text |
+| `enabled` | `true` | A disabled policy is stored but is neither validated nor evaluated |
+| `body` | required | `static`, with Cedar `source`, or `linked` (see [templates](#templates-and-linked-policies)) |
+
+The 201 response is the stored policy:
+
+```json title="Response"
+{
+  "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e80",
+  "name": "editors-can-read",
+  "description": "Holders of the editors role may read documents",
+  "origin": "custom",
+  "enabled": true,
+  "managed_by": null,
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+`origin` is `custom` for a static policy and `generated` for a linked one. `GET /authz/policies` returns every policy of the realm as one array, with no paging.
+
+In a policy, a role, a group or an organization is named by its id. For a subject FerrisKey resolves from the database those ids are UUIDs, as in `FerrisKey::Role::"01a0d3dd-a750-7817-aa2b-7e8b98f68e66"`; the names shown in the console are not what a policy matches on. For a subject the PEP describes itself, they are whatever strings the PEP sends (see [Evaluation](/en/modules/authz/evaluation#subjects)).
+
+Every write validates the new policy together with all the other enabled policies and templates, against the schema, in Cedar's strict mode. If anything fails, nothing is stored and the answer is a 422:
+
+```json title="422 body"
+{
+  "errors": [
+    {
+      "field": "editors-can-read",
+      "code": "invalid_authorization_policy",
+      "message": "<line>:<column>: <what Cedar reported>"
+    }
+  ]
+}
+```
+
+`field` is the name of the faulty policy or template, or `schema` when the problem is in the schema. `message` starts with `line:column:` when Cedar gave a position. A name outside the allowed pattern is refused with a 422 as well. A name already taken by another policy is refused with a 400 and the reason `already_exists`.
+
+:::callout{variant="warning" title="PUT replaces the whole policy"}
+`PUT /authz/policies/{policy_id}` takes the same body as the creation and overwrites every field. Leave out `enabled` and the policy is enabled again. Leave out `description` and it is cleared. Send what you want the policy to be, not the difference.
+:::
+
+## Templates and linked policies
+
+A template is a Cedar policy with a hole in it. The holes are `?principal` and `?resource`, the only two slots Cedar defines. A linked policy fills the slots with entities, so one template serves many roles or many resources without copying the text.
+
+```http
+POST /realms/{realm_name}/authz/templates
+```
+
+```json title="Request body"
+{
+  "name": "role-reads-documents",
+  "description": "Everyone in a role may read documents",
+  "source": "permit (principal in ?principal, action == App::Action::\"document:read\", resource);"
+}
+```
+
+```http
+POST /realms/{realm_name}/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "viewers-read",
+  "body": {
+    "type": "linked",
+    "template_id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e70",
+    "links": {
+      "?principal": { "type": "FerrisKey::Role", "id": "01a0d3dd-a750-7817-aa2b-7e8b98f68e66" }
+    }
+  }
+}
+```
+
+A linked policy reports `origin: "generated"`. A link key other than `?principal` or `?resource` is refused when the body is parsed. Linking a template that does not exist is a 422.
+
+Templates are validated with everything else on each write. Replacing a template validates the policies linked to it again. Deleting a template that a policy still links is refused with a 409 and the reason `authorization_template_in_use`. Template names follow the same pattern as policy names and are unique among templates.
+
+## Validate before you write
+
+`POST /authz/policies/validate` checks candidate policies and stores nothing.
+
+```json title="Request body"
+{
+  "policies": [
+    {
+      "name": "editors-can-read",
+      "body": { "type": "static", "source": "permit (principal, action, resource);" }
+    }
+  ]
+}
+```
+
+```json title="Response"
+{ "valid": true, "issues": [] }
+```
+
+A problem in a candidate does not make the call fail. The answer is a 200 with `"valid": false` and one entry per problem in `issues`, each with `message`, plus `policy` (the candidate's name) when the problem belongs to one, and `line` and `column` when Cedar gave a position. A body that is not a valid request, such as a missing `policies` array, is a 400.
+
+The candidates are checked on their own, against the realm's schema and templates, not merged with the stored policies. Cedar warnings, for instance a policy that can never apply to the types it names, are not reported: only errors make `valid` false.
+
+## Simulate a decision
+
+`POST /authz/simulate` decides one request against a rule set and stores nothing. Use it to test a policy before it goes live, or to explain a decision.
+
+```json title="Request body"
+{
+  "policies": [
+    {
+      "name": "support-reads",
+      "body": {
+        "type": "static",
+        "source": "permit (principal in FerrisKey::Group::\"support\", action == App::Action::\"document:read\", resource is App::Document);"
+      }
+    }
+  ],
+  "request": {
+    "subject": {
+      "type": "FerrisKey::User",
+      "id": "u1",
+      "properties": { "username": "u1", "email_verified": true, "enabled": true },
+      "parents": [{ "type": "FerrisKey::Group", "id": "support" }]
+    },
+    "action": { "name": "document:read" },
+    "resource": {
+      "type": "App::Document",
+      "id": "1",
+      "properties": { "classification": "public" }
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["support-reads"] } }
+}
+```
+
+| Field | Description |
+|---|---|
+| `policies` | Candidate policies, in the same shape as for validation. When present they replace the realm's policies for this call. When absent, the realm's enabled policies decide |
+| `entities` | Extra entities the request refers to, each with `type`, `id`, optional `properties` and optional `parents` |
+| `request` | `subject`, `action`, `resource` and optional `context`. Subject and resource take `type`, `id`, `properties` and `parents` |
+
+FerrisKey does not look anything up during a simulation. A `FerrisKey::User` subject is whatever you describe, with its groups and roles given as `parents`. With a schema in place the description has to satisfy it, which for a `FerrisKey::User` means `username`, `email_verified` and `enabled`. The response always carries `context.reason_admin`, because the caller already needs `view_authorization`.
+
+Invalid candidate policies give a 422. A request that does not fit the schema gives a 400.
+
+## Policies owned by a controller
+
+A script or an operator that keeps a set of policies in sync can label them so it never touches the rest. The label is the `managed_by` query parameter.
+
+| Call | Effect of `?managed_by=<label>` |
+|---|---|
+| `POST /authz/policies` | The policy is stored with that label, visible as `managed_by` in the response |
+| `GET /authz/policies` | Only the policies that carry the label |
+| `GET`, `PUT`, `DELETE /authz/policies/{policy_id}` | A policy with another label, or none, is treated as not found (404) |
+
+A `PUT` without the parameter keeps the policy's existing label. A label is 1 to 64 characters from lowercase letters, digits, `_`, `-` and `.`, and anything else is a 422. Only policies carry a label, not templates.
+
+The label is a filter, not an access control. A caller that omits the parameter sees and changes every policy its permissions allow.
+
+## Concurrent writes
+
+Each write validates the complete rule set, not only the object you sent. That is only sound if the rules do not move between the read and the write, so FerrisKey guards it with a counter. `GET /authz/state` returns it as `version`:
+
+```json title="Response"
+{ "enabled": true, "version": 7 }
+```
+
+`version` goes up by one on every write to the schema, a policy or a template. A write reads the version first, validates against the rules it loaded, and stores its change only if the version is still the same, bumping it in the same transaction. If another write landed in between, nothing is stored and the answer is a 409:
+
+```json title="409 body"
+{
+  "code": "E_CONFLICT",
+  "status": 409,
+  "reason": "authorization_conflict",
+  "message": "The authorization rules of this realm changed since they were read"
+}
+```
+
+You do not send the version; the check happens inside a single request. A 409 with that reason means you lost a race: read the rules again if your change depends on them, then repeat the call. Turning the realm on or off does not touch `version`.
+
+A replica re-checks the version at most once per second, so a change is picked up everywhere within about a second.
+
+## Limits
+
+| What | Limit |
+|---|---|
+| Body of a single evaluation (`/evaluation`) | 64 KiB |
+| Body of any other request, including `/evaluations` and the management routes | 1 MiB |
+| Items in an `evaluations` array | 1 to 100 |
+| Policy or template name | 128 characters |
+| Namespace | 64 characters |
+| `managed_by` label | 64 characters |
+
+A body over the limit is refused with a 400.
