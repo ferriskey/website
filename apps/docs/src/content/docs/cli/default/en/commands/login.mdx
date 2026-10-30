@@ -18,7 +18,16 @@ ferris-ctl login [--scope <scope>] [--no-browser]
 | `--scope` | `openid profile email` | OAuth scope (space-separated) |
 | `--no-browser` | `false` | Don't open the verification URL in a browser |
 
-The command uses the active context (or a `--url` / `--client-id` / `--realm` override) to know where and how to sign in. The realm defaults to `master` when none is configured.
+The command reads the active context, or the one you pick with `--context`. It also honors `--url`, `--client-id`, and `--realm`, each replacing the matching field of the context on its own, so it can run with no context at all when you give `--url` and `--client-id`. The realm is `--realm`, then the context's realm, then `master`. `login` never reads the `--client-secret` flag; if the context stores a secret, the CLI sends it while polling for the token.
+
+## Before you log in
+
+The client must allow the device authorization grant, or the server refuses the request with `unauthorized_client`. FerrisKey ships no such client, and the CLI cannot create one: `ferris-ctl client create` always turns the grant off and has no flag for it. Enable it in one of these ways:
+
+- In the admin console, create the client with **OAuth 2.0 device authorization grant** switched on, or open an existing client, go to its **Settings** tab, and switch it on under **Capability config**.
+- In a realm [description file](/en/cli/import/config-file#clients), set `device_authorization_grant_enabled: true` on the client and import it with an identity that is already signed in.
+
+[Getting started](/en/cli/getting-started#create-a-client-for-the-cli) walks through the console steps.
 
 ## The flow
 
@@ -28,15 +37,15 @@ The CLI asks FerrisKey for a device code and receives a verification URL and a u
 :::
 
 :::step{title="Approve in the browser"}
-The CLI prints the URL and user code, then opens your browser (use `--no-browser` to skip and open it yourself). Confirm the user code and sign in.
+The CLI prints the URL and the user code, then opens your browser on the complete verification URL when the server provides one (use `--no-browser` to skip that and open the URL yourself). Confirm the user code and sign in.
 :::
 
 :::step{title="Poll for the token"}
-The CLI polls FerrisKey at the server-provided interval, honoring `slow_down` and `authorization_pending` responses, until you approve or the code expires.
+The CLI polls FerrisKey at the interval the server gives (5 seconds when it gives none), until you approve or the code expires. An `authorization_pending` answer means keep waiting, and `slow_down` adds 5 seconds to the interval. A network error or a server error is retried after 1 second, doubling up to 30 seconds, until the code expires.
 :::
 
 :::step{title="Save the session"}
-Tokens are written to `credentials.toml` (mode `0600` on Unix). Other commands reuse this session automatically.
+Tokens are written to `credentials.toml` (mode `0600` on Unix), and the CLI prints `Logged in as <name> on realm <realm>.`. The name comes from the ID token (`preferred_username`, then `email`, then `name`) and falls back to the client ID. Other commands reuse this session automatically.
 :::
 ::::
 
@@ -44,8 +53,16 @@ Tokens are written to `credentials.toml` (mode `0600` on Unix). Other commands r
 ferris-ctl login --no-browser
 ```
 
-:::callout{variant="note" title="Cancelling"}
-Press <kbd>Ctrl-C</kbd> during polling to abort the login. No credentials are written.
-:::
+`credentials.toml` keeps one session, for one server, realm, and client. A new login replaces it. A later command uses the session only when the context points at the same server URL, sign-in realm, and client ID; see [Authentication](/en/cli/authentication#resolution-order).
+
+If you deny the request, the code expires, or the server rejects the client, the command exits with status 1 and a message naming the cause.
+
+<Callout variant="info" title="Cancelling">
+
+Press `Ctrl-C` while the CLI is waiting to abort the login. The command exits with status 130 and writes no credentials.
+
+</Callout>
+
+`login` prints plain text whatever `-o` says.
 
 [Authentication](/en/cli/authentication) covers the rest: how credentials are resolved, when to use client credentials instead, and the file format.

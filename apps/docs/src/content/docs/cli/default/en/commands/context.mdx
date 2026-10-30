@@ -7,15 +7,17 @@ order: 1
 
 # `context`
 
-Contexts are named connection profiles stored in `$XDG_CONFIG_HOME/ferriskey/config.toml`. Each holds a server URL, a client ID, an optional client secret, and an optional default realm. The first context you add becomes the active one.
+Contexts are named connection profiles stored in `$XDG_CONFIG_HOME/ferriskey/config.toml`. Each holds a server URL, a client ID, an optional client secret, and a realm. The first context you add becomes the active one.
 
 ```bash
 ferris-ctl context <subcommand>
 ```
 
+These subcommands only read and write the config file. They make no network call and need no login. They honor `-o`.
+
 ## `context add`
 
-Add a new context. The first context added is marked active.
+Add a new context. The first context added is marked active. Adding a name that already exists is an error: remove the old context first.
 
 ```bash
 ferris-ctl context add <name> --url <url> --client-id <id> [--client-secret <secret>] [--realm <realm>]
@@ -26,8 +28,10 @@ ferris-ctl context add <name> --url <url> --client-id <id> [--client-secret <sec
 | `<name>` | yes | Unique context name |
 | `--url` | yes | FerrisKey server URL |
 | `--client-id` | yes | OAuth2 client identifier |
-| `--client-secret` | no | Client secret (omit for public clients) |
-| `--realm` | no | Default realm for this context |
+| `--client-secret` | no | Client secret (omit for public clients). An empty value counts as none |
+| `--realm` | in practice, yes | The realm the CLI signs in to, and the default realm for commands |
+
+`--realm` is optional for `context add`, but `realm`, `client`, and `user` commands fail with `auth realm is required` on a context that has none. Only `login` falls back to `master`. See [Authentication](/en/cli/authentication#contexts).
 
 ```bash title="Example"
 ferris-ctl context add staging \
@@ -35,6 +39,8 @@ ferris-ctl context add staging \
   --client-id ferris-ctl \
   --realm master
 ```
+
+The secret goes into `config.toml` in clear text, and a value passed on the command line stays in your shell history. For a CI job, prefer `FERRISKEY_CLIENT_SECRET` (see [Authentication](/en/cli/authentication#overriding-the-context)).
 
 ## `context list`
 
@@ -44,11 +50,11 @@ List all configured contexts. The active context is marked with `*`.
 ferris-ctl context list
 ```
 
-Table columns: active marker, name, URL, client ID, realm.
+Table columns: ACTIVE, NAME, URL, CLIENT_ID, REALM. The JSON and YAML forms carry `name`, `url`, `client_id`, `realm`, and `is_current`. The client secret is never printed.
 
 ## `context current`
 
-Show the active context's full configuration.
+Show the active context: its name, URL, client ID, realm, and whether it is current. The secret is not shown.
 
 ```bash
 ferris-ctl context current
@@ -56,7 +62,7 @@ ferris-ctl context current
 
 ## `context use`
 
-Switch the active context.
+Switch the active context. The name must exist.
 
 ```bash
 ferris-ctl context use <name>
@@ -68,7 +74,7 @@ ferris-ctl context use <name>
 
 ## `context remove`
 
-Remove a stored context. If it was active, the active marker is cleared.
+Remove a stored context. If it was active, the active marker is cleared. A saved login session in `credentials.toml` is left alone; run [`logout`](/en/cli/commands/logout) to delete it.
 
 ```bash
 ferris-ctl context remove <name>
@@ -85,3 +91,5 @@ Print the path to the configuration file.
 ```bash
 ferris-ctl context path
 ```
+
+With `-o json` or `-o yaml` the path comes back under a `path` key.

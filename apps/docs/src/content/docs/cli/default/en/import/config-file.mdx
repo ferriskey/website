@@ -7,7 +7,7 @@ order: 2
 
 # Import from a file
 
-`--from config` imports a realm from a FerrisKey-native description file. The format comes from the extension: `.yaml`, `.yml`, or `.toml`. No external system and no credentials are involved.
+`--from config` imports a realm from a FerrisKey-native description file. The format comes from the extension: `.yaml`, `.yml`, or `.toml`. No external system is involved.
 
 ```bash
 ferris-ctl realm import --from config --file realm.yaml
@@ -21,7 +21,7 @@ ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
 
 ## Format
 
-A description carries a `name`, plus optional `settings`, `roles`, `clients`, and `users` sections. The repository ships a working example at [`cli/examples/realm.yaml`](https://github.com/ferriskey/ferriskey/blob/main/cli/examples/realm.yaml).
+A description carries a `name`, plus optional `settings`, `roles`, `clients`, and `users` sections. The ferriskey-cli repository ships a starting point at [`examples/realm.yaml`](https://github.com/ferriskey/ferriskey-cli/blob/main/examples/realm.yaml).
 
 ```yaml title="realm.yaml"
 name: acme
@@ -75,9 +75,44 @@ users:
       - viewer
 ```
 
+The same keys work in TOML. Sections that hold a list become arrays of tables:
+
+```toml title="realm.toml"
+name = "acme"
+
+[settings]
+access_token_lifetime = 300
+user_registration_enabled = true
+
+[[roles]]
+name = "admin"
+description = "Realm administrators"
+permissions = ["manage_realm"]
+
+[[clients]]
+client_id = "web-app"
+client_type = "public"
+public_client = true
+redirect_uris = ["https://app.acme.test/callback"]
+
+[[clients.roles]]
+name = "reader"
+
+[[users]]
+username = "alice"
+email = "alice@acme.test"
+roles = ["admin", "web-app:reader"]
+```
+
+<Callout variant="warning" title="A misspelled key is not an error">
+
+The importer ignores keys it does not know, without a warning. A typo or a key from another tool leaves the default in place. Run the file through `--dry-run -o yaml` and read the result: it prints every field the importer understood, with its value.
+
+</Callout>
+
 ## Settings
 
-Every setting is optional. Anything you leave out keeps the FerrisKey default.
+Every setting is optional. Anything you leave out keeps the FerrisKey default. Settings are sent again on every run, so they overwrite the realm's current values each time.
 
 | Field | Description |
 |-------|-------------|
@@ -103,7 +138,9 @@ Every setting is optional. Anything you leave out keeps the FerrisKey default.
 | `description` | none | Free-text description |
 | `permissions` | `[]` | Permission names, in snake_case |
 
-Permissions use the names from the [permissions reference](/en/discover/core-concepts/roles#permissions-reference), so `manage_realm`, not `ManageRealm` and not `realm:manage`. Unrecognized names are dropped silently when the role is created.
+Permissions use the names from the [permissions reference](/en/discover/core-concepts/roles#permissions-reference), so `manage_realm`, not `ManageRealm` and not `realm:manage`.
+
+The identity that runs the import can only grant permissions it holds. Without `manage_realm`, a role that lists a permission the identity lacks, or a name FerrisKey does not know, is refused with 403 `cannot grant a permission you do not hold`, and the import stops. With `manage_realm`, a name FerrisKey does not recognize is accepted and dropped, so the role is created with fewer permissions than the file lists.
 
 ## Clients
 
@@ -117,7 +154,7 @@ Permissions use the names from the [permissions reference](/en/discover/core-con
 | `public_client` | `false` | Public client, no secret |
 | `service_account_enabled` | `false` | Create a linked service account user |
 | `direct_access_grants_enabled` | `false` | Allow the password grant |
-| `oauth_device_code_grant_enabled` | `false` | Allow the device code grant |
+| `device_authorization_grant_enabled` | `false` | Allow the device authorization grant, which `ferris-ctl login` needs |
 | `redirect_uris` | `[]` | Allowed redirect URIs |
 | `post_logout_redirect_uris` | `[]` | Allowed post-logout redirect URIs |
 | `web_origins` | `[]` | Browser origins allowed on this client's realm-scoped routes |
@@ -128,16 +165,20 @@ Permissions use the names from the [permissions reference](/en/discover/core-con
 | `temporary_token_lifetime` | inherit | Override the realm temporary token TTL |
 | `roles` | `[]` | Roles scoped to this client, same shape as realm roles |
 
+A client that already exists is not modified, apart from `require_pkce` and the lifetimes, which are sent again on every run. Redirect URIs, web origins, and roles missing from it are added. The report lists the secret of each confidential client; see [the import report](/en/cli/import/overview#the-import-report).
+
 ## Users
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `username` | required | Username |
+| `id` | none | Create the user with this UUID instead of a generated one |
 | `email` | none | Email address |
 | `firstname` | none | First name |
 | `lastname` | none | Last name |
 | `email_verified` | none | Mark the email as already verified |
 | `roles` | `[]` | Roles to assign |
+| `credential` | none | A password hash to store as the user's password, see below |
 
 A plain name in `roles` refers to a realm role. Prefix it with a client id to pick a role scoped to that client:
 
@@ -149,6 +190,37 @@ users:
       - backend:service-reader   # role of the "backend" client
 ```
 
-:::callout{variant="note" title="Passwords are not in the blueprint"}
-Credentials are never part of an import. Users come out without a password: set one afterwards with [`ferris-ctl user set-password`](/en/cli/commands/user#user-set-password), from the admin console, or through a recovery flow.
-:::
+A `client_id:role` that no client in the file defines and that the client does not already hold stops the import. A plain name that matches no realm role only produces a warning, and that assignment is skipped.
+
+### Passwords
+
+Without a `credential`, a user arrives with no password. Set one afterwards with [`ferris-ctl user set-password`](/en/cli/commands/user#user-set-password), from the admin console, or through a recovery flow. To carry an existing password over, give the user the hash it already has:
+
+```yaml
+users:
+  - username: alice
+    credential:
+      algorithm: bcrypt
+      secret_data: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+      hash_iterations: 10
+```
+
+| Field | Description |
+|-------|-------------|
+| `algorithm` | `bcrypt`, `argon2id`, `argon2i`, or `argon2d` |
+| `secret_data` | The hash as the source stores it: a `$2a$`, `$2b$`, or `$2y$` bcrypt string, or an Argon2 PHC string |
+| `hash_iterations` | The cost written inside the hash: the bcrypt cost (4 to 14), or the Argon2 time cost `t`. The server refuses the hash when the two disagree |
+
+The import stores the hash as is and never marks it temporary. FerrisKey re-encodes it as Argon2id the first time the user signs in; [Export & Import](/en/discover/guides/portability#password-hashes) explains how. A user who already has a password keeps it. A refused hash adds a warning and counts in `passwords_failed`, and the import carries on.
+
+A file that holds password hashes is as sensitive as the password store it came from. Keep it out of version control. The `--dry-run` output redacts the hashes, the file does not.
+
+### Fixed ids
+
+With `id`, the user is created with that UUID, which keeps every identifier that points at the user valid. The import stops with an error if the server creates the user under a different id, or if the id already belongs to another user.
+
+<Callout variant="info" title="Not in release 0.3.0">
+
+The `credential` and `id` fields on users arrived after release 0.3.0. With 0.3.0 they are ignored like any unknown key. Build from the `main` branch of [ferriskey-cli](https://github.com/ferriskey/ferriskey-cli) to use them.
+
+</Callout>

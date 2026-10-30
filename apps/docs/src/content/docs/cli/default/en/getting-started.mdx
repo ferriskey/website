@@ -1,19 +1,32 @@
 ---
-title: Getting Started
+title: Getting started
 description: "Connect ferris-ctl to a FerrisKey instance, sign in, and run your first commands."
 icon: rocket
 order: 2
 ---
 
-# Getting Started
+# Getting started
 
 This guide takes you from a fresh `ferris-ctl` install to listing realms and creating your first user. It assumes you have a running FerrisKey instance. If you don't, follow the [deployment getting-started](/en/discover/getting-started) first.
 
 ## Prerequisites
 
-- `ferris-ctl` installed and on your `PATH` (see [Overview → Install](/en/cli/overview))
-- A reachable FerrisKey server URL (e.g. `http://localhost:3333`)
-- A client ID to authenticate with
+- `ferris-ctl` installed and on your `PATH` (see [Install](/en/cli/overview#install))
+- A reachable FerrisKey server URL, such as `http://localhost:3333`
+- A user who can administer the realms you will touch, for example the admin user of the `master` realm
+- Access to the admin console, to create the client the CLI signs in with
+
+## Create a client for the CLI
+
+`ferris-ctl login` signs in with the OAuth 2.0 device authorization grant, so it needs a client that allows that grant. FerrisKey does not ship one, and `ferris-ctl client create` cannot make one: it always creates clients with the grant off and has no flag to change that. Create the client in the admin console, in the realm you will sign in to (`master` in this guide):
+
+1. Open **Clients** and choose **New client**.
+2. Set **Client ID** to `ferris-ctl` and **Client authentication** to **Public**.
+3. Turn on **Client enabled**. A disabled client cannot authenticate anyone.
+4. Under **Capability config**, turn on **OAuth 2.0 device authorization grant**.
+5. Choose **Create client**.
+
+To reuse a client you already have, open it, go to the **Settings** tab, and turn on the same switch under **Capability config**.
 
 ## Add a context
 
@@ -28,7 +41,7 @@ ferris-ctl context add local \
   --realm master
 ```
 
-This writes a profile named `local` to your config file and marks it active.
+This writes a profile named `local` to your config file and marks it active. Keep `--realm`: it is the realm the CLI signs in to, and the `realm`, `client`, and `user` commands fail without it.
 :::
 
 :::step{title="Confirm it's active"}
@@ -38,23 +51,27 @@ ferris-ctl context current
 :::
 ::::
 
-:::callout{variant="info" title="Where is the config stored?"}
-Contexts live in `$XDG_CONFIG_HOME/ferriskey/config.toml` (typically `~/.config/ferriskey/config.toml`). Run `ferris-ctl context path` to print the exact location.
-:::
+<Callout variant="info" title="Where is the config stored?">
+
+Contexts live in `$XDG_CONFIG_HOME/ferriskey/config.toml`, which is typically `~/.config/ferriskey/config.toml`. Run `ferris-ctl context path` to print the exact location. The file is plain text; see [Authentication](/en/cli/authentication#contexts) before you store a secret in it.
+
+</Callout>
 
 ## Sign in
 
-Authenticate with the OAuth 2.0 Device Authorization Grant. The CLI prints a code, opens your browser, and waits while you approve the sign-in.
+Authenticate with the OAuth 2.0 Device Authorization Grant. The CLI prints a URL and a code, opens your browser, and waits while you approve the sign-in.
 
 ```bash
 ferris-ctl login
 ```
 
-Follow the prompt: confirm the user code in the browser, and the CLI stores the resulting tokens in `credentials.toml` (mode `0600` on Unix). Subsequent commands reuse that session automatically.
+Confirm the user code in the browser. The CLI then stores the resulting tokens in `credentials.toml` (mode `0600` on Unix), and later commands reuse that session. If the server answers `unauthorized_client`, the client does not allow the device grant yet: go back to the previous section.
 
-:::callout{variant="note" title="Service accounts"}
-If you'd rather authenticate non-interactively, add a context with a `--client-secret` instead. The CLI then uses the OAuth2 client-credentials grant and you can skip `login`. See [Authentication](/en/cli/authentication).
-:::
+<Callout variant="info" title="Service accounts">
+
+To authenticate without a browser, add a context with `--client-secret` and skip `login`. The CLI then uses the OAuth2 client-credentials grant. There is a known incompatibility between this mode and FerrisKey 0.10.0, described in [Authentication](/en/cli/authentication#client-credentials).
+
+</Callout>
 
 ## Run your first commands
 
@@ -73,18 +90,20 @@ ferris-ctl user create alice \
 ferris-ctl user get alice -o json
 ```
 
-The `-o` flag switches output between `table` (default), `json`, and `yaml` for any command, which is handy for scripting and `jq` pipelines.
+The `-o` flag selects `table` (the default), `json`, or `yaml`, which is handy for scripting and `jq` pipelines. It applies to every command except `login`, `logout`, and `client secret`, which always print plain text.
 
-## What's next?
+A new user has no password. Set one with [`user set-password`](/en/cli/commands/user#user-set-password).
+
+## Related pages
 
 ::::card-group{cols=2}
 :::card{label="Authentication" icon="lucide:key-round" href="/en/cli/authentication"}
 Contexts, login sessions, and how credentials are resolved.
 :::
-:::card{label="Command reference" icon="lucide:square-terminal" href="/en/cli/commands/context"}
+:::card{label="Command reference" icon="lucide:square-terminal" href="/en/cli/commands"}
 Every command, subcommand, and flag.
 :::
 :::card{label="Import a realm" icon="lucide:import" href="/en/cli/import/overview"}
-Bring a realm in from a file, Keycloak, or Zitadel.
+Bring a realm in from a file, Keycloak, Zitadel, or Supabase.
 :::
 ::::

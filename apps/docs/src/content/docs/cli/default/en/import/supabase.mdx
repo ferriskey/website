@@ -7,7 +7,13 @@ order: 5
 
 # From Supabase
 
-Supabase is the one source that is **users only**. It has no client catalogue and no role catalogue to read, so an import brings the accounts across and nothing else — you create the clients and the realm settings yourself afterwards.
+Supabase is the one source that is users only. It has no client catalogue and no role catalogue to read, so an import brings the accounts across and nothing else: you create the clients and the realm settings yourself afterwards.
+
+<Callout variant="warning" title="Not in a release yet">
+
+The Supabase source and its flags (`--source-passwords`, `--source-preserve-ids`, and the `--source-include-*` filters) are merged on the `main` branch of [ferriskey-cli](https://github.com/ferriskey/ferriskey-cli), but no release includes them yet. Release 0.3.0 accepts only `config`, `keycloak`, and `zitadel` after `--from`. Until a release catches up, build from the repository with `cargo install --git https://github.com/ferriskey/ferriskey-cli`.
+
+</Callout>
 
 ```bash
 ferris-ctl realm import --from supabase \
@@ -16,44 +22,50 @@ ferris-ctl realm import --from supabase \
   --target-realm acme
 ```
 
-Accounts are read through the project's **Auth (GoTrue) Admin API**, which is why `--source-token` wants the project's `service_role` key rather than the anon key.
+Accounts are read through the project's Auth (GoTrue) Admin API, which is why `--source-token` wants the project's `service_role` key rather than the anon key. The CLI reads them 100 at a time until a page brings no new user. A trailing `/` or `/auth/v1` on `--source-url` is accepted and removed.
+
+The realm is named by `--target-realm`, else `--source-realm`, else `supabase`.
 
 ## What gets carried over
 
 | FerrisKey field | Comes from |
 |---|---|
-| `username` | The email. Falling back to the phone number, then to the Supabase id |
+| `username` | The email, then the phone number, then the Supabase id |
 | `email` | The email, when there is one |
-| `email_verified` | Whether `email_confirmed_at` is set — only computed for users who have an email |
-| `firstname` / `lastname` | `user_metadata`, trying `first_name`, `firstName`, `given_name` and the matching last-name keys; failing that, `full_name` or `name` split in two |
-| Roles | `app_metadata.roles` (an array) and `app_metadata.role` (a single string), merged and de-duplicated |
+| `email_verified` | Whether `email_confirmed_at` is set. Only computed for users who have an email |
+| `firstname` / `lastname` | `user_metadata`, trying `first_name`, `firstName`, `given_name` and `last_name`, `lastName`, `family_name`. When none is present, `full_name` or `name` split at the first whitespace |
+| Roles | `app_metadata.roles` (an array) and `app_metadata.role` (a single string), trimmed, merged, and de-duplicated |
 | Password | Only from `--source-passwords`, below |
 
-Roles are created in the target realm as they are encountered, so a `roles` array in `app_metadata` is enough to rebuild a role catalogue Supabase never had.
+Roles are created in the target realm as they are encountered, with no permissions, so a `roles` array in `app_metadata` is enough to rebuild a role catalogue Supabase never had. Set their permissions afterwards.
 
-:::callout{variant="warning" title="A role name cannot contain a colon"}
+<Callout variant="warning" title="A role name cannot contain a colon">
+
 FerrisKey reserves `:` to separate a client from its role, so a Supabase role like `billing:admin` is refused rather than silently reinterpreted. The import stops and names both the role and the user carrying it. Rename it in `app_metadata` before re-running.
-:::
+
+</Callout>
 
 ## Three kinds of row are dropped by default
 
-Supabase's `auth.users` holds rows that are not really accounts you want. All three filters are **off** by default, and turning one on is a deliberate act:
+Supabase's `auth.users` holds rows that are not really accounts you want. All three filters are off by default, and turning one on is a deliberate act:
 
 | Flag | What it lets in | Why it is off by default |
 |---|---|---|
 | `--source-include-deleted` | Users an operator soft-deleted | Their `deleted_at` is set but the row survives. A plain import would resurrect accounts somebody removed on purpose |
-| `--source-include-anonymous` | Anonymous sign-in sessions | They are real rows with neither an email nor a phone number |
+| `--source-include-anonymous` | Anonymous sign-in sessions (rows flagged `is_anonymous`) | They are real rows, usually with neither an email nor a phone number |
 | `--source-include-unconfirmed` | Users who never confirmed an email or a phone | Nothing proves the address or the number belongs to them |
 
-A user counts as confirmed when **either** `email_confirmed_at` or `phone_confirmed_at` is set.
+A user counts as confirmed when `email_confirmed_at`, `phone_confirmed_at`, or `confirmed_at` is set. An anonymous user is kept or dropped by `--source-include-anonymous` alone, whether or not it is confirmed, and a soft-deleted user needs `--source-include-deleted` whatever else is true.
 
-:::callout{variant="info" title="Count before you commit"}
-Run the import with `--dry-run` first, then again with a filter added, and compare the user counts. That difference is exactly how many soft-deleted, anonymous or unconfirmed rows your project is carrying — usually more than anyone expects.
-:::
+<Callout variant="info" title="Count before you commit">
+
+Run the import with `--dry-run` first, then again with a filter added, and compare the user counts. That difference is exactly how many soft-deleted, anonymous or unconfirmed rows your project is carrying, usually more than anyone expects.
+
+</Callout>
 
 ## Carrying the passwords over
 
-The Auth Admin API **never serves password hashes**. Exporting the table is the only way to get them, so `--source-passwords` takes a CSV file rather than reading the API:
+The Auth Admin API never serves password hashes. Exporting the table is the only way to get them, so `--source-passwords` takes a CSV file rather than reading the API:
 
 ```bash
 ferris-ctl realm import --from supabase \
@@ -72,33 +84,51 @@ psql "<connection string>" -c \
   "\copy (select id, encrypted_password from auth.users) to 'auth_users.csv' with (format csv, header)"
 ```
 
-:::callout{variant="warning" title="The backslash on \\copy matters"}
-`\copy` runs client-side and writes the file on **your** machine. A plain `COPY TO` would try to write on the database server, where you have no filesystem access.
-:::
+<Callout variant="warning" title="The backslash on \copy matters">
+
+`\copy` runs client-side and writes the file on your machine. A plain `COPY TO` would try to write on the database server, where you have no filesystem access.
+
+</Callout>
 
 Or run `select id, encrypted_password from auth.users;` in the dashboard's SQL editor and use the download button above the results.
 
-Only `id` and `encrypted_password` are read and extra columns are ignored, so a plain `select *` export works too. Rows join onto users by **`auth.users.id`, never by email** — which is what makes the join safe when an address has changed on one side.
+Only `id` and `encrypted_password` are read and extra columns are ignored, so a plain `select *` export works too. A byte order mark at the start of the header line is tolerated. Rows join onto users by `auth.users.id`, never by email, which is what makes the join safe when an address has changed on one side.
 
-:::callout{variant="danger" title="That file holds every password hash in your directory"}
+<Callout variant="danger" title="That file holds every password hash in your directory">
+
 Keep it to yourself, never commit it, and delete it once the import has run. It is the single most sensitive artefact a migration produces.
-:::
+
+</Callout>
 
 ### What survives, and what does not
 
-Only **bcrypt** hashes that FerrisKey accepts are imported. Every other account arrives without credentials and needs a password reset — so plan the reset emails for that subset rather than for everyone.
+Only bcrypt hashes that FerrisKey accepts are imported. Every other account arrives without credentials and needs a password reset, so plan the reset emails for that subset rather than for everyone. The CLI skips a hash, and prints a `note:` line on standard error naming the account, in these cases:
+
+| Skipped | Why |
+|---|---|
+| A prefix other than `$2a$`, `$2b$`, or `$2y$` | FerrisKey accepts no other bcrypt variant, and `$2x$` is a known-broken one. Argon2 hashes are not carried over either |
+| A cost outside 4 to 14 | Outside the range FerrisKey accepts on import |
+| A hash body that is not 53 characters | Truncated in the export |
+| An empty `encrypted_password` | Not an error: the account signs in through a federated provider and has no password. The CLI counts these and prints one summary line |
 
 An imported hash is re-encoded as argon2id the first time that user signs in successfully. See [Export & Import](/en/discover/guides/portability#password-hashes) for what that means on the FerrisKey side, including the `password_imported` audit event that lets you measure migration progress.
+
+A user who already has a password in FerrisKey keeps it. The import reports the clash as a warning and counts it in `already_present`, rather than overwriting a credential somebody set deliberately.
 
 ## Keeping the user ids
 
 ```bash
-ferris-ctl realm import --from supabase … --source-preserve-ids
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-preserve-ids
 ```
 
-Creates each user with the id it already has in Supabase, so the **`sub` claim of every token survives the migration**. Supabase only.
+Creates each user with the id it already has in Supabase, so the `sub` claim of every token survives the migration. Supabase only; any other source refuses the flag.
 
-Reach for it when anything downstream stores the Supabase user id as a foreign key — your own tables, an analytics warehouse, a billing system. Without it those references all break and you are writing a mapping table.
+Reach for it when anything downstream stores the Supabase user id as a foreign key: your own tables, an analytics warehouse, a billing system. Without it those references all break and you are writing a mapping table.
+
+Two things stop the import with an error. One is a server that creates a user under a different id than the one requested, because every subject would then change. The other is an id that already belongs to another user in the FerrisKey instance, possibly in a realm your token cannot see. In both cases the message names the user.
 
 ## A realistic migration
 
@@ -119,7 +149,7 @@ Re-run the preview with each `--source-include-*` flag to see what you are leavi
 :::
 
 :::step{title="Export the passwords"}
-Only once you are about to run the real import — the file should exist for as short a time as possible.
+Only once you are about to run the real import: the file should exist for as short a time as possible.
 :::
 
 :::step{title="Import"}
@@ -131,13 +161,15 @@ Clients, redirect URIs, scopes and realm settings. [Connect an Application with 
 :::
 ::::
 
-:::callout{variant="info" title="Re-running is safe"}
-Like every source, a Supabase import is idempotent: accounts that already exist are skipped with a warning, so you can fix the source and run it again.
-:::
+<Callout variant="info" title="Re-running is safe">
+
+Like every source, a Supabase import converges: accounts that already exist are reused with a warning, so you can fix the source and run it again. Existing accounts are not updated.
+
+</Callout>
 
 ## Storing the connection
 
-Typing the service_role key on every run is how it ends up in a shell history. Store the source once:
+Typing the `service_role` key on every run is how it ends up in a shell history. Store the source once:
 
 ```bash
 ferris-ctl source add supabase-prod --kind supabase \
@@ -147,7 +179,7 @@ ferris-ctl source add supabase-prod --kind supabase \
 ferris-ctl realm import --source-ref supabase-prod --target-realm acme
 ```
 
-Inline `--source-*` flags still override individual fields of a stored source, so the stored entry can hold the connection while the run decides the filters. See [`source`](/en/cli/commands/source).
+Inline `--source-*` flags still override individual fields of a stored source, so the stored entry can hold the connection while the run decides the filters. The filters, the password export, and `--source-preserve-ids` are never stored. The token itself lands in `config.toml` in clear text, as [`source`](/en/cli/commands/source) explains.
 
 ::::card-group{cols=2}
 :::card{label="Import overview" icon="lucide:download" href="/en/cli/import/overview"}

@@ -13,7 +13,17 @@ Manage the users of a realm, their passwords, and the roles assigned to them.
 ferris-ctl user <subcommand>
 ```
 
-Every subcommand accepts `--realm <name>` to target a specific realm; otherwise the context default is used.
+Every subcommand accepts `--realm <name>` to choose the realm the command acts on; otherwise the context's realm is used. The CLI always signs in to the context's realm, so the context must have one even when you pass `--realm`. See [Authentication](/en/cli/authentication#contexts).
+
+<Callout variant="warning" title="Known limits: first page only, and usernames are not URL-encoded">
+
+The server returns users in pages of 20 by default (100 at most), and `ferris-ctl` reads the first page only. `user list` therefore shows at most 20 users.
+
+Every command that takes a username asks the server for users whose username contains that text, then looks for an exact match among the first 20 results. In a realm where more than 20 usernames contain the text, the exact one can be missing from that page and the command answers `user '<name>' not found`. The username is also put into the query string without percent-encoding, so a name containing `+`, `&`, or `#` cannot be found. That includes email-style usernames with a `+` tag.
+
+`user assign-role` and `user remove-role` look a realm role up by name in the first 20 realm roles, and a client by `client_id` in the first 20 clients of the realm.
+
+</Callout>
 
 ## `user list`
 
@@ -36,7 +46,7 @@ ferris-ctl user get <username> [--realm <realm>]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<username>` | yes | Username |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 
 Returns id, username, firstname, lastname, email, and enabled.
 
@@ -63,9 +73,13 @@ ferris-ctl user create alice \
   --lastname Doe
 ```
 
-:::callout{variant="note" title="Setting a password"}
+The command prints the created user.
+
+<Callout variant="info" title="Setting a password">
+
 `user create` does not set credentials. Give the new account a password with [`user set-password`](#user-set-password), or let the user go through a recovery flow.
-:::
+
+</Callout>
 
 ## `user set-password`
 
@@ -81,7 +95,7 @@ ferris-ctl user set-password <username> (--password <value> | --stdin) [--tempor
 | `--password` | one of the two | The new password, inline |
 | `--stdin` | one of the two | Read the password from stdin, trailing newline trimmed |
 | `--temporary` | no | Force the user to change this password at next login |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 
 Exactly one of `--password` and `--stdin` must be given; passing both, or neither, is an error.
 
@@ -89,9 +103,11 @@ Exactly one of `--password` and `--stdin` must be given; passing both, or neithe
 printf '%s' "$NEW_PASSWORD" | ferris-ctl user set-password alice --stdin --temporary
 ```
 
-:::callout{variant="warning" title="--password leaks into history"}
+<Callout variant="warning" title="--password leaks into history">
+
 A value passed to `--password` ends up in your shell history and in the process list, where anyone on the machine can read it. Use `--stdin` outside of throwaway environments.
-:::
+
+</Callout>
 
 ## `user assign-role`
 
@@ -106,12 +122,14 @@ ferris-ctl user assign-role <username> <role> [--client <client_id>] [--realm <r
 | `<username>` | yes | Username |
 | `<role>` | yes | Role name |
 | `--client` | no | Resolve the role among this client's roles instead of the realm's |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 
 ```bash
 ferris-ctl user assign-role alice user-admin
 ferris-ctl user assign-role alice service-reader --client backend
 ```
+
+FerrisKey lets you give away only what you hold. If the role carries permissions the signed-in identity does not have, the server answers 403 with `cannot assign a role granting permissions you do not hold`. An identity with `manage_realm` is exempt.
 
 ## `user remove-role`
 
@@ -129,7 +147,7 @@ List the roles assigned to a user.
 ferris-ctl user roles <username> [--realm <realm>]
 ```
 
-Table columns: NAME, ID.
+Table columns: NAME, ID. The list holds every role the user has, realm roles and client roles alike, and the output does not say which is which.
 
 ## `user delete`
 
@@ -142,5 +160,5 @@ ferris-ctl user delete <username> [--realm <realm>] [--force]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<username>` | yes | Username |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 | `--force` / `-f` | no | Skip the confirmation prompt (required in non-interactive shells) |
