@@ -1,10 +1,14 @@
 ---
 const screens = [
-  { src: '/console_preview/clients_overview.png',       label: 'Clients'             },
-  { src: '/console_preview/client_scopes_overview.png', label: 'Client Scopes'       },
-  { src: '/console_preview/idp_overview.png',           label: 'Identity Providers'  },
-  { src: '/console_preview/webhook_overview.png',       label: 'Webhooks'            },
-]
+  { name: 'clients_overview',       label: 'Clients'             },
+  { name: 'client_scopes_overview', label: 'Client Scopes'       },
+  { name: 'idp_overview',           label: 'Identity Providers'  },
+  { name: 'webhook_overview',       label: 'Webhooks'            },
+].map((s) => ({
+  ...s,
+  light: `/console_preview/${s.name}-light.jpg`,
+  dark: `/console_preview/${s.name}-dark.jpg`,
+}))
 ---
 
 <div class="w-full py-16 sm:py-24 lg:py-32 overflow-hidden">
@@ -26,7 +30,8 @@ const screens = [
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {screens.map((s, i) => (
         <button
-          data-src={s.src}
+          data-src-light={s.light}
+          data-src-dark={s.dark}
           data-label={s.label}
           data-anim="fade-up"
           style={`transition-delay: ${i * 100}ms`}
@@ -44,9 +49,15 @@ const screens = [
             </div>
           </div>
           <img
-            src={s.src}
+            src={s.light}
             alt={s.label}
-            class="w-full object-cover object-top aspect-video"
+            class="w-full object-cover object-top aspect-video dark:hidden"
+            loading="lazy"
+          />
+          <img
+            src={s.dark}
+            alt={s.label}
+            class="hidden w-full object-cover object-top aspect-video dark:block"
             loading="lazy"
           />
           <div class="px-4 py-3 text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
@@ -102,7 +113,8 @@ const screens = [
 
   document.querySelectorAll<HTMLButtonElement>('.showcase-open').forEach(btn => {
     btn.addEventListener('click', () => {
-      lightboxImg.src = btn.dataset.src!
+      const dark = document.documentElement.classList.contains('dark')
+      lightboxImg.src = (dark ? btn.dataset.srcDark : btn.dataset.srcLight)!
       lightboxImg.alt = btn.dataset.label!
       lightbox.classList.remove('hidden')
       lightbox.classList.add('flex')
