@@ -5,12 +5,18 @@ import { parsePath, buildHref, getLocales } from '../lib/docs'
 const allDocs = await getCollection('docs')
 const locales = getLocales(allDocs)
 
-// Find the first entry per locale for the redirect map
+// Land on the getting started page of each locale, or on its lowest-order entry
 const localeRedirects: Record<string, string> = {}
 for (const locale of locales) {
-  const first = allDocs
-    .filter((e) => parsePath(e.id).locale === locale)
-    .sort((a, b) => (a.data.order ?? Infinity) - (b.data.order ?? Infinity))[0]
+  const landing = allDocs.find((e) => {
+    const parsed = parsePath(e.id)
+    return parsed.locale === locale && parsed.project === 'discover' && parsed.segments.join('/') === 'getting-started'
+  })
+  const first =
+    landing ??
+    allDocs
+      .filter((e) => parsePath(e.id).locale === locale)
+      .sort((a, b) => (a.data.order ?? Infinity) - (b.data.order ?? Infinity))[0]
   if (first) {
     localeRedirects[locale] = buildHref(first)
   }

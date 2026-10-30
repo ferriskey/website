@@ -242,7 +242,7 @@ export const ui = {
     'hero.secondaryAction': 'Voir sur GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Accès anticipé · v0.9.0',
+    'hero.badge.version': 'Accès anticipé · v0.10.0',
 
     // Features
     'whyNow.label': 'Pourquoi maintenant',
