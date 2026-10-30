@@ -1,25 +1,56 @@
 ---
-title: Production Guide
-description: "Production checklist for running FerrisKey on Kubernetes: database, TLS, monitoring, and security."
+title: Production guide
+description: "Production checklist for running FerrisKey on Kubernetes: database, TLS, scaling, monitoring, and security."
 icon: shield
 order: 4
 ---
 
-# Production Guide
+# Production guide
 
-What to change before a FerrisKey deployment carries real users.
+What to change before a FerrisKey deployment carries real users. The examples use the [Helm chart](/en/kubernetes/helm-chart). The [operator](/en/kubernetes/operator) sets a fixed pod spec and cannot apply most of this.
 
 ## Database
 
-:::callout{variant="danger" title="Turn off the embedded PostgreSQL"}
-The chart ships with `postgresql.enabled: true` so a first install works with no prerequisites. It stores data in a single StatefulSet with no replication and no backup. Set `postgresql.enabled: false` and point at a real database.
+:::callout{variant="danger"}
+The chart ships with `postgresql.enabled: true` so a first install works with no prerequisites. The embedded PostgreSQL is a single StatefulSet with no replication and no backup. Set `postgresql.enabled: false` and point at a real database.
 :::
 
 - Use a managed service (RDS, Cloud SQL, Azure Database for PostgreSQL) or a PostgreSQL cluster someone actually operates.
-- Require TLS. `sslMode: require` at minimum, `verify-full` when you can validate the certificate chain.
+- Encrypt the connection and check the server certificate, as described below.
 - Give FerrisKey its own database rather than a schema inside a shared one.
 - Set up automated backups with point-in-time recovery, and restore one at least once to prove it works.
-- Put PgBouncer in front of it if the deployment sees heavy traffic.
+- Count connections. Each replica opens up to `DATABASE_MAX_CONNECTIONS` (20 by default), plus two outside the pool for change notifications. Keep `replicas × (DATABASE_MAX_CONNECTIONS + 2)`, with some room for the migration Job, under the server's `max_connections`.
+- Connect to PostgreSQL directly, or through a pooler in session mode. See [Scaling out and caches](#scaling-out-and-caches) for why a transaction-mode pooler such as PgBouncer is a bad fit.
+
+### Encrypt the database connection
+
+Neither the chart nor the API has a TLS setting for the database. The connection is made with sqlx, which reads the libpq environment variables `PGSSLMODE` and `PGSSLROOTCERT`. Set them through the chart's `env` values. Unset, `PGSSLMODE` is `prefer`.
+
+| `PGSSLMODE` | Behaviour |
+|---|---|
+| `prefer` (default) | Uses TLS when the server offers it, without checking the certificate, and plain text otherwise |
+| `require` | Fails if the server offers no TLS, but accepts any certificate, so it encrypts without authenticating the server |
+| `verify-ca` | Checks the certificate chain |
+| `verify-full` | Checks the chain and that the certificate matches `database.host` |
+
+Use `verify-full` when you can. A certificate signed by a public CA verifies with no further setup. For a private CA, mount its certificate and point `PGSSLROOTCERT` at the file. The migration Job builds its own `DATABASE_URL` without any `sslmode`, so it needs the same variables. `common.env`, `common.volumes` and `common.volumeMounts` reach every workload, which keeps the snippet short:
+
+```yaml title="values.yaml"
+common:
+  env:
+    - name: PGSSLMODE
+      value: verify-full
+    - name: PGSSLROOTCERT
+      value: /etc/ferriskey/db-ca/ca.crt
+  volumes:
+    - name: db-ca
+      secret:
+        secretName: ferriskey-db-ca
+  volumeMounts:
+    - name: db-ca
+      mountPath: /etc/ferriskey/db-ca
+      readOnly: true
+```
 
 ## TLS and exposure
 
@@ -38,14 +69,13 @@ ingress:
     - hosts:
         - iam.yourorg.com
       secretName: ferriskey-tls
-
-api:
-  server:
-    allowedOrigins:
-      - https://iam.yourorg.com
 ```
 
-`allowedOrigins` applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Per-client web origins only cover realm-scoped routes, so a console served from a different origin than the API must have its origin listed here.
+The console and the API share an origin in this layout, so `api.server.allowedOrigins` can stay empty. It applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Per-client web origins only cover realm-scoped routes, so a console served from a different origin than the API must have its origin listed there.
+
+The chart builds the console URLs with `https` unless you say otherwise. If you serve plain HTTP, for a test environment for example, set `api.webapp.protocol` and `webapp.api.protocol` to `http`. A wrong scheme or host in `webapp.api.url` makes the browser refuse the API calls, because the console's content security policy only allows that origin. [The console and the API URL](/en/kubernetes/helm-chart#the-console-and-the-api-url) has the details.
+
+The proxy in front of the API has to pass `Host` through unchanged and set `X-Forwarded-Proto: https`: FerrisKey builds the OIDC issuer of each request from those two headers. If you use SAML, also set `SERVER_PUBLIC_URL` (see the [configuration guide](/en/discover/guides/configuration)): the entity id is signed into every assertion and must not change with the hostname a request arrives through.
 
 If your cluster uses Gateway API, swap the Ingress block for `gatewayAPI.httpRoute` with the parent references of your gateway. `publicHost` is required either way.
 
@@ -64,11 +94,29 @@ api:
       key: password
 ```
 
-Generate the password randomly, at least 16 characters, and rotate it on a schedule you actually keep.
+Generate the password randomly, at least 16 characters, and rotate it on a schedule you actually keep. `ADMIN_PASSWORD` only seeds the account: once the admin has a password, FerrisKey ignores the variable, so rotate the password in the console, not by editing the Secret.
 
-## Resources and scaling
+## Scaling out and caches
 
-The API pods are stateless, so scaling out is a replica count. Resources are set per workload; there is no global override.
+The API pods hold no state of their own, so scaling out is a replica count. They do cache reads in memory, and that decides what may sit between them and the database.
+
+| What is cached | For how long | How the other replicas catch up |
+|---|---|---|
+| Realms, realm settings, clients, and the roles and groups of a service account | `CONFIG_CACHE_TTL_SECONDS` (5 seconds by default) | A write clears the entry on the replica that handled it. The others read the change when their entry expires |
+| Sessions and the revocation state of access tokens | The same value, at most 30 seconds | PostgreSQL `LISTEN`/`NOTIFY` on the channel `ferriskey_token_state`: a logout or a revocation on one replica empties the caches of the others at once |
+| Web origins registered by clients (CORS) | 30 seconds, fixed | Changing an origin refreshes the replica that handled it. The others catch up within 30 seconds |
+
+A change to a realm or a client is therefore visible on every replica after at most the cache delay, not instantly. A role change on a service account reaches new `client_credentials` tokens only after the same delay.
+
+Each replica sends a heartbeat every 15 seconds and resubscribes when it hears nothing for 45 seconds, so a broken connection is noticed. While a replica has no working subscription, it skips the cache and reads sessions and revocations from PostgreSQL.
+
+`LISTEN` needs a connection that keeps its session, and a transaction-mode pooler such as PgBouncer does not deliver notifications. The replicas would then never hear about a revocation made elsewhere: a token revoked or a session ended on one replica can stay valid on the others until their cache entry expires, and the listener logs `the token and session change listener heard nothing, reconnecting` each time it gives up waiting. Point `DATABASE_HOST` at PostgreSQL itself, or at a pooler in session mode. If you must use a transaction pooler, set `CONFIG_CACHE_TTL_SECONDS=0`: that turns the caches and the listener off, and every request reads from the database.
+
+The [configuration guide](/en/discover/guides/configuration#caching) lists these settings.
+
+### Resources
+
+Resources are set per workload; there is no global override.
 
 ```yaml title="values.yaml"
 api:
@@ -84,7 +132,9 @@ webapp:
   replicas: 2
 ```
 
-Add a PodDisruptionBudget so a node drain does not take every replica at once:
+The default API limit is 512Mi. Argon2 shares that limit with the rest of the process: `PASSWORD_HASH_MEMORY_BUDGET_MIB` caps the memory password hashing may use at once, and it defaults to 256 MiB, half of the default limit. If you raise the budget, or `PASSWORD_HASH_MEMORY_KIB`, raise `api.resources.limits.memory` by at least the same amount, because the budget is spent on top of everything else the process holds. See [password hashing](/en/discover/guides/configuration#password-hashing).
+
+The chart does not create a PodDisruptionBudget. Add one so a node drain does not take every replica at once:
 
 ```yaml title="pdb.yaml"
 apiVersion: policy/v1
@@ -97,9 +147,10 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: ferriskey-api
+      app.kubernetes.io/instance: ferriskey
 ```
 
-Check the label on your own pods with `kubectl get pod -n ferriskey --show-labels` before applying it.
+The `instance` label is the release name, or `nameOverride` when you set it.
 
 ## Health probes
 
@@ -108,17 +159,29 @@ GET /health/live
 GET /health/ready
 ```
 
-Liveness answers whether the process is up; readiness whether it can serve, which includes reaching the database. The chart wires both by default, at `/api/health/live` and `/api/health/ready` because it sets `rootPath: /api`.
+Both probes run `SELECT 1` against the database with a two-second timeout and answer `503` when it fails. Readiness also reports the response time, and a database slower than one second shows up as `status: slow` and `is_healthy: false` in the body, with the HTTP status still `200`. The chart wires both by default, at `/api/health/live` and `/api/health/ready` because it sets `rootPath: /api`.
 
-:::callout{variant="info" title="They are not in the OpenAPI document"}
-Both probes are real routes but carry no OpenAPI annotation, so they do not appear in the generated spec or in the API documentation UIs. They are part of the deployment contract rather than the API contract — do not go looking for them in `/scalar`.
+:::callout{variant="warning"}
+Because liveness depends on the database, a database outage fails it as well. With the chart defaults (`periodSeconds: 10`, `failureThreshold: 3`), the kubelet restarts the API containers after about 30 seconds of outage. If you would rather keep the pods running through a database failure, replace the liveness probe with a TCP check and leave readiness as it is:
+
+```yaml title="values.yaml"
+api:
+  livenessProbe:
+    httpGet: null
+    tcpSocket:
+      port: http
+```
+:::
+
+:::callout{variant="info"}
+Both probes are real routes but carry no OpenAPI annotation, so they do not appear in the generated spec or in the API documentation UIs. They are part of the deployment contract rather than the API contract, so do not go looking for them in `/scalar`.
 :::
 
 Keep readiness pointed at `/health/ready` rather than at a realm route: a realm-scoped URL makes the probe depend on a realm existing, and a readiness probe that fails because someone renamed a realm will take the pods down with it.
 
 ## Monitoring
 
-The API serves Prometheus metrics on `/metrics`. With the Prometheus Operator installed, the chart can create the ServiceMonitor for you:
+The API serves Prometheus metrics on `<rootPath>/metrics`, which is `/api/metrics` with the chart. With the Prometheus Operator installed, the chart can create the ServiceMonitor for you, with the path already set:
 
 ```yaml title="values.yaml"
 api:
@@ -127,36 +190,62 @@ api:
     interval: 30s
 ```
 
-Alert on error rate, request latency, and database connection failures. For traces, turn on the OTLP exporter:
+Alert on error rate, request latency, and database connection failures. For traces, turn on the OTLP exporter. The API refuses to start with observability on and no `METRICS_ENDPOINT`, and the chart has no value for that one, so pass it through `api.env`:
 
 ```yaml title="values.yaml"
 opentelemetry:
   enabled: true
   otlpEndpoint: http://tempo.observability.svc.cluster.local:4317
+
+api:
+  env:
+    - name: METRICS_ENDPOINT
+      value: http://otel-collector.observability.svc.cluster.local:4317
 ```
 
-That sets `ACTIVE_OBSERVABILITY` and `OTLP_ENDPOINT` on the API.
+`opentelemetry.enabled` sets `ACTIVE_OBSERVABILITY` and `OTLP_ENDPOINT` on the API.
 
 ## Security hardening
 
-The chart already runs every container as non-root with a read-only root filesystem, all capabilities dropped, and the `RuntimeDefault` seccomp profile. What is left to you:
+The chart already runs every container as non-root with a read-only root filesystem, all capabilities dropped, and the `RuntimeDefault` seccomp profile. The rest is yours.
 
-- Network policies. The API needs PostgreSQL, plus outbound access to external identity providers if you use Abyss and to your SMTP relay.
+### Restrict what the Ingress exposes
+
+The chart's Ingress sends the whole `rootPath` to the API, and several routes under it need no token: `/api/metrics`, `/api/config` (the version and the environment), and the API documentation (`/api/scalar`, `/api/swagger-ui`, `/api/redoc`, `/api/rapidoc` and `/api/api-docs/openapi.json`). Unless your Ingress or gateway blocks them, anyone on the internet can read them. Answer `404` or `403` for these paths on the public route, or serve them only on an internal hostname.
+
+The kubelet probes and the ServiceMonitor reach the pods directly, not through the Ingress, so blocking these paths on the Ingress does not affect them.
+
+### Secrets and client addresses
+
+- Set `SECRETS_ENCRYPTION_KEYS` from a Secret, as shown on the [Helm chart page](/en/kubernetes/helm-chart#environment-variables-the-chart-has-no-value-for). Without it, realm signing keys, TOTP seeds and SMTP passwords sit in clear in the database, and the API logs a warning at every start. See [Secrets at rest](/en/discover/guides/secrets-at-rest).
+- Set `SERVER_TRUST_FORWARDED_FOR=true` when only your proxy can reach the API. It is off by default, and behind an Ingress every caller then shares the proxy's address: audit events and [Compass](/en/modules/compass/overview) flows record the proxy, and the throttles count all your users as one caller. FerrisKey reads the first entry of `X-Forwarded-For`, so the proxy must replace the header rather than append to it. With the flag on and the API reachable directly, a client can write any address it likes. [Client addresses and throttles](/en/discover/guides/configuration#client-addresses-and-throttles) has the rest.
+
+### Everything else
+
+- Network policies. The API needs PostgreSQL, plus outbound access to external identity providers if you use Abyss, to your SMTP relay, to the endpoints of your webhooks and to the back-channel logout URLs of your clients. Allow your ingress controller in, and Prometheus if it scrapes the pods.
 - External secret management. Feed `database.passwordSecret` and `api.admin.passwordSecret` from Vault, an external secrets operator, or your cloud's secret manager, instead of letting the chart generate them.
 - Image scanning in CI, on the images you actually deploy.
-- Audit forwarding. Enable SeaWatch and ship its events to your SIEM.
+- Audit forwarding. SeaWatch records events whether or not you forward them; [ship them to your SIEM](/en/modules/seawatch/querying).
 - Log format. Set `api.log.json: true` so structured logs land in your aggregator intact.
 
 ## Checklist
 
 | Item | Status |
 |---|---|
-| `postgresql.enabled: false`, external database with TLS | |
+| `postgresql.enabled: false`, external database | |
+| `PGSSLMODE=verify-full` on the API and the migration Job | |
+| Connection budget under the server's `max_connections` | |
+| PostgreSQL reached directly or through a session-mode pooler | |
 | Database backups configured and a restore tested | |
 | TLS terminated, HTTP redirected | |
-| `api.server.allowedOrigins` restricted to real origins | |
+| Proxy sets `Host` and `X-Forwarded-Proto` | |
+| `SERVER_PUBLIC_URL` set if you use SAML | |
+| `/api/metrics`, `/api/config` and the API documentation blocked on the public route | |
+| `api.server.allowedOrigins` empty, or listing only a console origin served apart from the API | |
 | Admin password supplied from an existing Secret | |
-| Resource requests and limits set per workload | |
+| `SECRETS_ENCRYPTION_KEYS` set from a Secret and backed up | |
+| `SERVER_TRUST_FORWARDED_FOR=true` behind a proxy you control | |
+| Resource requests and limits set per workload, memory limit above the Argon2 budget | |
 | PodDisruptionBudget applied | |
 | ServiceMonitor enabled and alerts wired up | |
 | Network policies applied | |
