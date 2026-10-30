@@ -1,6 +1,6 @@
 ---
 title: Why IAM Exists
-description: "A beginner-friendly tour of identity standards: OAuth2, OIDC, JWT, CIAM, and AuthZen."
+description: "A beginner-friendly tour of identity standards: OAuth2, OIDC, JWT, CIAM, and AuthZEN."
 icon: graduation-cap
 order: 1
 ---
@@ -42,7 +42,7 @@ A compact, signed token format. Used by OIDC, OAuth2, and many APIs to carry cla
 :::card{label="CIAM" icon="lucide:users" href="/en/learn/ciam/overview"}
 Customer IAM. The flavor of IAM aimed at end-users of a product, not employees: branding, self-service signup, organization-level policies.
 :::
-:::card{label="AuthZen" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
+:::card{label="AuthZEN" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
 An emerging standard for fine-grained authorization. What a user can do, decided in a consistent way across tools.
 :::
 ::::
@@ -58,7 +58,7 @@ Every page ends with an "In FerrisKey" section pointing to where the concept liv
 
 ## In FerrisKey
 
-FerrisKey implements OAuth2, OIDC, JWT and SAML. AuthZen is the exception: FerrisKey issues the identity and coarse-grained authorization an AuthZen engine consumes, but does not yet speak the protocol itself. To see the rest in practice:
+FerrisKey implements OAuth2, OIDC, JWT, SAML and AuthZEN. Besides issuing identity and coarse-grained authorization, FerrisKey can act as an AuthZEN policy decision point for each realm, once the instance has the module turned on: you write Cedar policies for your applications, and they ask FerrisKey for a yes or no over the AuthZEN evaluation API. To see it in practice:
 
 ::::card-group{cols=2}
 :::card{label="What is FerrisKey?" icon="lucide:shield" href="/en/discover/what-is-ferriskey"}
@@ -66,5 +66,8 @@ The high-level overview of the platform.
 :::
 :::card{label="Getting Started" icon="lucide:rocket" href="/en/discover/getting-started"}
 Run FerrisKey locally and obtain your first tokens.
+:::
+:::card{label="Authz module" icon="lucide:scale" href="/en/modules/authz/overview"}
+Write Cedar policies for your own applications and let them ask FerrisKey for decisions.
 :::
 ::::

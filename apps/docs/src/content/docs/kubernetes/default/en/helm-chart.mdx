@@ -1,15 +1,17 @@
 ---
-title: Helm Chart
+title: Helm chart
 description: "Install FerrisKey on Kubernetes using the official Helm chart."
 icon: package
 order: 2
 ---
 
-# Helm Chart
+# Helm chart
 
-The FerrisKey chart is published as an OCI artifact at `oci://ghcr.io/ferriskey/charts/ferriskey`. It deploys the API, the web console, the database migration job, and, unless you turn it off, an embedded PostgreSQL.
+The FerrisKey chart is published as an OCI artifact at `oci://ghcr.io/ferriskey/charts/ferriskey`. It deploys the API, the web console, a database migration Job, and, unless you turn it off, an embedded PostgreSQL. Image tags default to the chart's `appVersion`, so chart 0.10.0 runs FerrisKey 0.10.0.
 
 ## Install
+
+This first install is a local trial. Resource names start with the release name, and the commands below assume it is `ferriskey`.
 
 ::::step-group
 :::step{title="Install the chart"}
@@ -18,10 +20,13 @@ The chart is an OCI artifact, so there is no `helm repo add` step:
 ```bash
 helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
   --namespace ferriskey \
-  --create-namespace
+  --create-namespace \
+  --set webapp.api.url=http://localhost:3333/api \
+  --set api.webapp.url=http://localhost:5555 \
+  --set 'api.server.allowedOrigins={http://localhost:5555}'
 ```
 
-Out of the box this brings up an embedded PostgreSQL and generates the database and admin passwords into Secrets.
+This brings up an embedded PostgreSQL and generates the database and admin passwords into Secrets. The three `--set` flags point the console and the API at the port-forwards you open in the last step. The console runs in your browser and calls the API from there, so it needs an API address the browser can reach. [The console and the API URL](#the-console-and-the-api-url) explains why.
 :::
 
 :::step{title="Check the rollout"}
@@ -29,22 +34,28 @@ Out of the box this brings up an embedded PostgreSQL and generates the database 
 kubectl get pods -n ferriskey
 ```
 
-Wait for the migration job to complete and the API and webapp pods to reach `Running`.
+Wait for the API pod, the console pod and `ferriskey-postgresql-0` to reach `Running`. The migration Job runs as a Helm hook and Helm deletes it as soon as it succeeds, so its pod only shows while it runs.
 :::
 
 :::step{title="Reach the console"}
-The webapp service listens on port 80:
+Open one port-forward per Service, each in its own terminal. The API Service listens on 3333 and the console Service on 80:
 
 ```bash
+kubectl port-forward -n ferriskey svc/ferriskey-api 3333:3333
 kubectl port-forward -n ferriskey svc/ferriskey-webapp 5555:80
 ```
 
-Open `http://localhost:5555` and sign in with the admin account.
+Open `http://localhost:5555` and sign in as `admin`. The generated password is in the `ferriskey-api-admin` Secret:
+
+```bash
+kubectl get secret -n ferriskey ferriskey-api-admin \
+  -o jsonpath='{.data.password}' | base64 -d
+```
 :::
 ::::
 
-:::callout{variant="warning" title="The embedded PostgreSQL is for trying things out"}
-`postgresql.enabled` defaults to `true` so a fresh install works with no dependencies. Do not ship that to production. Point `database.host` at a managed instance and set `postgresql.enabled: false`.
+:::callout{variant="warning"}
+The embedded PostgreSQL is for trying things out. `postgresql.enabled` defaults to `true` so a fresh install works with no dependencies, but it is a single StatefulSet with no replication and no backup. For production, set `postgresql.enabled: false` and point `database.host` at a managed instance.
 :::
 
 ## Install against an external PostgreSQL
@@ -58,7 +69,7 @@ helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
   --set database.passwordSecret.name=ferriskey-db-credentials
 ```
 
-With `database.passwordSecret.create=false`, the chart reads the password from the Secret you name, at the key given by `database.passwordSecret.key` (`password` by default).
+With `database.passwordSecret.create=false`, the chart reads the password from the Secret you name, at the key given by `database.passwordSecret.key` (`password` by default). The chart sets no TLS option on this connection. [Encrypt the database connection](/en/kubernetes/production-guide#encrypt-the-database-connection) shows how.
 
 ## Exposing the deployment
 
@@ -89,30 +100,73 @@ gatewayAPI:
         namespace: gateway-system
 ```
 
-Both route `/` to the webapp and `api.server.rootPath` (`/api` by default) to the API, on a single hostname. `api.webapp.url` and `webapp.api.url` are derived from that configuration, so you only set them when you serve the two on separate hosts.
+Both route `/` to the console and `api.server.rootPath` (`/api` by default) to the API, on a single hostname. Because the whole `rootPath` goes to the API, `/api/metrics` and the API documentation are reachable from outside unless you block them. The [production guide](/en/kubernetes/production-guide#restrict-what-the-ingress-exposes) covers that.
+
+`api.webapp.url` and `webapp.api.url` are derived from `publicHost`, the protocol and the root path, so you only set them when you serve the two on separate hosts. The derived URLs start with `https://`. If you serve plain HTTP, set `api.webapp.protocol` and `webapp.api.protocol` to `http`.
+
+### The console and the API URL
+
+The console is a static site. When it loads, the browser reads `/config.json`, which the chart mounts from a ConfigMap (`<release>-webapp-config`) with the value of `webapp.api.url`, and sends every API call to that address. The container also receives the value as `API_URL`. At startup its entrypoint takes the origin of that URL (scheme, host and port) and adds it to the `connect-src` directive of the content security policy the console serves. That directive allows the console's own origin and that one, nothing else.
+
+A `webapp.api.url` that differs from the address your browser really uses for the API, in scheme, host or port, therefore makes the browser block the calls, and the console cannot load anything from the API. This is also why a plain-HTTP deployment needs `webapp.api.protocol: http`: the derived URL would start with `https://`. With no value at all, the console falls back to its own origin, which only works when something routes the API under that origin.
+
+The console's nginx configuration is rewritten at startup, and the container's root filesystem is read-only. An init container named `seed-nginx` therefore copies `/etc/nginx/conf.d` from the image into an `emptyDir` volume that the console container mounts at that path. It runs the console image with `webapp.securityContext` and `webapp.resources`. Init containers you add with `webapp.initContainers` run after it.
+
+## Environment variables the chart has no value for
+
+The API Deployment sets a fixed list of variables from chart values: the database connection (`DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_PASSWORD`, `DATABASE_PORT`, `DATABASE_USER`), `ADMIN_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_USERNAME`, `ALLOWED_ORIGINS`, `ENV`, `LOG_FILTER`, `LOG_JSON`, `SERVER_PORT`, `SERVER_ROOT_PATH`, `WEBAPP_URL`, and the OpenTelemetry pair when `opentelemetry.enabled` is on.
+
+Everything else the API reads from its environment has no chart value. That includes `SECRETS_ENCRYPTION_KEYS`, `SERVER_PUBLIC_URL` (required for SAML), `AUTHZ_ENABLED`, `SERVER_TRUST_FORWARDED_FOR`, the connection pool variables and the Argon2 variables. Add them to `api.env`, which is appended after the fixed list, or load a whole ConfigMap or Secret with `api.envFrom`. The [configuration guide](/en/discover/guides/configuration) documents each variable.
+
+```yaml title="values.yaml"
+api:
+  env:
+    - name: SECRETS_ENCRYPTION_KEYS
+      valueFrom:
+        secretKeyRef:
+          name: ferriskey-secrets-encryption
+          key: SECRETS_ENCRYPTION_KEYS
+    - name: SERVER_PUBLIC_URL
+      value: https://iam.yourorg.com
+    - name: SERVER_TRUST_FORWARDED_FOR
+      value: "true"
+```
+
+Create the Secret in the release namespace, so the key never appears in your values file. The API pods do not start until it exists, so create the namespace first if the release is not installed yet:
+
+```bash
+kubectl create secret generic ferriskey-secrets-encryption \
+  --namespace ferriskey \
+  --from-literal=SECRETS_ENCRYPTION_KEYS="2026-10:$(openssl rand -base64 32)"
+```
+
+[Secrets at rest](/en/discover/guides/secrets-at-rest) covers the key format and rotation. Back the key up outside the cluster: the Secret is the only copy that can open what it sealed.
+
+`api.env` and `common.env` take full Kubernetes `EnvVar` entries. `common.env` and `common.envFrom` reach every workload the chart deploys, the migration Job and the embedded PostgreSQL included, so reserve them for settings every container may see. Kubernetes gives `env` precedence over `envFrom`, so a variable the chart already sets, `LOG_JSON` for example, cannot be overridden through `envFrom`. Change its chart value instead.
 
 ## Values reference
 
-The chart exposes the full Kubernetes surface for every workload: probes, security contexts, affinity, tolerations, topology spread, extra volumes, and so on. The table below covers the values specific to FerrisKey. The [chart README](https://github.com/ferriskey/ferriskey/blob/main/charts/ferriskey/README.md) has the exhaustive list.
+The chart exposes the full Kubernetes surface for every workload: probes, security contexts, affinity, tolerations, topology spread, extra volumes, and so on. The tables below cover the values specific to FerrisKey. The [chart README](https://github.com/ferriskey/ferriskey/blob/main/charts/ferriskey/README.md) has the exhaustive list.
 
 ### Top level
 
 | Key | Default | Description |
 |---|---|---|
-| `nameOverride` | `nil` | Override the release-derived resource name |
-| `publicHost` | `nil` | Public hostname. Required when an Ingress or HTTPRoute is enabled |
+| `nameOverride` | `nil` | Replaces the release name when the chart derives resource names (truncated to 43 characters) |
+| `publicHost` | `nil` | Public hostname. Required when an Ingress or HTTPRoute is enabled. Also used to derive `api.webapp.url` and `webapp.api.url` |
+| `common.env`, `common.envFrom` | `[]` | Environment applied to every workload |
 
 ### Database
 
 | Key | Default | Description |
 |---|---|---|
-| `database.host` | `nil` | PostgreSQL host. Defaults to the embedded instance when it is enabled |
+| `database.host` | `nil` | PostgreSQL host. Falls back to the Service name of the embedded instance |
 | `database.port` | `5432` | PostgreSQL port |
 | `database.name` | `ferriskey` | Database name |
 | `database.user` | `ferriskey` | Database user |
 | `database.passwordSecret.create` | `true` | Generate the password Secret |
 | `database.passwordSecret.name` | `nil` | Existing Secret to read the password from |
-| `database.passwordSecret.key` | `password` | Key inside that Secret |
+| `database.passwordSecret.key` | `password` | Key inside that Secret. A Secret the chart generates always uses `password` |
 
 ### API
 
@@ -127,13 +181,15 @@ The chart exposes the full Kubernetes surface for every workload: probes, securi
 | `api.admin.passwordSecret.name` | `nil` | Existing Secret holding the admin password |
 | `api.admin.passwordSecret.key` | `password` | Key inside that Secret |
 | `api.server.port` | `3333` | Port the API listens on |
-| `api.server.rootPath` | `/api` | Path prefix. Change it and the probes need updating too |
+| `api.server.rootPath` | `/api` | Path prefix of every route, including `/metrics` and the API documentation. Change it and the probe paths need updating too |
 | `api.server.allowedOrigins` | `[]` | Browser origins allowed on every route |
-| `api.webapp.url` | `nil` | Console URL. Computed from the exposure configuration when unset |
+| `api.webapp.url` | `nil` | Console URL, passed as `WEBAPP_URL`. Computed from `publicHost` when unset |
+| `api.webapp.protocol` | `https` | Scheme used for the computed console URL. Ignored when `api.webapp.url` is set |
 | `api.log.filter` | `info` | Log filter directives |
 | `api.log.json` | `false` | JSON log output |
-| `api.serviceMonitor.enabled` | `false` | Create a Prometheus Operator ServiceMonitor |
-| `api.resources` | 128Mi request / 512Mi limit | API container resources |
+| `api.env`, `api.envFrom` | `[]` | Extra environment for the API container |
+| `api.serviceMonitor.enabled` | `false` | Create a Prometheus Operator ServiceMonitor that scrapes `<rootPath>/metrics` |
+| `api.resources` | 128Mi memory request, 512Mi memory limit | API container resources. No CPU request or limit is set |
 
 ### Web console
 
@@ -141,18 +197,19 @@ The chart exposes the full Kubernetes surface for every workload: probes, securi
 |---|---|---|
 | `webapp.replicas` | `1` | Console replica count |
 | `webapp.image.repository` | `ghcr.io/ferriskey/ferriskey-webapp` | Console image |
-| `webapp.api.url` | `nil` | API URL the browser calls. Computed from the exposure configuration when unset |
-| `webapp.resources` | 32Mi request / 64Mi limit | Console container resources |
+| `webapp.api.url` | `nil` | API URL the browser calls. Written to `config.json` and to `API_URL`. Computed from `publicHost` when unset |
+| `webapp.api.protocol` | `https` | Scheme used for the computed API URL. Ignored when `webapp.api.url` is set |
+| `webapp.resources` | 32Mi memory request, 64Mi memory limit | Console container resources |
 
 ### Database migrations
 
 | Key | Default | Description |
 |---|---|---|
 | `databaseMigrations.image.repository` | API image | Image running `sqlx migrate run` |
-| `databaseMigrations.backoffLimit` | `nil` | Job backoff limit |
-| `databaseMigrations.ttlSecondsAfterFinished` | `nil` | Set to `0` outside of ArgoCD to clean the job up |
+| `databaseMigrations.backoffLimit` | `nil` | Retries before the Job is marked failed. Rendered only when `1` or more, so `0` leaves the Kubernetes default in place |
+| `databaseMigrations.ttlSecondsAfterFinished` | `nil` | Seconds Kubernetes keeps a finished Job before deleting it. Rendered only when `1` or more, so `0` renders nothing |
 
-Under Helm the migration job runs as a `post-install` and `pre-upgrade` hook, so it is recreated on every upgrade rather than patched in place.
+Under Helm the migration Job runs as a `post-install` and `pre-upgrade` hook, and Helm deletes it once it succeeds. It is recreated on every upgrade rather than patched in place, which is why you rarely need `ttlSecondsAfterFinished`. The Job runs with `restartPolicy: OnFailure`.
 
 ### Embedded PostgreSQL
 
@@ -169,8 +226,21 @@ Under Helm the migration job runs as a `post-install` and `pre-upgrade` hook, so
 
 | Key | Default | Description |
 |---|---|---|
-| `opentelemetry.enabled` | `false` | Set `ACTIVE_OBSERVABILITY` and export traces |
-| `opentelemetry.otlpEndpoint` | `http://tempo:4317` | OTLP collector endpoint |
+| `opentelemetry.enabled` | `false` | Set `ACTIVE_OBSERVABILITY` and `OTLP_ENDPOINT` on the API |
+| `opentelemetry.otlpEndpoint` | `http://tempo:4317` | OTLP endpoint for traces and logs |
+
+The API also needs `METRICS_ENDPOINT` once observability is on, and the chart has no value for it. Without it the API refuses to start, so add it to `api.env`:
+
+```yaml title="values.yaml"
+opentelemetry:
+  enabled: true
+  otlpEndpoint: http://tempo.observability.svc.cluster.local:4317
+
+api:
+  env:
+    - name: METRICS_ENDPOINT
+      value: http://otel-collector.observability.svc.cluster.local:4317
+```
 
 ## A production values file
 
@@ -198,19 +268,21 @@ api:
       create: false
       name: ferriskey-admin
       key: password
-  server:
-    allowedOrigins:
-      - https://iam.yourorg.com
   log:
     json: true
   serviceMonitor:
     enabled: true
+  env:
+    - name: SECRETS_ENCRYPTION_KEYS
+      valueFrom:
+        secretKeyRef:
+          name: ferriskey-secrets-encryption
+          key: SECRETS_ENCRYPTION_KEYS
+    - name: SERVER_PUBLIC_URL
+      value: https://iam.yourorg.com
 
 webapp:
   replicas: 2
-
-databaseMigrations:
-  ttlSecondsAfterFinished: 0
 
 ingress:
   enabled: true
@@ -227,9 +299,11 @@ helm upgrade --install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
   -f values.yaml
 ```
 
+The [production guide](/en/kubernetes/production-guide) goes through what this file leaves out: database TLS, the connection budget, health probes and what to block on the Ingress.
+
 ## Installing with ArgoCD
 
-ArgoCD does not run Helm hooks, so the ordering has to be expressed with sync waves. Give the Secrets and PostgreSQL wave 0 and the migration job wave 1:
+Under ArgoCD, order the resources with ArgoCD's own hook and sync-wave annotations: the database password Secret and the embedded PostgreSQL first, the migration Job after them.
 
 ```yaml title="values.yaml, ArgoCD"
 database:
@@ -242,9 +316,20 @@ databaseMigrations:
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/sync-wave: "1"
+
+postgresql:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "0"
+  serviceAccount:
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/sync-wave: "0"
 ```
 
-ArgoCD regenerates the admin password Secret on every sync, which shows up as permanent drift. Tell it to ignore that field:
+With an external database, only the `databaseMigrations` annotations apply.
+
+The chart keeps a generated password stable by looking up the existing Secret with Helm's `lookup`. ArgoCD renders the chart without access to the cluster, so the lookup finds nothing and a new password is generated at every sync. The admin password Secret then shows up as permanent drift. The cleanest fix is to create both password Secrets yourself and set `create: false`. If you keep the generated admin Secret, tell ArgoCD to ignore the field:
 
 ```yaml
 ignoreDifferences:

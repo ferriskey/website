@@ -1,72 +1,93 @@
 ---
 title: Magic Links
-description: "Passwordless email login in FerrisKey: generate, deliver, and verify magic links."
+description: "Passwordless email sign-in in FerrisKey: requirements, the browser binding, and how a link fails."
 icon: mail
 order: 13
 ---
 
-# Magic Links
+# Magic links
 
-Magic links provide passwordless login via email. Instead of typing a password, the user receives an email with a unique link. Clicking the link authenticates them immediately.
+A magic link signs a user in from their inbox instead of a password. The user types their email address on the sign-in page, receives a link, and opening it completes the sign-in. The link only works in the browser that asked for it.
 
 ## How it works
 
 ::::step-group
-:::step{title="User requests a magic link"}
-The user enters their email address on the login page and requests a magic link.
+:::step{title="The user asks for a link"}
+The sign-in page calls `POST /login-actions/send-magic-link` with the `email` and, optionally, `remember_me`. The call carries the `FERRISKEY_SESSION` cookie the sign-in page already holds. The answer is the same whether or not an account has that address, so the endpoint does not reveal which addresses exist.
 :::
 
-:::step{title="Token generated"}
-FerrisKey generates a unique token (UUID), hashes it for storage, and creates a `MagicLink` record with an expiration time.
+:::step{title="FerrisKey stores the link"}
+FerrisKey creates a link identifier (`token_id`, a UUID) and a secret of 43 random alphanumeric characters. It stores the identifier, an Argon2 hash of the secret, the expiry, and the session the request came from. The secret itself is never stored.
 :::
 
-:::step{title="Email sent"}
-FerrisKey sends an email to the user containing a link with the raw (unhashed) token as a URL parameter.
+:::step{title="The email goes out"}
+The email is rendered from the realm's magic-link template and carries a link of the form `<WEBAPP_URL>/realms/<realm_name>/authentication/magic-link?token_id=...&magic_token=...`.
 :::
 
-:::step{title="User clicks the link"}
-The user clicks the link in their email. The client sends the token to FerrisKey.
+:::step{title="The user opens the link"}
+The portal's `magic_link_verify` page calls `GET /login-actions/verify-magic-link` with the two query parameters.
 :::
 
-:::step{title="Token verified"}
-FerrisKey hashes the received token and compares it against the stored hash. If it matches and hasn't expired, the user is authenticated and receives full tokens.
+:::step{title="FerrisKey verifies it"}
+FerrisKey checks that the browser holds the `FERRISKEY_SESSION` cookie of the sign-in that asked for the link, that the link has not expired, and that the secret matches its hash. It then deletes the link and answers `{ "status": "Success", "url": ... }`, where `url` carries the authorization code, and sets the SSO session cookie.
 :::
 ::::
 
-## Configuration
-
-Magic links require two realm settings:
+## Requirements
 
 | Setting | Default | Description |
 |---|---|---|
-| `magic_link_enabled` | `false` | Enable magic link authentication |
-| `magic_link_ttl` | `15` minutes | How long a magic link remains valid |
+| `magic_link_enabled` | `false` | Turns magic-link sign-in on. While it is off, `send-magic-link` answers 400 `magic_link_not_enabled` |
+| `magic_link_ttl` | `15` | Minutes a link stays valid. The minimum is 1 |
+| `magic_link_template_id` | none | The email template used for the message |
 
-:::callout{variant="warning" title="SMTP required"}
-Magic links require a configured SMTP provider on the realm. Without email delivery, magic links cannot be sent. Configure SMTP in **Realm Settings → Email**.
-:::
+In the console, the first two are on the Sign-in methods screen, or on the Login tab of Realm Settings in the Admin panel.
 
-## Security Considerations
+<Callout variant="warning" title="SMTP and a template are both required">
 
-### Token Hashing
-The magic link token is never stored in plaintext. FerrisKey stores only the hash, even if the database is compromised, the tokens cannot be used.
+FerrisKey sends nothing unless the realm has an SMTP configuration and a `magic_link_template_id`. The request still answers 200, so the user waits for a mail that never comes. FerrisKey records an `email_not_sent` event in [SeaWatch](/en/modules/seawatch/overview) with the reason, either `SMTP_NOT_CONFIGURED` or `TEMPLATE_NOT_CONFIGURED`. Set up the server on the SMTP tab of the **Emails** page of the console and assign the template there, as described in [Email & Templates](/en/discover/guides/email).
 
-### Single Use
-Each magic link can be used exactly once. After the token is verified and the user is authenticated, the magic link record is consumed.
+</Callout>
 
-### Expiration
-Magic links expire after `magic_link_ttl` minutes (default: 15). Expired links return an error. Keep this window short to limit the exposure of an unread email.
+## How a link fails
 
-### Email Security
-The security of magic links depends on the security of the user's email inbox. If an attacker has access to the inbox, they can use the magic link. For higher-security environments, combine magic links with a second factor or prefer WebAuthn instead.
+| Situation | Result |
+|---|---|
+| The link is opened in a browser without the requesting `FERRISKEY_SESSION` cookie | 401 `invalid_magic_link`. The link stays valid for the original browser |
+| The link was requested without a session cookie | It cannot be completed |
+| The link has expired | 401 `magic_link_expired`, and the link is deleted |
+| The secret is wrong | 401 `invalid_magic_link`, and the link is deleted. One wrong guess burns it |
+| The user has an authenticator | 403. The link does not answer the TOTP challenge |
+| A required action other than `verify_email` is due | 403 |
 
-## Real-World Patterns
+The browser binding is what keeps a link read from a forwarded mail or a leaked inbox from signing in somewhere else. It has a cost for honest users: opening the link in the mail app of a phone, for a sign-in started on a laptop, fails.
 
-### Consumer Onboarding
-Send a magic link as part of the registration flow. The user signs up with their email, receives a link, clicks it, and they're authenticated with a verified email in one step. No password to create, no email verification step needed separately.
+A pending `verify_email` required action does not block a magic-link sign-in. If the client requires [consent](/en/discover/core-concepts/consent), the `url` in the answer leads to the consent screen first.
 
-### Low-friction internal tools
-For internal dashboards where users already have corporate email, magic links eliminate password management entirely. Users click "Send me a link", check their inbox, and they're in.
+## Security
 
-### Passwordless Fallback
-Offer magic links as a fallback for users who forget their password. Instead of going through a password reset flow, they can request a magic link for immediate access.
+### The secret is hashed
+
+FerrisKey stores only an Argon2 hash of the secret. A copy of the database does not give anyone a usable link.
+
+### Single use
+
+A link is deleted once it signs someone in. Expired links are deleted when they are opened, and when a later request for the same realm creates a new link.
+
+### Expiry
+
+A link expires after `magic_link_ttl` minutes. Keep the window short to limit what an unread email exposes.
+
+### The inbox is the factor
+
+Whoever controls the user's inbox, and can open the link in the browser that asked for it, signs in. Magic links are a poor fit when you want a second factor on top: a user who has an authenticator cannot use one at all, so give those users a password or a passkey instead.
+
+## Where it fits
+
+### Internal tools
+
+For dashboards whose users already have a corporate mailbox, magic links remove password management. The user clicks "Send me a link", checks their inbox, and is in.
+
+### A fallback for a forgotten password
+
+Offer a magic link next to the password-reset flow for users who have no authenticator. They get in without choosing a new password.

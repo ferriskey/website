@@ -1,11 +1,11 @@
 ---
-title: Getting Started
+title: Getting started
 description: "Deploy FerrisKey in minutes with Docker and authenticate your first user."
 icon: rocket
 order: 2
 ---
 
-# Getting Started
+# Getting started
 
 This guide takes you from nothing to a working FerrisKey instance with an authenticated user. You will start the Docker stack, create a realm, register a client, create a user, and request tokens.
 
@@ -13,7 +13,7 @@ This guide takes you from nothing to a working FerrisKey instance with an authen
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
 - A terminal and a web browser
-- Ports `3333` (API) and `5555` (UI) available
+- Ports `3333` (API), `5555` (UI) and `5432` (PostgreSQL) available
 
 ## Deploy FerrisKey
 
@@ -27,7 +27,7 @@ cd ferriskey
 docker compose --profile registry up -d
 ```
 
-This starts PostgreSQL, the FerrisKey API server, database migrations, and the admin console.
+This starts PostgreSQL, the FerrisKey API server, database migrations, and the admin console. The `registry` profile pulls the published images. The `build` profile builds the same services from your checkout instead.
 :::
 
 :::step{title="Verify the deployment"}
@@ -51,7 +51,7 @@ You land in the `master` realm, the built-in realm that manages all the others.
 ::::
 
 :::callout{variant="warning" title="Change default credentials"}
-The default admin credentials are for local development only. Change them immediately in any non-local environment by setting the `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` environment variables.
+The default admin credentials are for local development only. In any other environment, set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` before the first start. FerrisKey applies the password only while the admin user has none, so on a deployment that already ran, change it from the console instead.
 :::
 
 ## Deploy without cloning the repository
@@ -122,35 +122,8 @@ docker compose up -d
 The migration files are baked into the `ferriskey-api` image (under `/usr/local/src/ferriskey/migrations`), so the `db-migrations` service applies the schema without any checked-out source. These are the same images the repository's `registry` profile uses, extracted into a self-contained file you can drop onto any host or convert to a Docker Swarm stack.
 
 :::callout{variant="info" title="Pin a version for production"}
-The images above track the latest tag. For reproducible deployments, pin an explicit tag (for example `ghcr.io/ferriskey/ferriskey-api:v0.9.0`) on both the `api` and `db-migrations` services, so they always run the same binary and schema.
+The images above track the `latest` tag. For reproducible deployments, pin an explicit tag on the `api`, `db-migrations` and `webapp` services, for example `ghcr.io/ferriskey/ferriskey-api:0.10.0`. Tags carry no `v` prefix. A tag such as `0.10` follows the patch releases of that minor version. Using the same tag on `api` and `db-migrations` keeps the binary and the schema in step.
 :::
-
-## Run everything in one container
-
-There is a third image, `ghcr.io/ferriskey/ferriskey-standalone`, that bundles the API and the web app behind a single nginx process. It is the quickest way to get an instance up on one host, and it is what the repository's `standalone` profile starts:
-
-```bash
-docker compose --profile standalone-registry up -d
-```
-
-Everything is served from `http://localhost:8090`, with the API mounted under `/api`:
-
-```yaml title="Standalone service"
-standalone:
-  image: ghcr.io/ferriskey/ferriskey-standalone
-  environment:
-    DATABASE_HOST: db
-    DATABASE_NAME: ferriskey
-    DATABASE_USER: ferriskey
-    DATABASE_PASSWORD: ferriskey
-    SERVER_ROOT_PATH: /api
-    ALLOWED_ORIGINS: http://localhost:8090
-    WEBAPP_URL: http://localhost:8090
-  ports:
-    - 8090:80
-```
-
-The standalone image runs its own migrations at startup, so there is no separate migration service. It still needs an external PostgreSQL.
 
 ## Upgrading FerrisKey
 
@@ -180,6 +153,8 @@ docker compose up -d api webapp
 :::
 ::::
 
+`sqlx migrate run` handles the schema. The API then runs its own data migrations every time it starts, after the schema is in place: it applies the pending ones in version order, logs each one, and records it so it never runs twice. If one fails, the API stops with `Migration v<N> '<name>' failed: <reason>` and does not start. Fix the cause and start it again, and it resumes from the migration that failed.
+
 :::callout{variant="warning" title="Keep api and migrations on the same tag"}
 Always pull the `api` and `db-migrations` services from the same image tag. A newer API against an older schema, or an older API against a newer one, can fail at startup.
 :::
@@ -190,11 +165,13 @@ A realm is an isolated tenant. Users, clients, roles, and credentials all live i
 
 ::::step-group
 :::step{title="Create a realm"}
-In the admin console, navigate to **Realms** and click **Create Realm**. Give it a name like `my-app` and save.
+Click the realm name in the top bar, next to the FerrisKey logo, then **Create realm**. Enter `my-app` as the **Name** and click **Create realm**.
+
+The name appears in URLs and tokens and cannot be changed later. It takes letters, digits, hyphens and underscores.
 :::
 
-:::step{title="Switch to the new realm"}
-Use the realm selector in the sidebar to switch to `my-app`. All subsequent operations happen within this realm.
+:::step{title="Work in the new realm"}
+The console opens the new realm as soon as it exists. All subsequent operations happen within it. To come back to it later, pick `my-app` in the same selector.
 :::
 ::::
 
@@ -204,17 +181,21 @@ A client represents an application that uses FerrisKey for authentication.
 
 ::::step-group
 :::step{title="Create a client"}
-Navigate to **Clients** and click **Create Client**. Use these values:
+In the sidebar, click **Clients**, then **New client**. Choose **OpenID Connect** and fill in:
 
 - **Client ID:** `my-frontend`
-- **Client Type:** `Public` (for a single-page application)
-- **Redirect URIs:** `http://localhost:3000/*`
+- **Name:** `my-frontend`
+- **Client authentication:** `Public` (for a single-page application)
 
-Save the client.
+The protocol and the choice between public and confidential cannot be changed after creation.
 :::
 
 :::step{title="Enable direct access grants"}
-If you want to test authentication directly via the API (password grant), enable **Direct Access Grants** on the client settings page.
+If you want to test authentication directly via the API (password grant), switch **Direct access grants** on in the **Capability config** section.
+:::
+
+:::step{title="Save the client"}
+Click **Create client**. Redirect URIs are not part of this form. You add them later on the client's **Settings** tab, under **Access**, when you connect a real application. The password grant below does not use them.
 :::
 ::::
 
@@ -222,18 +203,17 @@ If you want to test authentication directly via the API (password grant), enable
 
 ::::step-group
 :::step{title="Create a user"}
-Navigate to **Users** and click **Create User**. Fill in:
+In the sidebar, click **Users**, then **New user**. Fill in:
 
 - **Username:** `alice`
+- **First and last name:** `Alice` and `Smith`
 - **Email:** `alice@example.com`
-- **First Name:** `Alice`
-- **Last Name:** `Smith`
 
-Save the user.
+Click **Create user**. The account starts without any credential.
 :::
 
 :::step{title="Set a password"}
-On the user's **Credentials** tab, set a password. Uncheck **Temporary** if you don't want to force a password change on first login.
+Open the user's **Credentials** tab and choose **Set a password**. Under **Validity**, pick **Permanent** unless you want to force a password change at the first sign-in, then enter the **New password**, confirm it, and click **Set the password**.
 :::
 ::::
 
@@ -252,13 +232,19 @@ curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
 
 A response containing an `access_token`, a `refresh_token`, and optionally an `id_token` means the user authenticated.
 
+:::callout{variant="info" title="Tokens for the management API"}
+The routes that manage a realm (users, clients, roles and the rest of the admin API) check more than the signature and the caller's permissions. The token must carry `<realm>-realm` in its `aud` claim, where `<realm>` is the realm that issued it, and its `azp` claim must name a client that is enabled and was created by an administrator.
+
+A token that fails either check gets 401. That covers a token requested for a resource server (the `resource` parameter replaces the audience) and a token issued to a client that registered itself through dynamic registration or a client metadata document.
+:::
+
 ## Connect a real application
 
-The password grant above is fine for a quick API test, and nothing else: it is [deprecated](/en/discover/core-concepts/authentication#password-resource-owner--deprecated). Real applications use browser-based SSO with the authorization code flow, and a CLI uses the device code grant.
+The password grant above is fine for a quick API test, and nothing else: it is [deprecated](/en/discover/core-concepts/authentication). Real applications use browser-based SSO with the authorization code flow, and a CLI uses the device code grant.
 
 To connect a dashboard, an internal service, or a self-hosted tool, follow the application SSO guide next. It walks through which console screens to use, what values to copy, and how to debug the usual setup mistakes.
 
-## What's next?
+## What's next
 
 ::::card-group{cols=2}
 :::card{label="Core Concepts" icon="lucide:layers" href="/en/discover/core-concepts/realms"}
@@ -266,5 +252,11 @@ Deep dive into realms, clients, users, roles, and tokens.
 :::
 :::card{label="Connect an Application" icon="lucide:plug" href="/en/discover/guides/application-sso"}
 Set up OpenID Connect SSO for an application with the FerrisKey dashboard.
+:::
+:::card{label="Configuration" icon="lucide:settings" href="/en/discover/guides/configuration"}
+Every environment variable, with defaults and the checks the API runs at start.
+:::
+:::card{label="Secrets at rest" icon="lucide:lock" href="/en/discover/guides/secrets-at-rest"}
+Encrypt realm signing keys, TOTP seeds and SMTP passwords in the database.
 :::
 ::::

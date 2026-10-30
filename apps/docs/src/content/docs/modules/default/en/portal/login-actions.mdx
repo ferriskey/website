@@ -1,21 +1,37 @@
 ---
 title: Login Actions
-description: "The endpoints the portal itself calls — what you need if you replace its UI with your own."
+description: "The endpoints the portal itself calls: what you need if you replace its UI with your own."
 icon: terminal
 order: 91
 ---
 
-# Login Actions
+# Login actions
 
-Everything else in this documentation is the surface an *application* integrates with: the OIDC endpoints, the admin API. This page is the other kind. `login-actions` is the family the **portal itself** calls — the 21 endpoints behind the login page, the MFA challenge, the password reset and the passkey prompts.
+Everything else in this documentation is the surface an *application* integrates with: the OIDC endpoints, the admin API. This page is the other kind. `login-actions` is the family the **portal itself** calls: the 20 endpoints behind the login page, the MFA challenge, the password reset and the passkey prompts.
 
 You do not touch them when you connect an application. You touch them when you **replace the portal** with your own UI and need to drive the same flows.
 
-:::callout{variant="warning" title="This is an internal contract, not a stable public API"}
-These endpoints exist to serve FerrisKey's own portal, and they move with it. If a themed portal gets you where you need to go, use [themes and layouts](/en/modules/portal/overview) instead — you get the flows for free and they keep working across upgrades. Reach for this family only when theming genuinely cannot express what you need.
-:::
+<Callout variant="warning" title="This is an internal contract, not a stable public API">
+
+These endpoints exist to serve FerrisKey's own portal, and they move with it. If a themed portal gets you where you need to go, use [themes and layouts](/en/modules/portal/overview) instead. You get the flows for free and they keep working across upgrades. Reach for this family only when theming genuinely cannot express what you need.
+
+</Callout>
 
 Paths below are relative to `/realms/{realm_name}`.
+
+## Cookies and credentials
+
+A sign-in is tracked by an auth session, and the browser carries it in the `FERRISKEY_SESSION` cookie, which the authorization request creates. Most calls below read it, and `authenticate` answers 401 `Missing session cookie` without it.
+
+`authenticate` also sets the **step token** in an HttpOnly cookie, `FERRISKEY_LOGIN_ACTION`, scoped to `/realms/{realm_name}/login-actions`. It is a short-lived JWT bound to the auth session, and it lasts as long as the realm's `temporary_token_lifetime` (300 seconds by default). A step token whose session differs from the `FERRISKEY_SESSION` cookie is refused with a 401.
+
+| Credential | Endpoints |
+|---|---|
+| No token | `authenticate`, `verify-email`, `send-magic-link`, `verify-magic-link`, `forgot-password`, `verify-reset-token`, `reset-password`, `passkey-request-options`, `passkey-authenticate` |
+| The step token cookie | `setup-otp`, `verify-otp`, `challenge-otp`, `update-password`, `burn-recovery-code`, `webauthn-public-key-create-options`, `webauthn-public-key-create` |
+| A Bearer access token | `generate-recovery-codes`, `webauthn-public-key-request-options`, `webauthn-public-key-authenticate`, `resend-verification-email` |
+
+While a user who has an authenticator has not answered the challenge, the step token only opens `challenge-otp` and `burn-recovery-code`. Every other step-token call answers 403.
 
 ## Password sign-in
 
@@ -24,32 +40,42 @@ Paths below are relative to `/realms/{realm_name}`.
 | `POST` | `/login-actions/authenticate` | Authenticate a user in the realm |
 | `POST` | `/login-actions/update-password` | Set a new password, for the `update_password` required action |
 
-`authenticate` is the entry point. When the realm or the user requires a second factor, it does not return full tokens — it returns a temporary token and a status saying which challenge to run. That temporary token authorizes the challenge and nothing else.
+`authenticate` is the entry point. Its body takes `username`, `password` and `remember_me`, and the query takes the `client_id`. The response `status` is one of:
+
+| Status | Meaning |
+|---|---|
+| `Success` | The sign-in is complete. `url` carries the authorization code |
+| `RequiresActions` | `required_actions` lists what is due. The step token is set |
+| `RequiresOtpChallenge` | The user has an authenticator. `email` is the user's address. The step token is set |
+
+When a second factor or a required action is due, `authenticate` does not return the authorization code. The step token it sets authorizes the next step and nothing else.
 
 ## MFA challenge
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/login-actions/setup-otp` | Start authenticator enrolment: returns the secret to render as a QR code |
-| `POST` | `/login-actions/verify-otp` | Verify the code during enrolment |
-| `POST` | `/login-actions/challenge-otp` | Ask for an authenticator code during sign-in |
-| `POST` | `/login-actions/generate-recovery-codes` | Generate recovery codes that let the user bypass a challenge |
-| `POST` | `/login-actions/burn-recovery-code` | Spend one recovery code instead of the challenge |
+| `GET` | `/login-actions/setup-otp` | Start authenticator enrolment: returns `secret`, `otpauth_url` and `issuer`, to render as a QR code |
+| `POST` | `/login-actions/verify-otp` | Confirm the enrolment with `code` and `label` |
+| `POST` | `/login-actions/challenge-otp` | Answer the OTP challenge with `code`, exactly six characters |
+| `POST` | `/login-actions/burn-recovery-code` | Answer the OTP challenge with a recovery code instead |
+| `POST` | `/login-actions/generate-recovery-codes` | Replace the user's recovery codes with a new set |
 
-Recovery codes are issued **here**, during the flow — not from the account page. See [Recovery Codes](/en/modules/trident/recovery-codes).
+`generate-recovery-codes` is not part of a sign-in. It takes the user's Bearer access token plus an `elevation_id` obtained from `POST /users/me/reauthenticate` with the password, and the call only makes sense once the user is already signed in. Nothing generates recovery codes automatically, and the portal never calls it. See [Recovery Codes](/en/modules/trident/recovery-codes) for the body and the format.
 
 ## Passkeys and WebAuthn
 
 | Method | Path | What it does |
 |---|---|---|
 | `POST` | `/login-actions/passkey-request-options` | Start passkey sign-in. With a username, the challenge is scoped to that user's passkeys; without one, it is discoverable and the browser proposes what it has |
-| `POST` | `/login-actions/passkey-authenticate` | Submit the browser's assertion. On success returns a login URL carrying an authorization code |
+| `POST` | `/login-actions/passkey-authenticate` | Submit the browser's assertion. On success returns `login_url`, which carries an authorization code |
 | `POST` | `/login-actions/webauthn-public-key-create-options` | Full `PublicKeyCredentialCreationOptions`, challenge in base64url |
-| `POST` | `/login-actions/webauthn-public-key-create` | Store a new WebAuthn public key |
-| `POST` | `/login-actions/webauthn-public-key-request-options` | Full `PublicKeyCredentialRequestOptions` |
-| `POST` | `/login-actions/webauthn-public-key-authenticate` | Authenticate with a `WebAuthnAssertionResponse` |
+| `POST` | `/login-actions/webauthn-public-key-create` | Store a new WebAuthn public key. Answers 403 unless `configure_passkey` is due for this sign-in |
+| `POST` | `/login-actions/webauthn-public-key-request-options` | Full `PublicKeyCredentialRequestOptions`, for a user who holds a Bearer token |
+| `POST` | `/login-actions/webauthn-public-key-authenticate` | Authenticate with a `WebAuthnAssertionResponse`, for a user who holds a Bearer token |
 
 The discoverable variant of `passkey-request-options` is what makes usernameless sign-in possible: no identifier is submitted, so the page cannot be used to probe which accounts exist.
+
+A user-verified passkey answers the OTP challenge, but required actions still block it with a 403. The portal uses the `passkey-*` pair for sign-in and the `webauthn-public-key-create*` pair for the `configure_passkey` action. It does not call the last two rows.
 
 ## Password reset
 
@@ -57,13 +83,21 @@ The discoverable variant of `passkey-request-options` is what makes usernameless
 |---|---|---|
 | `POST` | `/login-actions/forgot-password` | Send a reset email if the address exists |
 | `POST` | `/login-actions/verify-reset-token` | Check a token is valid and unexpired, **without consuming it** |
-| `POST` | `/login-actions/reset-password` | Complete the reset and return tokens, signing the user straight in |
+| `POST` | `/login-actions/reset-password` | Set the new password from `token_id`, `token` and `new_password`, and return tokens |
 
-:::callout{variant="info" title="Two deliberate details"}
-`forgot-password` **always answers 204**, whether the address exists or not — that is what stops the endpoint being an account-enumeration oracle. Do not "improve" your UI by reporting unknown addresses.
+<Callout variant="info" title="Three deliberate details">
+
+`forgot-password` answers **200** whether the address exists or not, and it sends nothing for an unknown address. That is what stops the endpoint being an account-enumeration oracle. Do not "improve" your UI by reporting unknown addresses. A realm that has not enabled `forgot_password_enabled` answers 403, whatever the address.
 
 `verify-reset-token` exists so a reset page can render its form knowing the token is good, without spending it. Check on load, consume on submit.
-:::
+
+A reset token lives 30 minutes, and a user can hold three live ones at a time. A fourth request is silently ignored until one expires.
+
+</Callout>
+
+The reset email only goes out when the realm has an SMTP configuration and a `reset_password_template_id`.
+
+`reset-password` applies the realm's password policy, replaces the password, revokes the user's earlier tokens and returns a new token response. When the reset started inside an authorization flow, it also returns `login_url`, which carries an authorization code and completes that flow. `login_url` is only present when the browser still holds the `FERRISKEY_SESSION` cookie of the sign-in that asked for the reset. A reset completed in another browser sets the password but returns no `login_url`, so the original client never receives a code. The field is absent as well when a step is still due for the user, such as an authenticator code.
 
 ## Email verification
 
@@ -76,8 +110,10 @@ The discoverable variant of `passkey-request-options` is what makes usernameless
 
 | Method | Path | What it does |
 |---|---|---|
-| `POST` | `/login-actions/send-magic-link` | Email a one-time sign-in link |
-| `GET` | `/login-actions/verify-magic-link` | Consume the token and return the redirect URL with an authorization code |
+| `POST` | `/login-actions/send-magic-link` | Email a one-time sign-in link. The call carries the `FERRISKEY_SESSION` cookie |
+| `GET` | `/login-actions/verify-magic-link` | Consume the token and return the redirect URL, with an authorization code, in `url` |
+
+The link is bound to the browser that asked for it. `verify-magic-link` answers 401 `invalid_magic_link` when the `FERRISKEY_SESSION` cookie differs from the session stored at send time. See [Magic Links](/en/modules/trident/magic-links) for the failure modes.
 
 ## Device flow
 
@@ -89,15 +125,15 @@ The [device code grant](/en/discover/core-concepts/authentication#device-code) n
 | `GET` | `/device/preview` | The client and scopes a pending device session is asking for, so the page can show what is being approved (RFC 8628 §5.3) |
 | `POST` | `/device/verify` | Approve or deny, once the user is authenticated |
 
-Both `preview` and `verify` need the `FERRISKEY_IDENTITY` cookie. When it is absent, `verify` answers `401` with a `redirect_uri` hint pointing back at the verification page — so a custom page can send the user to sign in and return, rather than dead-ending.
+Both `preview` and `verify` need the `FERRISKEY_SSO` cookie, the one the browser's SSO session rides on. When it is absent, `verify` answers `401` with a `redirect_uri` hint pointing back at the verification page, so a custom page can send the user to sign in and return rather than dead-ending.
 
-`preview` also refuses codes belonging to another session, which is what stops one user approving a device code that was displayed to someone else.
+`preview` also refuses codes belonging to another realm, which is what stops a user from one realm approving a device code that was issued in another.
 
 ## What you still get for free
 
 Replacing the portal does not mean reimplementing the whole IAM. These keep working underneath, whatever UI calls them:
 
-- The [authentication chain](/en/discover/core-concepts/authentication#authentication-chain) — lockout, required actions, realm policy.
+- The [authentication chain](/en/discover/core-concepts/authentication#authentication-chain): lockout, required actions, realm policy.
 - [Compass](/en/modules/compass/overview) flow recording, step by step, including the steps your UI drove.
 - [SeaWatch](/en/modules/seawatch/overview) audit events and [webhooks](/en/modules/webhooks/overview).
 - The [password policy](/en/discover/core-concepts/password-policy), including its public endpoint so your form can evaluate the rules as the user types.

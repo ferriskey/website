@@ -1,6 +1,6 @@
 ---
 title: Client
-description: "Create, inspect, and delete OAuth2 clients within a realm."
+description: "Create, inspect, and delete OAuth2 clients within a realm, and read a confidential client's secret."
 icon: box
 order: 3
 ---
@@ -13,7 +13,13 @@ Manage OAuth2 clients within a realm.
 ferris-ctl client <subcommand>
 ```
 
-Every subcommand accepts `--realm <name>` to target a specific realm; otherwise the context default is used.
+Every subcommand accepts `--realm <name>` to choose the realm the command acts on; otherwise the context's realm is used. The CLI always signs in to the context's realm, so the context must have one even when you pass `--realm`. See [Authentication](/en/cli/authentication#contexts).
+
+<Callout variant="warning" title="Known limit: only the first page of clients is read">
+
+The server returns clients in pages of 20 by default (100 at most), and `ferris-ctl` reads the first page only. In a realm with more than 20 clients, `client list` shows a subset. `client get`, `client delete`, and `client secret` look the client up by an exact `client_id` match in that same page, so they answer `client '<id>' not found` for a client that is not in it. The API reaches the rest with its `page` and `limit` parameters, and so does the admin console.
+
+</Callout>
 
 ## `client list`
 
@@ -36,9 +42,9 @@ ferris-ctl client get <client_id> [--realm <realm>]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<client_id>` | yes | Client identifier |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 
-Returns id, client_id, name, realm, enabled, protocol, public_client, service_accounts_enabled, and direct_access_grants_enabled.
+Returns id, client_id, name, realm, enabled, protocol, public_client, service_accounts_enabled, and direct_access_grants_enabled. The secret is not part of it: use [`client secret`](#client-secret).
 
 ## `client create`
 
@@ -54,9 +60,9 @@ ferris-ctl client create <name> [flags]
 | `--client-id` | `<name>` | Client identifier |
 | `--realm` | context realm | Realm |
 | `--type` | `public` | Client type: `public`, `confidential`, or `system` |
-| `--enabled` | `false` | Enable the client |
+| `--enabled` | off | Create the client enabled. Without the flag it is created disabled, and a disabled client cannot authenticate anyone |
 | `--protocol` | `openid-connect` | Protocol used by the client |
-| `--direct-access-grants` | `false` | Enable direct access grants |
+| `--direct-access-grants` | off | Enable direct access grants |
 
 The client type controls a few defaults:
 
@@ -73,9 +79,33 @@ ferris-ctl client create backend \
   --direct-access-grants
 ```
 
+The command prints the created client. It sets nothing else: no redirect URIs, no web origins, and the OAuth 2.0 device authorization grant is always off. Set those in the admin console, or describe the client in a [description file](/en/cli/import/config-file#clients) and import it.
+
+## `client secret`
+
+Print the secret of a confidential client.
+
+```bash
+ferris-ctl client secret <client_id> [--realm <realm>]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<client_id>` | yes | Client identifier |
+| `--realm` | no | Realm (defaults to the context realm) |
+
+The secret goes to standard output on its own line, with nothing else around it, so you can capture it:
+
+```bash
+ferris-ctl client secret backend > backend.secret
+SECRET="$(ferris-ctl client secret backend)"
+```
+
+`-o` has no effect here. Only confidential clients have a secret. Reading it takes more than reading the client: the signed-in identity needs `manage_clients` (or `manage_realm`), and every call records a `client_secret_viewed` security event on the server.
+
 ## `client delete`
 
-Delete a client. Prompts for confirmation unless `--force` is passed.
+Delete a client. Prompts for confirmation, naming the client and its id, unless `--force` is passed.
 
 ```bash
 ferris-ctl client delete <client_id> [--realm <realm>] [--force]
@@ -84,5 +114,5 @@ ferris-ctl client delete <client_id> [--realm <realm>] [--force]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<client_id>` | yes | Client identifier |
-| `--realm` | no | Realm (defaults to context realm) |
+| `--realm` | no | Realm (defaults to the context realm) |
 | `--force` / `-f` | no | Skip the confirmation prompt (required in non-interactive shells) |

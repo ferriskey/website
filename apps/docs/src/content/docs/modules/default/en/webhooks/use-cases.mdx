@@ -1,23 +1,19 @@
 ---
-title: Use Cases
-description: "Real-world webhook patterns: Slack notifications, CRM sync, security alerts, and more."
+title: Use cases
+description: "Webhook patterns that match what FerrisKey sends: Slack notifications, CRM sync, security alerts, provisioning and audit."
 icon: lightbulb
 order: 63
 ---
 
-# Use Cases
+# Use cases
 
-Webhooks unlock powerful integrations between FerrisKey and external systems. Here are concrete patterns you can implement today.
+These are patterns you can build today with the events FerrisKey raises. Two facts from [Payload format](/en/modules/webhooks/payload) shape every handler below. The object an event is about is in `data`, and `resource_id` is the realm for nearly every trigger. And each handler should check the signature before it acts, which the snippets leave out to stay short.
 
 ## Slack notification on user registration
 
-Notify your team in Slack when a new user signs up.
+Notify your team in Slack when a new user signs up. Create a webhook subscribed to `user.created`, and point its endpoint at your backend, which formats the message and forwards it to Slack.
 
-**Setup:**
-- Create a webhook subscribing to `user.created`
-- Point the endpoint at your backend, which formats and forwards to Slack
-
-:::code-group
+:::codegroup
 ```ts [AdonisJS]
 // app/controllers/webhooks_controller.ts
 import { inject } from '@adonisjs/core'
@@ -28,7 +24,7 @@ import { Slack } from '#services/slack'
 @inject()
 export default class WebhooksController {
   constructor(protected slack: Slack) {}
-  
+
   async handle({ request, response }: HttpContext) {
     const { event, data, timestamp } = request.body()
 
@@ -51,6 +47,7 @@ use serde::Deserialize;
 struct WebhookPayload {
     event: String,
     timestamp: String,
+    resource_id: String,
     data: Option<serde_json::Value>,
 }
 
@@ -61,12 +58,12 @@ async fn handle_webhook(
         if let Some(data) = &payload.data {
             let username = data["username"].as_str().unwrap_or("unknown");
             let email = data["email"].as_str().unwrap_or("unknown");
-            
+
             tracing::info!(
-              "New user registered: {} ({}) at {}", 
-              username, email, payload.timestamp
+                "New user registered: {} ({}) at {}",
+                username, email, payload.timestamp
             );
-            
+
             // Send to Slack via reqwest
         }
     }
@@ -76,16 +73,15 @@ async fn handle_webhook(
 ```
 :::
 
-## CRM Sync
+## CRM sync
 
-Keep your CRM (HubSpot, Salesforce, Pipedrive) in sync with FerrisKey user data.
+Keep your CRM (HubSpot, Salesforce, Pipedrive) in step with FerrisKey users. Subscribe to `user.created`, `user.updated` and `user.deleted`. For all three, `data` is the user, so `data.id` is the stable key to store in the CRM.
 
-**Subscribe to:** `user.created`, `user.updated`, `user.deleted`
-
-**Handler logic:**
-- `user.created` → Create a contact in the CRM with email, name, and signup date
-- `user.updated` → Update the contact's fields
-- `user.deleted` → Mark the contact as churned or archive it
+| Event | Handler logic |
+|---|---|
+| `user.created` | Create a contact with the email, the name and the signup date |
+| `user.updated` | Update the contact's fields |
+| `user.deleted` | Mark the contact as churned or archive it. `data` still holds the user as it was before deletion |
 
 ```ts title="app/controllers/crm_sync_controller.ts"
 import { inject } from '@adonisjs/core'
@@ -96,29 +92,29 @@ import { CrmService } from '#services/crm'
 @inject()
 export default class CrmSyncController {
   constructor(protected crmService: CrmService) {}
-  
+
   async handle({ request, response }: HttpContext) {
-    const { event, data, resource_id } = request.body()
+    const { event, data } = request.body()
 
     switch (event) {
       case 'user.created':
         await this.crmService.createContact({
-          externalId: resource_id,
+          externalId: data.id,
           email: data.email,
           name: `${data.firstname} ${data.lastname}`,
-          signupDate: new Date(),
+          signupDate: new Date(data.created_at),
         })
         break
 
       case 'user.updated':
-        await this.crmService.updateContact(resource_id, {
+        await this.crmService.updateContact(data.id, {
           email: data.email,
           name: `${data.firstname} ${data.lastname}`,
         })
         break
 
       case 'user.deleted':
-        await this.crmService.archiveContact(resource_id)
+        await this.crmService.archiveContact(data.id)
         break
     }
 
@@ -127,17 +123,19 @@ export default class CrmSyncController {
 }
 ```
 
-:::callout{variant="info" title="Batch updates"}
+<Callout variant="info" title="Batch updates">
+
 If your CRM has rate limits, queue webhook payloads and process them in batches rather than sending one API call per event. AdonisJS Jobs or Tokio tasks are good fits for this.
-:::
 
-## Security alert on secret rotation
+</Callout>
 
-Alert your security team when a client is modified outside of scheduled maintenance.
+Remember that `user.updated` is also raised when a role is removed from a user. In that case `data` is the role, not the user, so check that `data.username` exists before you treat it as a profile change.
 
-**Subscribe to:** `client.updated`, `realm.settings.updated`
+## Alert on client and realm changes
 
-:::code-group
+Alert your security team when a client or the realm settings change outside scheduled maintenance. Subscribe to `client.updated` and `realm.settings.updated`. For `client.updated`, `data` is the client, and `data.client_id` is the readable name.
+
+:::codegroup
 ```ts [AdonisJS]
 // app/controllers/security_alert_controller.ts
 import { inject } from '@adonisjs/core'
@@ -149,13 +147,13 @@ import { isMaintenanceWindow } from '#utils/maintenance'
 @inject()
 export default class SecurityAlertController {
   constructor(protected pagerDuty: PagerDuty) {}
-  
+
   async handle({ request, response }: HttpContext) {
-    const { event, resource_id } = request.body()
+    const { event, data } = request.body()
 
     if (event === 'client.updated' && !isMaintenanceWindow()) {
       await this.pagerDuty.triggerIncident({
-        summary: `Client modified outside maintenance: ${resource_id}`,
+        summary: `Client modified outside maintenance: ${data.client_id}`,
         severity: 'warning',
         source: 'ferriskey-webhooks',
       })
@@ -173,11 +171,16 @@ async fn security_alert(
     Json(payload): Json<WebhookPayload>,
 ) -> StatusCode {
     if payload.event == "client.updated" && !is_maintenance_window() {
-        let resource_id = payload.resource_id;
-        tracing::warn!("Client modified outside maintenance: {}", resource_id);
+        let client_id = payload
+            .data
+            .as_ref()
+            .and_then(|data| data["client_id"].as_str())
+            .unwrap_or("unknown");
+
+        tracing::warn!("Client modified outside maintenance: {}", client_id);
         // Trigger PagerDuty incident via reqwest
         pagerduty::trigger_incident(
-            &format!("Client modified outside maintenance: {}", resource_id),
+            &format!("Client modified outside maintenance: {}", client_id),
             "warning",
         ).await.ok();
     }
@@ -189,24 +192,23 @@ async fn security_alert(
 
 ## User provisioning in external systems
 
-When a user is created in FerrisKey, automatically provision them in other systems:
-
-**Subscribe to:** `user.created`
+When a user is created in FerrisKey, provision them in other systems. Subscribe to `user.created`.
 
 ::::step-group
 :::step{title="Receive the event"}
-FerrisKey sends a `user.created` payload with username, email, and name.
+FerrisKey sends a `user.created` payload whose `data` holds the new user: username, email, names and id.
 :::
 
 :::step{title="Create accounts in downstream systems"}
-Your handler creates accounts in:
-- **Email system**: Create a mailbox or alias
-- **Project management**: Add to the default workspace
-- **Cloud platform**: Create an IAM identity
+Your handler creates the accounts:
+
+- In the email system, a mailbox or an alias.
+- In project management, a seat in the default workspace.
+- In the cloud platform, an IAM identity.
 :::
 
 :::step{title="Notify the user"}
-Send a welcome email with links to all provisioned services.
+Send a welcome email with links to everything that was provisioned.
 :::
 ::::
 
@@ -216,7 +218,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 import { MailService } from '#services/mail'
 import { WorkspaceService } from '#services/workspace'
-import { MailService } from '#services/mail'
 
 @inject()
 export default class ProvisioningController {
@@ -224,12 +225,11 @@ export default class ProvisioningController {
     protected workspaceService: WorkspaceService,
     protected mailService: MailService
   ) {}
-  
+
   async handle({ request, response }: HttpContext) {
-    const { event, data, resource_id } = request.body()
+    const { event, data } = request.body()
 
     if (event === 'user.created') {
-      // Provision in parallel
       await Promise.all([
         this.workspaceService.addMember({
           email: data.email,
@@ -238,8 +238,7 @@ export default class ProvisioningController {
         this.mailService.createAlias(data.email),
       ])
 
-      // Send welcome email
-      await MailService.sendWelcome(data.email, {
+      await this.mailService.sendWelcome(data.email, {
         username: data.username,
         firstname: data.firstname,
       })
@@ -250,32 +249,26 @@ export default class ProvisioningController {
 }
 ```
 
-## Role change notifications
+## Role assignment audit
 
-Notify users when their permissions change.
+Keep a record of which roles are handed out. Subscribe to `user.role.assigned`. Its `data` is the role (`id`, `name`, `permissions`), and it does not say which user received it. To learn who did, look at the matching `role_assigned` event in [SeaWatch](/en/modules/seawatch/event-types), which names the user as its target.
 
-**Subscribe to:** `user.role.assigned`, `user.role.unassigned`
-
-```ts title="app/controllers/role_notification_controller.ts"
+```ts title="app/controllers/role_audit_controller.ts"
 import type { HttpContext } from '@adonisjs/core/http'
-import mail from '@adonisjs/mail/services/main'
 
-export default class RoleNotificationController {
+import { auditLog } from '#services/audit_log'
+
+export default class RoleAuditController {
   async handle({ request, response }: HttpContext) {
-    const { event, data, resource_id } = request.body()
+    const { event, data, resource_id: realmId } = request.body()
 
     if (event === 'user.role.assigned') {
-      // Fetch user details from FerrisKey API
-      const user = await ferriskey.getUser(resource_id)
-
-      await mail.send((message) => {
-        message
-          .to(user.email)
-          .subject('Your permissions have been updated')
-          .htmlView('emails/role_assigned', {
-            firstname: user.firstname,
-            roleName: data.role_name,
-          })
+      await auditLog.record({
+        realmId,
+        roleId: data.id,
+        roleName: data.name,
+        permissions: data.permissions,
+        receivedAt: new Date(),
       })
     }
 
@@ -284,11 +277,11 @@ export default class RoleNotificationController {
 }
 ```
 
+Removal is not symmetrical. `user.role.unassigned` is never raised: taking a role away from a user raises `user.updated`, with the role as `data`.
+
 ## Realm configuration audit
 
-Track all changes to realm settings for compliance.
-
-**Subscribe to:** `realm.settings.updated`, `realm.updated`
+Track every change to realm settings for compliance. Subscribe to `realm.settings.updated` and `realm.updated`. Here `resource_id` is useful: it is the realm that changed.
 
 ```rust title="src/handlers/audit.rs"
 use axum::{Json, http::StatusCode};
@@ -302,7 +295,7 @@ async fn audit_handler(
     if events.contains(&payload.event.as_str()) {
         let audit_entry = serde_json::json!({
             "event": payload.event,
-            "resource_id": payload.resource_id,
+            "realm_id": payload.resource_id,
             "timestamp": payload.timestamp,
             "received_at": Utc::now().to_rfc3339(),
             "data": payload.data,
@@ -316,18 +309,18 @@ async fn audit_handler(
 }
 ```
 
-## Multi-Webhook Architecture
+## Several webhooks in one realm
 
-For complex integrations, register multiple webhooks per realm:
+For complex integrations, register several webhooks in the realm, each with its own endpoint and triggers:
 
-| Webhook | Events | Endpoint |
+| Webhook | Triggers | Endpoint |
 |---|---|---|
 | `slack-notifications` | `user.created`, `user.deleted` | Slack proxy |
 | `crm-sync` | `user.created`, `user.updated`, `user.deleted` | CRM sync service |
 | `security-alerts` | `client.updated`, `realm.settings.updated`, `auth.reset_password` | PagerDuty proxy |
-| `audit-log` | All events | S3/GCS audit bucket |
+| `audit-log` | Every trigger you want kept | S3 or GCS audit bucket |
 
-Each webhook is independent, a failure in the Slack webhook doesn't affect CRM sync or security alerts.
+Each webhook is independent: a failure in the Slack webhook does not affect CRM sync or security alerts. Each has its own signing secret and its own retry policy, too.
 
 In AdonisJS, register each handler as a separate route:
 

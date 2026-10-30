@@ -5,9 +5,9 @@ icon: shield-check
 order: 71
 ---
 
-# Account Security
+# Account security
 
-The credential operations a user performs on their own account. Each one needs an [elevation](/en/modules/account/overview#sensitive-operations-need-an-elevation) — a five-minute proof, bound to the calling session, obtained from `POST /users/me/reauthenticate`.
+The credential operations a user performs on their own account. Each one needs an [elevation](/en/modules/account/overview#sensitive-operations-need-an-elevation): a five-minute proof, bound to the calling session, obtained from `POST /users/me/reauthenticate`. A wrong proof counts toward the account lockout like a wrong password does.
 
 Throughout this page, `{realm}` stands for `/realms/{realm_name}`.
 
@@ -17,13 +17,23 @@ Throughout this page, `{realm}` stands for `/realms/{realm_name}`.
 PUT {realm}/users/me/password
 ```
 
-The body carries the current password and the new one. This is the one sensitive operation that does not need a password-proved elevation first, because verifying the current password in the body *is* that proof.
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "current_password": "...",
+  "new_password": "..."
+}
+```
+
+The call takes an `elevation_id` like every other sensitive operation, but any live elevation will do, including one proved with a TOTP code. The current password in the body is itself the primary proof, so demanding a password-proved elevation on top would only make the user type it twice. An account that signs in through an external directory has no local password and gets a 409.
 
 The new password is checked against the realm's [password policy](/en/discover/core-concepts/password-policy). The console evaluates the same rules as you type, against `GET {realm}/password-policy/public`, so the failure is visible before submitting rather than after.
 
-:::callout{variant="warning" title="Other sessions are signed out"}
-A successful change revokes the account's other sessions and keeps the current one. That is the intended behaviour for a password change — if the reason for changing it is that someone else has it, leaving their session alive would defeat the exercise. Warn the user in your own UI if you build one; a silent sign-out of their phone reads as a bug.
-:::
+<Callout variant="warning" title="Other sessions are signed out">
+
+A successful change revokes the account's other sessions and keeps the current one. That is the intended behaviour for a password change: if the reason for changing it is that someone else has it, leaving their session alive would defeat the exercise. Warn the user in your own UI if you build one, because a silent sign-out of their phone reads as a bug.
+
+</Callout>
 
 ## Listing credentials
 
@@ -31,7 +41,7 @@ A successful change revokes the account's other sessions and keeps the current o
 GET {realm}/users/me/credentials
 ```
 
-Returns the sign-in credentials attached to the account — password, authenticator, each passkey — so a UI can show what exists before offering to add or remove anything. Secrets are never returned: a passkey comes back as its metadata and its id, which is what `DELETE` takes.
+Returns what is attached to the account so a UI can show it before offering to add or remove anything. Each entry has `id`, `credential_type`, `label` and `created_at`. The types are `password`, `otp`, `webauthn-public-key-credential` for a passkey, and `recovery-code`, with one entry for each unused [recovery code](/en/modules/trident/recovery-codes). Secrets are never returned. A passkey comes back as its metadata and its id, which is what `DELETE` takes.
 
 ## Authenticator app (TOTP)
 
@@ -43,9 +53,7 @@ Enrolment is two calls, because the server must not trust that the user successf
 POST {realm}/users/me/mfa/otp
 ```
 
-Returns the secret and the `otpauth://` URI to render as a QR code. The parameters are fixed: SHA-1, six digits, a thirty-second period — see [TOTP](/en/modules/trident/totp).
-
-Needs a password-proved elevation.
+The body is `{ "elevation_id": "..." }`, and the elevation must be password-proved. The response carries the `secret` and the `otpauth_uri` to render as a QR code. FerrisKey keeps the secret on the server for 10 minutes, so the confirmation never repeats it. The parameters are fixed at SHA-1, six digits and a thirty-second period, as described in [TOTP](/en/modules/trident/totp).
 :::
 
 :::step{title="Confirm with a code"}
@@ -53,7 +61,9 @@ Needs a password-proved elevation.
 PUT {realm}/users/me/mfa/otp
 ```
 
-The user types the current code from their app. Until this call succeeds, the authenticator is not active and the account's sign-in is unchanged — an abandoned enrolment leaves nothing behind.
+The body is `{ "elevation_id": "...", "code": "123456", "label": "Alice's phone" }`, and `label` is optional. The elevation must be password-proved. Until this call succeeds, the authenticator is not active and the account's sign-in is unchanged, so an abandoned enrolment leaves nothing behind.
+
+The pending secret is single-use. The call consumes it whether or not the code is right, so a wrong code answers 401 and the user has to start again. A valid code replaces any authenticator the account already had.
 :::
 
 :::step{title="Remove it, later"}
@@ -61,7 +71,7 @@ The user types the current code from their app. Until this call succeeds, the au
 DELETE {realm}/users/me/mfa/otp
 ```
 
-Also needs a password-proved elevation. An OTP code is not accepted as the proof for removing OTP.
+The body is `{ "elevation_id": "..." }`. It needs a password-proved elevation. An OTP code is not accepted as the proof for removing OTP.
 :::
 ::::
 
@@ -75,9 +85,7 @@ Passkey registration follows WebAuthn, so it is also two calls: the browser need
 POST {realm}/users/me/passkeys/options
 ```
 
-Returns the `PublicKeyCredentialCreationOptions` to hand to `navigator.credentials.create()`. The challenge is stored server-side against the session, so it cannot be replayed.
-
-Needs a password-proved elevation.
+The body is `{ "elevation_id": "..." }`, and the elevation must be password-proved. Returns the `PublicKeyCredentialCreationOptions` to hand to `navigator.credentials.create()`, excluding the passkeys the account already holds. The challenge is stored on the server and lives 5 minutes, so it cannot be replayed.
 :::
 
 :::step{title="Send the credential back"}
@@ -85,7 +93,7 @@ Needs a password-proved elevation.
 POST {realm}/users/me/passkeys
 ```
 
-Post the browser's response. The server checks it against the stored challenge and the relying-party id, then attaches the passkey to the account.
+The body is `{ "elevation_id": "...", "credential": { ... } }`, where `credential` is the browser's response. The elevation must be password-proved. The server consumes the stored challenge, checks the response against it and against the relying-party ID, then attaches the passkey to the account. An expired or missing challenge, or a response that does not match, is refused.
 :::
 
 :::step{title="Delete one"}
@@ -93,13 +101,21 @@ Post the browser's response. The server checks it against the stored challenge a
 DELETE {realm}/users/me/passkeys/{credential_id}
 ```
 
-`credential_id` comes from the credentials listing. Needs a password-proved elevation.
+`credential_id` comes from the credentials listing. The body is `{ "elevation_id": "..." }`, and the elevation must be password-proved. An id that belongs to someone else, or to a credential that is not a passkey, answers 404.
 :::
 ::::
 
-:::callout{variant="info" title="Passkeys have to be enabled on the realm"}
-`passkey_enabled` governs whether passkeys are offered at sign-in. Registering one on a realm where the setting is off stores a credential the login flow will not use.
-:::
+The relying-party ID is the hostname of the web app URL, so a passkey registered through one hostname does not work through another. [WebAuthn](/en/modules/trident/webauthn#where-the-origin-comes-from) explains where the origin comes from.
+
+<Callout variant="info" title="Registration does not check passkey_enabled">
+
+`passkey_enabled` decides whether the sign-in page shows a passkey button. Registering a passkey on a realm where the setting is off still works, but the sign-in page gives the user no way to use it.
+
+</Callout>
+
+## What a removal is refused for
+
+Removing the authenticator or a passkey answers 409 when it would leave the account with no way to sign in: no password, no other passkey and no federated identity. Removing the authenticator also answers 409 when the realm or one of the user's roles has `require_mfa`, because that would drop the second factor they must have. Removing a passkey never trips the second rule, since only an authenticator satisfies it.
 
 ## Endpoint summary
 
@@ -108,8 +124,8 @@ DELETE {realm}/users/me/passkeys/{credential_id}
 | `GET` | `{realm}/users/me` | None |
 | `PUT` | `{realm}/users/me` | None |
 | `PUT` | `{realm}/users/@me/locale` | None |
-| `POST` | `{realm}/users/me/reauthenticate` | — it *is* the elevation |
-| `PUT` | `{realm}/users/me/password` | Current password, in the body |
+| `POST` | `{realm}/users/me/reauthenticate` | None, it produces the elevation |
+| `PUT` | `{realm}/users/me/password` | Any live elevation, plus the current password in the body |
 | `GET` | `{realm}/users/me/credentials` | None |
 | `POST` | `{realm}/users/me/mfa/otp` | Password-proved |
 | `PUT` | `{realm}/users/me/mfa/otp` | Password-proved |
@@ -117,16 +133,20 @@ DELETE {realm}/users/me/passkeys/{credential_id}
 | `POST` | `{realm}/users/me/passkeys/options` | Password-proved |
 | `POST` | `{realm}/users/me/passkeys` | Password-proved |
 | `DELETE` | `{realm}/users/me/passkeys/{credential_id}` | Password-proved |
+| `GET` | `{realm}/users/{user_id}/sessions` | None, for the caller's own id |
+| `DELETE` | `{realm}/users/{user_id}/sessions/{session_id}` | None, for the caller's own id |
 
-No permission governs any of these. The token identifies the subject, and the subject is the target.
+No permission governs the `/users/me` calls. The token identifies the subject, and the subject is the target. The two session calls take the caller's own id without a permission and need `manage_users` for anyone else's, as described in [Account](/en/modules/account/overview#sessions).
 
 ## What gets recorded
 
-:::callout{variant="warning" title="These operations are not in the audit log yet"}
-The self-service credential operations do not currently write a [SeaWatch](/en/modules/seawatch/overview) security event. A user rotating their own password, enrolling an authenticator or deleting a passkey leaves no entry in the realm's audit trail, and no [webhook](/en/modules/webhooks/overview) fires.
+<Callout variant="warning" title="The credential operations are not in the audit log">
 
-The administrative equivalents do: an admin resetting a password raises `password_reset`, and deleting a user's credential fires the `user.credentials.deleted` webhook trigger. If you need self-service credential changes on the audit trail today, capture them at your own edge.
-:::
+The self-service credential operations do not write a [SeaWatch](/en/modules/seawatch/overview) security event. A user rotating their own password, enrolling an authenticator or deleting a passkey leaves no entry in the realm's audit trail, and no [webhook](/en/modules/webhooks/overview) fires.
+
+The administrative equivalents do: an admin resetting a password raises `password_reset`, and deleting a user's credential fires the `user.credentials.deleted` webhook trigger. If you need self-service credential changes on the audit trail today, capture them at your own edge. Revoking a session is the exception on the self-service side: it writes a `session_revoked` event.
+
+</Callout>
 
 ::::card-group{cols=2}
 :::card{label="Password Policy" icon="lucide:key-round" href="/en/discover/core-concepts/password-policy"}

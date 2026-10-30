@@ -1,66 +1,81 @@
 ---
 title: Overview
-description: "Trident is FerrisKey's multi-factor authentication module: TOTP, WebAuthn, magic links, and recovery codes."
+description: "Trident is FerrisKey's multi-factor authentication module: TOTP, WebAuthn passkeys, magic links and recovery codes."
 icon: shield-check
 order: 10
 ---
 
-# Trident: Multi-Factor Authentication
+# Trident: multi-factor authentication
 
-Trident is the MFA module. It sits in the authentication chain between a valid password and a token, and turns a single-factor login into a multi-step one. Four methods are available, and they combine.
+Trident covers the steps that can follow a valid password: the one-time-code challenge, the enrolment screens, passkey sign-in, magic links and recovery codes. The four methods do not play the same role, so it helps to know what each one does before you configure any of them.
 
 ## Why bother
 
-Credential stuffing and phishing make a password on its own a liability. A second factor means a stolen password is not enough on its own to get in.
+Credential stuffing and phishing make a password on its own a liability. A second factor means a stolen password is not enough to get in.
 
-Enrollment is enforced through required actions. Set `require_mfa` on the realm and users without a TOTP credential pick up `configure_otp` on their next login, which they have to clear before they get a real token.
+Enrolment is enforced through required actions. Set `require_mfa` on the realm, or on a role, and users without an authenticator pick up the `configure_otp` required action on their next sign-in. They have to clear it before the sign-in completes.
 
 ## Available methods
 
 ::::card-group{cols=2}
 :::card{label="TOTP" icon="lucide:clock" href="/en/modules/trident/totp"}
-Time-based one-time passwords. Works with Google Authenticator, Authy, 1Password, and any RFC 6238 compatible app.
+Time-based one-time passwords (RFC 6238). The only second factor FerrisKey challenges for after a password.
 :::
 :::card{label="WebAuthn" icon="lucide:fingerprint" href="/en/modules/trident/webauthn"}
-FIDO2 passkeys, hardware security keys (YubiKey), Touch ID, Face ID, Windows Hello, and synced passkeys.
+Passkeys and security keys. A user-verified passkey signs the user in on its own, without a password.
 :::
 :::card{label="Magic Links" icon="lucide:mail" href="/en/modules/trident/magic-links"}
-Passwordless email login. A unique link is sent to the user's inbox, click to authenticate.
+Passwordless email sign-in, tied to the browser that asked for the link.
 :::
 :::card{label="Recovery Codes" icon="lucide:file-key" href="/en/modules/trident/recovery-codes"}
-One-time backup codes for account recovery when the primary MFA device is lost.
+One-time backup codes that answer the TOTP challenge when the authenticator is lost.
 :::
 ::::
 
 ## Where Trident sits
 
-Between credential validation and token issuance:
+Between a valid password and the end of the sign-in:
 
 ```mermaid
-graph LR
-    A[Password Valid] --> B{MFA Configured?}
-    B -->|No| C[Issue Tokens]
-    B -->|Yes| D[Trident Challenge]
-    D --> E{Valid?}
-    E -->|Yes| C
-    E -->|No| F[Authentication Failed]
+graph TD
+    A[Password valid] --> B{Required action due?}
+    B -->|Yes| C[RequiresActions]
+    B -->|No| D{Authenticator enrolled?}
+    D -->|Yes| E[RequiresOtpChallenge]
+    D -->|No| F[Authorization code]
+    E --> G{Code valid?}
+    G -->|Yes| F
+    G -->|No| H[Refused]
 ```
 
-Once the credentials check out:
+Once the password checks out:
 
-1. FerrisKey looks for MFA credentials on the user, TOTP or WebAuthn.
-2. If there are any, the response comes back as `requires_otp_challenge` with a temporary token.
-3. The client submits the second factor using that temporary token.
-4. On success, the real access, refresh, and ID tokens are issued.
+1. FerrisKey applies the account lockout rules.
+2. If a required action is due (`configure_otp`, `verify_email`, `update_password` or `configure_passkey`), the response has the status `RequiresActions` and lists the actions in `required_actions`.
+3. Otherwise, if the user has an authenticator, the status is `RequiresOtpChallenge`.
+4. In both cases the response sets a step token in the `FERRISKEY_LOGIN_ACTION` cookie, and the portal calls the matching [login action](/en/modules/portal/login-actions) with it.
+5. When the last step is answered, FerrisKey applies the client's maintenance and consent rules and returns a `url` that carries the authorization code. The client exchanges it for tokens as usual.
 
-:::callout{variant="info" title="Temporary tokens"}
-The temporary token handed out during the challenge lives 300 seconds by default and only authorizes the MFA step and other required actions. It cannot touch a protected resource.
-:::
+A user who owns an authenticator cannot call any login action other than the code challenge and the recovery-code call until the challenge is answered.
+
+<Callout variant="info" title="The step token">
+
+The step token lives for the realm's `temporary_token_lifetime`, 300 seconds by default. It travels in an HttpOnly cookie scoped to `/realms/{realm_name}/login-actions`, and it only authorizes those endpoints. It cannot touch a protected resource.
+
+</Callout>
+
+Passkeys and magic links enter the chain differently. Both start from an identity proved some other way, so they skip the password and go straight to the end of the sign-in, as long as no required action is due. A user-verified passkey also answers the TOTP challenge. A magic link does not, and FerrisKey refuses it for a user who has an authenticator.
 
 ## Three ways teams use it
 
-**Mandatory MFA on a SaaS product.** Turn on `require_mfa` for the realm. Every user configures TOTP on first login before reaching the application.
+### Mandatory MFA on a SaaS product
 
-**Passwordless in an enterprise.** Make WebAuthn the primary authenticator and turn off password login on the client. People sign in with Touch ID or a YubiKey, and there is no password left to phish.
+Turn on `require_mfa` for the realm. Every user without an authenticator is sent through enrolment at their next sign-in, before they reach the application. To enforce it for part of the population, set `require_mfa` on a role instead: any user who holds that role is covered.
 
-**Optional MFA on a consumer app.** Leave `require_mfa` off and let users enroll TOTP or a passkey from their settings page. Available, not enforced.
+### Passkey-first sign-in
+
+Turn on `passkey_enabled` and give users the `configure_passkey` required action. The sign-in page then offers a passkey button next to the password field, and a user-verified passkey signs in without typing anything. The password stays accepted next to it.
+
+### Optional MFA on a consumer app
+
+Leave `require_mfa` off and let users enrol an authenticator or a passkey from the Security tab of their account page. Available, not enforced.

@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: "Environment variables, SMTP setup, and deployment options for FerrisKey."
+description: "Environment variables, startup checks, and deployment options for the FerrisKey API."
 icon: settings
 order: 20
 ---
@@ -23,6 +23,8 @@ The admin account is created on first boot in the `master` realm.
 | `ADMIN_PASSWORD` | `admin` | Initial admin password |
 | `ADMIN_EMAIL` | `admin@local` | Initial admin email |
 
+FerrisKey applies `ADMIN_PASSWORD` only while the admin user has no password. Changing the variable on a running deployment does not change the password: use the console. Starting with a different `ADMIN_USERNAME` creates a second admin user instead of renaming the first.
+
 ### Database
 
 | Variable | Default | Description |
@@ -33,6 +35,12 @@ The admin account is created on first boot in the `master` realm.
 | `DATABASE_USER` | `ferriskey` | Database user |
 | `DATABASE_PASSWORD` | `ferriskey` | Database password |
 | `DATABASE_SCHEMA` | `public` | Database schema |
+| `DATABASE_MAX_CONNECTIONS` | `20`, or `DATABASE_MIN_CONNECTIONS` when that is higher | Most connections one instance opens to the database |
+| `DATABASE_MIN_CONNECTIONS` | `2` | Connections one instance keeps open when idle |
+
+The pool is per instance. A connection idle for 60 seconds is closed, down to the minimum. Each connection costs PostgreSQL a few MiB, so a smaller pool is lighter on the database.
+
+Count more than the pool when you size PostgreSQL's `max_connections`. With the config cache on (see [Caching](#caching)), each instance holds two extra connections outside the pool for LISTEN/NOTIFY. Across replicas, `replicas × (DATABASE_MAX_CONNECTIONS + 2)` has to fit under the server's limit, next to every other client of that database.
 
 ### Server
 
@@ -40,17 +48,38 @@ The admin account is created on first boot in the `master` realm.
 |---|---|---|
 | `SERVER_HOST` | `0.0.0.0` | Bind address |
 | `SERVER_PORT` | `3333` | HTTP port |
-| `SERVER_ROOT_PATH` | empty | URL path prefix, for deployments behind a reverse proxy. A leading `/` is added if you omit it |
-| `SERVER_PUBLIC_URL` | unset | The origin browsers and service providers reach this deployment at, as `scheme://host[:port]` |
+| `SERVER_ROOT_PATH` | empty | URL path prefix, for deployments behind a reverse proxy. A leading `/` is added if you omit it, and trailing slashes are removed |
+| `SERVER_PUBLIC_URL` | unset | The origin browsers and service providers reach this deployment at, as `scheme://host[:port]`. Required for SAML |
+| `SERVER_TRUST_FORWARDED_FOR` | `false` | Read the caller's address from `X-Forwarded-For` instead of the TCP peer. See [Client addresses and throttles](#client-addresses-and-throttles) |
+| `SERVER_TOKEN_MAX_IN_FLIGHT` | 32 per CPU | Most `client_credentials` token requests served at once. Past it, a request gets 503 with `Retry-After: 1` instead of queuing. Must be at least 1 |
 | `ALLOWED_ORIGINS` | empty | Comma-separated browser origins allowed on every route |
-| `WEBAPP_URL` | `http://localhost:5555` | URL of the admin console, used when building links |
-| `ENV` | `development` | Reported back by `/config` and otherwise unused. Kept for compatibility |
+| `ENV` | `development` | `development` or `production`. Reported back by `/config` and otherwise unused. Deprecated, kept for compatibility |
 
-`ALLOWED_ORIGINS` deserves a note of its own. Each entry must be a serialized origin (`scheme://host[:port]`), with no path and no wildcard. It applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Clients also declare their own web origins per realm, but those only cover realm-scoped routes, so a console served from a different origin than the API still needs its origin listed here.
+`ALLOWED_ORIGINS` deserves a note of its own. Each entry must be a serialized origin (`scheme://host[:port]`), with no path and no wildcard, and an invalid entry stops the server at start. It applies to every route, including the ones that carry no realm: `/config`, the health probes, and the API documentation. Clients also declare their own web origins per realm, but those only cover realm-scoped routes, so a console served from a different origin than the API still needs its origin listed here.
 
 :::callout{variant="warning" title="SERVER_PUBLIC_URL and SAML"}
-Leave `SERVER_PUBLIC_URL` unset and FerrisKey derives the public origin from each request's `Host` header, which is the historical behaviour. SAML needs it set: the entity id is signed into every assertion, so it must not change when a request arrives through a different hostname.
+SAML will not work without `SERVER_PUBLIC_URL`. With it unset, every SAML request (the sign-in endpoint, its continuation and the metadata descriptor) answers HTTP 500 with an error page reading "Single sign-on is not configured on this server. Set SERVER_PUBLIC_URL." There is no fallback to the `Host` header, because the entity id is signed into every assertion and must not change when a request arrives through a different hostname.
+
+Other features do not need it. OpenID Connect issuers are still built from each request, using its `Host` header and `X-Forwarded-Proto`, so behind a proxy make sure both reach the API unchanged.
 :::
+
+### Console and webapp links
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEBAPP_URL` | `http://localhost:5555` | URL of the admin console. Used for the login and consent pages, emailed links and the WebAuthn origin, and to register the console's callback as a redirect URI at start |
+| `WEBAPP_URL_FROM_REQUEST` | `false` | Build those links from the scheme and `Host` of each request instead of `WEBAPP_URL` |
+| `WEBAPP_ALLOWED_HOSTS` | empty | Comma-separated hosts the webapp is served on. Required when `WEBAPP_URL_FROM_REQUEST` is on |
+
+Leave `WEBAPP_URL_FROM_REQUEST` off unless one deployment serves several hostnames, each with the webapp at `/` and the API under `SERVER_ROOT_PATH`. When it is on:
+
+- The server refuses to start without `WEBAPP_ALLOWED_HOSTS`. Links are built from the `Host` header, so an unlisted host could otherwise put an attacker's address in password reset and magic link emails.
+- Each entry is `host`, `host:port` or `*.domain`, where `*` stands for exactly one label: `*.example.com` matches `acme.example.com`, not `example.com` and not `a.b.example.com`. Case and one trailing dot are ignored. An entry without a port only matches the default port of the scheme.
+- The scheme is `https` when `X-Forwarded-Proto` is `https` and `http` otherwise, so the proxy must set or overwrite that header.
+- A request whose `Host` is missing, repeated, not ASCII or not on the list is refused with 400 on the routes that build a webapp link.
+- A passkey stays bound to the host it was registered on: one registered on `a.example.com` does not work on `b.example.com`.
+
+`WEBAPP_URL` still matters at start in this mode: it seeds the redirect URI of the admin console.
 
 ### TLS
 
@@ -61,6 +90,66 @@ Both variables are required together. Set neither to serve plain HTTP and termin
 | `SERVER_TLS_CERT` | unset | Path to the certificate file, in PEM format |
 | `SERVER_TLS_KEY` | unset | Path to the private key file, in PEM format |
 
+### Caching
+
+| Variable | Default | Description |
+|---|---|---|
+| `CONFIG_CACHE_TTL_SECONDS` | `5` | How long an instance keeps realm configuration in memory before reading it again. `0` turns the caches off |
+
+Each instance caches realms and their settings, clients, the scopes assigned to a client with their protocol mappers, and the roles and groups of a service account. A write made through the API clears the entry at once on the instance that handled it. The other replicas see the change after the TTL.
+
+The service account state matters most for the `client_credentials` grant: a change to a service account's roles or groups, made on any instance, reaches new tokens only after the TTL.
+
+Sessions and revoked tokens are cached for the same TTL, capped at 30 seconds. Replicas tell each other about changes through PostgreSQL `LISTEN`/`NOTIFY` on the channel `ferriskey_token_state`, so a logout or a revocation on one replica empties the caches of the others right away. While an instance has no working listener, it skips the cache and reads sessions from the database. `LISTEN` needs a connection that keeps its session, so connect to PostgreSQL directly or through a pooler in session mode, not in transaction mode.
+
+With `CONFIG_CACHE_TTL_SECONDS=0` nothing is cached, there is no listener and no extra connection per instance.
+
+The per-client web origins that drive CORS are cached for 30 seconds per realm, whatever the TTL, and that delay is fixed. Changing them through the API refreshes the instance that handled the change at once. Other replicas catch up within 30 seconds.
+
+### Password hashing
+
+New password hashes use Argon2id with the cost below.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PASSWORD_HASH_MEMORY_KIB` | `7168` | Memory cost of a new hash, in KiB |
+| `PASSWORD_HASH_ITERATIONS` | `5` | Iterations of a new hash |
+| `PASSWORD_HASH_PARALLELISM` | `1` | Parallelism of a new hash |
+| `PASSWORD_HASH_MEMORY_BUDGET_MIB` | `256` | Memory Argon2 may use at once, across every hash and verification in flight, in MiB |
+
+These values only apply to new hashes. Verifying a password reads the cost from the stored hash, and when a user signs in with a stored hash that used another cost, FerrisKey replaces it with a hash at the configured cost. Raise the cost, and each user's hash is upgraded at their next login.
+
+The server checks the values at start and refuses these:
+
+| Setting | Limit |
+|---|---|
+| `PASSWORD_HASH_ITERATIONS` | At least 1, at most 16 |
+| `PASSWORD_HASH_PARALLELISM` | At least 1, at most 8 |
+| `PASSWORD_HASH_MEMORY_KIB` | At most 262144 (256 MiB), and at least the OWASP minimum for the iteration count: 47104 for 1 iteration, 19456 for 2, 12288 for 3, 9216 for 4, 7168 for 5 or more |
+| `PASSWORD_HASH_MEMORY_BUDGET_MIB` | Large enough to hold one hash: `PASSWORD_HASH_MEMORY_BUDGET_MIB × 1024` must be at least `PASSWORD_HASH_MEMORY_KIB` |
+
+The default cost, 7168 KiB with 5 iterations and a parallelism of 1, is one of the Argon2id configurations OWASP lists.
+
+The budget caps memory, not requests. A hash or verification that would push the total past the budget waits until memory frees up instead of allocating more, so a burst of logins queues rather than growing the process. Verifying a stored hash that costs more than the whole budget takes the entire budget and runs alone.
+
+Keep the budget well under the container's memory limit. The Helm chart gives the API pod a 512Mi limit by default, and Argon2 is only one part of what the process holds.
+
+### Secrets at rest
+
+| Variable | Default | Description |
+|---|---|---|
+| `SECRETS_ENCRYPTION_KEYS` | empty | Keys that encrypt realm signing keys, TOTP seeds and SMTP passwords in the database, written `id:base64` and separated by commas. Empty keeps them in clear and logs a warning at each start |
+
+`--help` does not print the value. [Secrets at rest](/en/discover/guides/secrets-at-rest) covers the format, rotation and what stays unencrypted.
+
+### Authorization
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUTHZ_ENABLED` | `false` | Mount the AuthZEN evaluation endpoints and their metadata document, plus the authorization management API under `/realms/{realm_name}/authz` |
+
+With the variable off, those routes are not mounted and answer 404. Turning it on does not switch authorization on for anyone: each realm still has to enable tenant authorization for itself. See [Authorization](/en/modules/authz/overview).
+
 ### Logging
 
 | Variable | Default | Description |
@@ -68,21 +157,60 @@ Both variables are required together. Set neither to serve plain HTTP and termin
 | `LOG_FILTER` | `info` | [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) directives, for example `info,ferriskey_core=debug` |
 | `LOG_JSON` | `false` | Emit structured JSON logs instead of human-readable lines |
 
-### Webhooks
+### Outbound requests
+
+FerrisKey refuses to call loopback and private addresses when it delivers webhooks or fetches client metadata documents. These two switches lift that rule, and each logs a warning at start while it is on.
 
 | Variable | Default | Description |
 |---|---|---|
 | `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS` | `false` | Allow webhook endpoints to resolve to loopback or private addresses. For local development only. Link-local addresses stay refused regardless |
+| `CLIENT_METADATA_ALLOW_PRIVATE_ENDPOINTS` | `false` | Allow client metadata documents to be fetched over http from loopback or private addresses. For tests only. Link-local addresses stay refused regardless |
 
 ### Observability
 
 | Variable | Default | Description |
 |---|---|---|
 | `ACTIVE_OBSERVABILITY` | `false` | Turn on tracing and metrics export |
-| `OTLP_ENDPOINT` | unset | OTLP collector endpoint for traces |
-| `METRICS_ENDPOINT` | unset | Collector endpoint for metrics |
+| `OTLP_ENDPOINT` | unset | OTLP collector endpoint (gRPC) for traces and logs. Required when `ACTIVE_OBSERVABILITY` is on |
+| `METRICS_ENDPOINT` | unset | OTLP collector endpoint (gRPC) for metrics. Required when `ACTIVE_OBSERVABILITY` is on |
 
 Prometheus metrics are also exposed directly on `/metrics`, with no collector needed.
+
+:::callout{variant="warning" title="Some routes need no token"}
+`/metrics`, `/config`, the API documentation (`/scalar`, `/swagger-ui`, `/redoc`, `/rapidoc` and `/api-docs/openapi.json`) and the health probes (`/health/live` and `/health/ready`) are mounted without authentication. They sit under `SERVER_ROOT_PATH` when you set one. `/config` returns the version and the `ENV` value, and `/metrics` returns HTTP request metrics. If the API is reachable from the internet, decide at your proxy or ingress which of them to expose.
+:::
+
+## Client addresses and throttles
+
+FerrisKey records the caller's IP address in [SeaWatch](/en/modules/seawatch/overview) security events and [Compass](/en/modules/compass/overview) flows, and a few throttles count requests per address. By default the address is the one of the TCP peer. Behind an Ingress or any proxy, that is the proxy: every caller shares one address, the audit records are honest but of little use, and the throttles count all your users as one.
+
+Set `SERVER_TRUST_FORWARDED_FOR=true` to take the address from `X-Forwarded-For` instead. FerrisKey reads the first, leftmost entry, so the proxy has to replace the header with the real client address rather than append to it. Only enable it when a proxy you control is the only way in. With the flag on, a client that reaches the API directly can write any address it likes, and that address is what gets recorded and throttled.
+
+The throttles are fixed, kept in memory and counted per replica, so running three replicas triples the effective allowance. IPv6 callers are grouped by their /64 prefix.
+
+| Throttle | Limit | Counted per | Answer |
+|---|---|---|---|
+| Failed client authentication at the token endpoint | 10 failures per minute | IP address, realm and client id | 429 with `Retry-After: 60` |
+| Dynamic client registration | 10 requests per minute | IP address | 429 with `Retry-After: 60` |
+| Dynamic client registration | 60 registrations per hour | Realm | 429 with `Retry-After: 60` |
+| First use of a client metadata document URL that is not yet a client | 30 per minute | IP address | Treated as an invalid client |
+
+## Startup checks
+
+The API validates its configuration at start and exits, printing the reason, when one of these holds:
+
+| Setting | Refused when |
+|---|---|
+| `ALLOWED_ORIGINS` | An entry is not an `http` or `https` origin: it is a wildcard, is not a URL, or carries a path, query, fragment or credentials |
+| `SECRETS_ENCRYPTION_KEYS` | An entry is not `id:base64`, an id uses characters other than letters, digits, `-` and `_` or appears twice, or a key is not 32 bytes in base64 |
+| `PASSWORD_HASH_*` | A value is outside the limits listed under [Password hashing](#password-hashing) |
+| `DATABASE_MAX_CONNECTIONS`, `DATABASE_MIN_CONNECTIONS` | The maximum is 0, or the minimum is above the maximum |
+| `WEBAPP_URL_FROM_REQUEST` | It is on and `WEBAPP_ALLOWED_HOSTS` is empty or holds an entry that is not `host`, `host:port` or `*.domain` |
+| `ACTIVE_OBSERVABILITY` | It is on and `OTLP_ENDPOINT` or `METRICS_ENDPOINT` is missing |
+| `SERVER_TLS_CERT`, `SERVER_TLS_KEY` | Only one of them is set |
+| `SERVER_TOKEN_MAX_IN_FLIGHT` | The value is 0 |
+
+A data migration that fails also stops the start. See [Upgrading](/en/discover/getting-started#upgrading-ferriskey).
 
 ## Generating the OpenAPI spec
 
@@ -117,7 +245,7 @@ services:
 
 ### Bare metal
 
-Set the variables directly, or drop a `.env` file next to the binary:
+Set the variables directly, or put a `.env` file in the directory you start the server from. The server also looks in the parent directories.
 
 ```bash title=".env"
 DATABASE_HOST=localhost
@@ -146,7 +274,7 @@ Portal themes, portal layouts and email templates export and import as files, an
 
 ## SMTP configuration
 
-Email delivery for magic links, password resets, and email verification is configured per realm, in the database, not through environment variables. Open the admin console, go to **Realm Settings → Email**, and fill in the host, port, sender address, credentials, and encryption mode.
+Email delivery for magic links, password resets, and email verification is configured per realm, in the database, not through environment variables. Open **Emails** in the admin console sidebar, switch to the **SMTP** tab, and fill in the host, port, encryption mode, credentials and sender. The SMTP password is one of the values `SECRETS_ENCRYPTION_KEYS` encrypts.
 
 :::callout{variant="info" title="No global SMTP"}
 Every realm carries its own SMTP configuration and can point at a different mail provider. The [Email & Templates guide](/en/discover/guides/email) has the full field reference and the API endpoints.

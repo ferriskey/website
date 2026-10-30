@@ -1,13 +1,18 @@
 ---
-title: Querying & Integration
-description: "Query, filter, and export SeaWatch events: SIEM integration and compliance workflows."
+title: Querying events
+description: "Read SeaWatch events through one paginated endpoint: parameters, sorting, errors, audit questions and feeding a SIEM."
 icon: search
 order: 22
 ---
 
-# Querying & Integration
+# Querying events
 
-SeaWatch events are stored in PostgreSQL and read back through one endpoint. You can filter, paginate, and export them for compliance reporting, incident investigation, or SIEM integration.
+SeaWatch events are stored in PostgreSQL and read back through one endpoint. It is read-only: there is no endpoint that writes an event, and none that exports them. To move events elsewhere, page through the listing.
+
+The Sea Watch page of the console lists the same events, most recent first. Event, Outcome, Actor and Target each have a filter in their column header, and a single search box above the table matches the IP address. The server applies the filters and the sort to every recorded event, not only to the page on screen.
+
+<img class="only-light" src="/dashboard/seawatch_events-light.jpg" alt="FerrisKey Sea Watch event stream with Event, Outcome, Actor, Target, IP address and When columns, column filters, a search box and pagination" />
+<img class="only-dark" src="/dashboard/seawatch_events-dark.jpg" alt="FerrisKey Sea Watch event stream with Event, Outcome, Actor, Target, IP address and When columns, column filters, a search box and pagination" />
 
 ## The endpoint
 
@@ -17,94 +22,157 @@ GET /realms/{realm_name}/seawatch/v1/security-events
 
 Reading events needs `view_events`, `manage_events` or `manage_realm`.
 
-:::callout{variant="warning" title="Mind the root path"}
-Paths here are written as the server exposes them with no root path, which is the default. Set `SERVER_ROOT_PATH` — the Helm chart sets `/api` — and every path below gains that prefix.
+:::callout{variant="warning"}
+Paths here are written as the server exposes them with no root path, which is the default. Set `SERVER_ROOT_PATH` (the Helm chart sets `/api`) and every path below gains that prefix.
 :::
 
-### Query parameters
+### Parameters
+
+The listing follows the shared contract described in [Paginated listings](/en/discover/guides/api-listings): `page`, `limit`, `order_by`, `order`, filters, and a `{data, metadata}` response.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `event_types` | `String` | Comma-separated list of event types. Note the plural |
-| `actor_id` | `UUID` | Events triggered by this account |
-| `client_id` | `UUID` | Events attributed to this client |
-| `ip_address` | `String` | Events from this address |
-| `from_timestamp` | `DateTime` | Events at or after this instant, RFC 3339 |
-| `to_timestamp` | `DateTime` | Events at or before this instant |
-| `limit` | `u32` | Page size |
-| `offset` | `u32` | Pagination offset |
+| `page` | integer, 1 or more | Page number. Defaults to 1 |
+| `limit` | integer, 1 to 100 | Page size. Defaults to 20 |
+| `order_by` | `event_type`, `status`, `timestamp` or `created_at` | Sort column. Defaults to `created_at` |
+| `order` | `asc` or `desc` | Sort direction. Defaults to `desc` |
+| `event_types` | comma-separated list | Keeps events of any of these types. An unknown value, or `unknown`, gives 400 |
+| `status` | `success` or `failure` | Exact match |
+| `actor_id` | UUID | Events made by this account |
+| `client_id` | UUID | Events whose target is this UUID. Despite the name it matches `target_id`, so it finds events about a user, a client or a session alike |
+| `target_type` | string | Exact match on the target type, for example `user` or `client` |
+| `ip_address` | string | Case-insensitive match anywhere in the address. Events without an address never match |
+| `search` | string | Same match as `ip_address` |
+| `from_timestamp` | RFC 3339 date-time | Events at or after this instant, on `timestamp` |
+| `to_timestamp` | RFC 3339 date-time | Events at or before this instant, on `timestamp` |
 
-:::callout{variant="info" title="Fields you can read but not filter on"}
-An event carries more than you can query: `actor_type`, `status`, `target_type`, `target_id`, `resource`, `user_agent`, `trace_id` and a free-form `details` object are all in the payload, but none of them is a query parameter. Filter on them in your SIEM after ingestion, or narrow with `event_types` first.
-:::
+Filters combine with AND, and a filter sent with an empty value is ignored. `timestamp` is when the event was created. `created_at`, which you can sort on but which is not in the payload, is when it was stored, and it follows the order of the hash chain.
 
-### Example: recent failed logins
+Any other parameter is refused. That includes `offset`, which this endpoint does not have: use `page`. The error names the parameter:
+
+```json title="400 Bad Request"
+{
+  "code": "E_BAD_REQUEST",
+  "status": 400,
+  "reason": "invalid_query",
+  "message": "Invalid query parameter `offset`: unknown field `offset`, expected one of `search`, `actor_id`, `client_id`, `event_types`, `status`, `target_type`, `from_timestamp`, `to_timestamp`, `ip_address`"
+}
+```
+
+### Response
+
+```json title="GET /realms/my-app/seawatch/v1/security-events?order_by=created_at&order=asc&limit=2"
+{
+  "data": [
+    {
+      "id": "01a18e8b-8e28-7591-bfbe-a32e4b4ef27e",
+      "realm_id": "01a18e87-67a8-7801-8d2e-ab97acf9fc35",
+      "actor_id": "01a18e87-67a8-76d4-8ab8-07d5830d8a99",
+      "actor_type": "user",
+      "event_type": "login_success",
+      "status": "success",
+      "target_type": "session",
+      "target_id": "ad9654e4-8c48-43fa-890c-c63e5f693c68",
+      "resource": null,
+      "timestamp": "2026-10-30T20:41:13.554970Z",
+      "trace_id": null,
+      "ip_address": null,
+      "user_agent": null,
+      "details": null,
+      "event_hash": [84, 221, 63, 112, 62, 114, 217, 99, 133, 197, 0, 41, 226, 93, 27, 138, 176, 31, 204, 103, 112, 198, 19, 47, 221, 194, 118, 210, 28, 196, 200, 153],
+      "prev_hash": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    {
+      "id": "01a18e8b-8e28-7778-8787-5406fa24b771",
+      "realm_id": "01a18e87-67a8-7801-8d2e-ab97acf9fc35",
+      "actor_id": "01a18e87-67a8-76d4-8ab8-07d5830d8a99",
+      "actor_type": null,
+      "event_type": "session_created",
+      "status": "success",
+      "target_type": "session",
+      "target_id": "ad9654e4-8c48-43fa-890c-c63e5f693c68",
+      "resource": null,
+      "timestamp": "2026-10-30T20:41:13.554970Z",
+      "trace_id": null,
+      "ip_address": null,
+      "user_agent": null,
+      "details": null,
+      "event_hash": [211, 90, 105, 14, 3, 172, 156, 246, 84, 169, 33, 223, 87, 39, 38, 70, 238, 16, 16, 49, 255, 79, 78, 163, 33, 105, 15, 239, 195, 205, 175, 242],
+      "prev_hash": [84, 221, 63, 112, 62, 114, 217, 99, 133, 197, 0, 41, 226, 93, 27, 138, 176, 31, 204, 103, 112, 198, 19, 47, 221, 194, 118, 210, 28, 196, 200, 153]
+    }
+  ],
+  "metadata": {
+    "page": 1,
+    "limit": 2,
+    "total": 58,
+    "total_pages": 29,
+    "first_page": 1,
+    "last_page": 29,
+    "next_page": 2,
+    "prev_page": null
+  }
+}
+```
+
+The second event's `prev_hash` is the first one's `event_hash`: that is the chain, as described in [tamper evidence](/en/modules/seawatch/overview).
+
+### Examples
+
+Failed sign-ins in a window, newest first:
 
 ```bash
-curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?event_types=login_failure&limit=50" \
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "event_types=login_failure" \
+  --data-urlencode "from_timestamp=2026-10-01T00:00:00Z" \
+  --data-urlencode "to_timestamp=2026-10-31T23:59:59Z" \
+  --data-urlencode "limit=100" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### Example: everything one account did in a window
+Everything one account did, oldest first:
 
 ```bash
-curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?\
-actor_id=USER_UUID&\
-from_timestamp=2026-09-01T00:00:00Z&\
-to_timestamp=2026-09-30T23:59:59Z" \
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "actor_id=USER_UUID" \
+  --data-urlencode "order_by=timestamp" \
+  --data-urlencode "order=asc" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### Example: several event types at once
+Several event types at once:
 
 ```bash
-curl -X GET "http://localhost:3333/realms/my-app/seawatch/v1/security-events?\
-event_types=client_secret_viewed,client_secret_rotated,role_permission_updated" \
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "event_types=client_secret_viewed,role_permission_updated,role_assigned" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-## Integration with external systems
+## Questions the filters answer
 
-### SIEM Forwarding
+| Question | Parameters |
+|---|---|
+| Who changed the roles of this user? | `event_types=role_assigned,role_unassigned` and `client_id=USER_UUID`. `actor_id` of each result is the administrator, and `resource` is the role name |
+| Who read the secret of this client? | `event_types=client_secret_viewed` and `client_id=CLIENT_UUID` |
+| When was this client in maintenance? | `event_types=client_maintenance_enabled,client_maintenance_disabled` and `client_id=CLIENT_UUID` |
+| What did this administrator do last month? | `actor_id=ADMIN_UUID`, `from_timestamp` and `to_timestamp` |
+| Which accounts were created or deleted this quarter? | `event_types=user_created,user_deleted`, `from_timestamp` and `to_timestamp` |
+| Which sessions did this user open? | `event_types=session_created` and `actor_id=USER_UUID` |
+| Which webhook deliveries gave up? | `event_types=webhook_delivery_exhausted` |
 
-For production deployments, forward SeaWatch events to your SIEM for correlation with other security signals:
+`client_id` is the UUID of the client, not its `client_id` string. A bulk user deletion has no target, so it does not appear under a user's `client_id`.
 
-- **Splunk**: Use a webhook subscriber to forward events to the Splunk HTTP Event Collector (HEC)
-- **Elastic**: Forward events to Elasticsearch via a webhook or Logstash pipeline
-- **Datadog**: Send events to the Datadog Logs API via webhook
+## Feeding a SIEM
 
-### OpenTelemetry Correlation
+SeaWatch does not push events. [Webhooks](/en/modules/webhooks/triggers) have their own triggers, and sign-ins, sessions and secret reads are not among them. To forward events to Splunk, Elastic, Datadog or any other collector, poll the listing:
 
-SeaWatch events include a `trace_id` field when OpenTelemetry is enabled. This allows you to:
+1. Request `order_by=created_at`, `order=asc` and `limit=100`, with `from_timestamp` set to the latest `timestamp` you stored, and follow `next_page` until it is null.
+2. Deduplicate on `id`. The `from_timestamp` bound is inclusive, so the boundary event comes back.
+3. Overlap the window by a few minutes. `timestamp` is set when the event is created and `created_at` when it is stored, so an event can be stored slightly after one that carries a later `timestamp`.
 
-1. See an authentication event in your SIEM
-2. Use the `trace_id` to find the corresponding HTTP request trace in Jaeger/Tempo
-3. Follow the request through FerrisKey's internal services
-4. Correlate with downstream API calls made with the issued token
+The `trace_id` field is empty, so an event cannot be joined to a trace. To tie a sign-in to its [Compass](/en/modules/compass/querying) flow, match the user and the time: for an interactive sign-in, the flow's `user_id` is the event's `actor_id`, and the event's `timestamp` falls between the flow's `started_at` and `completed_at`.
 
-### Webhook Automation
+## Retention
 
-Use [Webhooks](/en/modules/webhooks/overview) to react to SeaWatch-tracked events in real time:
+FerrisKey never deletes SeaWatch events. The table grows for the life of the deployment, and its size is yours to plan for.
 
-- Alert on-call when `client_secret_rotated` happens outside maintenance windows
-- Notify a Slack channel on `user_created` events
-- Lock accounts after N consecutive `login_failure` events (via an external service)
-
-## Compliance use cases
-
-### SOC 2 Type II
-SeaWatch provides the audit trail required for the "Security" and "Availability" trust service criteria. Export events by time range to produce evidence for auditors.
-
-### GDPR
-Track when an account is created (`user_created`), when its email is confirmed (`user_email_verified`), when its roles change (`role_assigned`, `role_unassigned`) and when it is deleted (`user_deleted`). SeaWatch makes it possible to answer data subject access requests with precise records.
-
-### PCI DSS
-For environments handling payment data, SeaWatch captures all authentication and authorization events needed for PCI DSS Requirement 10 (Track and monitor all access to network resources and cardholder data).
-
-## Data Retention
-
-SeaWatch events are stored in PostgreSQL alongside your FerrisKey data. For long-term retention:
-
-- Forward events to a dedicated log storage system (S3, GCS, Azure Blob) via webhooks
-- Set up database-level partitioning and archival for the events table
-- Consider compliance requirements when determining retention periods (SOC 2 typically requires 1 year, HIPAA requires 6 years)
+Do not remove old rows to save space. Each event is chained to the one before it, so the oldest remaining event would no longer start from the zero hash and the gap would read as tampering. Copy events to long-term storage through the listing and leave the originals in place.

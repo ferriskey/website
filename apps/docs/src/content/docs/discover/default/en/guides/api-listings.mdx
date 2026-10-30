@@ -1,0 +1,123 @@
+---
+title: Paginated listings
+description: "The shared contract of FerrisKey's list endpoints: page, limit, sorting, filters, the response envelope and the errors."
+icon: list-filter
+order: 27
+---
+
+# Paginated listings
+
+Nineteen list endpoints of the API return one page at a time and share a single contract. The same query parameters, the same response envelope and the same errors apply to all of them, so a client written for the users list works for roles, clients, webhooks and the rest.
+
+## The request
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `page` | `1` | The page to return, starting at 1 |
+| `limit` | `20` | Items per page, from 1 to 100 |
+| `order_by` | `created_at` | The column to sort on. The accepted values depend on the endpoint, see the [table below](#the-endpoints) |
+| `order` | `desc` | `asc` or `desc` |
+
+On top of these, each endpoint accepts its own filters. A value that is out of range is refused, not clamped: `limit=101` is a `400`, not a page of 100.
+
+```
+GET /realms/acme/users?enabled=true&order_by=username&order=asc&page=2&limit=2
+```
+
+## The response
+
+The body is always `{ data, metadata }`. `data` holds up to `limit` items of the resource, and `metadata` describes where the page sits.
+
+```jsonc title="Response"
+{
+  "data": [
+    // up to 2 users
+  ],
+  "metadata": {
+    "page": 2,
+    "limit": 2,
+    "total": 30,
+    "total_pages": 15,
+    "first_page": 1,
+    "last_page": 15,
+    "next_page": 3,
+    "prev_page": 1
+  }
+}
+```
+
+`total` counts every item that matches the filters, not only the ones on this page. `next_page` is `null` on the last page and `prev_page` is `null` on the first. When nothing matches, `total_pages` is `0` and `last_page` is still `1`, so `first_page` and `last_page` are always safe to link to.
+
+## Filters
+
+The filters differ per endpoint, but they behave the same way:
+
+- A text filter, such as `name` or `email`, matches anywhere in the value and ignores case.
+- `search` looks across the main text fields of the resource at once. Which fields depends on the endpoint.
+- Booleans and enumerations, such as `enabled` or `status`, match exactly. Booleans are `true` or `false`.
+- `ids` takes a comma-separated list of at most 100 ids.
+- `created_from` is inclusive and `created_to` is exclusive. Both take an RFC 3339 date-time with a time and an offset, for example `2026-10-01T00:00:00Z`. A range that ends before it starts returns an empty page.
+- Filters combine with AND.
+- A filter with an empty value is ignored.
+
+The time bounds on the security events and on the authentication flows have their own names, `from_timestamp` and `to_timestamp` for [SeaWatch](/en/modules/seawatch/querying) and `from` and `to` for [Compass](/en/modules/compass/overview). Both bounds are inclusive.
+
+Sorting on a column that can be empty, such as `last_seen_at` on sessions or `last_sync_at` on federation providers, puts the rows without a value last in ascending order and first in descending order.
+
+## Errors
+
+A parameter the endpoint does not know is refused with `400` and the reason `invalid_query`, and the message names it. That includes `offset`, which no listing accepts, SeaWatch and Compass included: use `page` and `limit`.
+
+```json title="GET /realms/acme/users?offset=0"
+{
+  "code": "E_BAD_REQUEST",
+  "status": 400,
+  "reason": "invalid_query",
+  "message": "Invalid query parameter `offset`: unknown field `offset`, expected one of `search`, `username`, `email`, `firstname`, `lastname`, `enabled`, `email_verified`, `service_account`, `role_id`, `ids`, `not_in_group`, `not_in_organization`, `created_from`, `created_to`"
+}
+```
+
+The same `400` covers a `page` below 1, a `limit` outside 1 to 100, an `order` that is not `asc` or `desc`, an `order_by` the endpoint does not offer, a value of the wrong type (a UUID filter that is not a UUID, a boolean that is not `true` or `false`), a filter that appears twice, and an `ids` list longer than 100. See [API errors](/en/discover/guides/api-errors) for the error shapes.
+
+## The endpoints
+
+Every path below starts with `/realms/{realm_name}`. All of them take `search`, `page`, `limit`, `order_by` and `order`, plus the filters in the last column.
+
+| Endpoint | `order_by` | Other filters |
+|---|---|---|
+| `GET /users` | `username`, `email`, `firstname`, `lastname`, `enabled`, `created_at`, `updated_at` | `username`, `email`, `firstname`, `lastname`, `enabled`, `email_verified`, `service_account`, `role_id`, `ids`, `not_in_group`, `not_in_organization`, `created_from`, `created_to` |
+| `GET /users/@me/realms` | `name`, `created_at`, `updated_at` | `name`, `display_name` |
+| `GET /users/{user_id}/sessions` | `last_seen_at`, `expires_at`, `created_at` | `ip_address`, `user_agent`, `persistent`, `created_from`, `created_to` |
+| `GET /clients` | `name`, `client_id`, `enabled`, `created_at`, `updated_at` | `name`, `client_id`, `client_id_exact`, `enabled`, `public_client`, `service_account_enabled`, `oauth_device_code_grant_enabled`, `protocol`, `client_type`, `application_type`, `has_redirect_uris`, `maintenance_enabled`, `ids`, `created_from`, `created_to` |
+| `GET /client-scopes` | `name`, `created_at`, `updated_at` | `name`, `description`, `protocol`, `default_scope_type`, `has_protocol_mappers`, `not_assigned_to_client`, `created_from`, `created_to` |
+| `GET /roles` | `name`, `created_at`, `updated_at` | `name`, `qualified_name`, `description`, `require_mfa`, `client_id`, `scope`, `has_permissions`, `ids`, `created_from`, `created_to` |
+| `GET /organizations` | `name`, `alias`, `enabled`, `created_at`, `updated_at` | `name`, `alias`, `domain`, `description`, `enabled`, `has_domain`, `without_member`, `ids`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/members` | `username`, `email`, `created_at` | `username`, `email`, `enabled`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/groups` | `name`, `created_at`, `updated_at` | `name`, `description`, `parent_group_id`, `is_root`, `ids`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/groups/{group_id}/members` | `username`, `email`, `created_at` | `username`, `email`, `enabled`, `created_from`, `created_to` |
+| `GET /identity-providers` | `alias`, `display_name`, `provider_id`, `enabled`, `created_at`, `updated_at` | `alias`, `display_name`, `provider_id`, `enabled`, `health`, `created_from`, `created_to` |
+| `GET /federation/providers` | `name`, `priority`, `enabled`, `last_sync_at`, `created_at`, `updated_at` | `name`, `provider_type`, `provider_family`, `enabled`, `sync_enabled`, `synced`, `sync_mode`, `created_from`, `created_to` |
+| `GET /webhooks` | `name`, `endpoint`, `triggered_at`, `created_at`, `updated_at` | `name`, `endpoint`, `triggered`, `has_subscribers`, `secure_endpoint`, `created_from`, `created_to` |
+| `GET /webhooks/{webhook_id}/deliveries` | `status`, `attempt_count`, `last_attempt_at`, `created_at`, `updated_at` | `event`, `status`, `resource_id`, `created_from`, `created_to` |
+| `GET /email-templates` | `name`, `email_type`, `created_at`, `updated_at` | `name`, `email_type`, `created_from`, `created_to` |
+| `GET /portal/themes` | `name`, `created_at`, `updated_at` | `name`, `layout_id`, `activatable`, `created_from`, `created_to` |
+| `GET /portal-layouts` | `name`, `created_at`, `updated_at` | `name`, `is_default`, `in_use`, `ids`, `created_from`, `created_to` |
+| `GET /seawatch/v1/security-events` | `event_type`, `status`, `timestamp`, `created_at` | `actor_id`, `client_id`, `event_types`, `status`, `target_type`, `ip_address`, `from_timestamp`, `to_timestamp` |
+| `GET /compass/v1/flows` | `status`, `started_at`, `duration_ms`, `created_at` | `client_id`, `user_id`, `grant_type`, `status`, `ip_address`, `identified`, `completed`, `from`, `to` |
+
+`created_at` is the creation date everywhere, except on the two member lists, where it is the date the user joined the organization or the group. `GET /users/@me/realms` lists the realms the caller can reach, so it takes no date bounds. A few filters have a rule worth reading in the endpoint's description in the API reference, for instance `application_type` on clients, `health` on identity providers and `activatable` on portal themes.
+
+## In the console
+
+The tables of the admin console that show these lists share one layout. Each filterable column has its own filter in the column header, next to the sort arrows, and a single search box sits above the table. There is no separate filter bar.
+
+<img class="only-light" src="/dashboard/users_listing-light.jpg" alt="FerrisKey users listing with sort and filter controls in the column headers and the Status filter open" />
+<img class="only-dark" src="/dashboard/users_listing-dark.jpg" alt="FerrisKey users listing with sort and filter controls in the column headers and the Status filter open" />
+
+The state of a listing lives in the address bar, under the same names as the API: `page`, `limit`, `order_by`, `order` and the filters. A filtered, sorted view can be copied as a link, and reloading the page keeps it. Typing in the search box waits 300 milliseconds before it queries, and changing a filter or the sort goes back to page 1.
+
+<Callout variant="warning" title="ferris-ctl stops at the first page">
+
+`ferris-ctl` reads the `data` of the first page and does not ask for the next, so its `list` subcommands return at most 20 items. See the [CLI overview](/en/cli/overview).
+
+</Callout>

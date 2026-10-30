@@ -5,7 +5,7 @@ icon: lock
 order: 50
 ---
 
-# Aegis: Scopes & Protocol Mappers
+# Aegis: scopes and protocol mappers
 
 Aegis decides what information ends up in a token. It owns client scopes, which are named collections of claims, and protocol mappers, which are the rules that pull data out and write it into the JWT. Together they are the contract between an application and FerrisKey: grant me this scope, and these claims will be in the token.
 
@@ -13,7 +13,7 @@ Aegis decides what information ends up in a token. It owns client scopes, which 
 
 Without them, every client would get identical claims. With them, a public mobile app gets `sub` and `email` while an internal admin tool gets roles, and neither sees more than it needs.
 
-The standard OIDC scopes (`openid`, `profile`, `email`) are seeded into every realm. Anything specific to your business, a department, a plan tier, a feature flag, goes in through a custom protocol mapper.
+FerrisKey seeds the standard OIDC scopes into every realm. Anything specific to your business, such as a department, a plan tier or a feature flag, goes in through a protocol mapper on a scope of your own. The [mapper reference](/en/modules/aegis/protocol-mappers) lists the eleven types.
 
 ## Architecture
 
@@ -39,30 +39,35 @@ How data moves:
 |---|---|---|
 | Default | Included in every token for the clients it is assigned to | Claims the app always needs, like email or roles |
 | Optional | Included only when the request asks for it in `scope` | Data the client should have to ask for |
-| **None** | Available in the system but not assigned to any client | Shared scope definitions waiting to be assigned |
+| None | Available in the system but not assigned to any client | Shared scope definitions waiting to be assigned |
 
-## Standard OIDC scopes
+## Seeded scopes
 
-FerrisKey ships with the standard OpenID Connect scopes pre-configured:
+Each realm starts with these scopes already configured:
 
 | Scope | Claims | Type |
 |---|---|---|
-| `openid` | `sub` | Default |
+| `openid` | None from a mapper. `sub` is always in the token | Default |
 | `profile` | `preferred_username`, `given_name`, `family_name` | Default |
 | `email` | `email`, `email_verified` | Default |
 | `roles` | `realm_access.roles` | Default |
-| `address` | `address` | Optional |
-| `phone` | `phone_number` | Optional |
-| `offline_access` | Enables refresh token issuance | Optional |
-| `introspect` | Allows token introspection | Optional |
+| `organization` | `organizations`, with each organization's `id`, `name`, `alias` and the roles the user holds in it | Default |
+| `address` | `address`, read from the user attribute of that name | Optional |
+| `phone` | `phone_number`, read from the user attribute of that name | Optional |
+| `offline_access` | None, it carries no mapper | Optional |
 
-## Real-World Patterns
+Mappers only write ID-token claims when the request's `scope` includes `openid`. The `profile` scope does not carry a `name` claim; add an `oidc-full-name-mapper` to it if a client wants one.
+
+## Real-world patterns
 
 ### API gateway with role-based access
-Create a custom scope `api_access` with an `oidc-usermodel-realm-role-mapper` that writes `realm_access.roles` into the token. Your API gateway reads the roles claim and enforces route-level authorization without calling back to FerrisKey.
 
-### Multi-Tenant SaaS
-Create a custom scope with an `oidc-hardcoded-claim-mapper` that injects the realm name as a `tenant` claim. Your backend uses this to route requests to the correct tenant database.
+Assign the seeded `roles` scope, or create a scope of your own, with an `oidc-usermodel-realm-role-mapper` that writes `realm_access.roles` into the token. Your API gateway reads the roles claim and enforces route-level authorization without calling back to FerrisKey.
 
-### Third-Party Integrations
-Assign only `openid` and `email` as default scopes for third-party clients. They get the minimum data needed. Your first-party clients get `profile`, `roles`, and custom scopes as defaults.
+### Multi-tenant SaaS
+
+Create a custom scope with an `oidc-hardcoded-claim-mapper` that injects the realm name as a `tenant` claim. Your backend uses it to route requests to the correct tenant database.
+
+### Third-party integrations
+
+Assign only `openid` and `email` as default scopes for third-party clients. They get the minimum data needed. Your first-party clients get `profile`, `roles` and custom scopes as defaults.

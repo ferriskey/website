@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: "Hexagonal architecture, domain modules, and the ports & adapters pattern in FerrisKey."
+description: "Hexagonal architecture, domain modules, workspace crates, and the ports & adapters pattern in FerrisKey."
 icon: boxes
 order: 23
 ---
@@ -44,7 +44,7 @@ Orchestration. `ApplicationService` wires every domain service to a concrete imp
 
 ### Infrastructure layer
 
-The implementations behind the ports: repositories backed by SeaORM and PostgreSQL, plus the outbound integrations for SMTP, webhook delivery, and identity provider calls.
+The implementations behind the ports: repositories backed by SeaORM and PostgreSQL, plus the outbound integrations for SMTP, webhook delivery, and identity provider calls. It also holds the in-memory caches in front of the realm, client and session repositories (see [Caching](/en/discover/guides/configuration#caching)) and the sealing of secrets before they reach the database (see [Secrets at rest](/en/discover/guides/secrets-at-rest)).
 
 ### API layer
 
@@ -52,20 +52,23 @@ The HTTP surface, built with Axum. Each feature mirrors a domain module and brin
 
 ## Domain modules
 
-```
+```text
 core/src/domain/
 ├── authentication/       # OAuth2 / OIDC flows
 ├── user/                 # User lifecycle and required actions
 ├── account/              # Self-service account operations
 ├── account_security/     # Password, MFA and passkey self-service
 ├── client/               # OAuth2 clients
+├── client_registration/  # Dynamic client registration
+├── client_metadata/      # Clients identified by a metadata document URL
+├── consent/              # Consent to optional client scopes
 ├── realm/                # Multi-tenant realms and settings
 ├── credential/           # Passwords, OTP, WebAuthn
 ├── password_policy/      # Password strength rules
 ├── role/                 # Bitwise permissions
-├── session/              # User and auth sessions
+├── session/              # User sessions
 ├── jwt/                  # Token issuance and validation
-├── crypto/               # Key material and signing
+├── crypto/               # Password hashing
 ├── saml/                 # SAML 2.0 identity provider
 ├── trident/              # MFA
 ├── seawatch/             # Audit logging
@@ -79,24 +82,29 @@ core/src/domain/
 ├── portal_layouts/       # Login portal layouts
 ├── webhook/              # Event-driven hooks
 ├── health/               # Liveness and readiness
-└── maintenance/          # Maintenance mode
+├── maintenance/          # Maintenance mode
+└── common/               # Shared errors, pagination and rate limiters
 ```
+
+A module here is either implemented in `core` or re-exported from a crate under `libs/`. `consent/`, for example, is a re-export of `ferriskey-consent`.
 
 ## Workspace crates
 
-The workspace is being pulled apart into focused crates. Two families live under `libs/`.
+The workspace is split into focused crates under `libs/`, in two families.
 
 Feature crates hold domain and infrastructure logic for one module:
 
-```
+```text
 libs/
-├── ferriskey-domain/           # Shared domain types
-├── ferriskey-authz/            # Authorization engine and action catalogue
-├── ferriskey-security/         # Hashing and crypto primitives
+├── ferriskey-domain/           # Shared domain types and ports
+├── ferriskey-authz/            # RBAC engine, action catalogue and the tenant authorization domain
+├── ferriskey-authz-cedar/      # Cedar engine that evaluates tenant authorization policies
+├── ferriskey-security/         # Password hashing, JWT primitives and the secret cipher
+├── ferriskey-consent/          # Consent to optional client scopes
 ├── ferriskey-trident/          # MFA
 ├── ferriskey-abyss/            # Identity provider federation
 ├── ferriskey-aegis/            # Scopes and protocol mappers
-├── ferriskey-compass/          # Authentication flow engine
+├── ferriskey-compass/          # Authentication flow tracing
 ├── ferriskey-saml/             # SAML 2.0
 ├── ferriskey-seawatch/         # Audit events
 ├── ferriskey-organization/     # Organizations
@@ -104,11 +112,14 @@ libs/
 ├── ferriskey-portal-theme/     # Portal theming
 ├── ferriskey-portal-layouts/   # Portal layouts
 ├── ferriskey-webhook/          # Webhook delivery
-├── ferriskey-mail/             # SMTP transport
-└── ferriskey-migrate/          # Migration runner
+├── ferriskey-mail/             # SMTP transport, email templates and email verification
+├── ferriskey-migrate/          # Data migration runner
+└── maskass/                    # Redaction of sensitive values
 ```
 
-`ferriskey-api-*` crates carry the HTTP layer for the matching feature, so a module's routes and handlers can move out of the monolithic API crate one at a time. `ferriskey-api-core` holds the shared pieces: CLI arguments, application state, and error conversion.
+`maskass` is the one crate without the `ferriskey-` prefix, and it depends on no other FerrisKey crate. Its `Masked<T>` wrapper holds the real value but serializes, prints and debug-prints as `***`, which keeps identity provider client secrets out of API responses and logs. `MaskedWith` adds partial, email and hash masks.
+
+`ferriskey-api-*` crates carry the HTTP layer for the matching feature: its routes, handlers and OpenAPI paths. The `api` crate that builds the `ferriskey-api` binary only composes them into one router and one OpenAPI document, and starts the server. `ferriskey-api-core` holds the shared pieces: CLI arguments, application state, the bearer token middleware, CORS, request context and error conversion.
 
 ## Dependency flow
 
@@ -119,7 +130,7 @@ The rule is strict: inner layers never depend on outer layers.
 - The infrastructure implements the domain's ports
 - The API depends on the application
 
-Which means you can swap PostgreSQL for another store, replace Axum with a different HTTP framework, or run domain tests entirely in memory, without touching a business rule.
+That means you can swap PostgreSQL for another store, replace Axum with a different HTTP framework, or run domain tests entirely in memory, without touching a business rule.
 
 ## Error propagation
 

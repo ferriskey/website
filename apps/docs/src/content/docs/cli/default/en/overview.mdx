@@ -7,7 +7,7 @@ order: 1
 
 # FerrisKey CLI
 
-`ferris-ctl` is the official command-line interface for FerrisKey. It talks to the FerrisKey REST API, so from your terminal you can manage realms, OAuth2 clients, and users, import realms from Keycloak or Zitadel, and script administrative tasks.
+`ferris-ctl` is the official command-line interface for FerrisKey. It talks to the FerrisKey REST API, so from a terminal you can manage realms, OAuth2 clients, and users, import a realm from a description file, Keycloak, Zitadel, or Supabase, and script administrative tasks.
 
 ## What you can do
 
@@ -22,26 +22,50 @@ Authenticate with the OAuth 2.0 Device Authorization Grant. No client secret req
 Create and inspect realms, clients, and users.
 :::
 :::card{label="Import realms" icon="lucide:import" href="/en/cli/import/overview"}
-Migrate realms from a file, a live Keycloak, or a live Zitadel instance.
+Migrate a realm from a file, a live Keycloak, a live Zitadel, or a Supabase project.
 :::
 ::::
 
 ## Install
 
-::::code-group
+:::codegroup
 ```bash [Cargo]
 cargo install ferris-ctl
 ```
 
 ```bash [From source]
-git clone https://github.com/ferriskey/ferriskey.git
-cd ferriskey/cli
+git clone https://github.com/ferriskey/ferriskey-cli.git
+cd ferriskey-cli
 cargo build --release
 # binary at target/release/ferris-ctl
 ```
-::::
 
-Pre-built binaries for Linux, macOS, and Windows are also attached to every [GitHub release](https://github.com/ferriskey/ferriskey/releases). Download the archive for your platform, extract `ferris-ctl`, and place it on your `PATH`.
+```bash [Docker]
+docker run --rm ghcr.io/ferriskey/ferris-ctl --help
+```
+:::
+
+Building from source needs Rust 1.88 or later. The workspace sets no `rust-version`, but the code uses let chains, which became stable in 1.88.
+
+### Pre-built binaries
+
+Every [GitHub release](https://github.com/ferriskey/ferriskey-cli/releases) carries three archives. Extract `ferris-ctl` and put it on your `PATH`.
+
+| Platform | Archive |
+|----------|---------|
+| Linux x86_64 | `ferris-ctl-v0.3.0-x86_64-unknown-linux-gnu.tar.gz` |
+| macOS, Apple Silicon | `ferris-ctl-v0.3.0-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `ferris-ctl-v0.3.0-x86_64-pc-windows-msvc.zip` |
+
+The names follow `ferris-ctl-<tag>-<target>`; the ones above are the 0.3.0 release. A `SHA256SUMS.txt` file in the same release lists the checksum of each archive, so you can check a download before you run it. There is no pre-built binary for Intel Macs or for Linux on ARM: use Cargo or the container image there.
+
+### Container image
+
+The image `ghcr.io/ferriskey/ferris-ctl` is built for `linux/amd64` and `linux/arm64`, and its entrypoint is `ferris-ctl`. A release publishes the tags `X.Y.Z`, `X.Y`, and `X`. The tag `latest` is rebuilt from every push to `main`, so it can be ahead of the last release: pin `X.Y.Z` when you need a released build.
+
+The image runs as an unprivileged user that has no home directory. Pass the connection through `FERRISKEY_URL`, `FERRISKEY_CLIENT_ID`, `FERRISKEY_CLIENT_SECRET`, and `FERRISKEY_REALM` instead of relying on a context file (see [Authentication](/en/cli/authentication#overriding-the-context)).
+
+Release candidates (tags with `-rc`) are published as GitHub pre-releases and as images, but not to crates.io.
 
 Verify the install:
 
@@ -51,35 +75,39 @@ ferris-ctl --help
 
 ## How it works
 
-```
+```text
 CLI args → ferris-ctl → resolve context + credentials → FerrisKey REST API
                               ↑
                   config.toml / credentials.toml
 ```
 
-Every command resolves three things in order:
+Every command that calls the API resolves three things in order:
 
-1. **Where** to connect: the server URL, from the active [context](/en/cli/commands/context) or a `--url` override.
-2. **Who** you are: a saved [login](/en/cli/commands/login) session or client credentials, resolved automatically.
-3. **Which realm** to operate on: the context default, or a `--realm` override.
+1. Where to connect: the server URL from the active [context](/en/cli/commands/context), or from `--url` when `--client-id` is given too.
+2. Who you are: a saved [login](/en/cli/commands/login) session, or the client credentials stored in the context.
+3. Which realm to act on: the realm you sign in to is the context's `realm`, and a command acts on that same realm unless you pass `--realm`.
 
 ## Global flags
 
-These flags are available on every command and override values stored in your context.
+These flags work on every command, before or after the subcommand name.
 
-| Flag | Short | Values / default | Env var | Description |
-|------|-------|------------------|---------|-------------|
-| `--context` | | active context | | Use a specific context for this command |
-| `--output` | `-o` | `table` (default), `json`, `yaml` | | Output format |
-| `--url` | | context URL | `FERRISKEY_URL` | FerrisKey server URL |
-| `--client-id` | | context client | `FERRISKEY_CLIENT_ID` | Client ID used for authentication |
-| `--client-secret` | | context secret | `FERRISKEY_CLIENT_SECRET` | Client secret used for authentication |
-| `--realm` | | context realm | `FERRISKEY_REALM` | Realm to operate on |
+| Flag | Short | Default | Env var | Description |
+|------|-------|---------|---------|-------------|
+| `--context` | | active context | | Use this stored context instead of the active one |
+| `--output` | `-o` | `table` | | Output format: `table`, `json`, or `yaml` |
+| `--url` | | | `FERRISKEY_URL` | FerrisKey server URL |
+| `--client-id` | | | `FERRISKEY_CLIENT_ID` | OAuth2 client used to sign in |
+| `--client-secret` | | | `FERRISKEY_CLIENT_SECRET` | Secret of that client |
+| `--realm` | | | `FERRISKEY_REALM` | Realm the command acts on |
 
-## Next steps
+The connection flags are not per-field overrides. `--url` and `--client-id` take effect only together: when both are set, the CLI builds its connection from the flags and ignores the config file and `--context`. [Authentication](/en/cli/authentication#overriding-the-context) lays out the exact rules, including how `login` differs.
+
+`-o` applies to every command except `login`, `logout`, and `client secret`, which always print plain text.
+
+## Related pages
 
 ::::card-group{cols=3}
-:::card{label="Getting Started" icon="lucide:rocket" href="/en/cli/getting-started"}
+:::card{label="Getting started" icon="lucide:rocket" href="/en/cli/getting-started"}
 Connect to a FerrisKey instance and run your first commands.
 :::
 :::card{label="Authentication" icon="lucide:key-round" href="/en/cli/authentication"}

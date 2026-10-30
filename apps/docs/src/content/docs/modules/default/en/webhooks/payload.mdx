@@ -1,90 +1,128 @@
 ---
-title: Payload Format
-description: "Webhook payload structure in FerrisKey: fields, examples, and handling best practices."
+title: Payload format
+description: "What FerrisKey sends to a webhook endpoint: headers, the JSON envelope, the data of each trigger, and how to verify the signature."
 icon: braces
 order: 62
 ---
 
-# Payload Format
+# Payload format
 
-When a webhook fires, FerrisKey sends an HTTP POST to the registered endpoint with a JSON payload. The payload follows a consistent structure across all event types.
+When a webhook fires, FerrisKey sends an HTTP POST to the endpoint with a JSON body. The envelope is the same for every trigger. What changes is `data`, and a few headers let you check who sent it.
 
-## Payload Structure
+## What the request carries
+
+| Header | Value |
+|---|---|
+| `content-type` | `application/json` |
+| `x-ferriskey-timestamp` | Unix time in seconds at which this attempt was signed |
+| `x-ferriskey-signature` | Lowercase hex HMAC-SHA256 of the timestamp and the body, described [below](#verifying-the-signature) |
+| `x-ferriskey-delivery-id` | The id of the delivery. It stays the same across retries and replays |
+| Your custom headers | The ones you configured on the webhook |
+
+FerrisKey waits up to 5 seconds to connect and 10 seconds for the whole request. Any `2xx` answer counts as delivered. A redirect does not: FerrisKey does not follow redirects, so a `301` from `http` to `https` is recorded as a failed delivery with the error code `http_301`.
+
+## Envelope
 
 ```json title="Webhook payload"
 {
   "event": "user.created",
-  "timestamp": "2026-03-17T14:30:00.000Z",
-  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "timestamp": "2026-03-17T14:30:00.123456+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
   "data": {
+    "id": "01914b3c-5678-7f5a-b456-000000000002",
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
     "username": "alice",
-    "email": "alice@example.com",
     "firstname": "Alice",
     "lastname": "Smith",
-    "enabled": true
+    "email": "alice@example.com",
+    "email_verified": false,
+    "enabled": true,
+    "required_actions": [],
+    "created_at": "2026-03-17T14:30:00.101234Z",
+    "updated_at": "2026-03-17T14:30:00.101234Z",
+    "failed_login_attempts": 0,
+    "locked_until": null,
+    "locale": null,
+    "federation_provider_id": null
   }
 }
 ```
 
 | Field | Type | Description |
 |---|---|---|
-| `event` | `string` | The trigger event name (e.g., `user.created`) |
-| `timestamp` | `string` | ISO 8601 timestamp of when the event occurred |
-| `resource_id` | `UUID` | ID of the affected resource |
-| `data` | `object \| null` | Event-specific payload (resource data at the time of the event) |
+| `event` | `string` | The trigger name, for example `user.created` |
+| `timestamp` | `string` | RFC 3339 time at which the event was built |
+| `resource_id` | `UUID` | The realm id for every trigger except `auth.reset_password`, where it is the user id |
+| `data` | any JSON | The object the event is about, or its id. See the next section |
 
-## Payload Examples
+<Callout variant="warning" title="resource_id does not identify the object that changed">
 
-### `user.created`
+For nearly every trigger, `resource_id` is the id of the realm the event happened in. It tells you which realm, not which user, client or role. Read the object's own id from `data.id`, or from `data` itself when the event carries only an id. The same value fills the `resource_id` of the delivery record.
 
-```json
-{
-  "event": "user.created",
-  "timestamp": "2026-03-17T14:30:00.000Z",
-  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
-  "data": {
-    "username": "alice",
-    "email": "alice@example.com",
-    "firstname": "Alice",
-    "lastname": "Smith",
-    "enabled": true,
-    "email_verified": false
-  }
-}
-```
+</Callout>
 
-### `role.permission.updated`
+## What data holds
 
-```json
+| Triggers | `data` |
+|---|---|
+| `user.created`, `user.updated`, `user.deleted`, `user.email_verified` | The user object, including `id`, `username`, `email`, `enabled` and `email_verified`. For `user.deleted` it is the user as it was before deletion |
+| `user.bulk_deleted` | An array with the ids of the deleted users |
+| `user.role.assigned` | The role object (`id`, `name`, `permissions` and the rest). It does not say which user received the role |
+| `auth.reset_password` | `null`. `resource_id` is the user id |
+| `auth.device_flow.initiated`, `.denied`, `.expired` | `session_id`, `realm_id`, `client_id`, `status`, `user_id` and `device_code`. The code is in clear for `initiated`, and a SHA-256 hex digest for the other two |
+| `client.created`, `client.updated`, `client.maintenance.enabled`, `client.maintenance.disabled` | The client object. The client secret appears as `***` |
+| `client.deleted`, `redirect_uri.deleted`, `web_origin.deleted`, `client.saml_attribute_mapper.deleted` | The id of the removed object, as a string |
+| `redirect_uri.created`, `redirect_uri.updated`, `web_origin.created`, `client.saml_config.updated`, `client.saml_attribute_mapper.created` | The object itself |
+| `role.created`, `role.updated`, `role.deleted`, `role.permission.updated` | The role object. `permissions` is an array of permission names |
+| `realm.updated`, `realm.deleted` | The realm object |
+| `realm.settings.updated` | The realm settings object |
+| `webhook.created`, `webhook.updated`, `webhook.deleted` | The webhook, without its `headers` and `secret` |
+
+Timestamps inside `data` end in `Z`, while the envelope's `timestamp` ends in `+00:00`. Both are RFC 3339, so any parser accepts them.
+
+### Examples
+
+```json title="role.permission.updated"
 {
   "event": "role.permission.updated",
-  "timestamp": "2026-03-17T15:00:00.000Z",
-  "resource_id": "01914b3c-9abc-7f5a-b456-000000000010",
+  "timestamp": "2026-03-17T15:00:00.482913+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
   "data": {
+    "id": "01914b3c-9abc-7f5a-b456-000000000010",
     "name": "editor",
-    "permissions": 1234
+    "description": null,
+    "permissions": ["view_users", "manage_users"],
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+    "client_id": null,
+    "client": null,
+    "require_mfa": false,
+    "created_at": "2026-03-01T09:00:00.000000Z",
+    "updated_at": "2026-03-17T15:00:00.470112Z"
   }
 }
 ```
 
-### `client.deleted`
-
-```json
+```json title="client.deleted"
 {
   "event": "client.deleted",
-  "timestamp": "2026-03-17T15:30:00.000Z",
-  "resource_id": "01914b3c-def0-7f5a-b456-000000000020",
+  "timestamp": "2026-03-17T15:30:00.912004+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": "01914b3c-def0-7f5a-b456-000000000020"
+}
+```
+
+```json title="auth.reset_password"
+{
+  "event": "auth.reset_password",
+  "timestamp": "2026-03-17T16:10:00.250117+00:00",
+  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
   "data": null
 }
 ```
 
-:::callout{variant="info" title="Data may be null"}
-For deletion events, `data` may be `null` since the resource no longer exists. The `resource_id` identifies what was deleted.
-:::
+## Custom headers
 
-## Custom Headers
-
-Webhooks support custom HTTP headers. Use them to authenticate requests to your endpoint:
+Webhooks can carry custom HTTP headers, sent on every delivery. Use them for a bearer token or a routing tag your endpoint expects:
 
 ```json title="Webhook with custom headers"
 {
@@ -96,24 +134,108 @@ Webhooks support custom HTTP headers. Use them to authenticate requests to your 
 }
 ```
 
-Common patterns:
-- **Bearer token**: Authenticate with a static secret
-- **HMAC signature**: Compute a signature over the payload for verification (implement in your handler)
-- **Custom identifiers**: Tag the source for routing in multi-webhook architectures
+FerrisKey refuses to save a webhook whose headers include `host`, `content-type`, `content-length`, `transfer-encoding`, `x-ferriskey-signature`, `x-ferriskey-timestamp` or `x-ferriskey-delivery-id`, because it sets those itself. The values are never returned by the API. Leave `headers` out of a `PUT` to keep the stored set; send it to replace the whole set.
+
+A static header proves that the caller knows a token. It does not prove that the body was not altered, and it can be replayed. The signature covers both.
+
+## Verifying the signature
+
+Every delivery is signed with the webhook's secret. The signature is the lowercase hex HMAC-SHA256 of this string:
+
+```text
+{x-ferriskey-timestamp}.{raw request body}
+```
+
+That is the decimal value of the timestamp header, a literal dot, and the exact bytes of the body. The key is the secret as you received it, taken as text: the 64 hexadecimal characters themselves, not their decoded bytes. Binding the timestamp into the signed string is what stops someone who captured a request from sending it again later with a fresh timestamp header.
+
+::::step-group
+:::step{title="Get the secret"}
+The secret is shown once, when you call `POST /realms/{realm_name}/webhooks/{webhook_id}/secret/rotate` or use Generate a new secret in the console. Neither creating nor reading a webhook returns it. Store it where your endpoint can read it.
+:::
+
+:::step{title="Keep the raw body"}
+Compute the HMAC over the bytes you received, before any JSON parsing. Parsing and serializing again changes whitespace and key order, and the signature no longer matches.
+:::
+
+:::step{title="Check the timestamp"}
+Reject the request when `x-ferriskey-timestamp` is far from your clock. Five minutes is a reasonable tolerance. FerrisKey signs every attempt with the time of that attempt, so retries and manual replays pass this check even when the original event is old. Check the header, not the `timestamp` field of the body.
+:::
+
+:::step{title="Compare in constant time"}
+Compute the expected signature and compare it with `x-ferriskey-signature` using a constant-time comparison.
+:::
+::::
+
+```js title="verify.mjs"
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+const TOLERANCE_SECONDS = 300
+
+export function verifyFerrisKeySignature(secret, headers, rawBody) {
+  const timestamp = headers['x-ferriskey-timestamp']
+  const received = headers['x-ferriskey-signature']
+  if (!timestamp || !received) return false
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp))
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) return false
+
+  const expected = createHmac('sha256', secret)
+    .update(`${timestamp}.`)
+    .update(rawBody)
+    .digest('hex')
+
+  const a = Buffer.from(expected, 'hex')
+  const b = Buffer.from(received, 'hex')
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+```
+
+Wired into a plain Node server, the function receives the body as a `Buffer`, before anything parses it:
+
+```js title="server.mjs"
+import { createServer } from 'node:http'
+import { verifyFerrisKeySignature } from './verify.mjs'
+
+const secret = process.env.FERRISKEY_WEBHOOK_SECRET
+
+createServer((req, res) => {
+  const chunks = []
+  req.on('data', (chunk) => chunks.push(chunk))
+  req.on('end', () => {
+    const rawBody = Buffer.concat(chunks)
+
+    if (!verifyFerrisKeySignature(secret, req.headers, rawBody)) {
+      res.writeHead(401).end()
+      return
+    }
+
+    const payload = JSON.parse(rawBody.toString('utf8'))
+    console.log(req.headers['x-ferriskey-delivery-id'], payload.event)
+    res.writeHead(204).end()
+  })
+}).listen(8080)
+```
+
+FerrisKey signs each attempt with the secret in force at that moment. Once you rotate, any attempt that reaches an endpoint still holding the old secret fails verification. If you answer it with a 4xx other than 408 or 429, FerrisKey does not retry it and you replay it by hand, so have the new secret ready for your endpoint before you generate it.
 
 ## Handling a delivery well
 
-### Respond Quickly
-Return a `2xx` status code as fast as possible. Process the payload asynchronously, enqueue it for background processing rather than doing heavy work in the request handler.
+### Respond quickly
 
-### Be Idempotent
-Your handler may receive the same event more than once (retries, network issues). Use the `resource_id` and `timestamp` combination to deduplicate.
+Return a `2xx` as soon as you have stored the payload, and do the heavy work in the background. FerrisKey stops waiting after 10 seconds, records `transport_error`, and tries again later.
 
-### Validate the Source
-Check custom headers (e.g., a shared secret in `Authorization`) to verify the request comes from FerrisKey. Don't process payloads from unknown sources.
+### Be idempotent
 
-### Handle missing data
-The `data` field may be `null` for deletion events. Always check before accessing nested fields.
+The same delivery can reach you more than once: automatic retries after a timeout, or a manual replay. Use `x-ferriskey-delivery-id` as the deduplication key. It is the same on every attempt of one delivery. `resource_id` and `timestamp` cannot do that job, since `resource_id` is usually the realm.
 
-### Log Everything
-Log incoming payloads for debugging. When a webhook handler fails silently, logs are the only way to diagnose the issue.
+### Verify before you parse
+
+Check the signature first. Do not act on a payload from a caller that cannot produce one.
+
+### Read `data` by event
+
+`data` can be an object, a string, an array or `null`, depending on the trigger. Branch on `event` before you read fields, as the table above lays out.
+
+### Log the delivery id
+
+Log `x-ferriskey-delivery-id` with each payload. When a handler fails silently, that id is how you find the matching row under [Deliveries and retries](/en/modules/webhooks/deliveries).

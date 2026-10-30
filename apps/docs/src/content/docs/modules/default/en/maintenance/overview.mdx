@@ -5,14 +5,14 @@ icon: wrench
 order: 100
 ---
 
-# Maintenance Mode
+# Maintenance mode
 
 Maintenance mode temporarily restricts who can authenticate through a client, without touching the client's configuration. It exists for the window where an application is mid-migration and should not be letting users in, but you do not want to disable the client and then try to remember exactly how it was set up.
 
 Two things make it different from disabling a client:
 
-- **It is reversible by one switch**, and it changes nothing else. Redirect URIs, scopes, secrets all stay as they are.
-- **It has a hole in it, on purpose.** A whitelist of users and roles keeps authenticating, so your own team can verify the migration on the real client before reopening it.
+- It is reversible by one switch, and it changes nothing else. Redirect URIs, scopes and secrets all stay as they are.
+- It has a hole in it, on purpose. A whitelist of users and roles keeps authenticating, so your own team can verify the migration on the real client before reopening it.
 
 ## Closing a client
 
@@ -34,23 +34,49 @@ PUT /realms/{realm_name}/clients/{client_id}/maintenance
 | Field | Default | Description |
 |---|---|---|
 | `enabled` | required | `true` closes the client to everyone but the whitelist |
-| `reason` | none | Message displayed to blocked users on the login page |
-| `session_strategy` | `expire` | What happens to sessions that are already open |
+| `reason` | none | Message shown to blocked users. Without one, they see "This service is currently under maintenance" |
+| `session_strategy` | `expire` | `expire` or `terminate`. See below |
 
 The switch applies as soon as you flip it. There is no drain period.
 
+<Callout variant="info" title="Write the reason as the user will read it">
+
+`reason` is what a blocked user is told, and they were trying to get on with their day. "Migration under way, back at 2pm" answers their actual question. "MAINT-4417" does not.
+
+</Callout>
+
+## What maintenance blocks
+
+Maintenance gates the moment a user gets in. A user who is not on the whitelist is refused with the `reason`, whichever way the sign-in completes. The login page's `authenticate` call answers 503:
+
+| Way in | Blocked |
+|---|---|
+| Password sign-in on the login page | Yes |
+| The password grant (`grant_type=password`) | Yes |
+| Coming back through an existing SSO session | Yes |
+| Answering the second-factor challenge: TOTP code or recovery code | Yes |
+| Finishing a required action at sign-in: OTP or passkey enrolment, a forced password update | Yes |
+| Passkey sign-in | Yes |
+| Magic link | Yes |
+| Password reset that continues the original sign-in (`login_url`) | Yes |
+| Sign-in through an identity provider (broker) | Yes |
+| Device flow, when the device collects its tokens | Yes |
+
+Every login completion goes through the same check, so a path that skips the password does not skip maintenance. The device flow is the odd one out: the check runs when the device collects its tokens, after the user approved the code, and the refusal comes back as a 500 `token_issuance_failed` that quotes the reason. The code is already spent by then, so the device has to start over.
+
+The token response that `reset-password` returns in its body is issued without a client, so maintenance does not apply to it.
+
+Maintenance does not touch sessions that already exist. A refresh token keeps refreshing, and an access token stays valid until it expires, because the check runs at sign-in and not on each request. A `client_credentials` token has no user behind it and is not affected.
+
 ### Session strategy
 
-| Value | Behaviour |
-|---|---|
-| `expire` | Open sessions live until they run out. The default |
-| `terminate` | Every session is cut on the spot |
+`session_strategy` takes `expire` (the default) or `terminate`, and the console shows it as "Expire naturally" and "Terminate immediately". In FerrisKey 0.10.0 the server stores the value on the client and writes it into the audit event, but the sign-in checks never read it. Under both values, sessions opened before maintenance began keep working until they run out.
 
-`expire` is the polite option and the right default: people already working keep working, and nobody new gets in. Reach for `terminate` when the reason for closing the client is that the sessions themselves are the problem — a leaked token, a compromised integration — and letting them run to expiry is the thing you are trying to prevent.
+<Callout variant="warning" title="terminate does not cut sessions yet">
 
-:::callout{variant="info" title="Write the reason as the user will read it"}
-`reason` is shown on the login page, to someone who was trying to get on with their day. "Migration under way, back at 2pm" answers their actual question. "MAINT-4417" does not.
-:::
+If you close a client because a token leaked, do not rely on `terminate`. Revoke the sessions that matter with `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}`, which needs `manage_users` and invalidates that session's tokens at once.
+
+</Callout>
 
 ## The whitelist
 
@@ -68,7 +94,7 @@ DELETE /realms/{realm_name}/clients/{client_id}/maintenance/whitelist/{entry_id}
 
 ### Per realm
 
-Realm-level entries are inherited by every client of the realm placed under maintenance — the standing list of people who should never be locked out.
+Realm-level entries are inherited by every client of the realm placed under maintenance. They are the standing list of people who should never be locked out.
 
 <img class="only-light" src="/dashboard/realm_maintenance-light.jpg" alt="FerrisKey realm settings maintenance tab showing default maintenance members for users and roles" />
 <img class="only-dark" src="/dashboard/realm_maintenance-dark.jpg" alt="FerrisKey realm settings maintenance tab showing default maintenance members for users and roles" />
@@ -79,7 +105,7 @@ POST   /realms/{realm_name}/settings/maintenance/whitelist
 DELETE /realms/{realm_name}/settings/maintenance/whitelist/{entry_id}
 ```
 
-```json title="Adding an entry — supply one or the other"
+```json title="Adding an entry: supply one or the other"
 {
   "role_id": "01a0d3dd-a750-7817-aa2b-7e8b98f68e66"
 }
@@ -87,9 +113,11 @@ DELETE /realms/{realm_name}/settings/maintenance/whitelist/{entry_id}
 
 Both `user_id` and `role_id` are optional in the payload; supply the one that describes the entry you want.
 
-:::callout{variant="warning" title="Put the role on the realm whitelist before you need it"}
-A role-based realm entry — your platform team's role, say — is the difference between a planned maintenance window and an incident. Adding a whitelist entry requires authenticating to the admin console, and if the console's own client is the one you just closed, you have locked yourself out of the tool you need to unlock it.
-:::
+<Callout variant="warning" title="Put the role on the realm whitelist before you need it">
+
+A role-based realm entry, your platform team's role for example, is the difference between a planned maintenance window and an incident. Adding a whitelist entry requires authenticating to the admin console, and if the console's own client is the one you just closed, you have locked yourself out of the tool you need to unlock it.
+
+</Callout>
 
 ## Permissions
 
@@ -102,7 +130,7 @@ A role-based realm entry — your platform team's role, say — is the differenc
 
 ## What gets recorded
 
-Both transitions are observable, which matters because maintenance mode is a thing that gets left on by accident:
+Both transitions are observable, which matters because maintenance mode gets left on by accident:
 
 - [SeaWatch](/en/modules/seawatch/event-types) records `client_maintenance_enabled` and `client_maintenance_disabled`.
 - [Webhooks](/en/modules/webhooks/triggers) fire `client.maintenance.enabled` and `client.maintenance.disabled`.

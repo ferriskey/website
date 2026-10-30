@@ -1,0 +1,333 @@
+---
+title: Evaluation
+description: "The AuthZEN endpoints a policy enforcement point calls: subjects, resources, batches, failure behaviour, and the agent and MCP types."
+icon: list-checks
+order: 112
+---
+
+# Evaluation
+
+A policy enforcement point (PEP) asks FerrisKey whether something is allowed through two AuthZEN 1.0 endpoints, and finds them through a metadata document. These three routes are the whole AuthZEN surface of FerrisKey.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /realms/{realm_name}/authzen/access/v1/evaluation` | One question, one decision |
+| `POST /realms/{realm_name}/authzen/access/v1/evaluations` | Up to 100 questions in one call |
+| `GET /.well-known/authzen-configuration/realms/{realm_name}/authzen` | Metadata. No token needed |
+
+Like the rest of the module they exist only when the instance runs with `AUTHZ_ENABLED=true`, and the realm must have switched authorization on. See [the gates](/en/modules/authz/overview#the-gates).
+
+## Who can call
+
+The caller has to be a service account that holds `evaluate_authorization` (or `manage_realm`) in the realm of the URL. Build the PEP as a confidential client with the service account enabled and authenticate it with the client credentials grant. The [overview](/en/modules/authz/overview#quick-start) walks through it.
+
+The checks run in a fixed order, and the order decides which status you see. The token comes first (401), then the body (400 when it cannot be parsed or is incomplete), then the realm and the caller. A realm that does not exist, or a service account that belongs to another realm, is a 404. A caller that is not allowed to evaluate, whether a user or a service account without the permission, is a 403. Only then does FerrisKey look at whether the realm has authorization switched on, and answer a 404 with the reason `authorization_not_enabled` if it has not.
+
+## One evaluation
+
+The example runs against a schema that declares a document with two attributes and an update action that takes a context:
+
+```text
+namespace App {
+  entity Document = { classification: String, owner_team: String };
+
+  action "document:update" appliesTo {
+    principal: [FerrisKey::User],
+    resource: [Document],
+    context: { ip: String, time: String },
+  };
+}
+```
+
+```http
+POST /realms/acme/authzen/access/v1/evaluation
+```
+
+```json title="Request body"
+{
+  "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" },
+  "action": { "name": "document:update" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "internal", "owner_team": "eng" }
+  },
+  "context": { "ip": "10.0.3.4", "time": "2026-09-24T10:00:00Z" }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `subject` | yes | `type` and `id` are required. See [subjects](#subjects) |
+| `action.name` | yes | An action declared in the realm's schema. `action.properties` is accepted and ignored |
+| `resource` | yes | `type` and `id` are required. `properties` are its attributes |
+| `context` | no | A JSON object. When the realm has a schema it is checked against the `context` declared on the action |
+
+```json title="Response"
+{ "decision": true }
+```
+
+A refusal is a normal answer: a 200 with `"decision": false`. Every other status means FerrisKey could not decide, and carries no `decision` field.
+
+When the caller also holds `view_authorization` (or `manage_authorization`, or `manage_realm`), the response says which policies decided:
+
+```json title="Response for a caller that can view authorization"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["editors-can-update"] } }
+}
+```
+
+`reason_admin.policies` lists the names of the policies Cedar reports as determining the decision: the permitting ones for an allow, the forbidding ones for an explicit deny, and an empty list when nothing matched. It is meant for the people who maintain the rules, not for end users.
+
+If the request has an `X-Request-ID` header, the response echoes it, error responses included.
+
+## Subjects
+
+The `type` of the subject tells FerrisKey where the facts about it come from.
+
+| `type` | `id` | Where the facts come from |
+|---|---|---|
+| `FerrisKey::User` | The UUID of a user of the realm | FerrisKey reads them from the database. `properties` is ignored |
+| `FerrisKey::Client` | The UUID of a client of the realm | FerrisKey reads the roles of its service account. A client that is disabled, has no service account, or whose service account user is disabled, is denied |
+| `user` | Any string | The PEP asserts them in `properties` |
+| `agent` or `client` | Any string, usually the client id | The PEP asserts them. Becomes a `FerrisKey::Agent` and only `properties.roles` is read |
+| Any other type, such as `App::Device` | Any string | The request describes it. `properties` are its attributes and it has no parents. The type must exist in the realm's schema |
+
+A `FerrisKey::User` or `FerrisKey::Client` that does not exist, or belongs to another realm, is denied rather than rejected. Any other `FerrisKey::` type as a subject, a `FerrisKey::Role` for instance, is a 400.
+
+An asserted subject is taken on the caller's word, which is why only a service account with `evaluate_authorization` may call. Use `FerrisKey::User` whenever you have the user's UUID, and keep `user` for a PEP that already holds the roles and groups and has no UUID to give.
+
+### What FerrisKey reads for a user
+
+For a `FerrisKey::User`, FerrisKey builds the entities below from the database on every request.
+
+| Entity | Attributes | Is a member of |
+|---|---|---|
+| `FerrisKey::User` | `username`, `email` (when set), `email_verified`, `enabled`, and one string tag per [user attribute](/en/discover/core-concepts/users#attributes) | The roles assigned to the user, the [organization groups](/en/modules/organization/groups) they belong to, and the organizations they are a member of |
+| `FerrisKey::Role` | `name` | Nothing |
+| `FerrisKey::Group` | `name` | Its parent group, if any, and its organization |
+| `FerrisKey::Organization` | `alias`, `name` | Nothing |
+| `FerrisKey::Client` | `client_id` | The roles of its service account |
+
+Cedar's `in` follows membership transitively, so `principal in FerrisKey::Group::"<id>"` is true for a member of any child group, and `principal in FerrisKey::Organization::"<id>"` is true for a member of any group of that organization. Ids are UUIDs. User attributes are tags, read with `hasTag` and `getTag`:
+
+```text
+permit (principal, action == App::Action::"document:read", resource)
+when { principal.hasTag("department") && principal.getTag("department") == "legal" };
+```
+
+FerrisKey does not deny a disabled user on its own. `enabled` is an attribute like the others, so a policy that must refuse disabled accounts has to test `principal.enabled`.
+
+### Asserting a user
+
+For `type: "user"`, FerrisKey builds a `FerrisKey::User` from `properties`:
+
+| `properties` key | Result | Default |
+|---|---|---|
+| `username` | Attribute `username` | The `id` |
+| `email` | Attribute `email` | Absent |
+| `email_verified` | Attribute `email_verified` | `false` |
+| `enabled` | Attribute `enabled` | `true` |
+| `roles` | Attribute `roles`, and a `FerrisKey::Role` parent for each string | Empty |
+| `groups` | A `FerrisKey::Group` parent for each string | Empty |
+| `organisation` | Attribute `organisation`, and a `FerrisKey::Organization` parent | Absent |
+
+The key is spelled `organisation`. The strings in `roles`, `groups` and `organisation` are the ids your policies match, so `principal in FerrisKey::Group::"support"` works for `"groups": ["support"]`.
+
+## Resources and context
+
+`resource.type` and `resource.id` are required. `properties` becomes the attributes of the resource, and when the realm has a schema they have to fit it: an unknown resource type, a missing attribute or an attribute of the wrong type is a 400. An attribute declared as an entity, such as `owner: FerrisKey::User`, is sent in Cedar's JSON form, `{ "__entity": { "type": "FerrisKey::User", "id": "..." } }`.
+
+A request cannot describe the types FerrisKey resolves itself. A resource of type `FerrisKey::User`, `FerrisKey::Role`, `FerrisKey::Group`, `FerrisKey::Organization` or `FerrisKey::Client` is a 400. The agent types `FerrisKey::Agent`, `FerrisKey::Tool`, `FerrisKey::McpServer`, `FerrisKey::Resource` and `FerrisKey::Prompt` are the exception, because they only exist in requests. See [agents and MCP](#agents-and-mcp).
+
+The `context` is passed to Cedar as sent. FerrisKey adds nothing to it, and removes only `arguments` for the agent actions described [below](#agents-and-mcp).
+
+## Batches
+
+`/evaluations` implements AuthZEN's boxcarring. Fields at the top level are defaults, and each item of `evaluations` may override `subject`, `action`, `resource` and `context`. A `context` on an item replaces the default, it is not merged into it.
+
+```json title="Request body"
+{
+  "action": { "name": "document:update" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "internal", "owner_team": "eng" }
+  },
+  "context": { "ip": "10.0.3.4", "time": "2026-09-24T10:00:00Z" },
+  "evaluations": [
+    { "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" } },
+    { "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e71" } }
+  ],
+  "options": { "evaluations_semantic": "execute_all" }
+}
+```
+
+```json title="Response"
+{
+  "evaluations": [
+    { "decision": true },
+    { "decision": false }
+  ]
+}
+```
+
+The answers come back in the order of the items. Here the first user holds the role the policy names and the second does not.
+
+`evaluations` must hold between 1 and 100 items. If it is absent, the request is a single evaluation and the response has the single-evaluation shape. A subject, action or resource that is neither on the item nor at the top level is a 400 for the whole request.
+
+### Semantics
+
+`options.evaluations_semantic` says when to stop.
+
+| Value | Behaviour |
+|---|---|
+| `execute_all` | Every item is evaluated. The default |
+| `deny_on_first_deny` | Stops after the first deny |
+| `permit_on_first_permit` | Stops after the first permit |
+
+A response that stopped early holds only the items evaluated so far, still in request order, so it can be shorter than the request. Any other value is a 400.
+
+### An invalid item is a deny
+
+An item that the schema rejects, say with an unknown action, does not fail the batch. It becomes a deny that carries the reason, and it counts as a deny when the semantic decides whether to stop:
+
+```json title="One item of the response"
+{
+  "decision": false,
+  "context": { "error": { "status": 400, "message": "<why the item was rejected>" } }
+}
+```
+
+Problems that concern the whole call are not per-item: a missing permission, a realm without authorization and a malformed body are answered once, with no decisions.
+
+## When something goes wrong
+
+| Status | Meaning |
+|---|---|
+| 200 | A decision, allow or deny |
+| 400 | The request is malformed or too large, or does not fit the schema. That covers a missing `type`, `id` or `action.name`, an unknown action or resource type, a wrong attribute type, an undeclared context key, a `FerrisKey::` type that FerrisKey does not accept in that position, an `evaluations` array that is empty or over 100 items, and an unknown `evaluations_semantic` |
+| 401 | No token, or an invalid one |
+| 403 | The caller is not a service account holding `evaluate_authorization` or `manage_realm` |
+| 404 | The module is not mounted, the realm does not exist, the caller belongs to another realm, or the realm has not switched authorization on |
+| 500 | An internal error |
+
+Several situations end in a deny and not in an error:
+
+- No policy matches. Cedar denies by default.
+- A policy fails while it is evaluated, for example by reading an attribute the subject does not have. The decision is then a deny even if another policy would have permitted, and `reason_admin` names the faulty policy.
+- The subject is a `FerrisKey::User` or `FerrisKey::Client` that FerrisKey cannot find in the realm.
+- The stored rules do not compile and no earlier version is held in memory.
+
+## Fresh rules
+
+A replica keeps the compiled rules of a realm in memory and checks the realm's `version` at most once per second. A new schema, policy or template therefore reaches every replica within about a second. Switching the realm off or on is seen on the same schedule.
+
+If rules that were stored fail to compile, the replica keeps serving the previous ones and logs the failure. Nothing is reported to the caller. Writes are validated before they are stored, so this is a safety net more than an expected path.
+
+Facts about the subject are not cached. Roles, groups and attributes are read on each request.
+
+## Agents and MCP
+
+The built-in schema describes the pieces of an agent calling tools on an MCP server, so a realm can write policies about them without declaring anything. They exist once the realm has a schema (see [the built-in schema](/en/modules/authz/policies#the-built-in-schema)).
+
+| Type | Attributes | Is a member of |
+|---|---|---|
+| `FerrisKey::Agent` | `client_id` | Roles |
+| `FerrisKey::McpServer` | `name` | Nothing |
+| `FerrisKey::Tool` | `server`, `tool`, and optional `annotations` with the optional booleans `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` | A `McpServer` |
+| `FerrisKey::Resource` | `server`, `uri` | A `McpServer` |
+| `FerrisKey::Prompt` | `server`, `name` | A `McpServer` |
+
+Three actions apply to them. They live in the `FerrisKey` namespace, so a policy writes `FerrisKey::Action::"call_tool"` and not `App::Action::...`.
+
+| Action | Resource | Principals |
+|---|---|---|
+| `call_tool` | `FerrisKey::Tool` | `FerrisKey::User`, `FerrisKey::Agent`, `FerrisKey::Client` |
+| `read_resource` | `FerrisKey::Resource` | the same |
+| `get_prompt` | `FerrisKey::Prompt` | the same |
+
+All three take an `AgentContext`, which the PEP fills in:
+
+| Key | Type | Description |
+|---|---|---|
+| `agent` | String | Required. Names the agent making the call, for policies to test |
+| `delegated` | Boolean | Required. Whether the call is made on behalf of a user |
+| `act` | Record | Optional. `sub` and `client_id`, with the previous actor nested in a further `act`, three levels at most |
+| `time` | Record | Required. `weekday` and `hour` as integers, `iso` as a string. The PEP decides how weekdays are numbered |
+
+`act` has the shape of the `act` claim in a token issued by [token exchange](/en/discover/core-concepts/token-exchange) with an actor token: the current actor, and the earlier ones nested inside. FerrisKey does not read the token for you. The PEP copies the claim into `context.act`, together with the clock values and the agent name. How an agent obtains its token in the first place is covered in [MCP](/en/discover/core-concepts/mcp).
+
+For these three actions, `context.arguments` is removed before the request is checked and evaluated. It is neither validated nor visible to policies.
+
+### Shorthand for MCP entities
+
+A resource of type `tool`, `resource`, `prompt` or `mcp_server` (also written `mcpserver`) is expanded into the matching built-in type. By convention the `id` is written `server/leaf`. FerrisKey uses it to fill in whatever `properties` leaves out, and the whole `id` stays the entity id.
+
+| `type` | Becomes | Attributes, with their default |
+|---|---|---|
+| `tool` | `FerrisKey::Tool` | `server` (`properties.server`, else the `id` before the first `/`), `tool` (`properties.tool`, else the `id` after it), `annotations` when given |
+| `resource` | `FerrisKey::Resource` | `server` as above, `uri` (`properties.uri`, else the `id`) |
+| `prompt` | `FerrisKey::Prompt` | `server` as above, `name` (`properties.name`, else the `id` after the first `/`) |
+| `mcp_server` | `FerrisKey::McpServer` | `name` (`properties.name`, else the `id`) |
+
+Tools, resources and prompts are made members of the `FerrisKey::McpServer` named by `server`, so a policy can target a whole server with `resource in FerrisKey::McpServer::"files"`.
+
+### An example
+
+A policy that lets the members of one group call read-only tools, as long as the agent is Claude:
+
+```text
+permit (
+  principal in FerrisKey::Group::"support",
+  action == FerrisKey::Action::"call_tool",
+  resource is FerrisKey::Tool
+) when {
+  context.agent == "claude" &&
+  resource has annotations &&
+  resource.annotations has readOnlyHint &&
+  resource.annotations.readOnlyHint
+};
+```
+
+The PEP asks about a user it knows only from the token, so it asserts the groups:
+
+```json title="Request body"
+{
+  "subject": {
+    "type": "user",
+    "id": "9b4c7a52-0000-4000-8000-000000000001",
+    "properties": { "roles": ["dev"], "groups": ["support"] }
+  },
+  "action": { "name": "call_tool" },
+  "resource": {
+    "type": "tool",
+    "id": "files/read",
+    "properties": { "annotations": { "readOnlyHint": true } }
+  },
+  "context": {
+    "agent": "claude",
+    "delegated": true,
+    "time": { "weekday": 3, "hour": 10, "iso": "2026-10-22T10:00:00Z" }
+  }
+}
+```
+
+The decision is `true`. The same call for a tool without `readOnlyHint`, for a user outside the group, or for another agent name is `false`.
+
+## The metadata document
+
+```http
+GET /.well-known/authzen-configuration/realms/{realm_name}/authzen
+```
+
+```json title="Response"
+{
+  "policy_decision_point": "https://sso.example.com/realms/acme/authzen",
+  "access_evaluation_endpoint": "https://sso.example.com/realms/acme/authzen/access/v1/evaluation",
+  "access_evaluations_endpoint": "https://sso.example.com/realms/acme/authzen/access/v1/evaluations"
+}
+```
+
+The policy decision point identifier is `{root}/realms/{realm_name}/authzen`. Because that identifier has a path, the specification puts the well-known segment between the host and the path, which is why the route looks the way it does. When FerrisKey runs under `SERVER_ROOT_PATH`, the root path is part of the identifier and of the route. The host comes from `SERVER_PUBLIC_URL` when it is set, and from the request otherwise. The document answers for any existing realm, with or without authorization switched on, and a realm that does not exist is a 404.

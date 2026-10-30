@@ -9,14 +9,14 @@ order: 22
 
 Four things in FerrisKey are portable: portal themes, portal layouts, email templates, and password hashes coming from another identity provider. Everything else is configured per realm and stays there.
 
-The four are not variations on one feature — they solve different problems, and the asymmetries are deliberate.
+The four solve different problems, and the asymmetries between them are deliberate.
 
 | Resource | Export | Import | Why |
 |---|---|---|---|
-| Portal theme | ✓ | ✓ | Build a brand once, ship it to every realm |
-| Portal layout | ✓ | ✓ | Same, for the page structure |
-| Email template | ✓ | ✓ | Same, and hand MJML to a designer |
-| Password hash | — | ✓ | Migrate users off another IAM. There is no export, on purpose |
+| Portal theme | Yes | Yes | Build a brand once, ship it to every realm |
+| Portal layout | Yes | Yes | Same, for the page structure |
+| Email template | Yes | Yes | Same, and hand MJML to a designer |
+| Password hash | No | Yes | Migrate users off another IAM. There is no export, on purpose |
 
 ## Portal themes
 
@@ -25,14 +25,16 @@ GET  /realms/{realm_name}/portal/themes/{theme_id}/export
 POST /realms/{realm_name}/portal/themes/import
 ```
 
-The export is a JSON envelope carrying the theme's design tokens, **every one of its twelve page trees**, and the layout that frames it — the layout by value, inside the file. That last part is what makes the file genuinely self-contained: importing it into another realm or another deployment recreates the layout too and binds it to the new theme, rather than dangling a reference to a layout id that does not exist there.
+The export is a JSON envelope carrying the theme's design tokens, all 13 of its page trees, and the layout that frames it. The layout travels by value, inside the file. That is what makes the file self-contained: importing it into another realm or another deployment recreates the layout too and binds it to the new theme, rather than dangling a reference to a layout id that does not exist there.
 
 <img class="only-light" src="/dashboard/portal_themes-light.jpg" alt="FerrisKey portal themes tab with the Import action" />
 <img class="only-dark" src="/dashboard/portal_themes-dark.jpg" alt="FerrisKey portal themes tab with the Import action" />
 
-:::callout{variant="info" title="An imported theme is not active"}
-Import creates the theme; it does not activate it. Activation is a separate call, and it is gated on every page being valid — see [Portal](/en/modules/portal/overview#activation-is-gated-on-validity). That ordering is what lets you import into production and review before anyone sees it.
-:::
+<Callout variant="info" title="An imported theme is not active">
+
+Import creates the theme; it does not activate it. Activation is a separate call, and it is gated on every page being valid. See [Portal](/en/modules/portal/overview#activation-is-gated-on-validity). That ordering is what lets you import into production and review before anyone sees it.
+
+</Callout>
 
 ## Portal layouts
 
@@ -44,9 +46,9 @@ POST /realms/{realm_name}/portal-layouts/import
 <img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="FerrisKey portal layouts tab with the Import action and layout counters" />
 <img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="FerrisKey portal layouts tab with the Import action and layout counters" />
 
-A layout exports as its tree. On import the tree is **validated before it is stored** — and that is the interesting difference: the ordinary create endpoint is fed by the console's own builder, which only ever produces valid trees, so it trusts its input. The import endpoint cannot make that assumption, so it checks.
+A layout exports as its tree. On import the tree is validated before it is stored, and that is the interesting difference: the ordinary create endpoint is fed by the console's own builder, which only ever produces valid trees, so it trusts its input. The import endpoint cannot make that assumption, so it checks.
 
-Practical consequence: if you are generating layouts from a script, import is the endpoint that will tell you your tree is wrong. Create will accept it and you will find out when the portal renders.
+If you are generating layouts from a script, import is the endpoint that will tell you your tree is wrong, with a `422`. Create will accept it and you will find out when the portal renders.
 
 ## Email templates
 
@@ -66,15 +68,17 @@ Export takes a `format`:
 | `json` (default) | The builder envelope | You are moving the template between realms and want it to stay editable in the console |
 | `mjml` | The rendered MJML markup | You are handing it to a designer, or keeping it in version control |
 
-Import accepts either shape. MJML is parsed back into a builder structure so the imported template stays editable rather than becoming an opaque blob.
+Import accepts either shape. MJML is parsed back into a builder structure so the imported template stays editable rather than becoming an opaque blob. The body carries exactly one of `structure`, `tree` or `mjml`.
 
-:::callout{variant="warning" title="MJML round-trips lose everything outside mj-body"}
-The builder can only represent what is inside `<mj-body>`. Anything outside it — `<mj-head>`, and therefore custom fonts, `<mj-style>`, breakpoint declarations and preview text set that way — **is dropped on import**.
+<Callout variant="warning" title="MJML round-trips lose everything outside mj-body">
 
-So a `json` → `json` round trip is lossless, and an `mjml` round trip is not. If a designer edits the MJML and adds anything in the head, importing it back silently discards that part. Export as `json` for moving templates, and treat `mjml` as a one-way door out.
-:::
+The builder can only represent what is inside `<mj-body>`. Anything outside it is dropped on import: `<mj-head>`, and with it custom fonts, `<mj-style>`, breakpoint declarations and preview text set that way.
 
-A template's **type is fixed at creation** and decides which variables it may use, so an import lands as the type the file declares. See [Email & Templates](/en/discover/guides/email) for the variables each type carries.
+So a `json` to `json` round trip is lossless, and an `mjml` round trip is not. If a designer edits the MJML and adds anything in the head, importing it back silently discards that part. Export as `json` for moving templates, and treat `mjml` as a one-way door out.
+
+</Callout>
+
+A template's type is fixed at creation and decides which variables it may use. Import takes it from `email_type` in the request body, which is required, raw MJML included. Imported content goes through the same server-side cleaning as any other template, so unsafe markup is removed on the way in. See [Email & Templates](/en/discover/guides/email) for the variables each type carries and what the cleaning removes.
 
 ## Password hashes
 
@@ -82,42 +86,50 @@ A template's **type is fixed at creation** and decides which variables it may us
 POST /realms/{realm_name}/users/{user_id}/credentials/import
 ```
 
-This is the migration endpoint: it stores a hash produced by **another** identity provider as the user's password credential, so your users keep their existing passwords when you move to FerrisKey.
+This is the migration endpoint: it stores a hash produced by another identity provider as the user's password credential, so your users keep their existing passwords when you move to FerrisKey.
 
 ```json title="Request body"
 {
   "algorithm": "bcrypt",
-  "secret_data": "$2b$12$…",
+  "secret_data": "$2b$12$...",
   "hash_iterations": 12,
-  "salt": null
+  "salt": null,
+  "temporary": false
 }
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `algorithm` | yes | `bcrypt` or `argon2` |
+| `algorithm` | yes | `bcrypt`, `argon2id`, `argon2i` or `argon2d` |
 | `secret_data` | yes | The hash itself |
-| `hash_iterations` | yes | Cost factor from the source system |
+| `hash_iterations` | yes | Cost factor from the source system. It has to match the cost written in the hash |
 | `salt` | no | When the source stores it separately from the hash |
+| `temporary` | no | `true` makes the user set a new password at their next sign-in. Defaults to `false` |
 
-Supported algorithms are **bcrypt** (`$2a$`, `$2b$`, `$2y$`) and **argon2** as a PHC string.
+A bcrypt hash starts with `$2a$`, `$2b$` or `$2y$` and has a cost from 4 to 14. An argon2 hash is a PHC string whose algorithm matches the `algorithm` field and whose parameters stay within 262144 KiB of memory, 16 iterations and a parallelism of 8. For both, `hash_iterations` must equal the cost inside the hash.
 
-### The upgrade happens at first login
+A hash that breaks one of these rules is refused with `422`: the entry names the field `secret_data` and carries the code `invalid_password_hash`. A user who already has a password credential gets `409`; delete the credential first if you mean to replace it.
 
-An imported bcrypt hash is re-encoded as **argon2id the first time the user successfully signs in** — the only moment the plaintext is available to hash again. Until then the account authenticates against the original hash.
+### The upgrade happens at first sign-in
+
+An imported hash is re-encoded as argon2id the first time the user signs in successfully, the only moment the plaintext is available to hash again. Until then the account authenticates against the original hash. The same upgrade applies to an argon2 hash whose cost differs from the server's configured cost. If it fails, the sign-in still succeeds and FerrisKey tries again at the next one.
 
 That has two consequences worth planning for:
 
-- **Your realm will hold a mix of algorithms** for as long as some migrated users have not signed in. That is expected, not a defect.
-- **The upgrade is observable.** It raises `password_imported` in [SeaWatch](/en/modules/seawatch/event-types), so counting those events tells you how far through the migration your user base actually is — which is a far better signal than counting imported accounts.
+- Your realm will hold a mix of algorithms for as long as some migrated users have not signed in. That is expected, not a defect.
+- The upgrade is not an event. The `password_imported` event in [SeaWatch](/en/modules/seawatch/event-types) is written once, by the import call itself, with the administrator who made the call as the actor. It marks the import, so counting those events tells you how many hashes you loaded, not how far the migration has got.
 
-:::callout{variant="danger" title="There is no export counterpart, and that is the point"}
-FerrisKey will not hand you its password hashes. An endpoint that exports credential material is an endpoint that exfiltrates it, and no legitimate migration needs to leave *this* way. If you are moving off FerrisKey, run both systems side by side and let users re-authenticate.
-:::
+To see how far the migration has got, read each user's credentials: the password entry shows the `algorithm` of the stored hash, `bcrypt` until the first sign-in and `argon2id` after it.
+
+<Callout variant="danger" title="There is no export counterpart, and that is the point">
+
+FerrisKey will not hand you its password hashes. An endpoint that exports credential material is an endpoint that exfiltrates it, and no legitimate migration needs to leave this way. If you are moving off FerrisKey, run both systems side by side and let users re-authenticate.
+
+</Callout>
 
 ### The local policy still applies afterwards
 
-An imported password is not checked against the realm's [password policy](/en/discover/core-concepts/password-policy) — it cannot be, since the plaintext was never seen. The policy applies the next time that user changes their password. If the source system's rules were weaker than yours, `max_age_days` is the lever that forces the whole migrated population through a change.
+An imported password is not checked against the realm's [password policy](/en/discover/core-concepts/password-policy), since the plaintext was never seen. The policy applies the next time that user changes their password. To make the whole migrated population choose a new one, reset each password as temporary after the import or import with `temporary` set to `true`.
 
 ## What is not portable
 
@@ -129,7 +141,7 @@ Realms, clients, users, roles, scopes and organizations have no export/import en
 |---|---|---|
 | Portal theme, portal layout | `manage_realm` | `manage_realm` |
 | Email template | `view_email_templates` or `manage_email_templates` | `manage_email_templates` |
-| Password hash | — | `manage_users` |
+| Password hash | none | `manage_users` |
 
 `manage_realm` grants all of them.
 

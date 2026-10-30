@@ -1,17 +1,26 @@
 ---
-title: Querying & Analytics
-description: "Query Compass flows, filter by criteria, aggregate statistics, and build authentication dashboards."
+title: Querying and analytics
+description: "Read Compass flows, statistics and daily activity through four endpoints: parameters, pagination, and the queries that answer common questions."
 icon: bar-chart-3
 order: 32
 ---
 
-# Querying & Analytics
+# Querying and analytics
 
-Compass stores every authentication flow in PostgreSQL, making them queryable through the admin API. Use this data to build dashboards, debug failures, and understand authentication patterns across your realms.
+Compass keeps every traced authentication flow in PostgreSQL for 30 days and serves it through four read-only endpoints. Use them to debug a failed sign-in, watch authentication latency, and see how a realm's traffic changes day by day.
 
-## Flow Statistics
+All four need `view_events`, `manage_events` or `manage_realm`. Paths are written without a root path, the server default. If `SERVER_ROOT_PATH` is set, every path gains that prefix.
 
-The stats endpoint returns aggregate metrics for a realm at a glance:
+| Endpoint | Returns |
+|---|---|
+| `GET /realms/{realm_name}/compass/v1/stats` | Counts and average duration for the whole realm |
+| `GET /realms/{realm_name}/compass/v1/flows` | One page of flows with their steps |
+| `GET /realms/{realm_name}/compass/v1/flows/{flow_id}` | One flow with its steps |
+| `GET /realms/{realm_name}/compass/v1/activity/daily` | Per-day counts for a date window |
+
+## Flow statistics
+
+The stats endpoint returns aggregate figures for the realm at a glance:
 
 ```json title="GET /realms/{realm_name}/compass/v1/stats"
 {
@@ -25,62 +34,94 @@ The stats endpoint returns aggregate metrics for a realm at a glance:
 }
 ```
 
-| Metric | Description |
+| Field | Description |
 |---|---|
-| `total` | Total number of recorded flows |
-| `success_count` | Flows that completed with `success` status |
-| `failure_count` | Flows that ended in `failure` |
-| `pending_count` | Flows still in `pending` state (likely expired or abandoned) |
-| `avg_duration_ms` | Average flow duration across all completed flows |
+| `total` | Every recorded flow, including the `expired` ones |
+| `success_count` | Flows with status `success` |
+| `failure_count` | Flows with status `failure` |
+| `pending_count` | Flows still `pending`. Abandoned flows leave this count after 12 hours, when they become `expired` |
+| `avg_duration_ms` | Average `duration_ms` over the flows that have one. Null when none does |
 
-These metrics give you a quick health check: if `failure_count` is climbing or `avg_duration_ms` is spiking, something changed in your authentication pipeline.
+There is no `expired` count, so `total` can exceed the sum of the other three. Remember that `duration_ms` is the duration of a flow's closing step, not the time the user spent signing in. A rising `failure_count` or `avg_duration_ms` still tells you something changed in the pipeline.
 
-## Filtering Flows
+## Listing flows
 
-The flows endpoint supports rich filtering to narrow down to exactly the flows you need:
+```
+GET /realms/{realm_name}/compass/v1/flows
+```
 
-| Filter | Type | Description |
+The listing follows the shared contract described in [Paginated listings](/en/discover/guides/api-listings): `page`, `limit`, `order_by`, `order`, filters, and a `{data, metadata}` response. Each flow comes with its steps, sorted by `started_at`.
+
+| Parameter | Type | Description |
 |---|---|---|
-| `client_id` | `String` | Flows for a specific client |
-| `user_id` | `UUID` | Flows for a specific user |
-| `grant_type` | `String` | Filter by grant type (`password`, `authorization_code`, etc.) |
-| `status` | `String` | Filter by outcome (`success`, `failure`, `pending`, `expired`) |
-| `limit` | `u32` | Maximum results (default: 50) |
-| `offset` | `u32` | Pagination offset (default: 0) |
+| `page` | integer, 1 or more | Page number. Defaults to 1 |
+| `limit` | integer, 1 to 100 | Page size. Defaults to 20 |
+| `order_by` | `status`, `started_at`, `duration_ms` or `created_at` | Sort column. Defaults to `created_at` |
+| `order` | `asc` or `desc` | Sort direction. Defaults to `desc` |
+| `client_id` | string | The OAuth `client_id` of the client, exact match |
+| `user_id` | UUID | Flows closed for this user, exact match |
+| `grant_type` | string | Exact match, for example `authorization_code` or `password` |
+| `status` | `pending`, `success`, `failure` or `expired` | Exact match |
+| `ip_address` | string | Case-insensitive match anywhere in the address. Flows without an address never match |
+| `search` | string | Same match as `ip_address` |
+| `identified` | boolean | `true` keeps flows tied to a user, `false` keeps the anonymous ones |
+| `completed` | boolean | `true` keeps flows that have a `completed_at`, `false` the unfinished ones |
+| `from` | RFC 3339 date-time | Flows that started at or after this instant, on `started_at` |
+| `to` | RFC 3339 date-time | Flows that started at or before this instant, on `started_at` |
 
-:::callout{variant="warning" title="No time range on this endpoint"}
-`GET /compass/v1/flows` takes no `from_timestamp` or `to_timestamp`: the handler always queries the full history and paginates it, newest first. Narrow with `limit`, or use `GET /compass/v1/activity/daily` when you need a window.
+Filters combine with AND, and a filter sent with an empty value is ignored. Sorting on `duration_ms` puts unfinished flows last in ascending order and first in descending order.
+
+Any other parameter is refused with 400 `invalid_query` naming it. That includes `offset`, which this endpoint does not have: use `page`. It also includes `from_timestamp`, `to_timestamp`, `from_date` and `to_date`: the window parameters of this endpoint are `from` and `to`.
+
+:::callout{variant="info"}
+A flow gets its `user_id` when it closes. A wrong password or code on the login page leaves the flow `pending` with no user, so these attempts do not appear under `user_id` and are not counted as `failure`. Find them with `status=pending` and look for a failed step, as in the queries below.
 :::
 
-### Example Queries
+### Example queries
 
-**The most recent failed flows:**
+Flows that started in a window and closed with a failure:
+
 ```bash
-curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
-status=failure&\
-limit=50" \
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=failure" \
+  --data-urlencode "from=2026-10-30T00:00:00Z" \
+  --data-urlencode "limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-**All flows for a specific user:**
+Sign-ins that never closed, oldest first, to see where they stopped:
+
 ```bash
-curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
-user_id=01914b3c-5678-7f5a-b456-000000000002" \
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=pending" \
+  --data-urlencode "completed=false" \
+  --data-urlencode "order_by=started_at" \
+  --data-urlencode "order=asc" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-**Password grant flows for a specific client:**
+Password grant flows of one client:
+
 ```bash
-curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
-client_id=my-frontend&\
-grant_type=password&\
-limit=10" \
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "client_id=my-frontend" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "limit=10" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-## Flow Detail
+The slowest flows first:
 
-Fetch a single flow by ID to see all its steps:
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "order_by=duration_ms" \
+  --data-urlencode "order=desc" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+## Flow detail
+
+Fetch one flow by id to see all its steps:
 
 ```json title="GET /realms/{realm_name}/compass/v1/flows/{flow_id}"
 {
@@ -88,181 +129,193 @@ Fetch a single flow by ID to see all its steps:
     "id": "01914b3c-7e8a-7f5a-b456-789012345678",
     "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
     "client_id": "my-frontend",
-    "user_id": "01914b3c-5678-7f5a-b456-000000000002",
-    "grant_type": "password",
-    "status": "failure",
+    "user_id": null,
+    "grant_type": "authorization_code",
+    "status": "pending",
     "ip_address": "203.0.113.42",
     "user_agent": "Mozilla/5.0 ...",
-    "started_at": "2026-03-17T14:30:00.000Z",
-    "completed_at": "2026-03-17T14:30:00.097Z",
-    "duration_ms": 97,
+    "started_at": "2026-10-30T14:30:00.000000Z",
+    "completed_at": null,
+    "duration_ms": null,
     "steps": [
       {
-        "step_name": "credential_validation",
+        "id": "01914b3c-7e8a-7f5a-b456-789012345001",
+        "flow_id": "01914b3c-7e8a-7f5a-b456-789012345678",
+        "step_name": "authorize",
         "status": "success",
-        "duration_ms": 85,
+        "duration_ms": null,
         "error_code": null,
         "error_message": null,
-        "started_at": "2026-03-17T14:30:00.000Z"
+        "details": null,
+        "started_at": "2026-10-30T14:30:00.004000Z"
       },
       {
-        "step_name": "mfa_challenge",
+        "id": "01914b3c-7e8a-7f5a-b456-789012345002",
+        "flow_id": "01914b3c-7e8a-7f5a-b456-789012345678",
+        "step_name": "credential_validation",
         "status": "failure",
-        "duration_ms": 12,
-        "error_code": "invalid_otp",
-        "error_message": "The provided TOTP code is invalid",
-        "started_at": "2026-03-17T14:30:00.085Z"
+        "duration_ms": 85,
+        "error_code": "InvalidPassword",
+        "error_message": null,
+        "details": null,
+        "started_at": "2026-10-30T14:30:07.511000Z"
       }
     ]
   }
 }
 ```
 
-This tells the complete story: the user's password was correct (85ms for Argon2 verification), but the TOTP code was wrong.
+The story is complete: the authorization request was accepted, then the password was wrong after 85 ms of verification. The flow is still `pending` because the user is on the login page and can try again.
 
 ## Daily activity
-
-The third read endpoint aggregates per day, and it is the one that takes a date window.
 
 ```
 GET /realms/{realm_name}/compass/v1/activity/daily
 ```
 
+This endpoint aggregates per day and is the one that takes a date window.
+
 | Parameter | Type | Description |
 |---|---|---|
-| `from_date` | `Date` | First day in the window, `YYYY-MM-DD` |
-| `to_date` | `Date` | Last day in the window |
-| `client_id` | `String` | Restrict to one client |
-| `user_id` | `UUID` | Restrict to one account |
-| `grant_type` | `String` | Restrict to one grant type |
+| `from` | date, `YYYY-MM-DD` | First day, inclusive. Defaults to 29 days before `to`, which makes a 30-day window |
+| `to` | date, `YYYY-MM-DD` | Last day, inclusive. Defaults to the current UTC day |
+| `client_id` | string | Restrict the flow counts to one client |
+| `user_id` | UUID | Restrict the flow counts to one account |
+| `grant_type` | string | Restrict the flow counts to one grant type |
 
-```json title="GET /realms/my-app/compass/v1/activity/daily?from_date=2026-09-01&to_date=2026-09-03"
+A malformed date, a `from` after `to`, or a window longer than 366 days returns 400. Unlike the flow listing, this endpoint ignores parameters it does not know, so a misspelled `from_date` silently falls back to the default window.
+
+```json title="GET /realms/my-app/compass/v1/activity/daily?from=2026-10-28&to=2026-10-30"
 {
   "data": [
-    { "date": "2026-09-01", "signups": 12, "logins": 431 },
-    { "date": "2026-09-02", "signups": 9, "logins": 402 },
-    { "date": "2026-09-03", "signups": 14, "logins": 455 }
+    {
+      "date": "2026-10-28",
+      "signups": 12,
+      "logins": 431,
+      "login_failures": 7,
+      "pending_logins": 3,
+      "expired_logins": 9,
+      "total_flows": 450,
+      "unique_login_users": 212,
+      "avg_login_duration_ms": 38.4
+    },
+    {
+      "date": "2026-10-29",
+      "signups": 9,
+      "logins": 402,
+      "login_failures": 5,
+      "pending_logins": 2,
+      "expired_logins": 11,
+      "total_flows": 420,
+      "unique_login_users": 198,
+      "avg_login_duration_ms": 36.9
+    },
+    {
+      "date": "2026-10-30",
+      "signups": 0,
+      "logins": 0,
+      "login_failures": 0,
+      "pending_logins": 0,
+      "expired_logins": 0,
+      "total_flows": 0,
+      "unique_login_users": 0,
+      "avg_login_duration_ms": null
+    }
   ]
 }
 ```
 
-## Analytics people actually build
+Every day of the window gets a row, with zeros where nothing happened. Days are UTC days, taken from `started_at`.
 
-### Authentication latency dashboard
+| Field | Description |
+|---|---|
+| `signups` | Accounts created that day in the realm. The filters do not apply to it |
+| `logins` | Flows with status `success` |
+| `login_failures` | Flows with status `failure` |
+| `pending_logins` | Flows still `pending` |
+| `expired_logins` | Flows with status `expired` |
+| `total_flows` | All flows that started that day |
+| `unique_login_users` | Distinct users among the successful flows |
+| `avg_login_duration_ms` | Average `duration_ms` of the successful flows. Null when there are none |
 
-Build a Grafana or custom dashboard that queries Compass stats periodically:
+## Queries people actually run
 
-```ts title="app/tasks/compass_metrics.ts"
-import { BaseTask } from '@adonisjs/core/tasks'
+### Authentication latency
 
-export default class CompassMetrics extends BaseTask {
-  static readonly schedule = '*/5 * * * *' // Every 5 minutes
-
-  async run() {
-    const stats = await ferriskey.getCompassStats('my-app')
-
-    await prometheus.gauge('ferriskey_auth_avg_duration_ms', stats.avg_duration_ms)
-    await prometheus.counter('ferriskey_auth_total', stats.total)
-    await prometheus.counter('ferriskey_auth_failures', stats.failure_count)
-  }
-}
-```
-
-### Top failure reasons
-
-Query failed flows and group by `error_code` to find the most common failure patterns:
-
-```ts title="app/services/compass_analytics.ts"
-async function getTopFailureReasons(realmName: string) {
-  const flows = await ferriskey.getCompassFlows(realmName, {
-    status: 'failure',
-    limit: 500,
-  })
-
-  const reasons = new Map<string, number>()
-
-  for (const flow of flows) {
-    const failedStep = flow.steps.find((s) => s.status === 'failure')
-    if (failedStep?.error_code) {
-      reasons.set(failedStep.error_code, (reasons.get(failedStep.error_code) ?? 0) + 1)
-    }
-  }
-
-  return [...reasons.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([code, count]) => ({ code, count }))
-}
-```
-
-Common findings:
-- `invalid_credentials`. Wrong password (most common)
-- `invalid_otp`. Wrong TOTP code (clock skew? user confusion?)
-- `expired_session`. User took too long to complete the flow
-- `invalid_redirect_uri`. Client misconfiguration
-- `idp_error`. External provider returned an error
-
-### Finding slow flows
-
-Find flows where a specific step took unusually long:
+Poll the stats endpoint on a schedule and graph `avg_duration_ms`:
 
 ```bash
-# Find flows where credential_validation took > 500ms
-# (might indicate database performance issues)
-curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
-status=success&\
-limit=100" \
+curl -s "http://localhost:3333/realms/my-app/compass/v1/stats" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | {total, failure_count, avg_duration_ms}'
+```
+
+### Failed steps and their errors
+
+Because a wrong password leaves its flow `pending`, count failed steps rather than failed flows. This groups the failed steps of recent pending flows by error code:
+
+```bash
+curl -s -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=pending" \
+  --data-urlencode "limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '[.data[].steps[] | select(.status == "failure") | .error_code]
+      | group_by(.) | map({code: .[0], count: length}) | sort_by(-.count)'
+```
+
+The codes you will meet:
+
+| `error_code` | Step | Meaning |
+|---|---|---|
+| `InvalidPassword` | `credential_validation` | Wrong password |
+| `UserDisabled` | `credential_validation` | The account is disabled |
+| `AccountLocked` | `credential_validation` | The account is locked after repeated failures |
+| `invalid_otp_code` | `mfa_challenge` | Wrong one-time code |
+
+Failures at the token step carry the name of the internal error in the same way, and the SAML and token exchange steps carry their own error codes.
+
+### Finding slow sign-ins
+
+Find successful flows where `credential_validation`, which covers the user lookup and the password hash check, took more than 500 ms:
+
+```bash
+curl -s -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=success" \
+  --data-urlencode "limit=100" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | \
   jq '.data[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
 ```
 
-### IdP performance monitoring
+### Identity provider performance
 
-When using [Abyss](/en/modules/abyss/overview) for external IdP federation, Compass tracks `idp_redirect` and `idp_callback` steps. These are particularly valuable because they involve network calls to third-party services:
+When you sign in through an external provider with [Abyss](/en/modules/abyss/overview), the `idp_callback` step is the one that waits on the provider's token endpoint, so its `duration_ms` is the provider's response time. A failure carries the provider's own `error` and `error_description` in `error_message`. Filter on the broker grant type to see only these flows, for example `grant_type=broker_github` for a provider with the alias `github`.
 
-- **`idp_redirect`**: Should be < 5ms (just building a URL). If slow, check network/DNS.
-- **`idp_callback`**: Involves token exchange with the external provider. Typical: 100-500ms. If >1s, the external provider may be degraded.
-
-### Per-user flow history
-
-Investigate a specific user's authentication patterns:
+### A user's history
 
 ```bash
-curl "http://localhost:3333/realms/my-app/compass/v1/flows?\
-user_id=USER_UUID&\
-limit=20" \
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "user_id=USER_UUID" \
+  --data-urlencode "limit=20" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-This shows their recent login attempts, useful for support tickets ("I can't log in") or security investigations ("was this account compromised?").
+This lists the user's closed flows, which is useful for a support ticket ("when did I last sign in, and from where?"). It does not list their failed password attempts, because those flows are still anonymous. For those, match on `ip_address` or read the pending flows.
 
-## Data Maintenance
+## Keeping flows longer
 
-### Purging old flows
+Compass deletes flows 30 days after they started, and the window is not configurable. To keep a longer history, read flows out before they expire: page through `GET .../flows` with `order_by=started_at`, `order=asc` and a `from` that moves forward, and store them in your own system.
 
-Compass does not auto-delete flows. Over time, flow data grows. Use the `purge_old_flows` capability to clean up:
+## Compass and SeaWatch
 
-:::callout{variant="warning" title="Set up periodic purging"}
-For a realm with 10,000 logins/day, Compass generates ~250 MB/month of flow data. Set up a scheduled purge to keep only the last 30-90 days, depending on your compliance requirements.
-:::
-
-### Archival Strategy
-
-For compliance, you may need to retain flow data longer than you want it in PostgreSQL. A good pattern:
-
-1. **Export**: Periodically query flows and export to cold storage (S3, GCS)
-2. **Purge**: Delete flows older than your hot retention window (30-90 days)
-3. **Query cold storage**: For historical investigations, query the archived data
-
-## Compass + SeaWatch
-
-Compass and SeaWatch serve complementary purposes:
+The two modules complement each other.
 
 | Aspect | SeaWatch | Compass |
 |---|---|---|
-| **What it records** | Security events (login, user CRUD, config changes) | Authentication flow steps with timing |
-| **Granularity** | One event per action | Multiple steps per flow |
-| **Timing data** | Timestamp only | Duration per step + total |
-| **Error detail** | Event status (success/failure) | Error code + message per step |
-| **Best for** | Compliance audit trail, "what happened" | Performance debugging, "how it happened" |
+| What it records | Security events: sign-ins, user and role changes, secret reads | Authentication flows, step by step |
+| Granularity | One event per action | Several steps per flow |
+| Timing | A timestamp | A duration per step and for the flow |
+| Error detail | A status, and a reason on failed sign-ins | An error code and message per step |
+| Network context | Not recorded | IP address and user agent, when the request carries them |
+| Guarantees | Written with an awaited insert, chained, never deleted by FerrisKey | Best-effort: can drop events under load, deleted after 30 days, can be turned off per realm |
+| Best for | The audit trail, "what happened" | Debugging, "where and why it went wrong" |
 
-Use SeaWatch when you need to know *what* happened. Use Compass when you need to know *why* and *where* things went wrong.
+Use SeaWatch when you need to know what happened and be able to prove it. Use Compass when you need to know where a sign-in broke. To tie a SeaWatch event to its flow, see [Querying events](/en/modules/seawatch/querying).

@@ -1,32 +1,40 @@
 ---
-title: Trigger Events
-description: "Complete reference of all webhook trigger events in FerrisKey."
+title: Trigger events
+description: "Reference of the webhook triggers in FerrisKey: the 38 names you can subscribe to and the 33 the server raises."
 icon: zap
 order: 61
 ---
 
-# Trigger Events
+# Trigger events
 
-A webhook subscribes to the triggers it cares about. There are 38, grouped here by the resource they concern.
+A webhook subscribes to the triggers it cares about. There are 38, grouped here by the resource they concern. FerrisKey 0.10.0 raises 33 of them. The other five are valid names, and a webhook can subscribe to them, but nothing in the server emits them yet.
+
+<Callout variant="warning" title="Five triggers are never raised">
+
+`user.role.unassigned`, `user.credentials.deleted`, `realm.created`, `client.role.created` and `client.role.updated` accept a subscription and then stay silent. Removing a role from a user raises `user.updated` instead, with the role as `data`. Creating a client role raises `role.created`. A new realm has no webhook yet, since webhooks belong to a realm, so `realm.created` has nobody to tell. The descriptions below mark each of the five.
+
+</Callout>
+
+What each trigger puts in `data` is listed in [Payload format](/en/modules/webhooks/payload#what-data-holds).
 
 ## User
 
 | Trigger | Description |
 |---|---|
-| `user.created` | A new user account was created |
-| `user.updated` | A user's profile was modified |
+| `user.created` | A new user account was created, by an administrator or by self-registration |
+| `user.updated` | A user's profile was modified. Also raised, with the role as `data`, when a role is removed from the user |
 | `user.deleted` | A user account was deleted |
 | `user.bulk_deleted` | Several users were deleted in one batch |
 | `user.email_verified` | A user confirmed their email address |
-| `user.credentials.deleted` | A user's credentials were removed |
+| `user.credentials.deleted` | A user's credentials were removed. Not raised in 0.10.0 |
 | `user.role.assigned` | A role was assigned to a user |
-| `user.role.unassigned` | A role was removed from a user |
+| `user.role.unassigned` | A role was removed from a user. Not raised in 0.10.0 |
 
 ## Authentication
 
 | Trigger | Description |
 |---|---|
-| `auth.reset_password` | A password reset was performed |
+| `auth.reset_password` | A password reset was completed |
 | `auth.device_flow.initiated` | A device authorization flow was started |
 | `auth.device_flow.denied` | The user refused a device authorization |
 | `auth.device_flow.expired` | A device code expired before anyone approved it |
@@ -38,8 +46,8 @@ A webhook subscribes to the triggers it cares about. There are 38, grouped here 
 | `client.created` | A new OAuth2 client was registered |
 | `client.updated` | A client's configuration was modified |
 | `client.deleted` | A client was removed |
-| `client.role.created` | A client-scoped role was created |
-| `client.role.updated` | A client-scoped role was modified |
+| `client.role.created` | A client-scoped role was created. Not raised in 0.10.0: `role.created` fires instead |
+| `client.role.updated` | A client-scoped role was modified. Not raised in 0.10.0 |
 | `client.maintenance.enabled` | Maintenance mode was turned on for the client |
 | `client.maintenance.disabled` | Maintenance mode was turned off |
 | `client.saml_config.updated` | The client's SAML configuration changed |
@@ -60,16 +68,16 @@ A webhook subscribes to the triggers it cares about. There are 38, grouped here 
 
 | Trigger | Description |
 |---|---|
-| `role.created` | A new role was created |
+| `role.created` | A new role was created, including a client-scoped role |
 | `role.updated` | A role was modified |
-| `role.deleted` | A role was deleted |
-| `role.permission.updated` | A role's permission bitmask changed |
+| `role.deleted` | A role was deleted. The console picker does not offer it, so subscribe through the API |
+| `role.permission.updated` | A role's permissions changed. The console picker does not offer it either |
 
 ## Realms
 
 | Trigger | Description |
 |---|---|
-| `realm.created` | A new realm was created |
+| `realm.created` | A new realm was created. Not raised in 0.10.0 |
 | `realm.updated` | A realm was modified |
 | `realm.deleted` | A realm was deleted |
 | `realm.settings.updated` | Realm settings were changed |
@@ -82,17 +90,22 @@ A webhook subscribes to the triggers it cares about. There are 38, grouped here 
 | `webhook.updated` | A webhook was modified |
 | `webhook.deleted` | A webhook was removed |
 
-:::callout{variant="info" title="Yes, webhooks about webhooks"}
-Subscribing to webhook lifecycle events is allowed, and it is the only way to audit changes to your webhook configuration from outside.
-:::
+<Callout variant="info" title="Yes, webhooks about webhooks">
+
+Subscribing to webhook lifecycle events is allowed, and it is the only way to audit changes to your webhook configuration from outside. The payload carries the webhook without its `headers` and `secret`.
+
+</Callout>
 
 ## Choosing what to subscribe to
 
 ### Start narrow
-Subscribe to what you need and nothing more. Every subscription is a network call on every matching event. `user.created`, `user.deleted`, and `client.deleted` are a reasonable starting set.
+
+Subscribe to what you need and nothing more. Every subscription is a network call on every matching event. `user.created`, `user.deleted` and `client.deleted` are a reasonable starting set.
 
 ### Pair it with SeaWatch
-Triggers and [SeaWatch event types](/en/modules/seawatch/event-types) overlap without matching. SeaWatch records security audit events, including logins that failed. Webhooks push resource lifecycle events outward. You want both.
+
+Triggers and [SeaWatch event types](/en/modules/seawatch/event-types) overlap without matching. SeaWatch records security audit events, including logins that failed. Webhooks push resource lifecycle events outward. Some questions need both: `user.role.assigned` carries the role but not the user, and the matching `role_assigned` event in SeaWatch names the user.
 
 ### Ordering
+
 Events fire in the order they happen within the realm, but delivery is asynchronous. A slow endpoint can receive a later event before it has acknowledged an earlier one, so write your handlers to be idempotent.

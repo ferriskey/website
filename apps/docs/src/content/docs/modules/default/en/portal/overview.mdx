@@ -1,13 +1,13 @@
 ---
 title: Overview
-description: "Theme and lay out the public authentication pages a realm renders: colours, typography, and the twelve page types."
+description: "Theme and lay out the public authentication pages a realm renders: colours, typography, and the thirteen page types."
 icon: palette
 order: 90
 ---
 
 # Portal
 
-The portal is what an end user actually sees: the login page, the MFA challenge, the password reset, the email-verified confirmation. It is served by FerrisKey, on FerrisKey's domain, which makes it the one surface where your users meet the IAM directly — and the one place where an unstyled default is immediately visible.
+The portal is what an end user actually sees: the login page, the MFA challenge, the password reset, the email-verified confirmation. It is served by FerrisKey, on FerrisKey's domain, which makes it the one surface where your users meet the IAM directly, and the one place where an unstyled default is immediately visible.
 
 The portal module is how you stop it looking like someone else's product. It splits in two:
 
@@ -21,11 +21,11 @@ Both are per realm, so two realms in one deployment can look nothing alike.
 
 ## Themes
 
-A realm can hold any number of themes, and **exactly one is active** at a time — the active one is what the portal renders. Everything else is a draft you can work on without touching what users see.
+A realm can hold any number of themes, and **exactly one is active** at a time. The active one is what the portal renders. Everything else is a draft you can work on without touching what users see.
 
-### The twelve page types
+### The thirteen page types
 
-A theme carries content for twelve pages. All of them:
+A theme carries content for thirteen pages. All of them:
 
 | Page type | Rendered when |
 |---|---|
@@ -41,6 +41,7 @@ A theme carries content for twelve pages. All of them:
 | `email_verified` | Confirmation succeeded |
 | `device_verify` | A device-flow user code is being entered |
 | `device_verified` | The device flow was approved |
+| `consent` | The user is asked to grant optional scopes to a client. See [Consent](/en/discover/core-concepts/consent) |
 
 Editing one page at a time:
 
@@ -48,58 +49,76 @@ Editing one page at a time:
 PUT /realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}
 ```
 
+A draft accepts any tree, because validation waits for activation. Once a theme is the active one, every page write is validated, since the public portal already renders it, and a tree missing a required block answers 422.
+
 ### Activation is gated on validity
 
-A theme can only be activated when **every** page is valid — the console calls this "activatable", and counts them for you. This is deliberate: a partially filled theme would render a broken page for whichever flow happens to hit the gap, and that flow might be password reset at 2am.
+A theme can only be activated when **every** page is valid. The console calls this "activatable", and counts them for you. This is deliberate: a partially filled theme would render a broken page for whichever flow happens to hit the gap, and that flow might be password reset at 2am.
 
 ```
 GET  /realms/{realm_name}/portal/page-requirements
 POST /realms/{realm_name}/portal/themes/{theme_id}/activate
 ```
 
-`page-requirements` tells you what each page still needs, which is what to show a designer rather than a bare "not activatable".
+`page-requirements` lists the block types each page must contain, which is what to show a designer rather than a bare "not activatable". A failed activation answers 422 with the missing blocks for each invalid page.
 
-:::callout{variant="info" title="No theme is a valid state"}
-With no theme at all, or none activated, the portal falls back to its built-in appearance. Nothing breaks — you simply get FerrisKey's defaults. The console shows this as an active count of zero.
-:::
+Two of the thirteen pages, `email_verified` and `device_verified`, require no block: a static heading and text is a valid page. The `consent` page requires the blocks `consent_scopes`, `consent_allow_button` and `consent_deny_button`.
+
+A theme created through the API starts with empty page trees, so it is not activatable until you fill every page that has requirements. The console fills each page with a default composition when you create a theme there, so a new console theme is activatable at once.
+
+<Callout variant="warning" title="Themes that predate the consent page">
+
+A theme that existed before the `consent` page type was added holds an empty consent page. It is not activatable until you fill that page in, and the same goes for importing a file that carries no `consent` tree. If activation fails on a theme that was fine before, check `consent` first.
+
+</Callout>
+
+<Callout variant="info" title="No theme is a valid state">
+
+With no theme at all, or none activated, the portal falls back to its built-in appearance. Nothing breaks: you simply get FerrisKey's defaults. The console shows this as an active count of zero.
+
+</Callout>
 
 ### Theme API
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/realms/{realm_name}/portal/themes` | List the realm's themes |
-| `POST` | `/realms/{realm_name}/portal/themes` | Create a theme |
+| `POST` | `/realms/{realm_name}/portal/themes` | Create a theme, with empty page trees |
 | `GET` | `/realms/{realm_name}/portal/themes/{theme_id}` | Read one theme |
-| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}` | Update a theme's metadata |
-| `DELETE` | `/realms/{realm_name}/portal/themes/{theme_id}` | Delete a theme |
+| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}` | Update a theme's name, layout and design tokens |
+| `DELETE` | `/realms/{realm_name}/portal/themes/{theme_id}` | Delete a theme. Answers 400 for the active theme |
 | `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}` | Replace one page |
 | `POST` | `/realms/{realm_name}/portal/themes/{theme_id}/activate` | Make this theme the active one |
-| `GET` | `/realms/{realm_name}/portal/theme` | Read the realm's theme settings |
-| `PUT` | `/realms/{realm_name}/portal/theme` | Update the realm's theme settings |
-| `GET` | `/realms/{realm_name}/portal/page-requirements` | What each page still needs to be valid |
+| `GET` | `/realms/{realm_name}/portal/theme` | Read the realm's theme configuration (legacy single-theme endpoint) |
+| `PUT` | `/realms/{realm_name}/portal/theme` | Update the realm's theme configuration (legacy single-theme endpoint) |
+| `GET` | `/realms/{realm_name}/portal/page-requirements` | The blocks each page must contain |
 
-**Required permissions:** `manage_realm`, for reads as well as writes.
+The theme list is paginated and filterable. It takes `search`, `name`, `layout_id`, `activatable` (`true` keeps the themes whose every page holds its required blocks), `created_from` and `created_to`, on top of the common contract in [Paginated listings](/en/discover/guides/api-listings).
 
-:::callout{variant="info" title="There is no read-only access to themes"}
+**Required permissions:** `manage_realm`, for reads as well as writes. `page-requirements` only needs a valid token.
+
+<Callout variant="info" title="There is no read-only access to themes">
+
 Unlike most of the admin surface, the portal endpoints do not accept `view_realm`: listing themes needs `manage_realm`, the same permission as activating one. A designer who should be able to look at a theme without being able to activate it cannot be granted that today. The public endpoints below are the read path that needs no permission at all.
-:::
+
+</Callout>
 
 ### The public endpoint
 
 ```
-GET /realms/{realm_name}/portal/active
+GET /realms/{realm_name}/portal/active?page_type=login
 ```
 
-Unauthenticated, because the login page has to be able to render before anyone has signed in. It returns the active theme's appearance and nothing else — a theme is public by nature, so treat what you put in one accordingly.
+Unauthenticated, because the login page has to be able to render before anyone has signed in. `page_type` is required. The response holds `theme_id`, the `design_tokens`, the `layout_id` and the `page_tree` of that one page, and nothing else. With no active theme it returns the default tokens and an empty tree. A theme is public by nature, so treat what you put in one accordingly.
 
 ## Layouts
 
 <img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="FerrisKey portal layouts tab with layout counters and the Import action" />
 <img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="FerrisKey portal layouts tab with layout counters and the Import action" />
 
-A theme with no layout renders its pages bare, and that is a valid composition rather than an error — the counters distinguish layouts that are **attached** to a theme from those that are merely **deletable** because nothing holds them.
+A theme with no layout renders its pages bare, and that is a valid composition rather than an error. The counters distinguish layouts that are **attached** to a theme from those that are merely **deletable** because nothing holds them.
 
-Layouts hold the arrangement rather than the colours. Each carries a `tree`, and one layout per realm can be marked as the **default**, which is the one used when nothing else is specified.
+Layouts hold the arrangement rather than the colours. Each carries a `tree`, and one layout per realm is marked as the **default**. The first layout you create in a realm becomes the default on its own. A layout that is the realm default, or that a theme uses, cannot be deleted: both answer 400.
 
 | Method | Path | Description |
 |---|---|---|
@@ -112,7 +131,9 @@ Layouts hold the arrangement rather than the colours. Each carries a `tree`, and
 | `GET` | `/realms/{realm_name}/portal-layouts/public/{layout_id}` | Public read of one layout |
 | `GET` | `/realms/{realm_name}/portal-layouts/public/default` | Public read of the default layout |
 
-The two `public/` endpoints are unauthenticated for the same reason as `portal/active`.
+The layout list is paginated like the theme list. It takes `search`, `name`, `is_default`, `in_use`, `ids` (at most 100, comma-separated), `created_from` and `created_to`, and each entry carries a `theme_count`.
+
+The two `public/` endpoints are unauthenticated for the same reason as `portal/active`. They do not serve every layout of the realm: only the layout named by the active theme, and the realm's default layout. Any other layout answers 200 with `data: null`, so a draft layout stays private until a theme that uses it goes live.
 
 ## Moving a theme between realms
 
@@ -123,9 +144,11 @@ GET  /realms/{realm_name}/portal-layouts/{layout_id}/export
 POST /realms/{realm_name}/portal-layouts/import
 ```
 
-A theme exports as a self-contained JSON envelope: its design tokens, all twelve page trees, **and the layout it is framed by, carried by value**. Importing it into another realm or another deployment recreates that layout and binds it to the new theme, so the file does not depend on anything already existing at the destination.
+A theme exports as a self-contained JSON envelope: its design tokens, all thirteen page trees, **and the layout it is framed by, carried by value**. Importing it into another realm or another deployment recreates that layout and binds it to the new theme, so the file does not depend on anything already existing at the destination.
 
-Layout import validates the tree before storing it, which the ordinary create endpoint does not — create is fed by the console's builder and trusts its input. If you generate layouts from a script, import is the endpoint that will catch your mistakes.
+An import file may carry only some of the pages. The ones it omits stay empty and the theme is not activatable until they are filled. A page name FerrisKey does not know is refused with a 400, rather than dropped.
+
+Layout import validates the tree before storing it, which the ordinary create endpoint does not: create is fed by the console's builder and trusts its input. If you generate layouts from a script, import is the endpoint that will catch your mistakes.
 
 [Export & Import](/en/discover/guides/portability) covers the whole portability surface, including email templates.
 
@@ -133,25 +156,27 @@ Layout import validates the tree before storing it, which the ordinary create en
 
 ::::step-group
 :::step{title="Duplicate rather than edit live"}
-Create a new theme instead of editing the active one. The active theme is serving real sign-ins while you work.
+Create a new theme instead of editing the active one. The active theme is serving real sign-ins while you work, and every page write on it is validated.
 :::
 
 :::step{title="Fill every page"}
-Twelve page types, all required for activation. `page-requirements` lists what is still missing.
+Thirteen page types, and every one with required blocks must be valid for activation. `page-requirements` lists what each needs.
 :::
 
 :::step{title="Check the flows you do not think about"}
-`login` gets looked at. `device_verified` and `email_verified` do not, and they are exactly where an unstyled page survives for months.
+`login` gets looked at. `device_verified`, `email_verified` and `consent` do not, and they are exactly where an unstyled page survives for months.
 :::
 
 :::step{title="Activate"}
-One call, and it takes effect for the next request. Activation is reversible — activate the previous theme to roll back.
+One call, and it takes effect for the next request. Activation is reversible: activate the previous theme to roll back.
 :::
 ::::
 
-:::callout{variant="warning" title="Theme activation is not a realm setting"}
+<Callout variant="warning" title="Theme activation is not a realm setting">
+
 The realm does store which theme is active, but it is not a field you can write through `PUT /realms/{realm_name}/settings`. Activation goes through the activate endpoint, which is what enforces the validity gate.
-:::
+
+</Callout>
 
 ::::card-group{cols=2}
 :::card{label="Email & Templates" icon="lucide:mail" href="/en/discover/guides/email"}

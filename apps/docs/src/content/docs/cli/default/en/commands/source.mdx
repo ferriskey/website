@@ -13,6 +13,8 @@ Sources are reusable import connections stored in your config file. Once saved, 
 ferris-ctl source <subcommand>
 ```
 
+These subcommands only read and write the config file. They make no network call. They honor `-o`.
+
 ## `source list`
 
 List configured sources.
@@ -21,11 +23,11 @@ List configured sources.
 ferris-ctl source list
 ```
 
-Table columns: NAME, KIND, URL, SECRET (whether a secret/token is stored).
+Table columns: NAME, KIND, URL, SECRET (`yes` when a secret or token is stored). The JSON and YAML forms carry `has_secret` instead of the secret itself; the secrets are never printed.
 
 ## `source add`
 
-Add (or overwrite) a source.
+Add a source. Adding a name that already exists overwrites it without asking.
 
 ```bash
 ferris-ctl source add <name> --kind <kind> --url <url> [auth flags]
@@ -34,12 +36,12 @@ ferris-ctl source add <name> --kind <kind> --url <url> [auth flags]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<name>` | yes | Source name |
-| `--kind` | yes | `keycloak`, `zitadel` or `supabase`. A config file is not a storable source: it is a path, passed with `--file` at import time |
+| `--kind` | yes | `keycloak`, `zitadel`, or `supabase`. A config file is not a storable source: it is a path, passed with `--file` at import time |
 | `--url` | yes | Base URL of the source instance |
-| `--realm` | no | Source realm name (Keycloak) |
+| `--realm` | no | Keycloak: the realm to read. Supabase, and Zitadel with a pinned organization: the name of the realm to create in FerrisKey, used when the import gives no `--target-realm` or `--source-realm` |
 | `--client-id` | no | Client id for source auth (Keycloak) |
 | `--client-secret` | no | Client secret for source auth (Keycloak) |
-| `--token` | no | Bearer token / PAT (Zitadel, or a ready Keycloak token) |
+| `--token` | no | Bearer token (a Zitadel personal access token, a Supabase `service_role` key, or a ready Keycloak token) |
 | `--org-id` | no | Organization id (Zitadel); omit to import all orgs |
 
 ```bash title="Store a Keycloak source"
@@ -47,7 +49,7 @@ ferris-ctl source add keycloak-prod \
   --kind keycloak \
   --url https://keycloak.example.com \
   --realm acme \
-  --client-id admin-cli \
+  --client-id ferriskey-import \
   --client-secret "$KC_SECRET"
 ```
 
@@ -55,9 +57,13 @@ ferris-ctl source add keycloak-prod \
 ferris-ctl realm import --source-ref keycloak-prod --target-realm acme
 ```
 
-:::callout{variant="warning" title="Secrets are stored in plain text"}
-Source secrets and tokens are written to `config.toml` without redaction. Protect the file with appropriate filesystem permissions, and prefer short-lived tokens where possible.
-:::
+A stored source holds the connection only. The Supabase options (`--source-passwords`, `--source-preserve-ids`, and the `--source-include-*` flags) are not stored; pass them on each import. The `supabase` kind exists only in builds newer than 0.3.0, see [From Supabase](/en/cli/import/supabase).
+
+<Callout variant="warning" title="Secrets are stored in plain text">
+
+Source secrets and tokens are written to `config.toml` without redaction, and the file is created with your default umask, usually readable by other users on the machine. Restrict the directory with `chmod 700 ~/.config/ferriskey` (a `chmod` on the file alone is lost when the CLI next saves it), and prefer short-lived tokens where possible.
+
+</Callout>
 
 ## `source remove`
 

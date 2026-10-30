@@ -29,7 +29,7 @@ ferris-ctl realm import --from zitadel \
 | Flag | Behavior |
 |------|----------|
 | `--source-org <id>` | Import a single organization. Sent as the `x-zitadel-orgid` header. |
-| _(omitted)_ | Import **all** organizations, each as a separate realm. Requires IAM permissions to list orgs. |
+| _(omitted)_ | Import all organizations, each as a separate realm. Needs instance-level (IAM) permissions to list organizations. |
 
 ```bash title="Using a stored source"
 ferris-ctl source add zitadel-prod --kind zitadel \
@@ -38,17 +38,35 @@ ferris-ctl source add zitadel-prod --kind zitadel \
 ferris-ctl realm import --source-ref zitadel-prod --source-org 123456789
 ```
 
+If the token cannot list organizations, the import stops and tells you to pin one with `--source-org` or to give the token an IAM manager role.
+
+## Realm names
+
+With `--source-org`, the realm is named by `--target-realm`, else `--source-realm`, else `zitadel`.
+
+Without it, each organization becomes a realm named after it: the name is lowercased, every run of characters other than letters and digits becomes a single `-`, and leading and trailing dashes are trimmed. A name with nothing left becomes `org`. In this mode `--source-realm` is not used, and `--target-realm` applies only when exactly one organization comes back. With several, the CLI keeps the organization names and prints a note on standard error.
+
 ## How resources map
 
 | Zitadel | FerrisKey |
 |---------|-----------|
 | Organization | Realm |
-| Human user | Realm user |
-| Machine (service) user | Confidential client with a service account |
-| Project / application | Client |
+| Project role | Realm role, named after the role key, with the display name as description and no permissions |
+| Application of a project | Confidential client. Its client id is the OIDC client id, or the application id when there is none. Redirect URIs come from the OIDC configuration |
+| Human user | Realm user, with username, email, first name, last name, and the email-verified flag |
+| Machine (service) user | Confidential client with a service account, named after the user name |
 
-Organization names are sanitized into realm names: lowercased, with non-alphanumeric characters collapsed to `-`.
+Projects themselves are not mapped. The importer visits each one only to read its roles and its applications. Every application becomes a confidential client whatever its type in Zitadel.
 
-:::callout{variant="warning" title="Limitations"}
-Passwords and secrets are not read from Zitadel. Recreate credentials and machine-user keys after import. Preview with `--dry-run -o yaml` before applying.
+:::callout{variant="warning"}
+Passwords and secrets are not read from Zitadel, so users arrive without credentials and machine users arrive without keys. A confidential client gets a new secret from FerrisKey, listed in the [import report](/en/cli/import/overview#the-import-report).
 :::
+
+## What is not imported
+
+- Realm settings. The importer sets none, so the new realm keeps the FerrisKey defaults.
+- Role assignments. Zitadel's user grants are not read, so no user holds a role after the import.
+- Permissions on roles. Roles are created with none.
+- Per-client details such as post-logout redirect URIs, web origins, PKCE, and token lifetimes.
+
+Each resource type is read with one search request and no paging parameters, so very large instances yield only what Zitadel returns for a default request. Preview with `--dry-run -o yaml` before applying, and compare the counts with your instance.

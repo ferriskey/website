@@ -7,7 +7,7 @@ order: 3
 
 # Authentication
 
-Before any command reaches the FerrisKey API, `ferris-ctl` resolves **where** to connect, **who** you are, and **which realm** to operate on. This page explains each piece and the order in which they're resolved.
+Before a command reaches the FerrisKey API, `ferris-ctl` settles three questions: where to connect, who you are, and which realm to act on. This page covers each answer and the order in which they are resolved.
 
 ## Contexts
 
@@ -16,11 +16,13 @@ A **context** is a named connection profile. It holds:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `url` | yes | FerrisKey server URL |
-| `client-id` | yes | OAuth2 client used to authenticate |
-| `client-secret` | no | Set only for confidential clients / service accounts |
-| `realm` | no | Default realm for commands that need one |
+| `client-id` | yes | OAuth2 client used to sign in |
+| `client-secret` | no | Set only for confidential clients and service accounts |
+| `realm` | in practice, yes | The realm you sign in to, and the default realm for commands |
 
-Contexts are stored as TOML at `$XDG_CONFIG_HOME/ferriskey/config.toml` (typically `~/.config/ferriskey/config.toml`). The active context is tracked by `current-context`.
+`context add` accepts a context without a realm, but `realm`, `client`, and `user` commands cannot run on it: they stop with `auth realm is required`. The CLI always asks for a token in the context's realm, because that is where its client is registered. With a stored context, the `--realm` flag changes only the realm the command acts on, so you can sign in to `master` and still run `client list --realm acme`. `login` is the one command that falls back to `master` when the context has no realm.
+
+Contexts are stored as TOML in `$XDG_CONFIG_HOME/ferriskey/config.toml`, typically `~/.config/ferriskey/config.toml`. When `XDG_CONFIG_HOME` is unset the CLI uses `$HOME/.config`, and when `HOME` is unset too (usual on Windows) it uses `%APPDATA%`. The active context is tracked by `current-context`.
 
 ```toml title="config.toml"
 current-context = "local"
@@ -31,7 +33,13 @@ client-id = "ferris-ctl"
 realm = "master"
 ```
 
-Manage contexts with the [`context`](/en/cli/commands/context) command. Any field can be overridden per-command with `--url`, `--client-id`, `--client-secret`, `--realm`, or the matching `FERRISKEY_*` environment variable.
+Manage contexts with the [`context`](/en/cli/commands/context) command.
+
+<Callout variant="warning" title="config.toml is plain text">
+
+A context's `client-secret` and the secrets of every stored [source](/en/cli/commands/source) are written to `config.toml` as they are. The CLI creates the file with your default umask, which is usually `0644`, so other users on the machine can read it. A `chmod` on the file itself does not last: the CLI saves through a temporary file and renames it, which gives the new file default permissions. Restrict the directory instead, for example `chmod 700 ~/.config/ferriskey`. Better still, keep the secret out of the file and pass it through `FERRISKEY_CLIENT_SECRET`.
+
+</Callout>
 
 ## Two ways to authenticate
 
@@ -42,17 +50,17 @@ Manage contexts with the [`context`](/en/cli/commands/context) command. Any fiel
 Run `ferris-ctl login` to sign in as a user via the Device Authorization Grant. Best for humans and public clients.
 :::
 :::card{label="Client credentials" icon="lucide:bot"}
-Add a context with `--client-secret`. The CLI obtains a token with the OAuth2 client-credentials grant. Best for CI and service accounts.
+Add a context with `--client-secret`. The CLI obtains a token with the OAuth2 client-credentials grant. Meant for CI and service accounts.
 :::
 ::::
 
-### Interactive login (Device Authorization Grant)
+### Interactive login (device authorization grant)
 
 ```bash
 ferris-ctl login
 ```
 
-This runs the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)): the CLI requests a device code, shows you a verification URL and user code, opens your browser, and polls until you approve. On success it writes tokens to `credentials.toml`.
+This runs the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)): the CLI requests a device code, shows you a verification URL and a user code, opens your browser, and polls until you approve. On success it writes tokens to `credentials.toml`, next to `config.toml`. The client must allow the device grant; [Login](/en/cli/commands/login#before-you-log-in) explains how to turn that on.
 
 ```toml title="credentials.toml (mode 0600 on Unix)"
 server_url = "http://localhost:3333"
@@ -66,9 +74,13 @@ obtained_at = 1700000000
 scope = "openid profile email"
 ```
 
-:::callout{variant="warning" title="Protect the credentials file"}
-`credentials.toml` contains bearer tokens. On Unix it is written with `0600` permissions (owner read/write only). Treat it like an SSH private key. Never commit it or share it.
-:::
+The file also gets `id_token` and `refresh_expires_in` when the server returns them. It holds a single session: logging in again, against any server, realm, or client, replaces it.
+
+<Callout variant="warning" title="Protect the credentials file">
+
+`credentials.toml` contains bearer tokens. On Unix it is written with `0600` permissions (owner read and write only). On Windows it gets default permissions. Treat it like an SSH private key, and never commit or share it.
+
+</Callout>
 
 ### Client credentials
 
@@ -82,7 +94,13 @@ ferris-ctl context add ci \
   --realm master
 ```
 
-No `login` step is needed. The CLI exchanges the secret for a token on each run.
+No `login` step is needed. The CLI exchanges the secret for a token on every run and does not cache it.
+
+<Callout variant="warning" title="Known incompatibility with FerrisKey 0.10.0">
+
+FerrisKey 0.10.0 answers a client-credentials request without a `refresh_token`, since that grant has no session to refresh. `ferris-ctl` 0.3.0 expects the field, so every command run this way ends with `error: http error: error decoding response body`. A fix is proposed in [ferriskey-cli#48](https://github.com/ferriskey/ferriskey-cli/pull/48). Until a release includes it, sign in with `ferris-ctl login`.
+
+</Callout>
 
 ## Resolution order
 
@@ -90,11 +108,11 @@ When a command needs an access token, `ferris-ctl` resolves credentials in this 
 
 ::::step-group
 :::step{title="Reuse or refresh a login session"}
-If `credentials.toml` exists and its `(server_url, realm, client_id)` matches the active context, the saved `access_token` is reused while it is still valid. When it has expired, the CLI silently refreshes it with the stored `refresh_token` and saves the new tokens, so you don't have to log in again.
+If `credentials.toml` exists and its `server_url`, `realm`, and `client_id` equal the context's `url`, the realm you sign in to, and `client-id`, the saved `access_token` is reused while it is valid. The comparison is literal, so `http://host` and `http://host/` are different servers. The CLI treats a token as expired 30 seconds before its real expiry. After that it refreshes the token with the stored `refresh_token` and saves the new tokens, so you don't have to log in again. It skips the refresh when the refresh token's lifetime is known and has passed.
 :::
 
 :::step{title="Fall back to client credentials"}
-Otherwise, if the context has a non-empty `client-secret`, the CLI performs an OAuth2 client-credentials grant.
+Otherwise, if the context has a non-empty `client-secret`, the CLI performs an OAuth2 client-credentials grant. A refresh the server rejects falls through to this step as well.
 :::
 
 :::step{title="Fail with guidance"}
@@ -105,14 +123,39 @@ If neither is available, the command fails with:
 
 To discard the saved session, run [`ferris-ctl logout`](/en/cli/commands/logout). It deletes `credentials.toml`; the next command then falls back to client credentials or asks you to log in again.
 
-## Environment variables
+## Overriding the context
 
-Every connection setting can be supplied via the environment, which is convenient in CI:
+Flags and environment variables do not replace single fields of a stored context. The rules differ between `login` and the commands that call the admin API (`realm`, `client`, and `user`).
 
-| Variable | Overrides |
-|----------|-----------|
+| Command | Connection | Sign-in realm |
+|---------|------------|---------------|
+| `realm`, `client`, `user` | When `--url` and `--client-id` are both set, those two plus `--client-secret` if present. `--context` and the config file are then ignored. Otherwise, the context from `--context` or the active one. | With the pair, `--realm`. Otherwise, the context's `realm`. |
+| `login` | Each of `--url`, `--client-id`, and `--realm` replaces the matching field of the context on its own. | `--realm`, then the context's `realm`, then `master`. |
+
+The pair can come from the environment: `FERRISKEY_URL` and `FERRISKEY_CLIENT_ID` count the same as the flags. A few consequences follow:
+
+- `--url` or `--client-id` alone is ignored.
+- `--client-secret` has an effect only as part of the pair. `login` never reads it and uses the secret stored in the context, if any.
+- With the pair set, no config file is needed, which suits CI. Set `FERRISKEY_REALM` as well, or the command stops because it has no realm.
+- `--realm` on its own selects the realm a command acts on and leaves the sign-in realm alone.
+- If you export `FERRISKEY_URL` and `FERRISKEY_CLIENT_ID` in your shell profile, they silently take over from every context.
+
+```bash title="A CI job with no config file"
+export FERRISKEY_URL=https://auth.example.com
+export FERRISKEY_CLIENT_ID=automation
+export FERRISKEY_CLIENT_SECRET="$CI_SECRET"
+export FERRISKEY_REALM=master
+ferris-ctl realm list
+```
+
+| Variable | Matches flag |
+|----------|--------------|
 | `FERRISKEY_URL` | `--url` |
 | `FERRISKEY_CLIENT_ID` | `--client-id` |
 | `FERRISKEY_CLIENT_SECRET` | `--client-secret` |
 | `FERRISKEY_REALM` | `--realm` |
-| `XDG_CONFIG_HOME` | config & credentials directory |
+| `XDG_CONFIG_HOME` | Directory that holds `config.toml` and `credentials.toml` |
+
+## TLS
+
+`ferris-ctl` verifies server certificates against the Mozilla root certificates bundled in the binary. It does not read the operating system trust store, and no flag adds a CA certificate or turns verification off. A server whose certificate is signed by a private CA therefore fails the handshake, for the FerrisKey API and for import sources alike. Use a certificate from a public CA, or reach the server over plain `http://` on a path you trust, such as a local port-forward.

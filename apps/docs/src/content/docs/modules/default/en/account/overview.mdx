@@ -9,7 +9,7 @@ order: 70
 
 Everything else in FerrisKey is an administrator acting on someone. The account module is the opposite: it is the surface a user operates on **themselves**, and the only one where the caller and the target are the same person by construction.
 
-That distinction is the whole design. These endpoints live under `/users/me`, they resolve the subject from the caller's own token, and they take no user id — so there is no id to tamper with and no permission to hold. A user needs no `manage_users` to change their own password, and holding `manage_users` grants nothing extra here.
+That distinction is the whole design. Most of these endpoints live under `/users/me`. They resolve the subject from the caller's own token and take no user id, so there is no id to tamper with and no permission to hold. A user needs no `manage_users` to change their own password, and holding `manage_users` grants nothing extra here. The sessions endpoints are the one exception and are covered [below](#sessions).
 
 ## What a user can do
 
@@ -19,7 +19,9 @@ That distinction is the whole design. These endpoints live under `/users/me`, th
 | Password | Change it, against the realm's [password policy](/en/discover/core-concepts/password-policy) |
 | Authenticator app | Enrol a TOTP authenticator, confirm it, remove it |
 | Passkeys | Register a passkey, list credentials, delete one |
-| Sessions | Review their active sessions |
+| Sessions | List their sessions and revoke any of them |
+
+In the console, the account page has three tabs: Personal info, Security and Sessions.
 
 <img class="only-light" src="/dashboard/account_security-light.jpg" alt="FerrisKey account security tab showing password change with live policy feedback, authenticator app and passkeys sections" />
 <img class="only-dark" src="/dashboard/account_security-dark.jpg" alt="FerrisKey account security tab showing password change with live policy feedback, authenticator app and passkeys sections" />
@@ -31,9 +33,9 @@ GET /realms/{realm_name}/users/me
 PUT /realms/{realm_name}/users/me
 ```
 
-What a user may change about their own profile is not fixed: the realm decides. `edit_username_enabled` governs whether the username field is writable, and the console shows it as locked when the realm says no.
+The body of the update takes `firstname`, `lastname`, `email` and `username`. What a user may change is not fixed: the realm decides. `edit_username_enabled` governs the username, and it is off by default. A request that changes the username while it is off answers 403, and the console shows the field as locked.
 
-Email is the field to think about, because it is also the recovery address. When `email_verification_enabled` is on, changing it puts the account back through verification rather than trusting the new address immediately.
+Email is the field to think about, because it is also the recovery address. Changing it sets `email_verified` back to `false`, whatever its previous value. The call does not send a verification message and does not add the `verify_email` required action, so build that step in your own flow if you need it.
 
 ### Locale
 
@@ -41,11 +43,15 @@ Email is the field to think about, because it is also the recovery address. When
 PUT /realms/{realm_name}/users/@me/locale
 ```
 
-Sets the locale used for this user's login portal and emails, from the realm's `supported_locales`. With no preference stored, the realm's `default_locale` applies.
+The body is `{ "locale": "zh-CN" }`. FerrisKey checks that the tag is well formed, a two-letter language with an optional two-letter region, and answers 422 `malformed_locale` otherwise. It does not compare the tag with the realm's `supported_locales`. Sending `null` clears the stored value.
 
-:::callout{variant="warning" title="This one path says @me, not me"}
-Every other account endpoint is spelled `/users/me`. The locale endpoint is `/users/@me/locale`, as is `GET /users/@me/realms`. It is an inconsistency in the current API, not a typo in this page — code against it as written.
-:::
+FerrisKey stores the value and the console reads it back. The console and the default sign-in pages ship `en` and `zh-CN`, and the user's locale is the first thing the console consults, ahead of the browser and the realm's `default_locale`. FerrisKey does not choose the language of an email from it. [Localization](/en/discover/guides/localization) gives the full resolution order and the realm defaults.
+
+<Callout variant="warning" title="This one path says @me, not me">
+
+Every other account endpoint is spelled `/users/me`. The locale endpoint is `/users/@me/locale`, as is `GET /users/@me/realms`. It is an inconsistency in the current API, not a typo in this page. Code against it as written.
+
+</Callout>
 
 ## Sensitive operations need an elevation
 
@@ -55,7 +61,7 @@ Reading your profile needs nothing beyond a valid token. Changing a credential n
 POST /realms/{realm_name}/users/me/reauthenticate
 ```
 
-Supply **exactly one** of `password` or `otp_code`. The response carries an `elevation_id` and an `expires_at`; the elevation lives **five minutes** and is bound to the calling session. Every sensitive operation then takes that `elevation_id`.
+Supply **exactly one** of `password` or `otp_code`; anything else answers 400. The response carries an `elevation_id` and an `expires_at`. The elevation lives **five minutes** and is bound to the calling session, so the access token has to carry a session. Every sensitive operation then takes that `elevation_id`, and the same one serves all of them until it expires. A password change clears the user's outstanding elevations.
 
 ```json title="Response"
 {
@@ -64,20 +70,36 @@ Supply **exactly one** of `password` or `otp_code`. The response carries an `ele
 }
 ```
 
-:::callout{variant="info" title="A second factor cannot rotate the factors"}
-Adding, replacing or removing a sign-in credential requires the elevation to have been proved **with a password**, not with an OTP code. Otherwise a stolen second factor could enrol itself as the only factor and lock the owner out — a factor must not be able to rotate the set it belongs to, including itself.
+A wrong proof answers 401 and counts as a failed sign-in. It feeds the counter that locks the account at the realm's `lockout_threshold` failures (10 by default) for `lockout_duration_seconds` (900 by default), and a locked account is refused here too. An account that signs in through an external directory has no local password, so a password proof answers 409.
 
-Changing the password is the exception: it carries the current password in the request body, which is the same proof by another route.
-:::
+<Callout variant="info" title="A second factor cannot rotate the factors">
+
+Adding, replacing or removing a sign-in credential requires the elevation to have been proved **with a password**, not with an OTP code. Otherwise a stolen second factor could enrol itself as the only factor and lock the owner out. A factor must not be able to rotate the set it belongs to, including itself.
+
+Changing the password is the exception. It accepts any live elevation, because it also carries the current password in the request body, which is the same proof by another route.
+
+</Callout>
 
 [Security](/en/modules/account/security) covers each operation and the order to call them in.
 
+## Sessions
+
+```
+GET    /realms/{realm_name}/users/{user_id}/sessions
+DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}
+```
+
+These are the two self-service endpoints that carry a user id. A caller can use them on their own id with no permission. On anyone else's id, listing needs `manage_users`, `manage_realm` or `view_users`, and revoking needs `manage_users`.
+
+The list is paginated (see [Paginated listings](/en/discover/guides/api-listings)) and expired sessions are included. Each entry has `id`, `created_at`, `expires_at`, `last_seen_at`, `ip_address`, `user_agent` and `persistent`, which is true for a session opened with "remember me". The filters are `persistent`, `ip_address` and `user_agent`, plus `search` over the last two and `created_from` and `created_to`. `order_by` takes `created_at` (the default), `last_seen_at` or `expires_at`.
+
+Revoking a session invalidates its tokens at once and writes a `session_revoked` event to [SeaWatch](/en/modules/seawatch/overview). The console's Sessions tab is built on these two calls.
+
 ## What this surface deliberately does not do
 
-- **No credential reset for someone else.** That stays an administrative operation, under `manage_users`.
-- **No role or organization changes.** A user cannot grant themselves anything.
-- **No account deletion.** Self-service deletion is not exposed.
-- **No recovery-code generation.** Recovery codes are issued during the [MFA challenge](/en/modules/trident/recovery-codes), not from the account page.
+It does not reset a credential for someone else, which stays an administrative operation under `manage_users`. It does not change roles or organizations, so a user cannot grant themselves anything. It does not delete the account, because self-service deletion is not exposed.
+
+It has no recovery-code screen either. A client generates [recovery codes](/en/modules/trident/recovery-codes) through `POST /login-actions/generate-recovery-codes`, using an elevation from `reauthenticate`, but neither the console nor the default portal calls it.
 
 ::::card-group{cols=2}
 :::card{label="Account Security" icon="lucide:shield-check" href="/en/modules/account/security"}

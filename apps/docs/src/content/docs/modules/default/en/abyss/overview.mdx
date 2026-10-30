@@ -1,76 +1,144 @@
 ---
 title: Overview
-description: "Abyss is FerrisKey's identity provider federation module: connect external OAuth2, OIDC, and enterprise providers."
+description: "Abyss is FerrisKey's identity provider federation module: sign users in through external OAuth2 and OIDC providers, or import them from LDAP."
 icon: link
 order: 40
 ---
 
-# Abyss: Identity Provider Federation
+# Abyss: identity provider federation
 
-Abyss connects FerrisKey to external identity providers. Users can authenticate through Google, GitHub, Discord, or any custom OAuth2/OIDC provider, and FerrisKey handles the token exchange, user provisioning, account linking, and attribute mapping.
+Abyss connects FerrisKey to identity systems you do not run inside it. A user can sign in with Google, GitHub, Discord or any OAuth2 or OIDC provider: FerrisKey runs the authorization code flow against the provider, finds or creates the matching account, and hands your application a normal FerrisKey authorization code. A directory such as LDAP or Active Directory can also be the source of the accounts themselves.
 
 ## Why federation?
 
-Federation meets users where they already have an identity. Rather than making them create yet another account, let them sign in with the Google or corporate credentials they already carry. FerrisKey sits in the middle as the broker, normalizing each provider's format into one internal model.
+Users already have an identity somewhere. Asking them for another password costs them a form to fill in and costs you one more credential to store. With federation, your applications talk only to FerrisKey, and the differences between providers stay behind it.
+
+Abyss covers two shapes, and they work differently.
+
+Brokering sends the user to another provider to authenticate, so FerrisKey never sees the credential. This page, [Configuring providers](/en/modules/abyss/providers) and the [federation flow](/en/modules/abyss/federation-flow) describe it.
+
+User federation keeps the accounts in a directory you already run. The user types the password into FerrisKey's login page and FerrisKey checks it against the directory. [User federation](/en/modules/abyss/user-federation) describes it.
 
 ## Supported provider types
 
 | Type | Status | Examples |
 |---|---|---|
 | OAuth2 | Supported | Google, GitHub, Discord, any OAuth2 provider |
-| OIDC | Supported | Any OpenID Connect compliant provider |
-| SAML | Planned | Enterprise IdPs such as Okta or Entra ID |
-| LDAP | Supported | Active Directory, OpenLDAP — see [User Federation](/en/modules/abyss/user-federation) |
+| OIDC | Supported | Any OpenID Connect provider |
+| SAML | Not available | Identity providers that only speak SAML. The console lists SAML in the provider picker but disables it |
+| LDAP, Active Directory | Supported as user federation | See [User federation](/en/modules/abyss/user-federation) |
 
-:::callout{variant="info" title="SAML in the other direction already works"}
-Signing in *through* an external SAML provider is what is planned here. FerrisKey acting *as* a SAML identity provider, so other applications can trust it, is shipped: see [SAML 2.0](/en/discover/core-concepts/saml).
-:::
+<Callout variant="info" title="SAML in the other direction already works">
+
+Signing in through an external SAML provider is the part that is not available. FerrisKey acting as a SAML identity provider, so that other applications can trust it, is shipped: see [SAML 2.0](/en/discover/core-concepts/saml).
+
+</Callout>
 
 ## Provider configuration
 
-Providers are registered per realm, each with its full OAuth2 or OIDC configuration:
+Providers are registered per realm with `POST /realms/{realm_name}/identity-providers`. A provider is addressed by its `alias` from then on, and the alias is also the segment that appears in the broker URLs, so it cannot be changed after creation.
 
 | Field | Description |
 |---|---|
-| `name` | Display name shown on the login page |
-| `provider_type` | `oauth2` or `oidc` |
-| `client_id` | OAuth2 client ID from the external provider |
-| `client_secret` | OAuth2 client secret (encrypted in storage) |
-| `authorization_url` | Provider's authorization endpoint |
-| `token_url` | Provider's token endpoint |
-| `userinfo_url` | Provider's UserInfo endpoint (optional) |
-| `scopes` | OAuth2 scopes to request (e.g., `openid`, `email`, `profile`) |
-| `enabled` | Toggle the provider on/off without deleting it |
-| `configuration` | Provider-specific JSON config (e.g., tenant ID for Azure AD) |
+| `alias` | Required. Identifier of the provider in the realm. Unique per realm |
+| `provider_id` | Required. A label for the kind of provider, such as `google`, `github` or `oidc`. The login page receives it as the provider's `kind` and `icon` |
+| `display_name` | Label of the button on the login page |
+| `enabled` | Whether the login page offers the provider. Defaults to `false` when you omit it |
+| `store_token` | Keep the provider's access token on the user's link. Defaults to `false` |
+| `trust_email` | Treat the email the provider returns as verified. See [account resolution](/en/modules/abyss/federation-flow#account-resolution). Defaults to `false` |
+| `link_only` | Never create accounts: only users who already exist can sign in through the provider. Defaults to `false` |
+| `config` | The OAuth2 or OIDC settings, described below |
 
-:::callout{variant="info" title="Secret encryption"}
-Client secrets are encrypted before storage. They are never exposed through the admin API in plaintext.
-:::
+The console creates providers with `enabled`, `trust_email` and PKCE on, and with `store_token` and `link_only` off. The fields `first_broker_login_flow_alias`, `post_broker_login_flow_alias` and `add_read_token_role_on_create` are stored and returned, but the broker does not act on them in 0.10.0.
 
-## Provider mappings
+`config` is a JSON object. The broker reads these keys:
 
-Mappings say how the provider's attributes land on FerrisKey user fields:
+| Key | Description |
+|---|---|
+| `client_id` | OAuth2 client ID issued by the provider |
+| `client_secret` | OAuth2 client secret |
+| `authorization_url` | The provider's authorization endpoint |
+| `token_url` | The provider's token endpoint |
+| `userinfo_url` | The provider's UserInfo endpoint. Optional when ID tokens are verified |
+| `scopes` | Space-separated string such as `openid email profile`, or an array of strings. The key must exist: an empty string sends no `scope` parameter |
+| `use_pkce` | When `true`, FerrisKey sends an S256 `code_challenge` to the provider. Defaults to `false` through the API |
+| `jwks_url` | The provider's JWKS endpoint, used to verify ID tokens |
+| `issuer` | The `iss` value the provider puts in its ID tokens |
 
-| External Field | Internal Field | Required |
+```json title="POST /realms/acme/identity-providers"
+{
+  "alias": "google",
+  "provider_id": "google",
+  "display_name": "Google",
+  "enabled": true,
+  "trust_email": true,
+  "config": {
+    "client_id": "1234567890-abc.apps.googleusercontent.com",
+    "client_secret": "<client secret from the Google console>",
+    "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+    "scopes": "openid email profile",
+    "use_pkce": true
+  }
+}
+```
+
+Any other key in `config` is kept and returned, but has no effect.
+
+### ID token or userinfo
+
+FerrisKey verifies the ID token only when the token response contains one and both `jwks_url` and `issuer` are set. It then checks the signature (RS256, RS384, RS512, PS256, PS384, PS512, ES256 or ES384), the issuer, the audience (the `client_id` you configured), the expiry, the `azp` claim when present, and the nonce when one was sent. A token that fails any check ends the sign-in; FerrisKey does not fall back to userinfo.
+
+In every other case FerrisKey calls `userinfo_url` with the provider's access token. With neither source configured, the sign-in fails with "No ID token and no userinfo endpoint configured". The console form does not expose `jwks_url` and `issuer`, so a provider created there reads the profile from userinfo.
+
+### Where the client secret lives
+
+<Callout variant="warning" title="Provider secrets are not encrypted in the database">
+
+The `client_secret` is stored as given, inside the provider's `config` column. The API replaces it with `***` on every read, which hides it from API callers but not from anyone who can read the table. `SECRETS_ENCRYPTION_KEYS` seals only realm signing keys, TOTP seeds and SMTP passwords. [Secrets at rest](/en/discover/guides/secrets-at-rest) lists what is and is not covered.
+
+</Callout>
+
+## Profile mapping
+
+The mapping from the provider's claims to the FerrisKey user is fixed. It is not configurable per provider.
+
+| Provider claim | FerrisKey field | Notes |
 |---|---|---|
-| `email` | `email` | Yes |
-| `sub` |. (used for linking) | Yes |
-| `preferred_username` | `username` | No |
-| `given_name` | `firstname` | No |
-| `family_name` | `lastname` | No |
+| `sub` | The link key | Required. Identifies the user at the provider |
+| `email` | `email` | Optional |
+| `email_verified` | `email_verified` | Counts only when `trust_email` is on |
+| `preferred_username` | `username` | Falls back to the email, then to `{alias}_{sub}` |
+| `given_name` | `firstname` | |
+| `family_name` | `lastname` | |
 
-A mapping can be marked required. When a required one is absent from the provider's response, the federation flow fails rather than creating a half-filled user.
+When the profile comes from the userinfo endpoint, FerrisKey also accepts `id` for the subject, `username` or `login` for the username, `first_name`, `last_name` and `avatar_url`. That is what makes GitHub's numeric `id` and `login` work. The `name` and `picture` claims are read but not stored.
+
+FerrisKey copies these values once, when it creates the account. A returning user's profile is not refreshed from the provider.
 
 ## Common setups
 
 ### Sign in with Google for a SaaS product
-Configure a Google OAuth2 provider with scopes `openid email profile`. Users click "Sign in with Google", authenticate at Google, and are redirected back to your app with FerrisKey tokens. New users are automatically provisioned.
+
+Configure a Google provider with scopes `openid email profile`. Users click "Sign in with Google", authenticate at Google, and come back to your application with a FerrisKey authorization code. New users get an account on their first sign-in.
 
 ### Corporate SSO with Entra ID
-Configure an OIDC provider pointing at your tenant's endpoints. Employees authenticate with their corporate identity and receive FerrisKey tokens scoped to the right realm.
+
+Configure an OIDC provider pointing at your tenant's endpoints, and set `jwks_url` and `issuer` through the API if you want the ID token verified. Employees authenticate with their corporate identity and sign in to the realm.
 
 ### Several providers at once
-Configure Google, GitHub, and Discord as providers on the same realm. Users choose their preferred provider on the login page. All three paths converge into the same FerrisKey user model with unified roles and permissions.
 
-### Account linking
-A user who first signed in with Google can link a GitHub account later. Both external identities point at the same FerrisKey user, each tracked by its own federated credential.
+Configure Google, GitHub and Discord on the same realm. Users pick one on the login page. A second provider reaches an existing account only through the [email rule](/en/modules/abyss/federation-flow#account-resolution). When the rule does not apply and the email is already taken, the sign-in fails instead of creating a duplicate.
+
+::::card-group{cols=3}
+:::card{label="Configuring providers" icon="lucide:settings" href="/en/modules/abyss/providers"}
+Google, GitHub, Discord and custom OIDC, step by step.
+:::
+:::card{label="Federation flow" icon="lucide:git-branch" href="/en/modules/abyss/federation-flow"}
+What happens between the click and the authorization code.
+:::
+:::card{label="User federation" icon="lucide:folder-tree" href="/en/modules/abyss/user-federation"}
+Connect an LDAP or Active Directory tree.
+:::
+::::

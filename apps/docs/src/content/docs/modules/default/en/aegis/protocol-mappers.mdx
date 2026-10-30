@@ -1,31 +1,37 @@
 ---
 title: Protocol Mappers
-description: "The ten protocol mapper types in FerrisKey, and the config keys each one reads."
+description: "The eleven protocol mapper types in FerrisKey, and the config keys each one reads."
 icon: arrow-right-left
 order: 51
 ---
 
-# Protocol Mappers
+# Protocol mappers
 
-Protocol mappers are the rules that turn user, group, organization, and client data into JWT claims. Each mapper belongs to a client scope and runs during token generation.
+Protocol mappers are the rules that turn user, group, organization and client data into JWT claims. Each mapper belongs to a client scope and runs during token generation.
 
-A mapper is identified by a `mapper_type` string and carries a JSON `config`. FerrisKey keeps the Keycloak names for both, so configuration written for Keycloak is recognizable here: keys are dotted, and their values are strings, including the booleans.
+A mapper is identified by a `mapper_type` string and carries a JSON `config`. FerrisKey keeps the Keycloak names for both, so configuration written for Keycloak is recognizable here: keys are dotted, and their values are strings, including the booleans. FerrisKey runs eleven mapper types, listed below.
 
-:::callout{variant="warning" title="Keys are dotted, not snake_case"}
-The config keys are `claim.name`, `access.token.claim`, `user.attribute` — not `claim_name`, `add_to_access_token`, `attribute`. The `config` field is free-form JSON, so the API accepts an unknown key without complaining and the mapper then ignores it. A mapper that silently does nothing, or writes to a claim you did not name, is almost always a key spelled the wrong way.
-:::
+<Callout variant="warning" title="Keys are dotted, not snake_case">
+
+The config keys are `claim.name`, `access.token.claim` and `user.attribute`, not `claim_name`, `add_to_access_token` or `attribute`. The `config` field is free-form JSON, so the API accepts an unknown key without complaining and the mapper then ignores it. A mapper that silently does nothing, or writes to a claim you did not name, is almost always a key spelled the wrong way.
+
+The same goes for `mapper_type`. The API stores any non-empty string, and at token time FerrisKey skips a type it does not run and logs a warning. The console's mapper catalog lists `oidc-address-mapper`, `oidc-hardcoded-role-mapper` and `oidc-role-name-mapper`, and its forms offer Keycloak fields such as `userinfo.token.claim`, `introspection.token.claim`, `multivalued`, `claim.value.type` and `included.custom.audience`. FerrisKey runs none of those types and reads none of those keys.
+
+</Callout>
 
 ## Keys every mapper reads
 
 | Config key | Default | Description |
 |---|---|---|
-| `claim.name` | per mapper | Target claim. Dotted paths nest, so `realm_access.roles` produces `{"realm_access": {"roles": […]}}` rather than a flat key with a dot in it |
-| `access.token.claim` | `true` | Include the claim in the access token. Accepts `true`/`false` as a boolean or as a string |
-| `id.token.claim` | `true` | Include the claim in the ID token |
+| `claim.name` | per mapper | Target claim. Dotted paths nest, so `realm_access.roles` produces `{"realm_access": {"roles": [...]}}` rather than a flat key with a dot in it |
+| `access.token.claim` | `true` | Include the claim in the access token. A boolean, or the string `true`. Any other string counts as `false` |
+| `id.token.claim` | `true` | Include the claim in the ID token. Same values |
 
-Both token flags default to **true** when the key is absent, so a mapper with no flags writes to both tokens.
+Both token flags default to **true** when the key is absent, so a mapper with no flags writes to both tokens. The client role mapper, the full-name mapper and the audience mapper read the two flags but not `claim.name`.
 
-`token.claim.name` is accepted as a legacy alias for `claim.name`, because some earlier consoles stored mappers that way. Prefer `claim.name` in anything new.
+`token.claim.name` is accepted as a legacy alias for `claim.name` by the property, attribute, realm role and hardcoded claim mappers, because some earlier consoles stored mappers that way. The group and organization mappers read only `claim.name`. Prefer `claim.name` in anything new.
+
+A claim name is a dotted path of at most 8 non-empty segments and at most 255 characters. The API rejects a longer `claim.name` or `token.claim.name` with a 422 `invalid_claim_name`. At token time a name outside that shape is dropped silently, with only a warning in the server log.
 
 ## Mapper types
 
@@ -35,9 +41,9 @@ Maps a built-in user field to a claim.
 
 | Config key | Description |
 |---|---|
-| `user.attribute` | Field to read: `username`, `email`, `firstName`, `lastName`, or `emailVerified`. The snake_case spellings `firstname`, `lastname` and `email_verified` are also accepted |
+| `user.attribute` | Field to read: `username`, `email`, `firstName`, `lastName`, or `emailVerified`. The spellings `firstname`, `lastname` and `email_verified` are also accepted |
 | `claim.name` | Target claim. Defaults to the value of `user.attribute` |
-| `jsonType.label` | Cast the value: `String` (default), `Boolean`, or `Integer`. `Long` and `int` are accepted too |
+| `jsonType.label` | Cast the value: `String` (default), `Boolean`, or `Integer`. `Long`, `int`, `long` and `boolean` are accepted too. A value that cannot be cast stays as it is |
 
 ```json title="Username into preferred_username"
 {
@@ -49,21 +55,36 @@ Maps a built-in user field to a claim.
 }
 ```
 
+### `oidc-full-name-mapper`
+
+Writes the user's first and last name, trimmed and joined with a space, into the `name` claim.
+
+The claim name is fixed: this mapper does not read `claim.name`. It emits nothing when both names are empty. Its only keys are the two token flags.
+
+```json title="Full name in the ID token only"
+{
+  "access.token.claim": "false",
+  "id.token.claim": "true"
+}
+```
+
+The seeded `profile` scope carries `given_name` and `family_name` but no `name`, so add this mapper to a scope if a client expects it.
+
 ### `oidc-usermodel-attribute-mapper`
 
 Maps a custom user attribute to a claim. Use it for business data: department, plan tier, feature flags.
 
 | Config key | Description |
 |---|---|
-| `user.attribute` | Attribute key on the user |
-| `claim.name` | Target claim |
-| `jsonType.label` | Cast the value, as above |
+| `user.attribute` | Attribute key on the user. The mapper emits nothing when the user has no such attribute |
+| `claim.name` | Target claim. Defaults to the value of `user.attribute` |
+
+The value is always a string. This mapper does not read `jsonType.label`, so a numeric attribute reaches the token as text.
 
 ```json title="A department attribute into a department claim"
 {
   "user.attribute": "department",
   "claim.name": "department",
-  "jsonType.label": "String",
   "access.token.claim": "true",
   "id.token.claim": "true"
 }
@@ -71,7 +92,7 @@ Maps a custom user attribute to a claim. Use it for business data: department, p
 
 ### `oidc-usermodel-realm-role-mapper`
 
-Writes the user's realm role names into the token.
+Writes the user's realm role names into the token. Roles the user inherits from groups are included.
 
 | Config key | Description |
 |---|---|
@@ -95,11 +116,11 @@ Writes the user's realm role names into the token.
 
 ### `oidc-usermodel-client-role-mapper`
 
-Writes client-scoped roles under `resource_access.<client_id>.roles`. The placement is fixed — this mapper does not take a `claim.name`.
+Writes client-scoped roles under `resource_access.<client_id>.roles`. The placement is fixed: this mapper does not take a `claim.name`.
 
 | Config key | Description |
 |---|---|
-| `client.id` | Which client's roles to include. Left empty or absent, roles from **every** client are included |
+| `client.id` | The `client_id` string of the one client whose roles to include. Left empty or absent, roles from **every** client are included |
 
 ```json title="Resulting claim"
 {
@@ -120,7 +141,7 @@ Writes the groups the user belongs to.
 | `full.path` | `true` | Emit full paths (`/parent/child`). Set to `false` for bare group names |
 | `prefix.org` | `false` | Prepend the group's organization alias (`/acme/finance`) |
 
-`prefix.org` exists because a FerrisKey token can carry groups from several organizations at once, and paths are relative to their org — so `/finance` from two organizations would collide. It only applies to full paths.
+`prefix.org` exists because a FerrisKey token can carry groups from several organizations at once, and paths are relative to their org, so `/finance` from two organizations would collide. It only applies to full paths.
 
 ### `oidc-organization-membership-mapper`
 
@@ -129,10 +150,10 @@ Writes the organizations the user belongs to, as a JSON object keyed by alias. K
 | Config key | Default | Description |
 |---|---|---|
 | `claim.name` | `organizations` | Target claim |
-| `include.domain` | `false` | Add each organization's domain |
+| `include.domain` | `false` | Add each organization's domain, `null` when it has none |
 | `include.attributes` | `false` | Add each organization's attributes |
 
-`id`, `name` and `alias` are always present. Domain and attributes are opt-in so tokens stay compact by default.
+`id`, `name` and `alias` are always present. Domain and attributes are opt-in so tokens stay compact by default. A user with no organization gets an empty object.
 
 ### `oidc-organization-detail-mapper`
 
@@ -144,11 +165,11 @@ Writes detail about a **single** organization.
 | `organization.alias` | unset | Only emit a claim if the user belongs to this organization. Omitted, the first organization in the user's membership list is used |
 | `include.attributes` | `false` | Add the organization's attributes |
 
-If the user belongs to no matching organization, the mapper emits nothing.
+`id`, `name`, `alias` and `domain` are always present, and `domain` is `null` when the organization has none. If the user belongs to no matching organization, the mapper emits nothing.
 
 ### `oidc-organization-role-mapper`
 
-Writes the roles a user holds **within the scope of each organization**, keyed by organization alias. Realm roles land under `roles`, client roles under `clients.<client_id>.roles`.
+Writes the roles a user holds **within the scope of each organization**, keyed by organization alias. Realm roles land under `roles`, client roles under `clients.<client_id>.roles`. An organization where the user holds no scoped role is left out.
 
 | Config key | Default | Description |
 |---|---|---|
@@ -156,17 +177,19 @@ Writes the roles a user holds **within the scope of each organization**, keyed b
 
 Org-scoped roles come from two sources, merged during token assembly: roles assigned directly to the membership, and roles inherited from the user's groups in that organization.
 
-:::callout{variant="info" title="This mapper shares a claim with the membership mapper"}
+<Callout variant="info" title="This mapper shares a claim with the membership mapper">
+
 Both default to the `organizations` claim, and their objects deep-merge when both are enabled: the membership mapper contributes `id`, `name` and `alias`, this one contributes `roles` and `clients`. Match on the membership mapper's `id` field rather than the alias, which can be renamed.
-:::
+
+</Callout>
 
 ### `oidc-audience-mapper`
 
-Adds an entry to the audience (`aud`) claim. Use it when a token has to be accepted by more than one resource server.
+Adds an entry to the audience (`aud`) claim of the access token. Use it when a token has to be accepted by more than one resource server.
 
 | Config key | Description |
 |---|---|
-| `included.client.audience` | Audience value to add. Empty or absent, the mapper emits nothing |
+| `included.client.audience` | Audience value to add. Any string works, not only a `client_id`. Empty or absent, the mapper emits nothing |
 
 ```json title="Accept this token at another client"
 {
@@ -176,15 +199,17 @@ Adds an entry to the audience (`aud`) claim. Use it when a token has to be accep
 }
 ```
 
+The access token's `aud` starts as `["<realm_name>-realm", "account"]` and the mapper appends to it. A token request with a `resource` parameter replaces the whole list with that resource. The ID token's `aud` is the client's `client_id` and no mapper changes it.
+
 ### `oidc-hardcoded-claim-mapper`
 
 Injects a static value. Useful for environment indicators or tenant identifiers that do not come from user data.
 
 | Config key | Description |
 |---|---|
-| `claim.name` | Target claim |
+| `claim.name` | Target claim. The mapper emits nothing without one |
 | `claim.value` | Static value to inject |
-| `jsonType.label` | Cast the value: `String` (default), `Boolean`, `Integer` |
+| `jsonType.label` | Cast the value: `String` (default), `Boolean`, `Integer`, `Long` or `JSON`. The lowercase `boolean`, `int` and `long` work too. `JSON` parses the value as JSON. A number or JSON that cannot be parsed stays a string, and a Boolean is `true` only for the exact string `true` |
 
 ```json title="An environment indicator, access token only"
 {
@@ -200,28 +225,30 @@ Injects a static value. Useful for environment indicators or tenant identifiers 
 
 Ten claim names are removed after every mapper has run, so a mapper cannot overwrite them:
 
-```
+```text
 sub  iat  jti  iss  typ  azp  aud  scope  exp  client_id
 ```
 
-Target one of these and the mapper appears to be configured correctly yet changes nothing. `aud` is on the list, which is exactly why adding an audience needs `oidc-audience-mapper` — it contributes audiences through a separate channel — and not a hardcoded mapper pointed at `aud`.
+Target one of these and the mapper appears to be configured correctly yet changes nothing. `aud` is on the list, which is exactly why adding an audience needs `oidc-audience-mapper`, which contributes audiences through a separate channel, and not a hardcoded mapper pointed at `aud`.
 
 ## Execution order
 
-Mappers execute in the order they appear within their scope. When several scopes are active, the mappers of each scope run in scope order.
+Mappers within a scope run in the order they were created. Default scopes run before the optional scopes the request named.
 
-:::callout{variant="warning" title="Claim collisions"}
-If two mappers target the same claim name, the later one overwrites the earlier one. The organization mappers are the deliberate exception: they deep-merge into a shared claim. Be intentional about claim names across scopes.
-:::
+<Callout variant="warning" title="Claim collisions">
+
+If two mappers write the same claim name, the later one overwrites the earlier one, unless both values are JSON objects: objects merge key by key. That is how `features.new_dashboard` and `features.beta_export` end up in one `features` object, and how the two organization mappers share the `organizations` claim. Be intentional about claim names across scopes.
+
+</Callout>
 
 ## Token generation pipeline
 
-1. **Resolve scopes** — the client's default scopes, plus any optional scopes named in the request's `scope` parameter.
-2. **Gather mappers** — every protocol mapper on the active scopes.
-3. **Execute mappers** — each one runs against the authenticated user and the client context.
-4. **Filter by token type** — `access.token.claim` and `id.token.claim` decide which token each claim lands in.
-5. **Strip reserved claims** — the ten names above are removed.
-6. **Build and sign** — mapper output is merged with the standard claims and the JWT is signed with the realm's signing key.
+1. **Resolve scopes.** The client's default scopes, plus any optional scopes named in the request's `scope` parameter.
+2. **Gather mappers.** Every protocol mapper on the active scopes.
+3. **Execute mappers.** Each one runs against the authenticated user and the client context, once for the access token and once for the ID token. The ID-token pass only happens when `scope` includes `openid`.
+4. **Filter by token type.** `access.token.claim` and `id.token.claim` decide which token each claim lands in.
+5. **Strip reserved claims.** The ten names above are removed.
+6. **Build and sign.** Mapper output is merged with the standard claims and the JWT is signed with the realm's signing key.
 
 ## Adding a mapper
 
@@ -231,17 +258,15 @@ Open **Client Scopes** in the admin console. Create a scope, or select the one t
 :::
 
 :::step{title="Add a protocol mapper"}
-On the scope's mappers tab, add a mapper. Pick its `mapper_type` and fill the config keys documented above.
+On the scope's **Protocol Mappers** tab, choose **Add mapper**. Start from a quick-start template, or pick a `mapper_type` and fill the config keys documented above.
 :::
 
 :::step{title="Assign the scope to a client"}
 On the client's **Client Scopes** tab, add the scope as Default or Optional. Default scopes apply to every request; an optional scope only applies when the request asks for it by name.
 :::
 
-:::step{title="Verify against a real token"}
-Authenticate through the client and decode the token. If the claim is missing, check the config keys before anything else — a misspelled key is accepted and then ignored.
-
-`POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` returns the claims a client would receive without requiring a full login.
+:::step{title="Check the result"}
+Use **Evaluate** on the client's Client Scopes tab, or call `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` with a `user_id` and an optional `scope`. It returns the claims that user would receive without a full login. If a claim is missing, check the `mapper_type` and the config keys before anything else.
 :::
 ::::
 

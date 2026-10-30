@@ -13,7 +13,7 @@ order: 3
 ferris-ctl realm import --from keycloak \
   --source-url https://keycloak.example.com \
   --source-realm acme \
-  --source-client-id admin-cli \
+  --source-client-id ferriskey-import \
   --source-client-secret "$KC_SECRET" \
   --target-realm acme
 ```
@@ -29,7 +29,7 @@ ferris-ctl realm import --from keycloak \
 
 Two options:
 
-- Client credentials: pass `--source-client-id` and `--source-client-secret`, and the CLI runs a client-credentials grant against the source realm's token endpoint.
+- Client credentials: pass `--source-client-id` and `--source-client-secret`. The CLI runs a client-credentials grant against the token endpoint of the source realm, so the client has to be registered in that realm, with a service account that may read the realm through the Admin REST API.
 - A ready token: pass `--source-token` when you already have a bearer token in hand.
 
 When `--source-token` is set, the client id and secret are ignored.
@@ -37,27 +37,38 @@ When `--source-token` is set, the client id and secret are ignored.
 ```bash title="Using a stored source"
 ferris-ctl source add kc-prod --kind keycloak \
   --url https://keycloak.example.com --realm acme \
-  --client-id admin-cli --client-secret "$KC_SECRET"
+  --client-id ferriskey-import --client-secret "$KC_SECRET"
 
 ferris-ctl realm import --source-ref kc-prod --target-realm acme
 ```
 
 ## What gets imported
 
-The importer reads, from `/admin/realms/{realm}`:
+The importer reads the realm representation and then `clients`, `roles`, and `users` under `/admin/realms/{realm}`, and maps them like this:
 
-- realm settings, mapped onto the FerrisKey realm settings it has an equivalent for
-- clients, with their redirect URIs and flags
-- the roles of each client
-- realm roles
-- users, paged 100 at a time
+| Keycloak | FerrisKey |
+|----------|-----------|
+| Realm | A realm named like the source realm, or `--target-realm` |
+| Realm settings `accessTokenLifespan`, `registrationAllowed`, `resetPasswordAllowed`, `rememberMe`, `verifyEmail` | `access_token_lifetime`, `user_registration_enabled`, `forgot_password_enabled`, `remember_me_enabled`, `email_verification_enabled` |
+| Realm roles | Realm roles, with name and description |
+| Clients | Clients with `clientId`, `name`, `enabled`, `protocol`, `serviceAccountsEnabled`, `directAccessGrantsEnabled`, and `redirectUris`. A client with `publicClient` set is `public`, any other is `confidential` |
+| Client roles | Roles scoped to their client, with name and description |
+| Users | Users with username, email, first name, last name, and the email-verified flag |
 
-:::callout{variant="warning" title="What does not come across"}
-Keycloak never exports password hashes, so users arrive without credentials.
+Only those five realm settings are mapped; every other Keycloak setting keeps the FerrisKey default. Users are read 100 at a time until the list runs out.
 
-Role mappings per user are not imported either. The roles themselves are created, but who holds them is not carried over.
+## What does not come across
 
-Go through the imported realm afterwards and re-establish credentials and role assignments.
-:::
+- Passwords. Keycloak never exports password hashes, so users arrive without credentials.
+- Role assignments. The roles are created, but who holds them is not carried over.
+- Permissions. Roles are created with none, so a role that meant something in Keycloak grants nothing until you set its permissions in FerrisKey.
+- The `enabled` flag of a user. It is not read, so every user is created with FerrisKey's default.
+- Per-client OAuth details: post-logout redirect URIs, web origins, the PKCE requirement, token lifetimes, and the device authorization grant. Clients arrive with FerrisKey's defaults for these and need finishing by hand.
+- Client secrets. A confidential client gets a new secret from FerrisKey, listed in the [import report](/en/cli/import/overview#the-import-report); the applications that used the Keycloak secret need the new one.
+- Everything the importer does not request, such as groups, identity providers, client scopes, and mappers.
 
-Run `--dry-run -o yaml` first to see precisely what would be created.
+A client is never created as `system`.
+
+A failed read of one client's roles is swallowed without a message: that client simply arrives with no roles. Compare the role count in the report with what you expect.
+
+Go through the imported realm afterwards and re-establish credentials, permissions, and role assignments. Run `--dry-run -o yaml` first to see precisely what would be created.

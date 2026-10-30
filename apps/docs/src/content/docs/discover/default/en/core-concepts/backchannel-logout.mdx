@@ -1,0 +1,146 @@
+---
+title: Back-channel logout
+description: "OIDC Back-Channel Logout in FerrisKey: how a client registers an endpoint, what the logout token contains, when it is sent, and how delivery behaves."
+icon: log-out
+order: 21
+---
+
+# Back-channel logout
+
+Back-channel logout lets FerrisKey tell an application's server that a user's session has ended, so the application can drop its own session without waiting for the browser to come back.
+
+Without it, an application only learns about a logout when the user clicks its own sign-out button. A session revoked by an administrator, a password reset, or a disabled account would leave the application signed in until its local session times out. With it, FerrisKey sends a signed logout token straight to the application, server to server, whatever ended the session.
+
+## Registering an endpoint
+
+Open the client, then **Settings**, then the **Logout** section.
+
+| Console label | API field | Meaning |
+|---|---|---|
+| Back-channel logout URL | `backchannel_logout_uri` | Where FerrisKey POSTs the logout token. Leave it empty to opt out |
+| Require session id (sid) | `backchannel_logout_session_required` | Records that the application needs the `sid` claim. Defaults to `true` |
+
+<img class="only-light" src="/dashboard/client_settings_logout-light.jpg" alt="FerrisKey client settings tab showing the Logout section with the post-logout redirect URIs and the Back-channel logout URL field" />
+<img class="only-dark" src="/dashboard/client_settings_logout-dark.jpg" alt="FerrisKey client settings tab showing the Logout section with the post-logout redirect URIs and the Back-channel logout URL field" />
+
+Through the API, send both fields to `PATCH /realms/{realm_name}/clients/{client_id}`. Leaving `backchannel_logout_uri` out keeps the current value, and sending `null` clears it.
+
+```json title="PATCH /realms/home/clients/{client_id}"
+{
+  "backchannel_logout_uri": "https://app.example.com/backchannel-logout"
+}
+```
+
+The URL is checked for shape when you save it: it needs a host, no embedded credentials, and the `https` scheme (`http` is accepted only for a loopback host). A bad value is refused with `422` on the field `backchannel_logout_uri`. Whether the address may actually be reached is decided at send time, against the address the host resolves to then.
+
+The session id is always part of the token. `backchannel_logout_session_required` is stored for the record and does not change what FerrisKey sends.
+
+Discovery advertises the feature: `/realms/{realm_name}/.well-known/openid-configuration` carries `backchannel_logout_supported` and `backchannel_logout_session_supported`, both `true`.
+
+## When a logout token is sent
+
+FerrisKey sends one whenever a user session is deleted, except when it simply expires. That covers:
+
+- the logout endpoint, `GET` or `POST /realms/{realm_name}/protocol/openid-connect/logout`;
+- a session revoked with `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}`;
+- a user disabled or deleted, including bulk deletion;
+- a password reset, by an administrator or through the reset link, a password update completed through the required action, and a password change from the account page, which signs out the user's other sessions.
+
+The recipients are the clients that took part in the session: every enabled client with a `backchannel_logout_uri` that was issued an access token carrying that session's `sid`. A client that never received a token in the session is not contacted, and neither is one that has no endpoint. A `client_credentials` token has no session, so it triggers nothing.
+
+If a client received tokens under two different issuer URLs in the same session, it gets one logout token per issuer.
+
+## What FerrisKey sends
+
+A `POST` with `Content-Type: application/x-www-form-urlencoded` and a single field, `logout_token`:
+
+```http
+POST /backchannel-logout HTTP/1.1
+Host: app.example.com
+Content-Type: application/x-www-form-urlencoded
+
+logout_token=eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...
+```
+
+The token is a JWT signed with the realm key that signs every other token, so the application verifies it against the same JWKS (the `jwks_uri` of the discovery document). The header carries the key id and a distinctive type:
+
+```json
+{ "alg": "RS256", "kid": "5c1e0b7a-...", "typ": "logout+jwt" }
+```
+
+```json
+{
+  "iss": "https://sso.example.com/realms/home",
+  "sub": "8d1f3c52-0a4e-4d1c-9a57-2f0a1c9e7b11",
+  "aud": "orders-web",
+  "iat": 1790000000,
+  "exp": 1790000120,
+  "jti": "0192f7c4-5e1a-7b3e-9d0c-3a6f1b2c4d5e",
+  "sid": "b2a4c6e8-1f3d-4a5b-8c7e-9d0f1a2b3c4d",
+  "events": {
+    "http://schemas.openid.net/event/backchannel-logout": {}
+  }
+}
+```
+
+| Claim | Value |
+|---|---|
+| `iss` | The issuer of the tokens the client received in that session, so it matches the `iss` the application already sees |
+| `sub` | The user's id |
+| `aud` | The client's `client_id`, as a single string |
+| `iat`, `exp` | Issue time, and 120 seconds later |
+| `jti` | A fresh identifier per token |
+| `sid` | The session id. The same value is the `sid` claim of the access and ID tokens that session produced |
+| `events` | The back-channel logout event member |
+
+There is never a `nonce`.
+
+## What the application must check
+
+OpenID Connect Back-Channel Logout 1.0 asks the receiver to validate the token before acting on it. In practice:
+
+1. Verify the signature with a key from the JWKS, picked by `kid`, and check that the `typ` header is `logout+jwt`.
+2. Check that `iss` is the realm's issuer, that `aud` contains your `client_id`, and that `iat` and `exp` put the token in the present.
+3. Check that `events` contains the `http://schemas.openid.net/event/backchannel-logout` member, that `sub` or `sid` is present, and that there is no `nonce`.
+4. Reject a `jti` you have already seen.
+
+Then end every local session tied to that `sid` and answer with a `2xx`. FerrisKey treats any `2xx` as delivered. Answer `400` when the token is invalid: that is the status the specification asks for, and FerrisKey does not retry it.
+
+## Delivery
+
+The send is asynchronous. Logging out never waits for an application, and never fails because one is slow or down.
+
+| Behaviour | Value |
+|---|---|
+| Attempts | 3, waiting 0, 2 and 10 seconds before each |
+| Retried | Connection, DNS and timeout failures, and `5xx` answers |
+| Not retried | Any other status, `4xx` included, and a refused address or unusable URL |
+| Redirects | Never followed. A `3xx` counts as a refusal |
+| Timeouts | 5 seconds to connect, 10 seconds per request |
+| Queue | 1024 ended sessions held in memory, delivered 16 at a time |
+
+Delivery is best effort. A client that stays unreachable through the three attempts misses the notice, and so does one whose notice was queued when the server restarted. When the queue is full, new sessions are dropped with a warning in the log and the user's logout still succeeds. Keep the application's own session lifetime bounded as the backstop.
+
+FerrisKey resolves the host once and pins the connection to an address it may reach, with the same guard that protects [webhook deliveries](/en/modules/webhooks/deliveries). An `https` endpoint is required. Loopback, private and other non-public addresses are refused, and link-local addresses, which include the cloud metadata address, are refused whatever the settings. `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` lets loopback and private addresses through for local development and allows plain `http` to loopback only. It is the same switch as for webhooks, and it should stay off in production. See [Configuration](/en/discover/guides/configuration).
+
+Failures are written to the server log, not to [SeaWatch](/en/modules/seawatch/overview). The messages to look for:
+
+| Log message | Meaning |
+|---|---|
+| `Logout token not delivered, retrying` | A retryable failure, with the attempt number |
+| `Logout token refused` | The endpoint answered with a status that is not retried, or the address was refused |
+| `Gave up delivering a logout token` | The three attempts failed |
+| `Back-channel logout queue full, dropping a session` | The queue was full |
+| `Could not sign a logout token` | The realm key could not sign the token |
+
+::::card-group{cols=3}
+:::card{label="Clients" icon="lucide:app-window" href="/en/discover/core-concepts/clients"}
+Post-logout redirect URIs and the rest of the client settings.
+:::
+:::card{label="Tokens" icon="lucide:ticket" href="/en/discover/core-concepts/tokens"}
+The `sid` claim that ties a token to a session.
+:::
+:::card{label="Webhook deliveries" icon="lucide:webhook" href="/en/modules/webhooks/deliveries"}
+The address guard that logout tokens share with webhooks.
+:::
+::::

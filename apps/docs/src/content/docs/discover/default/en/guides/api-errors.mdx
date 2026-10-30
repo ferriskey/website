@@ -1,0 +1,112 @@
+---
+title: API errors
+description: "The three error shapes of the FerrisKey API, the stable reason codes inside them, and what to match on in client code."
+icon: circle-alert
+order: 28
+---
+
+# API errors
+
+The API answers a failed request in one of three shapes. Which one you get depends on the endpoint and on the kind of failure, and each carries a machine-readable code that is meant to be matched on. The human-readable text is not.
+
+| Shape | Where | Machine-readable field |
+|---|---|---|
+| Standard | Most endpoints | `reason` |
+| Validation | A request body or a value that fails validation, status `422` | `errors[].code` |
+| OAuth | The token endpoint, the device flow and some failures of the authorization request | `error` |
+
+## The standard shape
+
+```json title="GET /realms/master/users/00000000-0000-0000-0000-000000000000"
+{
+  "code": "E_NOT_FOUND",
+  "status": 404,
+  "reason": "not_found",
+  "message": "Resource not found"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `code` | One value per status: `E_BAD_REQUEST`, `E_UNAUTHORIZED`, `E_FORBIDDEN`, `E_NOT_FOUND`, `E_CONFLICT`, `E_INTERNAL_SERVER_ERROR` or `E_SERVICE_UNAVAILABLE` |
+| `status` | The HTTP status, repeated in the body |
+| `reason` | A stable snake_case code for the specific failure. When an error has no more specific one, it repeats the class: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `internal_server_error` or `service_unavailable` |
+| `message` | English text for a developer |
+
+Some reasons you will meet:
+
+| Status | `reason` | When |
+|---|---|---|
+| 400 | `invalid_query` | A listing parameter is unknown or out of range. See [Paginated listings](/en/discover/guides/api-listings) |
+| 400 | `unexpected_payload` | The request body is not valid JSON, or does not match the shape the endpoint expects |
+| 400 | `email_already_exists` | Another user of the realm already has that email address |
+| 401 | `token_not_found` | The request has no bearer token |
+| 401 | `invalid_credentials` | The username or the password is wrong |
+| 401 | `account_locked` | Too many failed attempts. See [Users](/en/discover/core-concepts/users#lockout) |
+| 403 | `forbidden` | The caller lacks a permission the operation needs |
+| 403 | `user_disabled` | The account is disabled |
+| 403 | `elevation_required` | A sensitive account operation needs a fresh re-authentication. See [Account Security](/en/modules/account/security) |
+| 404 | `not_found` | The resource does not exist, or it belongs to another realm |
+| 409 | `user_id_already_exists` | A user is created with an `id` that is already taken |
+| 409 | `password_credential_already_exists` | A password hash is imported for a user who already has a password |
+| 409 | `last_sign_in_means` | Removing a credential would leave the account with no way to sign in |
+| 500 | `internal_server_error` | Something failed on the server. The `message` starts with `Internal Server Error:` and can carry internal detail, so do not show it to end users |
+| 503 | `client_under_maintenance` | The client is in maintenance and refuses sign-ins |
+
+The list is long, because every domain error has its own reason. These are examples, not the whole set.
+
+## Validation errors
+
+A body that fails validation, a password that breaks the realm's policy, a hash the server cannot accept and a locale that is not well formed all answer with `422` and a list. The list has one entry for each problem, so a form can show them all at once.
+
+```json title="POST /realms/{realm_name}/users with an empty username"
+{
+  "errors": [
+    { "field": "username", "code": "length", "message": "username is required" }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `field` | The name of the field that failed |
+| `code` | The failed rule. For a body checked field by field it is the rule, such as `length`, `email` or `range`. For a password it is one of `too_short`, `missing_uppercase`, `missing_lowercase`, `missing_number`, `missing_special`, `insufficient_entropy` and `common_password`. Other validations use their own code, for example `invalid_password_hash` or `malformed_locale` |
+| `message` | English text for a developer |
+
+This shape has no `reason` and no `status` in the body. Read the status from the response.
+
+## OAuth errors
+
+The token endpoint, the device flow and some failures of the authorization request, such as a missing PKCE challenge, answer in the shape RFC 6749 defines, so that any OAuth library can read them.
+
+```json title="POST /realms/master/protocol/openid-connect/token"
+{
+  "error": "invalid_client",
+  "error_description": "Client authentication failed."
+}
+```
+
+| `error` | Status | Meaning |
+|---|---|---|
+| `invalid_request` | 400 | A required parameter is missing, or the request is malformed |
+| `invalid_grant` | 400 | The code, refresh token, credentials or session is not valid. Also what the `password` grant answers when the account still owes a login step |
+| `unauthorized_client` | 400 | The client may not use this grant |
+| `unsupported_grant_type` | 400 | The `grant_type` is not one FerrisKey knows |
+| `invalid_scope` | 400 | The requested scope is not allowed |
+| `invalid_client` | 401 | Client authentication failed. The response carries `WWW-Authenticate: Basic` |
+| `temporarily_unavailable` | 429 or 503 | Too many failed client authentications from one address (429, `Retry-After: 60`), or the server is at capacity (503, `Retry-After: 1`) |
+
+The device flow adds the codes from RFC 8628: `authorization_pending`, `slow_down`, `expired_token` and `access_denied`, all with status `400`.
+
+## What to match on
+
+Branch on the status for the class of failure, then on the code for the specific one. Do not branch on `message`: it is English prose, its wording is not part of the contract, and some messages carry detail that changes from one request to the next.
+
+One line reads the code out of any of the three shapes:
+
+```ts
+const body = await response.json()
+const code = body.reason ?? body.error ?? body.errors?.[0]?.code
+```
+
+The console does the same. It picks the text it shows from `reason`, from `error` for an OAuth response, or from `code` for each entry of a validation error, in the language of the person using it, and falls back on `message` only when it has no text for the code. See [Localization](/en/discover/guides/localization).

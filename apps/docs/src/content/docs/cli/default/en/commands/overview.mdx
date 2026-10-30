@@ -8,7 +8,7 @@ order: 0
 
 # Commands
 
-`ferris-ctl` has seven top-level commands. All of them accept the [global flags](/en/cli/overview#global-flags), and all of them resolve where to connect, who you are, and which realm to act on before sending anything. [Authentication](/en/cli/authentication) explains how.
+`ferris-ctl` has seven top-level commands. All of them accept the [global flags](/en/cli/overview#global-flags). The ones that call the FerrisKey API (`realm`, `client`, `user`) first resolve where to connect, who you are, and which realm to act on, and [Authentication](/en/cli/authentication) explains how. `context` and `source` only read and write your local config file, and `logout` only deletes the saved session.
 
 ## Connect and authenticate
 
@@ -31,7 +31,7 @@ Drop the stored session by deleting the credentials file.
 Create, inspect, and delete realms, manage their roles, and import one from an external source.
 :::
 :::card{label="Client" icon="lucide:box" href="/en/cli/commands/client"}
-Create, inspect, and delete OAuth2 clients within a realm.
+Create, inspect, and delete OAuth2 clients within a realm, and read a confidential client's secret.
 :::
 :::card{label="User" icon="lucide:users" href="/en/cli/commands/user"}
 Create, inspect, and delete users, set their passwords, and assign roles.
@@ -45,7 +45,7 @@ Create, inspect, and delete users, set their passwords, and assign roles.
 Store reusable import sources, so credentials and URLs are not repeated on every import.
 :::
 :::card{label="Importing realms" icon="lucide:import" href="/en/cli/import/overview"}
-The import guide: from a description file, a live Keycloak, or a live Zitadel instance.
+The import guide: from a description file, a live Keycloak, a live Zitadel, or a Supabase project.
 :::
 ::::
 
@@ -67,3 +67,11 @@ Each command carries its own help, down to the subcommand:
 ferris-ctl <command> --help
 ferris-ctl <command> <subcommand> --help
 ```
+
+## Output and exit codes
+
+`-o table|json|yaml` picks the output format. `login`, `logout`, and `client secret` ignore it and always print plain text. With `-o json` or `-o yaml`, listings are arrays and `realm import` always returns an array, even for a single realm, so a script can rely on the shape.
+
+Errors go to standard error as `error: <message>`. The exit code is 1 for any failure, 130 when you press `Ctrl-C` during `login`, and 2 when the arguments do not parse.
+
+The commands that delete something (`realm delete`, `realm role delete`, `client delete`, `user delete`) ask for confirmation on standard error and accept `y` or `yes`. In a shell without a terminal they refuse to run unless you pass `--force` (`-f`).

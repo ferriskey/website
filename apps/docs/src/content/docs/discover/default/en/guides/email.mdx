@@ -7,29 +7,35 @@ order: 21
 
 # Email & Templates
 
-FerrisKey sends transactional email for password resets, magic link sign-in, and email verification. Delivery is configured per realm, and each email type can be pointed at a template of your own.
+FerrisKey sends transactional email for password resets, magic link sign-in, and email verification. Delivery is configured per realm, and each email type needs a template assigned to it before anything is sent.
 
 ## Configure SMTP
 
 SMTP settings live in the database, on the realm, not in a global environment variable. Two realms in the same deployment can use completely different mail providers.
 
-:::callout{variant="info" title="No global SMTP"}
+<Callout variant="info" title="No global SMTP">
+
 SMTP is configured per realm, not globally. See the [Configuration guide](/en/discover/guides/configuration) for the short overview. This page covers the full field reference and API.
-:::
+
+</Callout>
 
 ### SMTP fields
 
 | Field | Type | Notes |
 |---|---|---|
 | `host` | String | SMTP server hostname |
-| `port` | u16 | Port number (1–65535) |
-| `username` | String | SMTP authentication username |
-| `password` | String | SMTP authentication password. Write-only: the API never returns it |
+| `port` | u16 | Port number, 1 to 65535 |
+| `username` | String | SMTP authentication username. Required |
+| `password` | String | SMTP authentication password. Required, and write-only: the API never returns it |
 | `from_email` | String | Sender address, must be a valid email |
 | `from_name` | String | Sender display name |
 | `encryption` | Enum | `tls` \| `starttls` \| `none` |
 
-**Encryption modes:**
+The API requires a `username` and a `password` even for a relay that does not authenticate, so give such a relay placeholder values.
+
+When `SECRETS_ENCRYPTION_KEYS` is set, the stored password is sealed. See [Secrets at rest](/en/discover/guides/secrets-at-rest).
+
+Encryption modes:
 
 | Mode | Port | When to use |
 |---|---|---|
@@ -47,21 +53,17 @@ All endpoints are scoped to a realm and require authentication.
 | `PUT` | `/realms/{realm_name}/smtp-config` | Create or replace the config |
 | `DELETE` | `/realms/{realm_name}/smtp-config` | Remove the config |
 
-**Required permissions:** reading the SMTP config requires view access to the realm. Creating, updating, or deleting it requires `ManageRealm`. There are no SMTP-specific permissions beyond the realm gates.
+Required permissions: reading the SMTP config requires view access to the realm. Creating, updating, or deleting it requires `ManageRealm`. There are no SMTP-specific permissions beyond the realm gates.
 
 ### Configure SMTP in the console
 
 ::::step-group
-:::step{title="Open Realm Settings"}
-In the left sidebar, select the realm you want to configure. Navigate to **Realm Settings**.
-:::
-
-:::step{title="Go to the Email tab"}
-Click the **Email** tab. You will see the SMTP configuration form.
+:::step{title="Open the Emails page"}
+In the left sidebar of the admin console, open **Emails**, then the **SMTP** tab. In the second console panel the same page is under Branding, as Email templates. See [The admin console](/en/discover/guides/admin-console).
 :::
 
 :::step{title="Fill in the provider details"}
-Enter the host, port, credentials, sender address and name. Select the encryption mode that matches your provider.
+Enter the host, port, encryption mode, username and password, then the sender address and name. Select the encryption mode that matches your provider.
 
 Common provider settings:
 
@@ -73,14 +75,18 @@ Common provider settings:
 | Local (MailHog / MailPit) | `localhost` | 1025 | `none` |
 :::
 
-:::step{title="Save and verify"}
-Click **Save**. Send a test email from the console to confirm delivery reaches the inbox before enabling email-gated features.
+:::step{title="Save and check"}
+Click **Save configuration**, or **Save changes** when one already exists. Saving replaces the whole configuration, password included, so type the password again.
+
+There is no test-send button. Trigger a real flow instead, for example a password reset for a test account, then look for an `email_sent` or `email_not_sent` event in [SeaWatch](/en/modules/seawatch/overview) or in the Message delivery view of the console.
 :::
 ::::
 
-:::callout{variant="warning" title="Password is write-only"}
+<Callout variant="warning" title="Password is write-only">
+
 The API never returns the SMTP password. If you need to rotate credentials, submit a full `PUT` with the new password included.
-:::
+
+</Callout>
 
 ---
 
@@ -94,14 +100,21 @@ There are three types of transactional email, each gated by a realm toggle.
 | Magic link | `magic_link` | A user requests passwordless email login | `magic_link_enabled` |
 | Email verification | `email_verification` | A user must verify their email address | `email_verification_enabled` |
 
-Turning a toggle on in Realm Settings activates the matching flow. Until you assign a template of your own, FerrisKey uses the built-in default.
-
----
+The toggles are in Realm Settings, on the Login tab, under Authentication capabilities. Turning one on activates the matching flow, but it does not send anything by itself: an email leaves only when the type has a template assigned and the realm has an SMTP configuration.
 
 <img class="only-light" src="/dashboard/email_templates-light.jpg" alt="FerrisKey email templates page showing per-type assignment and the Import action" />
 <img class="only-dark" src="/dashboard/email_templates-dark.jpg" alt="FerrisKey email templates page showing per-type assignment and the Import action" />
 
-Assignment is per email type, and a type with nothing assigned is not broken: FerrisKey falls back to its plain-text default, which the page states explicitly rather than leaving you to infer.
+Assignment is per email type, and a type with nothing assigned sends no email. FerrisKey has no built-in default template to fall back on. What you see when something is missing depends on the type:
+
+| Missing | Password reset and magic link | Email verification |
+|---|---|---|
+| Template | Nothing is sent. The request still succeeds for the person asking, and SeaWatch records `email_not_sent` with the error code `TEMPLATE_NOT_CONFIGURED` | Sending fails with `400` and the reason `email_verification_template_not_configured` |
+| SMTP configuration | Nothing is sent, and SeaWatch records `email_not_sent` with `SMTP_NOT_CONFIGURED` | Sending fails with `503` |
+
+For email verification the failure is not silent. A self-registration in a realm with email verification on fails with that error, and the account it was creating is rolled back, so nobody can register until the template and the SMTP configuration are in place. The resend endpoint fails the same way.
+
+When the mail server refuses or fails to deliver a password reset or a magic link, SeaWatch records `email_not_sent` with `SMTP_SEND_FAILED` and the reason. The person who asked gets the same answer whether or not the mail left, and whether or not the address belongs to an account, so `email_not_sent` events are where you find out. Watch for them.
 
 ## Customizing templates
 
@@ -115,22 +128,44 @@ Templates are rendered by a small interpolation engine written for the purpose, 
 
 Every interpolated value is HTML-escaped before insertion (`&`, `<`, `>`, `"`, `'`), so a template cannot be turned into an injection vector.
 
-:::callout{variant="info" title="HTML escaping"}
-Values inserted via `{{...}}` are always HTML-escaped. If a user's name is `Alice <script>`, it renders as `Alice &lt;script&gt;` in the final email, safe to embed in HTML.
-:::
+<Callout variant="info" title="HTML escaping">
 
-Templates are stored as a JSON `structure` that FerrisKey renders to MJML and then to HTML before sending.
+Values inserted via `{{...}}` are always HTML-escaped. If a user's name is `Alice <script>`, it renders as `Alice &lt;script&gt;` in the final email, safe to embed in HTML.
+
+</Callout>
+
+Templates are stored as a JSON `structure` that FerrisKey renders to MJML and then to HTML before sending. The HTML part travels with a plain-text version of the message, which a mail client falls back on. If a template cannot be rendered when the email is sent, only the plain-text version goes out.
+
+### What the server removes from a template
+
+The builder is only one way to produce a `structure`. Another one is an import, or a direct call to the API, so FerrisKey cleans the structure on the server rather than trusting the editor. It does so when a template is created, updated or imported, and again each time it renders an email. Most of the cleaning is silent: the template saves, minus whatever was removed. Two cases are refused instead.
+
+| What | Rule |
+|---|---|
+| Node types | `mjml`, `root`, or a name starting with `mj-`. Any other type is refused with `400` |
+| Nesting | At most 32 levels. A deeper structure is refused with `400` |
+| Text content | Only these tags stay: `p`, `br`, `hr`, `strong`, `b`, `em`, `i`, `u`, `s`, `a`, `ul`, `ol`, `li`, `h1` to `h6`, `blockquote`, `code`, `pre`, `span`, `table`, `thead`, `tbody`, `tfoot`, `tr`, `td`, `th`. Scripts, comments and every other tag go |
+| URLs | Only `http`, `https`, `mailto` and `tel`. A URL with another scheme, such as `javascript:`, is removed from `href`, `src` and any attribute ending in `-url` or `-src`. Relative URLs and `{{placeholders}}` have no scheme and pass |
+| Inline CSS | Only `color`, `font-size`, `font-weight`, `font-style`, `font-family`, `text-align`, `line-height` and `text-decoration`, and not with `url(`, `expression(` or `@import` in the value |
+| Attributes | Names that start with `on`, and names that are not letters, digits and hyphens, are dropped |
+| `mj-style` | Emptied whole if it contains `<`, a backslash, `url(`, `expression(`, `@import`, `javascript:`, `behavior` or `binding` |
+
+Links in text content also get `rel="noopener noreferrer"`.
 
 ### Available variables
 
-These variables are available in every template:
+These variables are available in every template, whatever its type:
 
 | Variable | Description |
 |---|---|
 | `user.first_name` | User's first name |
 | `user.last_name` | User's last name |
 | `user.email` | User's email address |
-| `expiration` | Expiry time of the token or link |
+| `expiration` | How long the link stays valid, written out: `30 minutes` for a password reset, the realm's magic link validity in minutes (15 by default), `24 hours` by default for an email verification |
+| `requested_at` | When the email was requested, in UTC and RFC 3339, for example `2026-10-17T12:34:56Z` |
+| `user_agent` | The `User-Agent` of the request that triggered the email, or `unknown` when it carried none |
+
+`requested_at` and `user_agent` let a security notice tell its recipient when and from what client the request came, so they can spot one they never made.
 
 Each email type also provides one link variable:
 
@@ -157,30 +192,38 @@ Example response for `reset_password`:
     { "name": "user.last_name", "description": "User's last name" },
     { "name": "user.email", "description": "User's email address" },
     { "name": "expiration", "description": "Expiration time" },
+    { "name": "requested_at", "description": "Date and time the email was requested (UTC, RFC 3339)" },
+    { "name": "user_agent", "description": "User agent of the request that triggered the email" },
     { "name": "reset_link", "description": "Password reset link" }
   ]
 }
 ```
 
+### Language
+
+FerrisKey does not choose a template or a language from the user's locale. The locale on a user and on a realm sets the language of the console and of the default sign-in pages. It plays no part in email; see [Localization](/en/discover/guides/localization). A realm has one template per email type, so every recipient of that type gets the same one. The subject lines are fixed English strings (`Reset your password`, `Your magic link` and `Verify your email address`), and so is the plain-text version. Write the template itself in the language your users read.
+
 ### Template API endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/realms/{realm_name}/email-templates` | List all templates for the realm |
+| `GET` | `/realms/{realm_name}/email-templates` | List the templates of the realm, paginated |
 | `POST` | `/realms/{realm_name}/email-templates` | Create a new template |
 | `GET` | `/realms/{realm_name}/email-templates/{template_id}` | Get a template by ID |
 | `PUT` | `/realms/{realm_name}/email-templates/{template_id}` | Update a template |
 | `DELETE` | `/realms/{realm_name}/email-templates/{template_id}` | Delete a template |
 
-**Request body for `POST`:** `name`, `email_type`, `structure`.
+The list takes `search`, `name`, `email_type`, `created_from` and `created_to`, and sorts on `name`, `email_type`, `created_at` (the default) or `updated_at`. See [Paginated listings](/en/discover/guides/api-listings).
 
-**Request body for `PUT`:** `name`, `structure` (`email_type` cannot be changed after creation).
+Request body for `POST`: `name`, `email_type`, `structure`.
 
-**Required permissions:** `ViewEmailTemplates` to read. `ManageEmailTemplates` to create, update, or delete. `ManageRealm` also grants both.
+Request body for `PUT`: `name`, `structure` (`email_type` cannot be changed after creation).
+
+Required permissions: `ViewEmailTemplates` to read. `ManageEmailTemplates` to create, update, or delete. `ManageRealm` also grants both.
 
 ### Linking a template to an email type
 
-Creating a template does not activate it. Point the realm at it by updating realm settings:
+Creating a template does not activate it. Point the realm at it by updating realm settings, with `PUT /realms/{realm_name}/settings`, or by choosing a template in the Assignment section of the Emails page:
 
 | Realm setting field | Applies to |
 |---|---|
@@ -188,7 +231,7 @@ Creating a template does not activate it. Point the realm at it by updating real
 | `magic_link_template_id` | `magic_link` emails |
 | `email_verification_template_id` | `email_verification` emails |
 
-Set the field to the template UUID to activate it. Set it to `null` (or leave it unset) to fall back to the built-in default.
+Set the field to the template UUID to activate it. Set it to `null` and that email type stops sending.
 
 ---
 
@@ -196,14 +239,14 @@ Set the field to the template UUID to activate it. Set it to `null` (or leave it
 
 ### Template snippet
 
-A minimal password-reset template body using placeholder syntax:
+A minimal password-reset message, written as the content of a text block in the builder and using placeholder syntax:
 
-```html title="Reset password template (body excerpt)"
+```html title="Reset password template (text block content)"
 <p>Hi {{user.first_name}},</p>
 
 <p>
-  Someone requested a password reset for your account (<strong>{{user.email}}</strong>).
-  This link expires in {{expiration}}.
+  Someone requested a password reset for your account (<strong>{{user.email}}</strong>)
+  at {{requested_at}}, from {{user_agent}}. This link expires in {{expiration}}.
 </p>
 
 <p>
@@ -222,6 +265,8 @@ A minimal password-reset template body using placeholder syntax:
     { "name": "user.last_name", "description": "User's last name" },
     { "name": "user.email", "description": "User's email address" },
     { "name": "expiration", "description": "Expiration time" },
+    { "name": "requested_at", "description": "Date and time the email was requested (UTC, RFC 3339)" },
+    { "name": "user_agent", "description": "User agent of the request that triggered the email" },
     { "name": "magic_link", "description": "Magic link URL" }
   ]
 }

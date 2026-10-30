@@ -1,13 +1,13 @@
 ---
 title: Operator
-description: "Manage FerrisKey declaratively with the FerrisKey Operator and FerrisKeyCluster CRD."
+description: "Manage FerrisKey declaratively with the FerrisKey Operator and the FerrisKeyCluster resource."
 icon: bot
 order: 3
 ---
 
-# FerrisKey Operator
+# Operator
 
-The operator manages FerrisKey instances declaratively, through a custom resource. You describe the cluster you want in a `FerrisKeyCluster` manifest, and the operator reconciles towards it.
+The operator manages FerrisKey instances through a custom resource. You describe a cluster in a `FerrisKeyCluster` manifest, and the operator creates the Kubernetes objects that run it and keeps them in line with the manifest.
 
 ## The FerrisKeyCluster resource
 
@@ -22,7 +22,7 @@ metadata:
 spec:
   name: my-ferriskey
   replicas: 3
-  version: "0.9.0"
+  version: "0.10.0"
   api:
     apiUrl: "https://api.iam.yourorg.com"
     webappUrl: "https://iam.yourorg.com"
@@ -31,9 +31,6 @@ spec:
   database:
     secretRef:
       name: ferriskey-db-credentials
-      namespace: ferriskey
-    databaseName: ferriskey
-    sslMode: require
 ```
 
 ## Spec reference
@@ -44,9 +41,9 @@ Every field below is required unless the description says otherwise.
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | Cluster name |
-| `replicas` | `integer` | Number of API replicas |
-| `version` | `string` | FerrisKey version to deploy |
+| `name` | `string` | Required by the schema but not used to name anything. The generated objects are named after `metadata.name`, so set both to the same value |
+| `replicas` | `integer` | Number of replicas. It sizes both the API and the console Deployments |
+| `version` | `string` | Image tag of `ferriskey-api` and `ferriskey-webapp`. The migration Job runs the API image at the same tag |
 | `api` | `object` | API configuration |
 | `database` | `object` | Database configuration |
 
@@ -54,54 +51,54 @@ Every field below is required unless the description says otherwise.
 
 | Field | Type | Description |
 |---|---|---|
-| `apiUrl` | `string` | Public URL of the API |
-| `webappUrl` | `string` | Public URL of the console |
-| `allowedOrigins` | `string[]` | Optional. Browser origins allowed on every route |
+| `apiUrl` | `string` | Public URL of the API, as the browser reaches it. The console receives it as `API_URL`, and its origin is the only cross-origin address the console's content security policy lets it call |
+| `webappUrl` | `string` | Public URL of the console. The API receives it as `WEBAPP_URL` |
+| `allowedOrigins` | `string[]` | Optional. Browser origins allowed on every route, passed as `ALLOWED_ORIGINS` |
 
-As with the standalone deployment, per-client web origins only cover realm-scoped routes. `/config`, the health probes, and the API documentation carry no realm, so a console served from a different origin than the API has to keep its origin in `allowedOrigins`.
+The operator runs the API with `SERVER_ROOT_PATH=/`, so it is served from the root of a host, and in the example above the console has a host of its own. Per-client web origins only cover realm-scoped routes. `/config`, the health probes, and the API documentation carry no realm, so a console served from a different origin than the API has to keep its origin in `allowedOrigins`.
 
 ### `spec.database`
 
 | Field | Type | Description |
 |---|---|---|
-| `secretRef.name` | `string` | Secret holding the database credentials |
-| `secretRef.namespace` | `string` | Optional. Defaults to the resource's namespace |
-| `databaseName` | `string` | Optional. Overrides the database name from the Secret |
-| `sslMode` | `string` | Optional. `disable`, `prefer`, `require`, `verify-ca`, or `verify-full` |
+| `secretRef.name` | `string` | Secret holding the database credentials, in the namespace of the FerrisKeyCluster |
+| `secretRef.namespace` | `string` | Optional. Accepted but ignored: pods can only read Secrets from their own namespace, and the operator always uses the namespace of the FerrisKeyCluster |
+| `databaseName` | `string` | Optional. Accepted but not used. The database name comes from the `dbname` key of the Secret |
+| `sslMode` | `string` | Optional. Accepted but not used. See the TLS note below |
 
-:::callout{variant="info" title="Database Secret format"}
-The referenced Secret must carry `host`, `port`, `user`, and `password`. `database` is optional and can be supplied through `databaseName` instead.
-:::
+## Database Secret
+
+The Secret named by `secretRef.name` must carry these keys. A pod whose Secret lacks one does not start.
+
+| Key | Used for |
+|---|---|
+| `host` | `DATABASE_HOST` on the API |
+| `port` | `DATABASE_PORT` on the API |
+| `dbname` | `DATABASE_NAME` on the API |
+| `user` | `DATABASE_USER` on the API |
+| `password` | `DATABASE_PASSWORD` on the API |
+| `uri` | `DATABASE_URL` of the migration Job, a full connection URL such as `postgresql://user:password@host:5432/dbname` |
+
+The `sslMode` field does nothing. To make the migration Job use TLS, end the `uri` with `?sslmode=verify-full` (or another mode). The API pods are different: the operator adds no environment variable to them beyond its fixed list, so they connect in the default `prefer` mode: TLS when the server offers it, without checking the certificate, and plain text when it does not. The [production guide](/en/kubernetes/production-guide#encrypt-the-database-connection) explains the modes.
 
 ## Status
 
-The operator reports cluster status through the `status` subresource:
+The operator writes the `status` subresource after every reconcile:
 
 ```yaml
 status:
   ready: true
   phase: Running
-  databaseStatus:
-    connected: true
-    host: "postgres.database.svc.cluster.local"
-    database: "ferriskey"
-    lastCheck: "2026-03-17T10:30:00Z"
-  conditions:
-    - conditionType: Ready
-      status: "True"
-      lastTransitionTime: "2026-03-17T10:25:00Z"
-    - conditionType: DatabaseConnected
-      status: "True"
-      lastTransitionTime: "2026-03-17T10:24:00Z"
+  message: Cluster successfully deployed
 ```
 
 | Field | Description |
 |---|---|
-| `ready` | Overall cluster readiness |
-| `phase` | Current phase (Pending, Running, Failed) |
-| `message` | Human-readable status message |
-| `databaseStatus` | Database connectivity information |
-| `conditions` | Standard Kubernetes conditions |
+| `ready` | `true` once the operator has applied all the manifests. It does not wait for the pods, so check them with `kubectl get pods` |
+| `phase` | `Running` after a successful reconcile, `Error` after a failed one |
+| `message` | `Cluster successfully deployed`, or `Error deploying cluster:` followed by the cause |
+
+The CRD schema also defines `conditions` and `databaseStatus`, but the operator never fills them. After a failure it retries every 20 seconds. After a success it reconciles again every 60 seconds.
 
 ## Deploying
 
@@ -117,13 +114,19 @@ helm install ferriskey-operator oci://ghcr.io/ferriskey/charts/ferriskey-operato
 :::
 
 :::step{title="Create a database secret"}
+Create the namespace the cluster will live in, then the Secret with the six keys:
+
 ```bash
+kubectl create namespace ferriskey
+
 kubectl create secret generic ferriskey-db-credentials \
   --namespace ferriskey \
   --from-literal=host=postgres.database.svc.cluster.local \
   --from-literal=port=5432 \
+  --from-literal=dbname=ferriskey \
   --from-literal=user=ferriskey \
-  --from-literal=password=your-db-password
+  --from-literal=password=your-db-password \
+  --from-literal=uri=postgresql://ferriskey:your-db-password@postgres.database.svc.cluster.local:5432/ferriskey
 ```
 :::
 
@@ -136,13 +139,71 @@ kubectl apply -f ferriskey-cluster.yaml
 :::step{title="Check status"}
 ```bash
 kubectl get fkcl -n ferriskey
+kubectl get pods -n ferriskey
 ```
 :::
 ::::
 
+## What the operator creates
+
+For a FerrisKeyCluster named `<name>`, the operator applies these objects in its namespace:
+
+| Kind | Name | Notes |
+|---|---|---|
+| Secret | `ferriskey-admin-<name>` | Random admin password |
+| Job | `ferriskey-migrations-<name>` | Runs `sqlx migrate run` with `backoffLimit: 3` and `ttlSecondsAfterFinished: 300` |
+| Deployment | `ferriskey-api-<name>` | The API, on `ghcr.io/ferriskey/ferriskey-api:<version>`, port 3333 |
+| Service | `ferriskey-api-<name>` | ClusterIP on port 3333 |
+| Deployment | `ferriskey-webapp-<name>` | The console, on `ghcr.io/ferriskey/ferriskey-webapp:<version>`, port 80, with `API_URL` set |
+| Service | `ferriskey-webapp-<name>` | ClusterIP on port 80 |
+
+The operator applies the Job at every reconcile. Once Kubernetes has deleted the finished Job, the next pass creates it again, so a new migration pod appears every few minutes. Running the migrations again changes nothing when the schema is current.
+
+No Ingress or HTTPRoute is created. Route your public hostnames to the two Services yourself.
+
+The FerrisKeyCluster carries the finalizer `ferriskey.rs/finalizer`. Deleting it makes the operator delete the six objects above, so the operator has to be running for the deletion to finish. The database and the credentials Secret are not touched.
+
+## Limits of the operator today
+
+The operator builds fixed pod specs, and the FerrisKeyCluster has no field to change them:
+
+- The API runs with `ADMIN_USERNAME=admin`, `ADMIN_EMAIL=admin@gmail.com`, `ENV=production`, `LOG_FILTER=info`, `LOG_JSON=true`, `SERVER_PORT=3333` and `SERVER_ROOT_PATH=/`, plus `WEBAPP_URL` and `ALLOWED_ORIGINS` from the spec. There is no way to add other environment variables. That rules out `SECRETS_ENCRYPTION_KEYS`, so realm signing keys, TOTP seeds and SMTP passwords stay in clear in the database. It also rules out `SERVER_PUBLIC_URL`, which SAML needs, `SERVER_TRUST_FORWARDED_FOR` and the pool and Argon2 settings. Use the [Helm chart](/en/kubernetes/helm-chart) if you need any of them.
+- Neither Deployment has liveness or readiness probes, resource requests or limits, or a security context.
+- `replicas` applies to the API and the console alike.
+- The `ferriskey-admin-<name>` Secret does not keep the admin password. The operator writes a new random value into it at every reconcile, which includes the 60-second requeue. The API reads `ADMIN_PASSWORD` when its container starts, and it only uses the value when the admin account has no password yet. After the first start, the Secret therefore no longer holds the password of the admin account, and a restart never changes that password.
+
+## Operator chart values
+
+| Key | Default | Description |
+|---|---|---|
+| `crds.install` | `true` | Install the CRD with the chart |
+| `crds.keep` | `true` | Annotate the CRD with `helm.sh/resource-policy: keep` |
+| `rbac.create` | `true` | Create the RBAC objects. Requires `operator.serviceAccount.create` |
+| `operator.watchNamespaces` | `[]` | Namespaces to watch. Empty watches the whole cluster |
+| `operator.replicas` | `1` | Run a single replica |
+| `operator.image.repository` | `ghcr.io/ferriskey/ferriskey-operator` | Operator image. The tag defaults to the chart's `appVersion` |
+| `operator.resources` | 64Mi memory request, 256Mi memory limit | Operator container resources |
+
+## Watching a subset of namespaces
+
+By default the operator watches every namespace, and the chart creates a ClusterRole and a ClusterRoleBinding. The ClusterRole is narrow. It can get, list, watch, update and patch `FerrisKeyCluster` resources with their status and finalizers, and create, patch and delete Services, Secrets, Deployments and Jobs. Those rights hold in every namespace, so the operator can write Secrets anywhere in the cluster.
+
+To confine it, list the namespaces:
+
+```yaml title="values.yaml"
+operator:
+  watchNamespaces:
+    - team-a
+    - team-b
+```
+
+With the list set, the chart drops the cluster-wide pair and creates one Role and one RoleBinding in each listed namespace instead. It also sets `WATCH_NAMESPACES` (comma-separated) on the operator Deployment. The operator then watches only those namespaces and ignores a FerrisKeyCluster created anywhere else.
+
+The namespaces must exist when you install the chart, and each name has to be a valid DNS label: the operator refuses to start otherwise. Rendering fails on an empty entry, on a duplicate, and when `common.env` or `operator.env` define `WATCH_NAMESPACES` themselves.
+
 ## CRD and RBAC ownership
 
-By default the chart installs the CRD and annotates it with `helm.sh/resource-policy: keep`, so `helm uninstall` leaves it, and your clusters, alone. It also creates a ClusterRole and ClusterRoleBinding letting the operator manage `FerrisKeyCluster` resources across namespaces.
+By default the chart installs the CRD and annotates it with `helm.sh/resource-policy: keep`, so `helm uninstall` leaves it, and your clusters, alone. It also creates the RBAC described above.
 
 If either is managed elsewhere, for example through GitOps or a dedicated CRD chart, turn the chart's copy off:
 
@@ -154,6 +215,8 @@ rbac:
   create: false
 ```
 
-:::callout{variant="warning" title="Keep the CRD on uninstall"}
+With `rbac.create: false`, you must grant the operator's service account the same rules yourself.
+
+:::callout{variant="warning"}
 Leave `crds.keep` at `true` in production. Deleting the CRD deletes every `FerrisKeyCluster` in the cluster along with it.
 :::

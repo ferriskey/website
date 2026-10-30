@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: "Import realms into FerrisKey from a description file, a live Keycloak, or a live Zitadel instance."
+description: "Import realms into FerrisKey from a description file, a live Keycloak, a live Zitadel, or a Supabase project."
 icon: import
 order: 1
 ---
@@ -26,45 +26,88 @@ Read users live from a Supabase project. Users only, with optional password and 
 
 ## How it works
 
-Each source is resolved into a **blueprint** (a normalized description of the realm) which is then applied to FerrisKey.
+Each source is resolved into a **blueprint** (a normalized description of the realm) which is then applied to FerrisKey. The API has no bulk-import endpoint, so the CLI replays the blueprint as ordinary create calls, signed in as the identity of your context.
 
-```
+```text
 source (file | keycloak | zitadel | supabase) → blueprint → apply to FerrisKey
 ```
 
-Apply order: realm → settings → realm roles → clients (with redirect URIs and client roles) → users (with role assignments).
+The apply order is: realm, realm settings, realm roles, clients (with redirect URIs, post-logout redirect URIs, web origins, per-client settings, and client roles), then users (with their password and role assignments).
 
 ```bash title="Basic shape"
 ferris-ctl realm import --from <config|keycloak|zitadel|supabase> [source flags] [--target-realm <name>]
 ```
 
-See the full flag list on the [`realm import`](/en/cli/commands/realm) reference.
+See the full flag list on the [`realm import`](/en/cli/commands/realm#realm-import) reference.
 
 ## Preview with `--dry-run`
 
-Add `--dry-run` to resolve the source and print the planned realm **without** writing anything to FerrisKey. Combine it with `-o yaml` to inspect the blueprint:
+Add `--dry-run` to resolve the source and print the planned realm without writing anything to FerrisKey. It needs no context and no login, but it does read the source. Combine it with `-o yaml` to inspect the blueprint:
 
 ```bash
 ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
 ```
 
+The table form prints counts only. The `json` and `yaml` forms print the whole blueprint as an array, with password hashes replaced by `<redacted>`.
+
+## The import report
+
+A real import ends with a report. The table form prints one line per counter, and `-o json` or `-o yaml` print an array with one report per realm, using the keys below.
+
+| JSON key | Counts |
+|----------|--------|
+| `realm_created` | `true` when the import created the realm |
+| `settings_applied` | `true` when realm settings were sent |
+| `roles_created` | Realm roles created |
+| `clients_created` | Clients created |
+| `redirects_created` | Redirect URIs added |
+| `post_logout_redirects_created` | Post-logout redirect URIs added |
+| `web_origins_created` | Web origins added |
+| `client_settings_applied` | Clients for which PKCE or token lifetimes were sent |
+| `client_roles_created` | Client roles created |
+| `users_created` | Users created |
+| `role_assignments` | Roles assigned to users |
+| `passwords_imported` | Password hashes stored |
+| `passwords_failed` | Hashes the server refused, or skipped because the server has no import endpoint |
+| `already_present` | Things skipped because they already exist: the realm, a role, a client, a redirect URI, a web origin, a user, a role assignment, or a user's password |
+
+Each report also carries `realm`, the name of the realm, and `dry_run`, which is always `false` for a real import. The two `passwords_*` counters are not in release 0.3.0. Two more keys appear only when they have content: `client_secrets` and `warnings`. Each warning is one sentence naming what was skipped or could not be read, such as `user 'alice' already exists, reusing it` or `role 'ops' not found, cannot assign it to user 'bob'`.
+
+<Callout variant="danger" title="The report prints client secrets">
+
+For every confidential client in the import, including clients that already existed, the report lists `client_id` and the secret FerrisKey holds for it, in plain text, in the table, `json`, and `yaml` outputs. A client the import creates gets a new secret from FerrisKey; the secret it had in Keycloak or Zitadel is not read or carried over, so the applications that use it need the new one. Keep the output out of shared CI logs.
+
+</Callout>
+
 ## Idempotency
 
-Imports are safe to re-run. Entities that already exist (the API returns a conflict) are skipped with a warning rather than failing the whole import, so you can fix a source and run it again.
+An import converges when you re-run it; it does not synchronise. Before it creates anything, the importer reads what the realm already holds and skips what is there, counting each skip in `already_present` and adding a warning.
+
+- Existing entities are reused as they are, never updated. A role keeps its permissions, a client keeps its flags, a user keeps their email. Only what is missing is added: redirect URIs, web origins, client roles, role assignments.
+- Realm settings, and a client's PKCE and token lifetimes, are the exception. They are sent on every run, whether or not the realm or client existed, and they overwrite the current values.
+- A password in the source for a user who already has one is not applied: the server answers with a conflict, the importer keeps the existing password, and a warning says so.
+- When a call that creates or updates something fails with anything other than an "already exists" answer, the import stops at once with `error: ...` and exit status 1. There is no rollback and no report; what was created before the error stays. Fix the cause and run again. Failed reads and failed password imports only add a warning.
+- A user role written as `client_id:role` must exist, either in the source or already on that client, or the import stops with an error naming the user. An unknown realm role only adds a warning and that assignment is skipped.
+
+The existence checks for realm roles and clients read the first page of the listing (20 items). In a realm that already holds more than 20 roles or clients, an existing one can be missed and the importer then tries to create it again.
+
+When a source yields several realms (Zitadel without `--source-org`), a failure discards the report of the realms already imported. They are still in FerrisKey.
 
 ## Stored sources
 
-For Keycloak and Zitadel, save the connection once as a [source](/en/cli/commands/source) and reference it with `--source-ref`, instead of passing URL and credentials every time:
+For Keycloak, Zitadel, and Supabase, save the connection once as a [source](/en/cli/commands/source) and reference it with `--source-ref`, instead of passing URL and credentials every time:
 
 ```bash
 ferris-ctl source add kc-prod --kind keycloak --url https://kc.example.com \
-  --realm acme --client-id admin-cli --client-secret "$KC_SECRET"
+  --realm acme --client-id ferriskey-import --client-secret "$KC_SECRET"
 
 ferris-ctl realm import --source-ref kc-prod --target-realm acme
 ```
 
-Inline `--source-*` flags override values from a referenced source.
+Inline `--source-*` flags override values from a referenced source. When you pass `--source-ref`, the kind comes from the stored source and `--from` is ignored.
 
-:::callout{variant="info" title="Renaming on import"}
-By default the imported realm keeps the source realm's name. Use `--target-realm` to import it under a different name in FerrisKey.
-:::
+<Callout variant="info" title="Naming the realm">
+
+What the created realm is called depends on the source and on `--target-realm`; the table is in [`realm import`](/en/cli/commands/realm#name-of-the-created-realm). A config file or a Keycloak realm keeps its own name unless you override it.
+
+</Callout>
