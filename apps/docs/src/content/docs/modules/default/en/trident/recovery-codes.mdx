@@ -1,63 +1,94 @@
 ---
 title: Recovery Codes
-description: "Backup recovery codes in FerrisKey: generation, usage, and best practices."
+description: "Backup recovery codes in FerrisKey: how a client generates a set, how a code answers the TOTP challenge, and what it cannot do."
 icon: file-key
 order: 14
 ---
 
-# Recovery Codes
+# Recovery codes
 
-Recovery codes are one-time backup credentials generated when MFA is first configured. They serve as a last resort when the user loses access to their primary MFA device, a lost phone, a broken hardware key, or a wiped authenticator app.
+Recovery codes are one-time backup codes. A user who has lost their authenticator, because of a lost phone or a wiped app, can type one at the TOTP challenge instead of a six-digit code.
 
-## How they work
+FerrisKey does not create recovery codes by itself. Enrolling an authenticator or a passkey generates nothing, and neither the console nor the default portal has a screen for them. Your application asks FerrisKey for a set, shows it to the user once, and tells them to keep it. If you use the default portal only, nobody has recovery codes.
 
-When a user configures TOTP or WebAuthn for the first time, FerrisKey generates a set of recovery codes. Each code is a random byte sequence that can be used exactly once to bypass the normal MFA challenge.
+## Generating a set
 
-### Lifecycle
+```
+POST /realms/{realm_name}/login-actions/generate-recovery-codes
+```
 
-::::step-group
-:::step{title="Generation"}
-A set of recovery codes is generated alongside the primary MFA credential. Each code is a random value. The raw codes are returned to the user **once**: this is the only time they see them.
-:::
+The call is made with the user's own access token as a Bearer token, and it needs an elevation proved with the user's **password**. Get one from [`POST /users/me/reauthenticate`](/en/modules/account/overview#sensitive-operations-need-an-elevation), minted for the same session as the token. An elevation proved with an OTP code is refused with a 403.
 
-:::step{title="Storage"}
-Each code is hashed before being stored in the database as a `RecoveryCode` credential. The plaintext codes are not retained by FerrisKey.
-:::
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "amount": 8,
+  "code_format": "b32-split-4"
+}
+```
 
-:::step{title="User saves codes"}
-The user is instructed to save the codes in a secure location, a password manager, a printed sheet in a safe, or an encrypted file.
-:::
+| Field | Description |
+|---|---|
+| `elevation_id` | The elevation from `reauthenticate` |
+| `amount` | How many codes to create |
+| `code_format` | `b32-split-4` is the only accepted value. Any other gets a 400 |
 
-:::step{title="Usage"}
-When the user cannot access their TOTP or WebAuthn device, they submit a recovery code instead. FerrisKey hashes the submitted code and checks it against the stored hashes.
-:::
+```json title="Response"
+{
+  "codes": ["ybnd-rfg8-ejkm-cpqx", "..."]
+}
+```
 
-:::step{title="Consumption"}
-A matching code is consumed (deleted from the database) after use. It cannot be reused.
-:::
-::::
+Each code is 10 random bytes written as 16 characters of z-base32, in four groups of four. The response is the only time the codes exist in clear. FerrisKey stores a hash of each one as a credential of type `recovery-code`.
 
-## Security Model
+Generating a set **replaces** the previous one: the new codes are stored first, then every earlier code is deleted. A user has one set at a time.
 
-- **Hashed storage**: Recovery codes are never stored in plaintext. A compromised database does not expose usable codes.
-- **Single use**: Each code works exactly once. After use, it's permanently deleted.
-- **No expiration**: Recovery codes remain valid until used or until the user regenerates a new set.
-- **Independent of MFA**: Recovery codes bypass the normal TOTP/WebAuthn challenge entirely, making them a true last resort.
+## Using a code
 
-:::callout{variant="danger" title="Treat codes like passwords"}
-Recovery codes grant full account access. Users should store them with the same care as a root password, never in plain text on a device, never shared, never in a screenshot.
-:::
+At the TOTP challenge, the client calls `burn-recovery-code` in place of `challenge-otp`. Like every login action, it carries the step token cookie and the `FERRISKEY_SESSION` cookie.
 
-## Best Practices
+```
+POST /realms/{realm_name}/login-actions/burn-recovery-code
+```
 
-### Prompt Regeneration
-After a user consumes a recovery code, prompt them to generate a fresh set. Each used code reduces the safety net.
+```json title="Request body"
+{
+  "recovery_code": "ybnd-rfg8-ejkm-cpqx",
+  "recovery_code_format": "b32-split-4"
+}
+```
 
-### Show how many are left
-Show users how many recovery codes they have remaining. If the count is low (1-2 remaining), warn them to regenerate.
+FerrisKey hashes the code and compares it with the user's stored codes. A match deletes that code, so it works once, and the sign-in carries on: the response holds `login_url`, or the `required_actions` still due. A code that is wrong or already used gets a 400.
 
-### Secure Display
-When displaying recovery codes during generation, use a copy-to-clipboard button and a download option. Avoid showing codes in a way that could be cached by the browser or captured by screen recording.
+A recovery code only answers a pending **TOTP** challenge. If the user has no authenticator, the call is refused with a 403 (`a recovery code only answers a pending OTP challenge`). A user whose only second device is a passkey has no challenge to answer, so recovery codes are of no use to them.
 
-### Admin Recovery
-If a user loses all MFA credentials and all recovery codes, an administrator can remove the MFA credentials from the user's account through the admin console, allowing them to reconfigure MFA from scratch.
+A recovery code does not lift an account lockout, and the client's maintenance and consent rules still apply after it.
+
+## Security model
+
+| Property | Behaviour |
+|---|---|
+| Storage | Only a hash is stored. A copy of the database does not give anyone a usable code |
+| Single use | A code is deleted the moment it matches |
+| Lifetime | A code never expires. It stays valid until it is used or the user generates a new set |
+| Scope | It replaces the TOTP code at the challenge. It does not replace the password |
+
+<Callout variant="danger" title="Treat codes like passwords">
+
+A recovery code gets its holder past the second factor. Users should store codes with the same care as a root password: never in plain text on a device, never shared, never in a screenshot.
+
+</Callout>
+
+## Building the experience
+
+### Show the codes once
+
+The response of `generate-recovery-codes` is the only time the codes exist in clear. Show them with a copy button and a download option, and avoid rendering them where the browser may cache them or a screen recording may capture them.
+
+### Count what is left
+
+`GET /realms/{realm_name}/users/me/credentials` returns one entry of type `recovery-code` for each unused code. Show the count, and prompt for a new set when it is low. Each code used shrinks the safety net, and a new set replaces whatever is left.
+
+### Admin recovery
+
+If a user loses their authenticator and has no recovery codes, an administrator deletes the one-time password credential from the user's page in the console, under **Authentication methods**. The user can then sign in with the password and enrol again.

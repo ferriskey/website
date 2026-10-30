@@ -1,6 +1,6 @@
 ---
 title: Groups
-description: "Hierarchical groups inside a FerrisKey organization: nested membership, inherited roles, and group attributes."
+description: "Hierarchical groups inside a FerrisKey organization: nested membership, inherited roles, group attributes and the group API."
 icon: network
 order: 82
 ---
@@ -13,16 +13,18 @@ That is what makes "everyone in Engineering can read the build logs, and the Pla
 
 ## The group tree
 
-A group belongs to one organization and points at a parent through `parent_group_id`. A `null` parent means the group sits at the top level.
+A group belongs to one organization and points at a parent through `parent_group_id`. A `null` or missing parent means the group sits at the top level.
 
-```
+```text
 Acme Corp (organization)
 └── Engineering              roles: build:read
     ├── Platform             roles: deploy
     └── Frontend
 ```
 
-A user added to Platform is a member of Platform and of Engineering, and holds both `deploy` and `build:read`.
+A user added to Platform is a member of Platform and of Engineering, and holds both `deploy` and `build:read`. A user added to Engineering holds only `build:read`.
+
+Names are unique among siblings: two groups under the same parent, or two top-level groups, cannot share a name. Deleting a group deletes its sub-groups, with their memberships, role mappings and attributes.
 
 ## Group fields
 
@@ -31,62 +33,104 @@ A user added to Platform is a member of Platform and of Engineering, and holds b
 | `id` | UUID v7 | Identifier |
 | `organization_id` | UUID | The organization the group belongs to |
 | `parent_group_id` | UUID or null | Parent group. `null` for a top-level group |
-| `name` | String | Group name, required |
+| `name` | String | Group name, required, at most 255 characters |
 | `description` | String | Free-text description |
 | `created_at` | DateTime (UTC) | Creation timestamp |
 | `updated_at` | DateTime (UTC) | Last-modified timestamp |
 
-Updating a group can move it: sending a new `parent_group_id` reparents it, and sending `null` promotes it to the top level.
+Updating a group can move it: sending a `parent_group_id` reparents it under that group. The new parent must belong to the same organization, and cannot be the group itself or one of its descendants (400). Leaving `parent_group_id` out, or sending `null`, keeps the current parent. The API has no way to move a group back to the top level.
 
 ## Endpoints
 
-All of them are scoped to a realm and an organization.
+All of them are scoped to a realm and an organization: the paths start with `/realms/{realm_name}/organizations/{organization_id}`.
 
 ### Groups
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups` | List the organization's groups |
-| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups` | Create a group |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups` | Create a group. Answers `201` |
 | `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Read one group |
-| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Update or reparent a group |
-| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Delete a group |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Update or move a group |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | Delete a group and its sub-groups. Answers `204` |
 
-Listing returns the tree: each node carries the group's own fields plus a `children` array of the same shape.
+The list is a flat, paginated page, not a tree. The contract is described in [API listings](/en/discover/guides/api-listings). Each item carries the group's own fields and a `child_count`, the number of direct sub-groups:
+
+```json title="GET /realms/acme/organizations/{organization_id}/groups?parent_group_id={engineering_id}"
+{
+  "data": [
+    {
+      "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "parent_group_id": "0199a4f2-0000-7b8a-9f00-1a2b3c4d5e00",
+      "name": "Platform",
+      "description": "Runs the deploy pipeline",
+      "created_at": "2026-07-10T09:00:00Z",
+      "updated_at": "2026-07-10T09:00:00Z",
+      "child_count": 0
+    }
+  ],
+  "metadata": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1,
+    "first_page": 1,
+    "last_page": 1,
+    "next_page": null,
+    "prev_page": null
+  }
+}
+```
+
+To walk the tree, ask for the top level with `is_root=true`, then for the children of each group with `parent_group_id`. The other filters are:
+
+| Parameter | Matches |
+|---|---|
+| `search` | Case-insensitive substring of the name or the description |
+| `name`, `description` | Case-insensitive substring of that field |
+| `parent_group_id` | The direct children of that group |
+| `is_root` | `true` keeps top-level groups, `false` keeps nested ones. `is_root=true` cannot be combined with `parent_group_id` |
+| `ids` | A comma-separated list of at most 100 group ids |
+| `created_from`, `created_to` | RFC 3339 date-times, inclusive and exclusive |
+
+`order_by` accepts `name`, `created_at` (the default) and `updated_at`.
 
 ### Members
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `.../groups/{group_id}/members` | List the group's members, paginated |
-| `POST` | `.../groups/{group_id}/members` | Add a user to the group |
-| `DELETE` | `.../groups/{group_id}/members/{user_id}` | Remove a user from the group |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members` | List the group's members, paginated |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members` | Add a user to the group |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members/{user_id}` | Remove a user from the group |
 
-The member list is enriched, so a client can render it without walking the user directory. Each entry carries `username`, `email`, `firstname`, `lastname`, and `enabled` alongside the membership ids, and the response wraps them with `total`, `limit`, and `offset` for server-side pagination.
+Adding a member takes `{ "user_id": "…" }`, answers `201` with the membership, and refuses a user from another realm or a user already in the group. Removing a user who is not in the group answers 404.
+
+The member list is enriched, so a client can render it without walking the user directory. Each entry carries `id`, `group_id`, `user_id`, `username`, `email`, `firstname`, `lastname`, `enabled` and `created_at`, the date the user joined. It filters on `search` (username or email), `username`, `email`, `enabled`, `created_from` and `created_to`, and sorts on `username`, `email` or `created_at` (the default).
 
 ### Roles
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `.../groups/{group_id}/roles` | List the roles mapped to the group |
-| `POST` | `.../groups/{group_id}/roles` | Map a role to the group |
-| `DELETE` | `.../groups/{group_id}/roles/{role_id}` | Unmap a role |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles` | List the roles mapped to the group |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles` | Map a role to the group |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles/{role_id}` | Unmap a role |
 
-Every member of the group, and of every group below it, inherits the roles mapped here.
+Mapping takes `{ "role_id": "…" }` and answers `204`. The role must belong to the same realm. The list is not paginated: it returns the full role objects in a plain array. Every member of the group, and of every group below it, inherits the roles mapped here.
 
 ### Attributes
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `.../groups/{group_id}/attributes` | List the group's attributes |
-| `PUT` | `.../groups/{group_id}/attributes/{key}` | Upsert an attribute |
-| `DELETE` | `.../groups/{group_id}/attributes/{key}` | Delete an attribute |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes` | List the group's attributes |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes/{key}` | Upsert an attribute |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes/{key}` | Delete an attribute. Answers `204` |
 
-Same key-value shape and same upsert behaviour as [organization attributes](/en/modules/organization/attributes).
+Same key-value shape and same upsert behavior as [organization attributes](/en/modules/organization/attributes), except that the list is a plain array of attributes rather than an object with a `data` key.
 
 ## Permissions
 
-Groups use the same realm-level gates as the rest of the organization module: `ManageRealm` or `ManageUsers` to write, and `ViewUsers` on top of those to read. There are no group-specific permissions.
+Groups use the permissions of the organization module. Reading groups, their members, roles and attributes needs `view_organizations`, `manage_organizations` or `manage_realm`. Creating, updating and deleting groups, and changing their members, roles and attributes, needs `manage_organizations` or `manage_realm`. `manage_users` and `view_users` are not enough. There are no group-specific permissions.
 
 ::::card-group{cols=2}
 :::card{label="Members" icon="lucide:users" href="/en/modules/organization/members"}

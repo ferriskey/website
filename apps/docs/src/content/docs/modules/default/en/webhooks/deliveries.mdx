@@ -1,137 +1,173 @@
 ---
-title: Deliveries & Retries
+title: Deliveries and retries
 description: "Follow every webhook delivery attempt: status codes, error codes, automatic backoff, manual replay, and secret rotation."
 icon: repeat
 order: 64
 ---
 
-# Deliveries & Retries
+# Deliveries and retries
 
-A webhook that fires into a void is worse than no webhook: you believe the other system knows, and it does not. FerrisKey records **every delivery attempt** as a row you can query, with the HTTP status it got back, the error class when there was no status at all, and when it will try again.
+A webhook that fires into a void is worse than no webhook: you believe the other system knows, and it does not. FerrisKey records every delivery as a row you can query, with the HTTP status it got back, the error class when there was no status at all, and when it will try again.
 
 <img class="only-light" src="/dashboard/webhooks_list-light.jpg" alt="FerrisKey webhooks list showing endpoint count, subscription count, never-triggered and without-event counters" />
 <img class="only-dark" src="/dashboard/webhooks_list-dark.jpg" alt="FerrisKey webhooks list showing endpoint count, subscription count, never-triggered and without-event counters" />
 
 ## The delivery record
 
-```
+In the console, open a webhook and switch to its Deliveries tab. It lists every attempt FerrisKey made to call the endpoint, newest first: the status, the event, how many attempts have run and the outcome of the last one. You can filter on Created, Status and Event, search by resource ID, open a delivery with Inspect to read the payload that was sent, and use Send again to replay a finished one.
+
+<img class="only-light" src="/dashboard/webhook_deliveries-light.jpg" alt="FerrisKey webhook Deliveries tab with a search box and a table of five client.updated deliveries, each Queued after an HTTP 500 outcome, with attempt counts, last attempt times and an Inspect button" />
+<img class="only-dark" src="/dashboard/webhook_deliveries-dark.jpg" alt="FerrisKey webhook Deliveries tab with a search box and a table of five client.updated deliveries, each Queued after an HTTP 500 outcome, with attempt counts, last attempt times and an Inspect button" />
+
+The same data is available from the API:
+
+```text
 GET /realms/{realm_name}/webhooks/{webhook_id}/deliveries
 GET /realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}
 ```
 
+The list is paginated, as described in [API listings](/en/discover/guides/api-listings), and it leaves the payloads out. It filters on `event` (one trigger name), `status`, `resource_id`, `search` (matches the resource id), `created_from` and `created_to`, and sorts on `status`, `attempt_count`, `last_attempt_at`, `created_at` (the default) or `updated_at`. Deliveries never attempted sort last on `last_attempt_at` in ascending order and first in descending order.
+
 | Field | Description |
 |---|---|
-| `id` | Delivery identifier, used for replay |
+| `id` | Delivery identifier. It is also the `x-ferriskey-delivery-id` header on every attempt, and the id used for replay |
+| `webhook_id` | The webhook the delivery belongs to |
 | `event` | The [trigger](/en/modules/webhooks/triggers) that produced it, for example `user.created` |
-| `resource_id` | The id of the object the event is about |
+| `resource_id` | The `resource_id` of the payload. For almost every trigger this is the realm id, not the id of the changed object. See [Payload format](/en/modules/webhooks/payload) |
 | `status` | `pending`, `delivering`, `succeeded` or `failed` |
 | `attempt_count` | How many attempts have been made so far |
 | `next_attempt_at` | When the worker will try again. Absent once the delivery is terminal |
 | `last_attempt_at` | When the last attempt ran |
 | `last_status_code` | HTTP status returned by your endpoint, when it answered at all |
-| `last_error_code` | Why the attempt failed, when there was no usable HTTP response |
-| `last_error_detail` | Free-text detail for that error |
+| `last_error_code` | Why the attempt failed. A failing HTTP answer reads `http_<status>`; any other code means there was no usable response |
+| `last_error_detail` | Reserved for free-text detail on the error. FerrisKey leaves it empty in 0.10.0 |
 | `created_at`, `updated_at` | Row timestamps |
 
-The single-delivery read wraps the same summary alongside the **payload** that was sent, which is what you compare against what your endpoint logged:
+Reading one delivery returns the same fields, flat, with the payload that was sent next to them. That is what you compare against what your endpoint logged:
 
 ```json title="GET …/deliveries/{delivery_id}"
 {
   "data": {
-    "summary": { "id": "…", "event": "user.created", "status": "failed", "attempt_count": 5, "last_status_code": 500 },
+    "id": "…",
+    "webhook_id": "…",
+    "event": "user.created",
+    "status": "failed",
+    "attempt_count": 5,
+    "last_status_code": 500,
     "payload": { "…": "the body that was posted" }
   }
 }
 ```
 
+FerrisKey deletes finished deliveries, succeeded or failed, once they are 30 days old. Pending ones are kept.
+
 ### Status, and what it means for you
 
-| Status | Meaning |
-|---|---|
-| `pending` | Queued, waiting for its turn or for `next_attempt_at` |
-| `delivering` | A worker holds a lease on it right now |
-| `succeeded` | Your endpoint answered with a success status |
-| `failed` | Terminal. The attempts ran out, or the error is not worth retrying |
+| Status | Console label | Meaning |
+|---|---|---|
+| `pending` | Queued | Waiting for its turn or for `next_attempt_at`. A delivery that failed and will be retried is back here |
+| `delivering` | Sending | A worker holds a lease on it right now |
+| `succeeded` | Delivered | Your endpoint answered with a success status |
+| `failed` | Failed | Terminal. The attempts ran out, or the error is not worth retrying |
 
-:::callout{variant="info" title="Two fields, two kinds of failure"}
-`last_status_code` and `last_error_code` answer different questions. A `500` in `last_status_code` means your endpoint was reached and broke — the problem is on your side of the wire. An error code with no status means the request never got that far: DNS, TLS, a refused address. Read them in that order.
-:::
+<Callout variant="info" title="Two fields, two kinds of failure">
+
+`last_status_code` and `last_error_code` answer different questions. A `500` in `last_status_code` means your endpoint was reached and broke, so the problem is on your side of the wire. An error code with no status means the request never got that far: DNS, TLS, a refused address. Read them in that order.
+
+</Callout>
 
 ## Error codes
 
-When there is no HTTP response to report, the delivery carries one of ten error codes. They separate the causes that need different fixes:
+When there is no HTTP response to report, the delivery carries one of ten error codes. They separate the causes that need different fixes, and they decide whether FerrisKey tries again.
 
-| Code | What happened | Where to look |
-|---|---|---|
-| `dns_resolution_failed` | The endpoint host did not resolve | DNS, or a typo in the endpoint |
-| `no_usable_address` | It resolved, but to nothing FerrisKey may call | Often a private address with the guard on — see below |
-| `cleartext_not_allowed` | The endpoint is `http://` and cleartext is refused | Use `https://` |
-| `malformed_endpoint` | The stored endpoint is not a usable URL | The webhook's configuration |
-| `missing_host` | The URL carries no host | Same |
-| `reserved_header` | A custom header collides with one FerrisKey sets itself | Remove it from the webhook's headers |
-| `header_encoding_failed` | A custom header value is not encodable | Same |
-| `client_build_failed` | The HTTP client could not be constructed for this endpoint | Usually a TLS or proxy problem server-side |
-| `transport_error` | The request failed in transit: connection reset, timeout | Network, or your endpoint dropping the connection |
-| `http_<status>` | Your endpoint answered with a failing status. The code is interpolated, so a 500 reads `http_500` | `last_status_code` has the number on its own |
+| Code | What happened | Retried | Where to look |
+|---|---|---|---|
+| `dns_resolution_failed` | The endpoint host did not resolve | Yes | DNS, or a typo in the endpoint |
+| `no_usable_address` | It resolved, but to nothing FerrisKey may call | No | Often a private address with the guard on, see below |
+| `cleartext_not_allowed` | The endpoint is `http://` and cleartext is refused | No | Use `https://` |
+| `malformed_endpoint` | The stored endpoint is not a usable URL | No | The webhook's configuration |
+| `missing_host` | The URL carries no host | No | Same |
+| `reserved_header` | A custom header collides with one FerrisKey sets itself | No | Remove it from the webhook's headers |
+| `header_encoding_failed` | A custom header value is not encodable | Yes | Same |
+| `client_build_failed` | The HTTP client could not be constructed for this endpoint | Yes | Usually a TLS or proxy problem server-side |
+| `transport_error` | The request failed in transit: connection reset, timeout | Yes | Network, or your endpoint dropping the connection or answering too slowly |
+| `http_<status>` | Your endpoint answered with a failing status. The code is interpolated, so a 500 reads `http_500` | Only for 5xx, 408 and 429 | `last_status_code` has the number on its own |
 
-:::callout{variant="warning" title="Private addresses are refused by default"}
-An endpoint that resolves to loopback or a private range is refused with `no_usable_address`, because a webhook that can reach inside the deployment's own network is an SSRF primitive. For local development, `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` lifts the restriction — never in production. Link-local addresses stay refused regardless of that setting.
-:::
+Any other status counts as a failed delivery on the first attempt: a `400`, a `401`, a `404`, or a `301`, since FerrisKey does not follow redirects. Your endpoint decides, with its status code, whether a retry is worth it. A `503` while you deploy is retried. A `401` because your endpoint rejected the signature is not.
+
+<Callout variant="warning" title="Private addresses are refused by default">
+
+An endpoint that resolves to loopback or a private range is refused with `no_usable_address`, because a webhook that can reach inside the deployment's own network is an SSRF primitive. For local development, `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` lifts the restriction, and it must never be on in production. Link-local addresses stay refused regardless of that setting.
+
+</Callout>
 
 ## Automatic retries
 
-A failed delivery is retried with exponential backoff and jitter. Four numbers govern it:
+A failed delivery whose error is retryable is tried again with exponential backoff and jitter. Four numbers govern it:
 
 | Setting | System default | Bounds |
 |---|---|---|
 | `max_attempts` | 5 | 1 to 20 |
 | `base_delay_ms` | 500 ms | 100 ms to 60 s |
-| `max_delay_ms` | 30 s | at least `base_delay_ms` |
-| `max_total_delay_ms` | 120 s | — |
+| `max_delay_ms` | 30 s | At least `base_delay_ms` |
+| `max_total_delay_ms` | 120 s | At least `max_delay_ms` |
 
-`base_delay_ms` is the wait before the first retry; each subsequent wait grows and is capped by `max_delay_ms`. `max_total_delay_ms` caps the whole sequence, so a delivery stops being retried when either the attempt count or the total elapsed budget runs out — whichever comes first.
+The wait before retry number n is a random value between 0 and `base_delay_ms * 2^n`, and never more than `max_delay_ms` or the time left in `max_total_delay_ms`. With the defaults, the ceilings of the four retries are 1 s, 2 s, 4 s and 8 s. `max_total_delay_ms` is counted from the moment the delivery was created, so a delivery stops being retried when either the attempt count or the total time budget runs out, whichever comes first.
 
-Jitter is applied to each interval, which is what stops a hundred deliveries that failed together from retrying in lockstep and hammering your endpoint the moment it comes back.
+The jitter is what stops a hundred deliveries that failed together from retrying in lockstep and hammering your endpoint the moment it comes back. The cost is that a retry can come almost immediately.
 
 ### Where the numbers come from
 
 The policy resolves in three layers, each field independently:
 
-1. The **webhook's** own `retry_policy`, when it sets that field.
-2. Otherwise the **realm's** setting — `webhook_retry_max_attempts`, `webhook_retry_base_delay_ms`, `webhook_retry_max_delay_ms`, `webhook_retry_max_total_delay_ms`.
-3. Otherwise the **system default** above.
+1. The webhook's own `retry_policy`, when it sets that field.
+2. Otherwise the realm's setting: `webhook_retry_max_attempts`, `webhook_retry_base_delay_ms`, `webhook_retry_max_delay_ms` or `webhook_retry_max_total_delay_ms`.
+3. Otherwise the system default above.
 
-Because the resolution is per field, a webhook can raise only `max_attempts` and inherit the three delays. A webhook read returns both `retry_policy` (what this webhook overrides) and `effective_retry_policy` (what will actually be applied) — use the second one when you want to know what the worker will do.
+Because the resolution is per field, a webhook can raise only `max_attempts` and inherit the three delays. A webhook read returns both `retry_policy` (what this webhook overrides) and `effective_retry_policy` (what will actually be applied). Use the second one when you want to know what the worker will do.
 
 ### When the attempts run out
 
-The delivery goes `failed`, and SeaWatch records `webhook_delivery_exhausted`. That event is the one to alert on: it is the difference between "a delivery failed and recovered" and "this endpoint has been unreachable long enough that we gave up".
+The delivery goes `failed`, and SeaWatch records `webhook_delivery_exhausted`. The same happens on the first attempt when the error is not retryable. The event has the webhook as its target, no actor, a `failure` status and these details:
+
+| Detail | Value |
+|---|---|
+| `delivery_id` | The delivery that gave up |
+| `event` | The trigger, for example `user.created` |
+| `error_code` | The last error code from the table above |
+| `attempts` | How many attempts ran |
+
+That event is the one to alert on: it is the difference between "a delivery failed and recovered" and "this endpoint has been unreachable long enough that we gave up".
 
 ## Manual replay
 
-```
+```text
 POST /realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}/retry
 ```
 
-Puts a terminal delivery back in the queue so the worker attempts it again. This is the tool for the ordinary case: the receiving service was down for an hour, the deliveries exhausted their attempts, the service is back and you want the events it missed.
+Puts a finished delivery back in the queue so the worker attempts it again. The answer is a `202` with `{ "delivery_id": "…", "requeued": true }`. A delivery that is still `pending` or `delivering` answers `409`: wait for it to finish. This is the tool for the ordinary case: the receiving service was down for an hour, the deliveries exhausted their attempts, the service is back and you want the events it missed.
 
-Replay re-sends the **stored payload**, unchanged. It is not a fresh snapshot of the resource — the event described the world as it was, and replaying it says the same thing again. If the resource has since changed twice more, your endpoint will also receive those deliveries, and the order it sees them in is the order they are replayed.
+Replay re-sends the stored payload, unchanged. It is not a fresh snapshot of the resource: the event described the world as it was, and replaying it says the same thing again. If the resource has since changed twice more, your endpoint will also receive those deliveries, and the order it sees them in is the order they are replayed. Each replay is signed again, with a new timestamp.
 
-:::callout{variant="info" title="Make your endpoint idempotent"}
-Between automatic retries and manual replay, an endpoint will eventually receive the same delivery twice. The delivery `id` is stable across attempts and replays, which makes it the natural deduplication key.
-:::
+<Callout variant="info" title="Make your endpoint idempotent">
+
+Between automatic retries and manual replay, an endpoint will eventually receive the same delivery twice. The delivery `id`, sent as `x-ferriskey-delivery-id`, is stable across attempts and replays, which makes it the natural deduplication key.
+
+</Callout>
 
 ## Rotating the signing secret
 
-```
+```text
 POST /realms/{realm_name}/webhooks/{webhook_id}/secret/rotate
 ```
 
-Generates a new signing secret and returns it. **This is the only response that ever contains the secret** — it cannot be read back afterwards, so capture it from this call or rotate again.
+Generates a new signing secret and returns it as `{ "secret": "…" }`. This is the only response that ever contains the secret. It cannot be read back afterwards, so capture it from this call or rotate again. A webhook has a secret from the moment it is created, but nothing returns that first one, so the first rotation is also how you learn a secret at all. In the console the button is Generate a new secret on the webhook's Settings tab.
 
-:::callout{variant="danger" title="Rotation breaks in-flight deliveries"}
-Deliveries already signed with the previous secret will fail verification at your endpoint. Rotate when you have somewhere to put the new secret immediately, and expect the deliveries queued at that moment to fail and retry — they will be re-signed on the next attempt.
-:::
+<Callout variant="danger" title="Rotation takes effect at once">
+
+Every attempt from now on is signed with the new secret, including the retries of deliveries that were already queued. Until your endpoint knows the new secret, it will reject them. If it answers with a `401` or another 4xx that FerrisKey does not retry, those deliveries end as `failed` and you replay them once the endpoint is updated. Rotate when you have somewhere to put the new secret immediately.
+
+</Callout>
 
 ## Reading the console
 
@@ -141,7 +177,7 @@ The webhooks list summarises the state of every endpoint at a glance:
 |---|---|
 | Total | Endpoints configured in this realm |
 | Subscriptions | How many triggers are subscribed across all webhooks |
-| Never triggered | Endpoints that have no delivery yet — either new, or subscribed to something that never happens |
+| Never triggered | Endpoints that have no delivery yet, either new or subscribed to something that never happens |
 | Without event | Endpoints subscribed to nothing. They will never fire |
 
 "Without event" above zero is almost always a mistake: a webhook was created and its triggers were never picked.
@@ -160,7 +196,7 @@ The webhooks list summarises the state of every endpoint at a glance:
 | `POST` | `/realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}/retry` | Replay a delivery |
 | `POST` | `/realms/{realm_name}/webhooks/{webhook_id}/secret/rotate` | Rotate the signing secret |
 
-**Required permissions:** `view_webhooks` or `manage_webhooks` to read, `manage_webhooks` to create, update, delete, replay or rotate. `manage_realm` grants all of them. Note that `query_webhooks` exists as a permission but is not what the read endpoints accept.
+Permissions: `view_webhooks` or `manage_webhooks` to read, `manage_webhooks` to create, update, delete, replay or rotate. `manage_realm` grants all of them. `query_webhooks` exists as a permission but is not what the read endpoints accept.
 
 ## Debugging a webhook that is not arriving
 
@@ -170,7 +206,7 @@ The webhooks list summarises the state of every endpoint at a glance:
 :::
 
 :::step{title="Look for a delivery at all"}
-No delivery row means the event never matched a subscription. Check the [trigger name](/en/modules/webhooks/triggers) — they are exact strings, and `user.updated` is not `user.update`.
+No delivery row means the event never matched a subscription. Check the [trigger name](/en/modules/webhooks/triggers): they are exact strings, and `user.updated` is not `user.update`. Also check that FerrisKey raises it: five of the 38 triggers are never raised.
 :::
 
 :::step{title="Read the last error"}
@@ -187,6 +223,6 @@ Do not wait for the next event to find out whether the fix worked. Replay the fa
 The envelope your endpoint receives, and how to verify its signature.
 :::
 :::card{label="Triggers" icon="lucide:webhook" href="/en/modules/webhooks/triggers"}
-The 38 events a webhook can subscribe to.
+The 38 triggers a webhook can subscribe to.
 :::
 ::::

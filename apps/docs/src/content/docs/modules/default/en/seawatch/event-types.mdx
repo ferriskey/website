@@ -1,135 +1,199 @@
 ---
-title: Event Types
-description: "Complete reference of the SeaWatch security event types in FerrisKey."
+title: Event types
+description: "Reference of the 29 SeaWatch event types: when each one is written, who the actor and target are, and what its details carry."
 icon: list
 order: 21
 ---
 
-# Event Types
+# Event types
 
-SeaWatch writes 24 event types, grouped below by what they are about. Each carries a success or failure status alongside its details.
+SeaWatch has 29 event types, grouped below by subject. FerrisKey writes 27 of them. `client_secret_rotated` and `realm_config_changed` are valid values you can filter on, but nothing emits them. Every event has a `status` of `success` or `failure`.
 
-## Authentication
+Each table gives the `actor_id` and the target of the event. The actor is the account that made the request, and "none" means the field is null. The target is the `target_type` and `target_id` pair. The [overview](/en/modules/seawatch/overview) explains both, and why `actor_type` is mostly null.
 
-| Event | Description | Actor | Target |
+## Authentication and sessions
+
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `login_success` | User successfully authenticated | User | User |
-| `login_failure` | Authentication attempt failed | None | User (if identified) |
+| `login_success` | A user authenticated and a session was opened, resumed from an SSO session, or re-authenticated | The user | `session` |
+| `login_failure` | A sign-in was refused | The user, if the username matched an account | none |
+| `session_created` | A new session was opened. Written in the same statement as `login_success`, with the same `timestamp` | The user | `session` |
+| `session_revoked` | A session ended: the user signed out, or the session was revoked through the API | The session's user on sign-out, otherwise whoever revoked it, the user or an administrator | `session` |
 
-**`login_success` details:**
-```json
+`login_success` carries no `details` for a new session. When an existing session is reused, `details.method` says how: `sso_session` for a session resumed from its SSO cookie, `reauthentication` for a session that was authenticated again.
+
+`login_failure` carries the reason in `details`:
+
+```json title="login_failure details"
 {
-  "client_id": "my-frontend",
-  "grant_type": "password",
-  "ip_address": "203.0.113.42"
+  "reason": "invalid_credentials"
 }
 ```
 
-**`login_failure` details:**
-```json
-{
-  "reason": "invalid_credentials",
-  "client_id": "my-frontend",
-  "username": "alice"
-}
-```
+| `reason` | Meaning |
+|---|---|
+| `user_not_found` | No account matches the username. The event has no actor |
+| `user_disabled` | The account is disabled |
+| `account_locked` | The account is locked after repeated failures |
+| `invalid_credentials` | The password is wrong |
+| `ldap_authentication_failed` | The account's LDAP provider rejected the password |
+| `provider_disabled` | The account's LDAP provider is disabled |
 
-:::callout{variant="info" title="Failed logins have no actor"}
-When a login fails, the user is not yet authenticated, so `actor_id` is typically null. The `target_id` is set when the user could be identified (valid username, wrong password).
+The username is not stored. A wrong one-time code does not write `login_failure`: it shows up as a failed `mfa_challenge` step on the [Compass](/en/modules/compass/overview) flow, and it counts toward the account lockout.
+
+:::callout{variant="info"}
+The actor of a failed sign-in is the account the attempt named, not a person who proved who they are: nobody authenticated. Only a username that matches no account leaves `actor_id` null.
 :::
-
-## Password
-
-| Event | Description | Actor | Target |
-|---|---|---|---|
-| `password_reset` | Password was reset by an admin | Admin | User |
-| `password_reset_requested` | User requested a password reset email | System | User |
-| `password_reset_completed` | User completed the password reset flow | User | User |
-| `password_imported` | A password hash was imported from another IAM and re-hashed to argon2id on first login | System | User |
-
-These three events trace the full password reset lifecycle. A `password_reset_requested` without a matching `password_reset_completed` might indicate a user who abandoned the flow, or an attacker testing email enumeration.
-
-## User
-
-| Event | Description | Actor | Target |
-|---|---|---|---|
-| `user_created` | New user account created | Admin or System | User |
-| `user_email_verified` | A user confirmed their email address | User | User |
-| `user_deleted` | User account deleted | Admin | User |
-
-User creation events record whether the account came from an admin, from self-registration, or from a client's service account.
-
-## Role
-
-| Event | Description | Actor | Target |
-|---|---|---|---|
-| `role_assigned` | Role assigned to a user | Admin | User |
-| `role_unassigned` | Role removed from a user | Admin | User |
-| `role_created` | New role created | Admin | Role |
-| `role_removed` | Role deleted | Admin | Role |
-| `role_updated` | A role's name or description changed | Admin | Role |
-| `role_permission_updated` | A role's permission set changed | Admin | Role |
-
-Role events are critical for access control audits. They answer: "Who granted this user admin permissions, and when?"
-
-## Client
-
-| Event | Description | Actor | Target |
-|---|---|---|---|
-| `client_created` | New OAuth2 client registered | Admin | Client |
-| `client_deleted` | Client removed | Admin | Client |
-| `client_secret_rotated` | Client secret was regenerated | Admin | Client |
-| `client_secret_viewed` | Someone read a client's secret | Admin | Client |
-
-`client_secret_rotated` invalidates the old secret, so an unexpected one is worth a look. `client_secret_viewed` is the quieter sibling: nothing changed, but a credential left the system, and that is exactly the trail you want during an incident.
-
-## Sessions
-
-| Event | Description | Actor | Target |
-|---|---|---|---|
-| `session_created` | A user session was established | User | User |
-| `session_revoked` | A session was revoked | Admin or User | User |
 
 ## Token exchange
 
-| Event | Description | Actor | Target |
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `token_exchanged` | A client swapped a user's access token for a new one ([RFC 8693](/en/discover/core-concepts/token-exchange)) | User (the token's subject) | Client |
+| `token_exchanged` | A client tried to swap a subject token for a new access token (RFC 8693) | The subject token's user, when it could be read | `client`, with the client id in `resource` |
 
-`details` carries the `client_id`, the requested `audience`, the `policy_id` that allowed it and the `actor` on a delegated exchange, plus `error_code` on failure. Only exchanges by an authenticated client are recorded: a wrong secret leaves no event.
+The target is the client that made the exchange, and the status is `failure` when the exchange was refused. A request from a client that fails authentication is not recorded.
 
-## Maintenance
+```json title="token_exchanged details"
+{
+  "client_id": "orders-api",
+  "audience": "billing-api",
+  "policy_id": "01914b3c-9a10-7f5a-b456-00000000a001",
+  "actor": null
+}
+```
 
-| Event | Description | Actor | Target |
+`policy_id` is the delegation policy that applied to the exchange, and `actor` is the identity of the acting party when the request carried an actor token. Both are null otherwise. On a failure, `details.error_code` holds the OAuth error that was returned, for example `unauthorized_client` or `invalid_scope`.
+
+## Passwords
+
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `client_maintenance_enabled` | Maintenance mode was turned on | Admin | Client |
-| `client_maintenance_disabled` | Maintenance mode was turned off | Admin | Client |
+| `password_reset` | An administrator reset a user's password | The administrator | `user` |
+| `password_reset_requested` | A user asked for a password reset email | The user | `user` |
+| `password_reset_completed` | A user finished the reset | The user | `user` |
+| `password_imported` | An administrator imported a pre-hashed password for a user | The administrator | `user` |
 
-Maintenance mode blocks access while it is on, subject to a whitelist. Both transitions are recorded, so a window that stayed open longer than intended is visible after the fact.
+`password_reset_requested` and `password_reset_completed` bracket the self-service flow. A request with no matching completion is a user who gave up, or someone else asking for a reset on their behalf.
+
+`password_imported` is written once, by `POST /realms/{realm_name}/users/{user_id}/credentials/import`, when the hash is stored. The later re-encoding of the hash to argon2id at the user's first sign-in writes nothing.
+
+## Users
+
+| Event | Written when | `actor_id` | Target |
+|---|---|---|---|
+| `user_created` | An account was created by an administrator, or registered itself | The administrator, or the new user on self-registration | `user` |
+| `user_email_verified` | A user confirmed their email address | The user | `user` |
+| `user_deleted` | One or several accounts were deleted | The administrator | `user`, none on a bulk delete |
+
+When `actor_id` and `target_id` of a `user_created` event are the same, the account registered itself. A bulk delete writes a single event with no target, and `details.user_ids` lists the accounts:
+
+```json title="user_deleted details after a bulk delete"
+{
+  "user_ids": [
+    "01914b3c-5678-7f5a-b456-000000000002",
+    "01914b3c-5678-7f5a-b456-000000000003"
+  ]
+}
+```
+
+## Roles
+
+| Event | Written when | `actor_id` | Target |
+|---|---|---|---|
+| `role_assigned` | A role was assigned to a user | The administrator | `user`, with the role name in `resource` |
+| `role_unassigned` | A role was removed from a user | The administrator | `user`, with the role name in `resource` |
+| `role_created` | A realm role or a client role was created | The administrator | none |
+| `role_removed` | A role was deleted | The administrator | none |
+| `role_updated` | A role was edited | The administrator | none |
+| `role_permission_updated` | A role's permission set changed | The administrator | none |
+
+The four events without a target say that a role changed and who changed it, not which role. For an access review, `role_assigned` and `role_unassigned` are the ones that answer "who gave this user admin permissions, and when".
+
+## Clients
+
+| Event | Written when | `actor_id` | Target |
+|---|---|---|---|
+| `client_created` | A client was registered | The administrator | none |
+| `client_deleted` | A client was removed | The administrator | `client` |
+| `client_secret_viewed` | A client's secret was read | The administrator | `client` |
+| `client_secret_rotated` | Never written | | |
+
+`client_secret_viewed` is the quiet one: nothing changed, but a credential left the system, which is the trail you want during an incident.
+
+### Maintenance
+
+| Event | Written when | `actor_id` | Target |
+|---|---|---|---|
+| `client_maintenance_enabled` | Maintenance mode was turned on for a client | The administrator | `client` |
+| `client_maintenance_disabled` | Maintenance mode was turned off | The administrator | `client` |
+
+Both carry the request that was applied. `reason` and `session_strategy` are null when the request left them out:
+
+```json title="client_maintenance_enabled details"
+{
+  "enabled": true,
+  "reason": "Migration under way, back at 2pm.",
+  "session_strategy": "expire"
+}
+```
+
+Both transitions are recorded, so a window that stayed open longer than intended is visible afterwards.
 
 ## Email
 
-| Event | Description | Actor | Target |
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `email_sent` | A transactional email was handed to the SMTP server | System | User |
-| `email_not_sent` | Delivery failed | System | User |
+| `email_sent` | The SMTP server accepted a magic link or password reset email | The recipient | none |
+| `email_not_sent` | That email could not be sent. The status is `failure` | The recipient | none |
 
-`email_not_sent` is the one to alert on. A password reset that never left the building looks identical to a user ignoring it, unless you are watching this event.
+Only magic link and password reset emails are recorded. `details` identifies the email:
+
+```json title="email_not_sent details"
+{
+  "email_type": "reset_password",
+  "user_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "error_code": "SMTP_NOT_CONFIGURED",
+  "reason": "SMTP not configured for realm my-app"
+}
+```
+
+`email_type` is `magic_link` or `reset_password`. `email_sent` carries `email_type`, `user_id` and `template_id`. `email_not_sent` adds `reason` and an `error_code`: `SMTP_SEND_FAILED` (with the `template_id`), `TEMPLATE_NOT_CONFIGURED` or `SMTP_NOT_CONFIGURED`.
+
+`email_not_sent` is the one to alert on. A password reset that never left the building looks identical to a user ignoring it, unless you watch this event.
 
 ## Federation
 
-| Event | Description | Actor | Target |
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `identity_provider_link_removed` | A federated identity was unlinked from a user | Admin or User | User |
+| `identity_provider_link_removed` | A federated identity was unlinked from a user | The administrator | `identity_provider_link`, with the provider alias in `resource` |
+
+`details` holds `user_id`, the account that lost the link, and `identity_provider_id`.
+
+## Webhooks
+
+| Event | Written when | `actor_id` | Target |
+|---|---|---|---|
+| `webhook_delivery_exhausted` | A webhook delivery ran out of attempts, or failed with an error that is not retried. The status is `failure` | none | `webhook` |
+
+```json title="webhook_delivery_exhausted details"
+{
+  "delivery_id": "01914b3c-9a10-7f5a-b456-00000000d001",
+  "event": "user.created",
+  "error_code": "transport_error",
+  "attempts": 5
+}
+```
+
+`event` is the webhook trigger that produced the delivery, `error_code` is the error of the last attempt and `attempts` counts every attempt made. The delivery itself, with its history, is on the [deliveries](/en/modules/webhooks/deliveries) page.
 
 ## Configuration
 
-| Event | Description | Actor | Target |
+| Event | Written when | `actor_id` | Target |
 |---|---|---|---|
-| `realm_config_changed` | Realm settings were modified | Admin | Realm |
+| `realm_config_changed` | Never written | | |
 
-Configuration changes reach far: turning registration on, changing a token lifetime, lowering a lockout threshold. SeaWatch records what changed, not just that something did.
+Changing a realm's settings does not produce a SeaWatch event.
 
-:::callout{variant="info" title="The `unknown` type"}
-Reading an event whose stored type matches no known variant yields `unknown` rather than a guess. A row written by a newer version, or a corrupt one, can never be misread as a successful login.
-:::
+## Unrecognised types
+
+A stored row whose type this version does not know is returned as `unknown`, never as a guess. A row written by a newer version, or a corrupt one, can therefore not be misread as a successful login. `unknown` is never written, and you cannot filter on it: `event_types=unknown` returns 400.

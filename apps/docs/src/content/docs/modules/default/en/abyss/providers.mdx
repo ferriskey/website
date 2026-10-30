@@ -1,35 +1,48 @@
 ---
-title: Configuring Providers
-description: "Set up Google, GitHub, Discord, and custom OIDC providers in FerrisKey."
+title: Configuring providers
+description: "Set up Google, GitHub, Discord and custom OIDC providers in FerrisKey, edit them later, and manage the links they create."
 icon: settings
 order: 41
 ---
 
-# Configuring Providers
+# Configuring providers
 
-This guide walks through setting up specific identity providers with Abyss. Each provider requires creating an OAuth2/OIDC application on the external platform and registering it in FerrisKey.
+This guide walks through registering identity providers with Abyss. Each provider needs an OAuth2 or OIDC application created on the external platform, then a matching provider in FerrisKey. The two have to agree on one value: the redirect URI the provider calls back.
+
+## Adding a provider in the console
+
+Open Identity Providers in the console and choose Add provider. The console asks for a protocol (OIDC or OAuth2) and then a template: Google, Discord, GitHub, Microsoft, Apple, Facebook, GitLab, X (Twitter), LinkedIn or Custom Provider. A template fills in the endpoints and the default scopes, so only your application credentials are left. A custom provider starts empty.
+
+The create screen shows the Redirect URI to declare at the provider. It is built from the alias you chose:
+
+```text
+https://your-ferriskey.com/realms/{realm}/broker/{alias}/endpoint
+```
+
+The alias is part of that URL, which is why it is fixed once the provider exists. Changing it later would break the callback registered at the provider.
 
 ## Google
 
 ::::step-group
 :::step{title="Create a Google OAuth2 app"}
-Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID with:
-- **Application type:** Web application
-- **Authorized redirect URI:** `https://your-ferriskey.com/realms/{realm}/broker/google/endpoint`
+In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID with:
+
+- Application type: Web application
+- Authorized redirect URI: `https://your-ferriskey.com/realms/{realm}/broker/google/endpoint`
 :::
 
-:::step{title="Register in FerrisKey"}
-In the FerrisKey admin console, navigate to **Identity Providers → Add Provider** and configure:
+:::step{title="Register it in FerrisKey"}
+Choose the Google template and fill in the two credentials. The rest is pre-filled:
 
 | Field | Value |
 |---|---|
-| Name | Google |
-| Type | `oauth2` |
-| Client ID | From Google Console |
-| Client Secret | From Google Console |
+| Alias | `google` |
+| Display Name | Google |
+| Client ID | From the Google console |
+| Client Secret | From the Google console |
 | Authorization URL | `https://accounts.google.com/o/oauth2/v2/auth` |
 | Token URL | `https://oauth2.googleapis.com/token` |
-| UserInfo URL | `https://openidconnect.googleapis.com/v1/userinfo` |
+| Userinfo URL | `https://www.googleapis.com/oauth2/v3/userinfo` |
 | Scopes | `openid`, `email`, `profile` |
 :::
 ::::
@@ -38,21 +51,21 @@ In the FerrisKey admin console, navigate to **Identity Providers → Add Provide
 
 ::::step-group
 :::step{title="Create a GitHub OAuth App"}
-Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**:
-- **Authorization callback URL:** `https://your-ferriskey.com/realms/{realm}/broker/github/endpoint`
+Go to GitHub, then Settings, Developer settings, OAuth Apps and New OAuth App, and set the authorization callback URL to `https://your-ferriskey.com/realms/{realm}/broker/github/endpoint`.
 :::
 
-:::step{title="Register in FerrisKey"}
+:::step{title="Register it in FerrisKey"}
+Choose the GitHub template:
 
 | Field | Value |
 |---|---|
-| Name | GitHub |
-| Type | `oauth2` |
+| Alias | `github` |
+| Display Name | GitHub |
 | Client ID | From GitHub |
 | Client Secret | From GitHub |
 | Authorization URL | `https://github.com/login/oauth/authorize` |
 | Token URL | `https://github.com/login/oauth/access_token` |
-| UserInfo URL | `https://api.github.com/user` |
+| Userinfo URL | `https://api.github.com/user` |
 | Scopes | `read:user`, `user:email` |
 :::
 ::::
@@ -60,44 +73,84 @@ Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth 
 ## Discord
 
 ::::step-group
-:::step{title="Create a Discord Application"}
-Go to the [Discord Developer Portal](https://discord.com/developers/applications), create an application, and add an OAuth2 redirect:
-- **Redirect URL:** `https://your-ferriskey.com/realms/{realm}/broker/discord/endpoint`
+:::step{title="Create a Discord application"}
+In the [Discord Developer Portal](https://discord.com/developers/applications), create an application and add an OAuth2 redirect: `https://your-ferriskey.com/realms/{realm}/broker/discord/endpoint`.
 :::
 
-:::step{title="Register in FerrisKey"}
+:::step{title="Register it in FerrisKey"}
+Choose the Discord template:
 
 | Field | Value |
 |---|---|
-| Name | Discord |
-| Type | `oauth2` |
+| Alias | `discord` |
+| Display Name | Discord |
 | Client ID | From Discord |
 | Client Secret | From Discord |
 | Authorization URL | `https://discord.com/api/oauth2/authorize` |
 | Token URL | `https://discord.com/api/oauth2/token` |
-| UserInfo URL | `https://discord.com/api/users/@me` |
+| Userinfo URL | `https://discord.com/api/users/@me` |
 | Scopes | `identify`, `email` |
 :::
 ::::
 
 ## Custom OIDC provider
 
-For any OpenID Connect compliant provider (Okta, Auth0, Azure AD, Keycloak):
+For any OpenID Connect provider (Okta, Auth0, Azure AD, Keycloak), pick Custom Provider and read the endpoints from the provider's discovery document at `https://provider.example/.well-known/openid-configuration`:
 
-| Field | How to Find It |
+| FerrisKey setting | Discovery field |
 |---|---|
-| Authorization URL | Provider's `.well-known/openid-configuration` → `authorization_endpoint` |
-| Token URL | → `token_endpoint` |
-| UserInfo URL | → `userinfo_endpoint` |
+| Authorization URL | `authorization_endpoint` |
+| Token URL | `token_endpoint` |
+| Userinfo URL | `userinfo_endpoint` |
 | Scopes | Typically `openid email profile` |
+| `jwks_url` (API only) | `jwks_uri` |
+| `issuer` (API only) | `issuer` |
 
-:::callout{variant="info" title="OIDC Discovery"}
-Most OIDC providers publish their configuration at `https://provider.com/.well-known/openid-configuration`. Use this to find all the endpoint URLs you need.
-:::
+The console form does not have fields for `jwks_url` and `issuer`. Set them in the provider's `config` through the API when you want FerrisKey to verify the ID token instead of calling the userinfo endpoint. They only take effect together. See [ID token or userinfo](/en/modules/abyss/overview#id-token-or-userinfo).
+
+<Callout variant="warning" title="Provider endpoints must be public">
+
+FerrisKey calls the token, userinfo and JWKS endpoints from the server. It refuses any that resolve to a loopback, private or link-local address, and any that use plain `http`. An identity provider on your internal network fails with "Invalid provider URL" until you start the API with `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true`. That setting is meant for local development: with it on, plain `http` is still refused except towards loopback, and link-local addresses stay refused either way.
+
+</Callout>
+
+## Editing a provider
+
+Select a provider in the list to open its edit screen. It shows the General Settings (alias, display name, enabled) and the OAuth configuration: client ID, client secret, the three URLs, the scopes and the PKCE toggle.
+
+<img class="only-light" src="/dashboard/idp_edit-light.jpg" alt="FerrisKey edit screen of a GitHub identity provider: the authorization, token and userinfo URLs, the scopes field, the PKCE toggle set to Enabled (S256), and the metadata and delete sections below" />
+<img class="only-dark" src="/dashboard/idp_edit-dark.jpg" alt="FerrisKey edit screen of a GitHub identity provider: the authorization, token and userinfo URLs, the scopes field, the PKCE toggle set to Enabled (S256), and the metadata and delete sections below" />
+
+Leave the client secret empty to keep the stored one; anything you type replaces it. The PKCE toggle controls `use_pkce`: when it is on, FerrisKey sends a `code_challenge` (S256) with the authorization request and the matching verifier when it exchanges the code. Turn it off only for a provider that rejects the extra parameters.
+
+The same changes are available through the API:
+
+```text
+PUT /realms/{realm_name}/identity-providers/{alias}
+```
+
+Only the fields you send change. The body accepts `display_name`, `enabled`, `store_token`, `trust_email`, `link_only` and the two flow aliases, plus these configuration fields, which are merged into the stored `config` and leave its other keys alone:
+
+| Field | Behavior |
+|---|---|
+| `client_id`, `client_secret`, `authorization_url`, `token_url` | Replaced when sent. Sending an empty string is refused with a 400, because a provider cannot work without them |
+| `userinfo_url` | Replaced when sent. An empty string removes it |
+| `scopes` | Replaced when sent, as a space-separated string. An empty string is accepted and sends no scope |
+| `use_pkce` | Replaced when sent |
+
+You can also send a whole `config` object. It replaces the stored configuration, and any of the fields above in the same request are merged into it. Do not send back a `config` you read from the API: it carries `***` as the secret, and FerrisKey would store those three characters as the new secret. To change one value, send the field on its own.
+
+The alias cannot be changed. The response wraps the updated provider in `data`.
+
+## Disabling and rotating
+
+Set `enabled` to `false` to take a provider off the login page without deleting its configuration. A disabled provider refuses sign-ins with a 403, and links to it stay in place. Accounts created through it have no password of their own, so those users cannot sign in until you enable the provider again or give them another way in.
+
+When you rotate the client secret at the provider, update it in FerrisKey in the same change. A mismatched secret makes every sign-in through that provider fail at the token exchange.
 
 ## API reference
 
-```
+```text
 GET    /realms/{realm_name}/identity-providers
 POST   /realms/{realm_name}/identity-providers
 GET    /realms/{realm_name}/identity-providers/{alias}
@@ -105,39 +158,40 @@ PUT    /realms/{realm_name}/identity-providers/{alias}
 DELETE /realms/{realm_name}/identity-providers/{alias}
 ```
 
-Providers are addressed by their **alias**, not by a uuid — the alias is also the segment that appears in the broker URLs, which is why changing it breaks the redirect URI registered at the provider.
+The list is paginated, and the contract is described in [API listings](/en/discover/guides/api-listings). Besides `search`, which matches the alias or the display name, it filters on:
 
-The two broker endpoints are the flow itself, and neither is called by you:
+| Parameter | Matches |
+|---|---|
+| `alias`, `display_name` | Case-insensitive substring |
+| `provider_id` | Exact value, such as `oidc` or `google` |
+| `enabled` | `true` or `false` |
+| `health` | `healthy`, `degraded` or `error` |
+| `created_from`, `created_to` | RFC 3339 date-times, inclusive and exclusive |
 
-```
+`order_by` accepts `alias`, `display_name`, `provider_id`, `enabled`, `created_at` (the default) and `updated_at`.
+
+`health` is derived from the stored configuration, not from a call to the provider. A provider is `error` when `client_id`, `client_secret`, `authorization_url` or `token_url` is missing, `degraded` when only `scopes` is missing, and `healthy` otherwise. The console shows these as Incomplete, No scope and Complete.
+
+Deleting a provider removes its links too. The accounts they pointed at stay.
+
+The two broker endpoints are the flow itself. Browsers call them, not you:
+
+```text
 GET  /realms/{realm_name}/broker/{alias}/login
 GET  /realms/{realm_name}/broker/{alias}/endpoint
 ```
 
+Permissions for the provider endpoints: `view_identity_providers` or `manage_identity_providers` to read, `manage_identity_providers` to create, update or delete. `manage_realm` grants both.
+
 ### Links on a user
 
-```
+```text
 GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
 DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
 ```
 
-A link binds one external identity to one local account. Deleting it leaves the account intact and simply removes that sign-in route; the removal is audited as `identity_provider_link_removed`.
+A link binds one external identity to one local account. Each entry in the `data` array carries the link `id`, the provider's `identity_provider_id` and `identity_provider_alias`, the `identity_provider_user_id` (the provider's subject), and the two timestamps. The stored provider token is never returned.
 
-**Required permissions:** `view_identity_providers` or `manage_identity_providers` to read, `manage_identity_providers` to write. `manage_realm` grants both.
+Deleting a link leaves the account intact and removes that way of signing in. The removal is recorded as `identity_provider_link_removed` in [SeaWatch](/en/modules/seawatch/event-types). If the same person signs in through the provider again, the flow can create a new link, subject to the [account resolution](/en/modules/abyss/federation-flow#account-resolution) rules.
 
-## Provider Management
-
-### Disabling a Provider
-Toggle `enabled` to `false` to hide the provider from the login page without deleting its configuration. Existing federated credentials remain, users can still log in through other methods.
-
-### Updating Credentials
-When you rotate the client secret on the external provider, update it in FerrisKey immediately. A mismatched secret will cause all federated logins through that provider to fail.
-
-### Provider-Specific Configuration
-The `configuration` field accepts arbitrary JSON for provider-specific settings. For example, Azure AD may need a `tenant_id`:
-
-```json
-{
-  "tenant_id": "your-azure-tenant-id"
-}
-```
+These two endpoints need the permission that updating a user needs: `manage_users` or `manage_realm`.

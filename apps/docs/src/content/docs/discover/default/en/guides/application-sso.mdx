@@ -1,11 +1,11 @@
 ---
-title: Connect an Application with SSO
+title: Connect an application with SSO
 description: "Configure an OpenID Connect application in FerrisKey and give another service the values it needs to sign users in."
 icon: plug
 order: 19
 ---
 
-# Connect an Application with SSO
+# Connect an application with SSO
 
 Use this guide when an application speaks OpenID Connect and you want FerrisKey to handle sign-in.
 
@@ -72,7 +72,7 @@ In the sidebar, click **Clients**, then **New client**.
 <img class="only-light" src="/dashboard/list_clients-light.jpg" alt="FerrisKey clients list with counters for total, active, public and confidential clients, and the New client button" />
 <img class="only-dark" src="/dashboard/list_clients-dark.jpg" alt="FerrisKey clients list with counters for total, active, public and confidential clients, and the New client button" />
 
-The banner at the top of that list is worth reading before you add anything: it names every client that has **no redirect URI**, because the authorization code flow cannot work without one.
+The banner at the top of that list is worth reading before you add anything: it names every client that has no redirect URI, because the authorization code flow cannot work without one.
 :::
 
 :::step{title="Choose the protocol"}
@@ -82,21 +82,25 @@ Creation starts by asking which protocol the application speaks: **OpenID Connec
 <img class="only-dark" src="/dashboard/client_protocol-dark.jpg" alt="FerrisKey client protocol dialog offering OpenID Connect or SAML 2.0" />
 
 :::callout{variant="warning" title="This choice is final"}
-It decides how the application signs its users in and **cannot be changed after creation**. An application that later moves from SAML to OIDC needs a new client, not an edited one. See [Authentication](/en/discover/core-concepts/authentication#saml-20) for what each protocol gives you.
+It decides how the application signs its users in and cannot be changed after creation. An application that later moves from SAML to OIDC needs a new client, not an edited one. See [Authentication](/en/discover/core-concepts/authentication#saml-20) for what each protocol gives you.
 :::
 :::
 
 :::step{title="Fill the client details"}
 Use a stable client ID. In this example:
 
-- **Client ID:** `vaultwarden`
-- **Name:** `Vaultwarden`
-- **Client enabled:** Enabled
-- **Client authentication:** Confidential
+| Field | Value |
+|---|---|
+| Client ID | `vaultwarden` |
+| Name | `Vaultwarden` |
+| Client enabled | Enabled |
+| Client authentication | Confidential |
 
-**Client authentication is a choice between Confidential and Public, and it is also final.** Pick Confidential for a server-side application that can hold a secret — FerrisKey then generates one. Pick Public for an SPA, a mobile app or a CLI, where a secret would end up in the user's hands and PKCE carries the protection instead.
+Client authentication is a choice between Confidential and Public, and it is also final. Pick Confidential for a server-side application that can hold a secret; FerrisKey then generates one. Pick Public for an SPA, a mobile app or a CLI, where a secret would end up in the user's hands and PKCE carries the protection instead.
 
-Leave both capability switches off for browser SSO: **Direct access grants** is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner--deprecated), and the **device authorization grant** is for browserless clients.
+Leave both capability switches off for browser SSO: **Direct access grants** is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner), and the **device authorization grant** is for browserless clients.
+
+The client is created with PKCE required, which means the application has to send an S256 code challenge with its authorization request. Most OIDC libraries do so by default. The **Require PKCE** switch is under **Capability config** in the client's **Settings** tab.
 
 <img class="only-light" src="/dashboard/create_client-light.jpg" alt="FerrisKey new client form with client ID, name, enabled state, the confidential/public choice and the capability switches" />
 <img class="only-dark" src="/dashboard/create_client-dark.jpg" alt="FerrisKey new client form with client ID, name, enabled state, the confidential/public choice and the capability switches" />
@@ -113,7 +117,7 @@ Open the client you just created and stay on the **Settings** tab.
 :::
 
 :::step{title="Add the redirect URI"}
-Scroll to the **Access** section and add the exact callback URL from your application. Every entry is saved as you add it — there is no separate save button for this list.
+Scroll to the **Access** section and add the exact callback URL from your application. Every entry is saved as you add it, so there is no separate save button for this list.
 
 For the example:
 
@@ -124,10 +128,14 @@ https://vault.example.com/identity/connect/oidc-signin
 <img class="only-light" src="/dashboard/client_access-light.jpg" alt="FerrisKey client Access section with redirect URIs, web origins and post-logout redirect URIs" />
 <img class="only-dark" src="/dashboard/client_access-dark.jpg" alt="FerrisKey client Access section with redirect URIs, web origins and post-logout redirect URIs" />
 
+FerrisKey compares the callback with the entries character for character. Only an entry written `^...$` is read as a regular expression, so keep literal addresses unless the callback really varies.
+
 Two neighbours in the same area matter as much as the redirect URI:
 
-- **Web origins** — the origins this application may call FerrisKey from in a browser. The `+` button derives them from the redirect URIs you just entered, but only from **literal** ones: regex patterns are skipped. Removing an origin takes a few minutes to clear browser preflight caches, and up to 30 seconds to propagate to the other API replicas.
-- **Post-logout redirect URIs**, under **Logout** — where the user lands once the session closes. With no entry, logout ends on the FerrisKey page rather than back in your application.
+- Web origins are the origins this application may call FerrisKey from in a browser. The `+` button derives them from the redirect URIs you just entered, but only from literal ones: regex patterns are skipped. Removing an origin takes a few minutes to clear browser preflight caches, and up to 30 seconds to propagate to the other API replicas.
+- Post-logout redirect URIs, under **Logout**, are where the user can land once the session closes. FerrisKey redirects there only when the logout request names the address and identifies the client, and the address must match an entry exactly. Without a redirect, logout answers with an empty `204` and the user stays on the page that sent the request: FerrisKey shows no page of its own.
+
+The same **Logout** section holds the **Back-channel logout URL**, where FerrisKey tells the application's backend that a session ended. See [back-channel logout](/en/discover/core-concepts/backchannel-logout).
 :::
 ::::
 
@@ -144,14 +152,14 @@ The secret is masked. Click **Reveal** to read it, then copy it into the applica
 <img class="only-light" src="/dashboard/client_secret-light.jpg" alt="FerrisKey client credentials tab showing the client ID and the masked client secret with a Reveal action" />
 <img class="only-dark" src="/dashboard/client_secret-dark.jpg" alt="FerrisKey client credentials tab showing the client ID and the masked client secret with a Reveal action" />
 
-Revealing a secret is **recorded as a security event** — `client_secret_viewed` in [SeaWatch](/en/modules/seawatch/event-types) — which is intentional: it means an unexplained reveal is visible in the audit trail.
+Revealing a secret is recorded as a security event, `client_secret_viewed` in [SeaWatch](/en/modules/seawatch/event-types). That is intentional: an unexplained reveal is visible in the audit trail.
 :::
 ::::
 
 :::callout{variant="danger" title="A leaked secret cannot be rotated through the API yet"}
-Rotating a client secret is **not exposed by the administration API** at this version, as the Credentials tab states. So if a secret is pasted into a public issue, a log, a screenshot or a repository, there is no rotate call to make.
+Rotating a client secret is not exposed by the administration API at this version, as the Credentials tab states. So if a secret is pasted into a public issue, a log, a screenshot or a repository, there is no rotate call to make.
 
-Until it ships, the containment path is to create a replacement client, move the application over, and delete the compromised one. Plan for that being slower than a rotation, and treat client secrets accordingly — in a secret manager, never in a screenshot.
+Until it ships, the containment path is to create a replacement client, move the application over, and delete the compromised one. Plan for that being slower than a rotation, and treat client secrets accordingly: keep them in a secret manager, never in a screenshot.
 :::
 
 ## Check the client scopes
@@ -164,13 +172,13 @@ Open the client's **Client Scopes** tab.
 :::
 
 :::step{title="Confirm required scopes"}
-Each assigned scope carries a **default / optional** switch. Make sure these three are on **default**, which means every token gets them without the application asking:
+Each assigned scope carries a default or optional switch. Make sure these three are on default, which means every token gets them without the application asking:
 
 - `openid`
 - `profile`
 - `email`
 
-If the application needs roles, set `roles` to default too. A new realm seeds eight scopes, and the remaining ones — `address`, `phone`, `offline_access` — arrive as **optional**, applied only when a request names them in its `scope` parameter.
+A client created now already has `openid`, `profile`, `email`, `roles` and `organization` as default scopes, so this step is mostly a check. `address`, `phone` and `offline_access` exist in the realm but are not attached to a new client. Add one as optional if the application needs it, and it applies only when a request names it in its `scope` parameter.
 
 <img class="only-light" src="/dashboard/client_client_scopes-light.jpg" alt="FerrisKey client Client Scopes tab listing the assigned scopes with their default and optional switches" />
 <img class="only-dark" src="/dashboard/client_client_scopes-dark.jpg" alt="FerrisKey client Client Scopes tab listing the assigned scopes with their default and optional switches" />
@@ -206,7 +214,7 @@ When the application opens that URL, FerrisKey returns a JSON document with the 
 - Where to exchange the authorization code for tokens
 - Which issuer value to expect in tokens
 - Where to fetch the public keys used to verify token signatures
-- Which scopes and response types are supported
+- Which scopes, grants and client authentication methods are supported
 
 That is why so many applications only ask for an issuer, an authority, or a discovery URL, instead of making you fill in every endpoint by hand.
 
@@ -221,6 +229,7 @@ Some applications ask for the issuer or authority URL, others for the discovery 
 3. Confirm that the browser redirects to FerrisKey.
 4. Sign in with a user from the same realm.
 5. Confirm that FerrisKey redirects back to the application.
+6. Sign out of the application. If it calls the FerrisKey logout endpoint, the SSO session ends, and the next sign-in asks for credentials again.
 
 If the user signs in but the application says the account is not allowed, look at the application's own signup, domain, group, or role rules. FerrisKey authenticated the user; the application still gets to decide whether that user is welcome.
 
@@ -228,9 +237,9 @@ If the user signs in but the application says the account is not allowed, look a
 
 ### Invalid redirect URI
 
-FerrisKey rejects the login before showing the sign-in page.
+FerrisKey does not send the browser to the address the application asked for. It lands on the FerrisKey login page with an error message instead.
 
-Check that the redirect URI in the client settings exactly matches the callback URL sent by the application. Compare the scheme, domain, path, trailing slash, and port.
+Check that the redirect URI in the client settings exactly matches the callback URL sent by the application. Compare the scheme, domain, path, trailing slash, and port. Only an entry written `^...$` is read as a pattern.
 
 ### Discovery endpoint does not load
 
@@ -248,6 +257,8 @@ Some applications validate that the configured authority equals the `issuer` fie
 
 Open the discovery endpoint and copy the `issuer` value. Use that exact value as the application's issuer or authority.
 
+FerrisKey builds the issuer from the `Host` and `X-Forwarded-Proto` headers of each request. If the issuer shows an internal host name or `http://` while users reach FerrisKey over https, the reverse proxy is not forwarding those headers.
+
 ### Client authentication failed
 
 The application reaches FerrisKey but token exchange fails.
@@ -258,6 +269,17 @@ Check:
 - **Client Authentication** is enabled for confidential applications
 - The application uses the current client secret
 - There are no extra spaces around the copied secret
+- A secret containing `+` or `%` is percent-encoded when it travels in an HTTP Basic header
+
+FerrisKey answers `invalid_client` with a `401` whether the client is unknown, disabled or sent a wrong secret. After 10 failed attempts within a minute from the same address for the same client, it answers `429` with `Retry-After: 60` until the delay passes.
+
+### PKCE is required
+
+The authorization request fails with `invalid_request` and a message about PKCE. The client requires an S256 code challenge, and the application did not send one. Make the application send `code_challenge` with `code_challenge_method=S256`. Only if it cannot, switch **Require PKCE** off in the client's capability config.
+
+### The application gets login_required or consent_required
+
+An authorization request with `prompt=none` never shows a page. FerrisKey sends the browser back with `login_required` when no SSO session exists, `interaction_required` when the account still owes a step, and `consent_required` when the consent screen would have to appear. The application has to fall back to an interactive request. See [the authorization request](/en/discover/core-concepts/authentication#the-authorization-request).
 
 ### Missing email or profile data
 

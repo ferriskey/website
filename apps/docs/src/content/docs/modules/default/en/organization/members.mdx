@@ -13,7 +13,7 @@ Membership connects a user to an organization. A user can belong to several orga
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | List the members of an organization |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | List the members of an organization, paginated |
 | `POST` | `/realms/{realm_name}/organizations/{organization_id}/members` | Add a user to an organization |
 | `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}` | Remove a user from an organization |
 | `GET` | `/realms/{realm_name}/users/{user_id}/organizations` | List the organizations a user belongs to |
@@ -28,7 +28,7 @@ Send the target `user_id` in the request body:
 }
 ```
 
-A successful addition returns the new membership record:
+A successful addition answers `201` with the new membership record:
 
 ```json
 {
@@ -63,28 +63,48 @@ Confirm the user appears in `GET /realms/{realm_name}/organizations/{organizatio
 
 | Situation | Result |
 |---|---|
-| User already a member of this organization | `AlreadyExists`. Duplicate membership is rejected |
-| User is in a different realm than the organization | Request rejected |
-| Organization is disabled (`enabled: false`) | Request rejected |
-| Removing a user who is not a member | `NotFound` |
+| User already a member of this organization | 400 with the reason `already_exists`. Duplicate membership is rejected |
+| User is in a different realm than the organization | 400 with the reason `invalid` |
+| Organization is disabled (`enabled: false`) | 400 with the reason `invalid` |
+| User id that does not exist | 404 |
+| Removing a user who is not a member | 404 |
+
+## Listing members
+
+```text
+GET /realms/{realm_name}/organizations/{organization_id}/members
+```
+
+The list is paginated, as described in [API listings](/en/discover/guides/api-listings), and answers `{ data, metadata }`. Each entry in `data` is a membership record, the same shape you get back when adding a member: `id`, `organization_id`, `user_id` and `created_at`, the date the user joined. It carries no username or email. Resolve the `user_id` against the users API when you need to show a name.
+
+The filters apply to the member's user:
+
+| Parameter | Matches |
+|---|---|
+| `search` | Case-insensitive substring of the username or the email |
+| `username`, `email` | Case-insensitive substring of that field |
+| `enabled` | Whether the user account is enabled, `true` or `false` |
+| `created_from`, `created_to` | The membership date, as RFC 3339 date-times, inclusive and exclusive |
+
+`order_by` accepts `username`, `email` and `created_at` (the default, which is the membership date).
 
 ## Listing a user's organizations
 
 To find every organization a user belongs to within the realm:
 
-```
+```text
 GET /realms/{realm_name}/users/{user_id}/organizations
 ```
 
-The response is an array of membership records, each with `organization_id`, `user_id`, and `created_at`. That is the same `OrganizationMember` shape you get back when adding a member, not a full organization object, so resolve each `organization_id` against `GET /realms/{realm_name}/organizations/{organization_id}` when you need the details. It is what a workspace switcher is built on.
+The response is a plain array of membership records, each with `id`, `organization_id`, `user_id` and `created_at`. It is not paginated, and it is not a full organization object, so resolve each `organization_id` against `GET /realms/{realm_name}/organizations/{organization_id}` when you need the details. It is what a workspace switcher is built on.
 
 ## Removing a member
 
-```
+```text
 DELETE /realms/{realm_name}/organizations/{organization_id}/members/{user_id}
 ```
 
-Removal takes effect immediately. If the user is not a member, the call returns `NotFound`. Nothing cascades to the user's account: the user record is untouched.
+Removal takes effect immediately and answers `204`. If the user is not a member, the call answers 404. Nothing cascades to the user's account: the user record is untouched.
 
 ## Member roles
 
@@ -106,6 +126,12 @@ Assignment takes the role id in the body and answers `204 No Content`:
 
 `GET` returns the full role objects, so a client can read their names and permissions without a second lookup.
 
-:::callout{variant="info" title="Roles can also come from a group"}
+## Permissions
+
+Listing members, member roles and a user's organizations needs `view_organizations`, `manage_organizations` or `manage_realm`. Adding and removing members, and assigning or revoking roles, needs `manage_organizations` or `manage_realm`. `manage_users` is not enough.
+
+<Callout variant="info" title="Roles can also come from a group">
+
 Groups inside an organization carry role mappings of their own, and membership in a group is recursive: a member of a group effectively belongs to all of its ancestors, and inherits their roles. See [Groups](/en/modules/organization/groups).
-:::
+
+</Callout>

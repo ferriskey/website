@@ -23,7 +23,7 @@ Token exchange ships with the release after FerrisKey 0.8.0.
 
 ## Before you start
 
-1. The requesting client is **confidential**. Public clients are always refused, because they cannot keep the secret that proves who is asking.
+1. The requesting client is **confidential**. Public clients are always refused, because they cannot keep the secret that proves who is asking. It also has to be enabled and registered by an administrator: a client created by dynamic registration, or resolved from a metadata document, is refused with `unauthorized_client`.
 2. Turn on **token exchange** on that client: the toggle in its settings, or `token_exchange_enabled: true` through the API. It is off by default.
 3. To target another service, add a [delegation policy](#delegation-policies) for that audience. Downscoping without an audience needs no policy.
 
@@ -66,7 +66,7 @@ curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
   -d scope=orders:read
 ```
 
-The requesting client must be a party to the subject token: its `azp`, or listed in its `aud`. A client cannot exchange a token it intercepted.
+The requesting client must be a party to the subject token: its `azp`, listed in its `aud`, or the owner of a resource listed in its `aud` (see [resource owners](/en/discover/core-concepts/mcp#resource-owners)). A client cannot exchange a token it intercepted.
 
 ## The response
 
@@ -114,7 +114,7 @@ A policy lets one client target one audience. Without a matching policy, an exch
 | Field | Meaning |
 |---|---|
 | `target_audience` | `client_id` of the client the issued token is for |
-| `allowed_scopes` | Scope ceiling. Empty or `null` means no extra cap |
+| `allowed_scopes` | Scope ceiling. `null` means no extra cap. An empty array is refused, and so is an entry that contains whitespace |
 | `allow_impersonation` | The client may exchange with no actor, acting as the user |
 | `allow_delegation` | The client may exchange with an `actor_token`, and the token names the actor |
 
@@ -122,11 +122,14 @@ The two switches are independent. A policy that allows only delegation refuses a
 
 Manage policies from the client page, tab **Token exchange**, or through the admin API:
 
-| Method | Path |
-|---|---|
-| `GET` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` |
-| `POST` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` |
-| `DELETE` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies/{policy_id}` |
+<img class="only-light" src="/dashboard/client_token_exchange-light.jpg" alt="FerrisKey client page on the Token exchange tab, listing each policy with its target audience, its allowed scopes, and Impersonation and Delegation indicators" />
+<img class="only-dark" src="/dashboard/client_token_exchange-dark.jpg" alt="FerrisKey client page on the Token exchange tab, listing each policy with its target audience, its allowed scopes, and Impersonation and Delegation indicators" />
+
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `view_clients`, `manage_clients` or `manage_realm` |
+| `POST` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `manage_clients` or `manage_realm` |
+| `DELETE` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies/{policy_id}` | `manage_clients` or `manage_realm` |
 
 ```json
 {

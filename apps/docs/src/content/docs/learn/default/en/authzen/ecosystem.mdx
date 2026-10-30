@@ -1,13 +1,13 @@
 ---
 title: The Authorization Ecosystem
-description: "A tour of OPA, Cerbos, Cedar, OpenFGA, and how AuthZen connects them."
+description: "A tour of OPA, Cerbos, Cedar, OpenFGA, and how AuthZEN connects them."
 icon: network
 order: 2
 ---
 
 # The Authorization Ecosystem
 
-Fine-grained authorization has a healthy ecosystem of policy engines. They differ in how you write rules, what they're best at, and how they integrate. AuthZen is the emerging wire protocol that lets you talk to any of them with one API shape.
+Fine-grained authorization has several policy engines. They differ in how you write rules, what they're best at, and how they integrate. AuthZEN is the emerging wire protocol that lets you talk to any of them with one API shape.
 
 Here's the lay of the land. Treat the labels loosely; engines borrow from each other constantly.
 
@@ -53,18 +53,18 @@ Open source. Inspired by Google's Zanzibar paper.
 
 Another Zanzibar-style engine. Same family as OpenFGA, slightly different model and operator ergonomics. Same use-case sweet spot.
 
-## How AuthZen ties them together
+## How AuthZEN ties them together
 
-Without AuthZen, every engine has its own SDK and request shape. Your app code embeds the engine choice.
+Without AuthZEN, every engine has its own SDK and request shape. Your app code embeds the engine choice.
 
-With AuthZen, your app speaks one request shape:
+With AuthZEN, your app speaks one request shape:
 
 ```
 POST /access/v1/evaluation
 { subject, action, resource, context }
 ```
 
-A small adapter in front of each engine translates the AuthZen request into the engine's native call. From the app's perspective, all engines look the same.
+A small adapter in front of each engine translates the AuthZEN request into the engine's native call. From the app's perspective, all engines look the same.
 
 This lets you:
 
@@ -80,18 +80,23 @@ This lets you:
 - Need formal verification of policies? Cedar.
 - You're on AWS and want managed? Verified Permissions (Cedar).
 
-It is fine to use more than one in the same product. AuthZen makes that less painful.
+It is fine to use more than one in the same product. AuthZEN makes that less painful.
 
 ## A mental model
 
-Think of policy engines as database engines for permissions. They differ in their query language and what they optimize for. AuthZen is the SQL standard of authorization: not the engine itself, but a shared way to ask questions of any of them.
+Think of policy engines as database engines for permissions. They differ in their query language and what they optimize for. AuthZEN is the SQL standard of authorization: not the engine itself, but a shared way to ask questions of any of them.
 
 ## In FerrisKey
 
-FerrisKey's job is identity (who, with what scopes, with what claims). The decisions an engine makes consume that identity information. The cleaner FerrisKey's claims are, the better any AuthZen-compatible engine downstream behaves.
+FerrisKey's first job is identity (who, with what scopes, with what claims). Its tokens and claims can feed any engine you run, such as OPA, Cerbos or OpenFGA, and the cleaner the claims are, the better an AuthZEN-compatible engine downstream behaves.
+
+FerrisKey also ships an engine of its own. Each realm can be an AuthZEN policy decision point that runs Cedar and reads the subject's roles, groups and organizations from the realm when a request arrives. The request shape is the standard one, so an application that speaks it is not tied to the engine behind it.
 
 ::::card-group{cols=2}
-:::card{label="AuthZen Overview" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
+:::card{label="Authz module" icon="lucide:scale" href="/en/modules/authz/overview"}
+FerrisKey's own AuthZEN endpoint, backed by Cedar.
+:::
+:::card{label="AuthZEN Overview" icon="lucide:shield-check" href="/en/learn/authzen/overview"}
 The standard itself, and the problem it solves.
 :::
 :::card{label="JWT Claims" icon="lucide:list-checks" href="/en/learn/jwt/claims"}

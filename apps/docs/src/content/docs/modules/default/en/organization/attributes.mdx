@@ -9,7 +9,7 @@ order: 83
 
 Attributes are key-value pairs hanging off an organization. They hold whatever business data belongs with a customer record, subscription tier, external system ids, feature flags, without anyone extending the core schema for it.
 
-Groups carry attributes too, with the same shape and the same upsert semantics, under `/groups/{group_id}/attributes`.
+Groups carry attributes too, with the same shape and the same upsert semantics, under `/groups/{group_id}/attributes`. See [Groups](/en/modules/organization/groups#attributes).
 
 ## Attribute endpoints
 
@@ -17,11 +17,13 @@ Groups carry attributes too, with the same shape and the same upsert semantics, 
 |---|---|---|
 | `GET` | `/realms/{realm_name}/organizations/{organization_id}/attributes` | List all attributes for an organization |
 | `PUT` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Upsert an attribute by key |
-| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Delete an attribute by key |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | Delete an attribute by key. Answers `204`, including when the key did not exist |
+
+Listing needs `view_organizations`, `manage_organizations` or `manage_realm`. Upserting and deleting need `manage_organizations` or `manage_realm`.
 
 ## Upsert semantics
 
-`PUT` upserts by key. An existing key has its value overwritten; a new key is created. There is no separate create endpoint.
+`PUT` upserts by key. An existing key has its value overwritten; a new key is created. There is no separate create endpoint. The response is the attribute.
 
 ```json title="PUT /realms/acme/organizations/{org_id}/attributes/plan"
 {
@@ -29,49 +31,53 @@ Groups carry attributes too, with the same shape and the same upsert semantics, 
 }
 ```
 
-Both `key` and `value` are required. An empty or missing value is rejected.
+The key comes from the path and the value from the body. Both are required, and FerrisKey trims surrounding whitespace from them. An empty or missing value is rejected.
 
 ## Attribute fields
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| `id` | UUID v7 | generated | Identifier |
-| `organization_id` | UUID | generated | The organization this attribute belongs to |
+| `id` | UUID v7 | Generated | Identifier |
+| `organization_id` | UUID | Generated | The organization this attribute belongs to |
 | `key` | String | 1 to 255 characters, required | Attribute name |
-| `value` | String | required | Attribute value |
-| `created_at` | DateTime (UTC) | generated | Set on the first upsert, and left alone on overwrites |
+| `value` | String | Required | Attribute value |
+| `created_at` | DateTime (UTC) | Generated | Set on the first upsert, and left alone on overwrites |
 
 ## Several attributes at once
 
-A typical organization might carry several attributes:
+A typical organization might carry several attributes. The list answers an object with a `data` array:
 
 ```json title="GET /realms/acme/organizations/{org_id}/attributes"
-[
-  {
-    "id": "01936b2e-aaaa-7000-abcd-000000000001",
-    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
-    "key": "plan",
-    "value": "enterprise",
-    "created_at": "2026-01-15T09:00:00Z"
-  },
-  {
-    "id": "01936b2e-bbbb-7000-abcd-000000000002",
-    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
-    "key": "stripe_customer_id",
-    "value": "cus_Qx8mN2kLpR4t",
-    "created_at": "2026-01-15T09:01:00Z"
-  },
-  {
-    "id": "01936b2e-cccc-7000-abcd-000000000003",
-    "organization_id": "01936b2e-1234-7000-abcd-000000000001",
-    "key": "feature_advanced_reporting",
-    "value": "true",
-    "created_at": "2026-03-01T14:30:00Z"
-  }
-]
+{
+  "data": [
+    {
+      "id": "01936b2e-aaaa-7000-abcd-000000000001",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "plan",
+      "value": "enterprise",
+      "created_at": "2026-01-15T09:00:00Z"
+    },
+    {
+      "id": "01936b2e-bbbb-7000-abcd-000000000002",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "stripe_customer_id",
+      "value": "cus_Qx8mN2kLpR4t",
+      "created_at": "2026-01-15T09:01:00Z"
+    },
+    {
+      "id": "01936b2e-cccc-7000-abcd-000000000003",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "feature_advanced_reporting",
+      "value": "true",
+      "created_at": "2026-03-01T14:30:00Z"
+    }
+  ]
+}
 ```
 
-## Real-World Uses
+The list is not paginated.
+
+## Real-world uses
 
 | Key pattern | Example value | Use case |
 |---|---|---|
@@ -82,6 +88,8 @@ A typical organization might carry several attributes:
 | `max_seats` | `50` | Enforce seat limits in application logic |
 | `onboarded_at` | `2026-01-15` | Track onboarding completion |
 
-:::callout{variant="warning" title="Values are always strings"}
+<Callout variant="warning" title="Values are always strings">
+
 Attributes store strings only. Numeric values (`50`), booleans (`true`), and dates (`2026-01-15`) are stored as their string representations. Your application is responsible for parsing them back to the appropriate type.
-:::
+
+</Callout>

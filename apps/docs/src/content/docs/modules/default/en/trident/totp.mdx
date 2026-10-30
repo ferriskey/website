@@ -1,72 +1,87 @@
 ---
 title: TOTP
-description: "Time-based one-time passwords in FerrisKey: setup, verification, and configuration."
+description: "Time-based one-time passwords in FerrisKey: enrolment, the sign-in challenge, lockout and secret storage."
 icon: clock
 order: 11
 ---
 
-# TOTP (Time-based One-Time Password)
+# TOTP (time-based one-time password)
 
-TOTP generates a 6-digit code that changes every 30 seconds using a shared secret between FerrisKey and the user's authenticator app. It follows [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238) and is compatible with Google Authenticator, Authy, 1Password, Bitwarden, and any TOTP-compliant app.
+TOTP is the second factor FerrisKey challenges for after a password. The user's authenticator app and FerrisKey share a secret and derive the same six-digit code from it every 30 seconds, as described in [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238). Any compliant app works: Google Authenticator, Authy, 1Password, Bitwarden.
 
-## How it works
+## Parameters
 
-TOTP relies on two ingredients: a **shared secret** (a 20-byte key) and **time**. Both FerrisKey and the authenticator app derive the same code from the secret and the current 30-second time window. Because both sides share the secret and agree on the time, the codes match.
+The parameters are fixed. The `otpauth://` URI FerrisKey hands out always carries them.
 
-### TOTP Parameters
+| Parameter | Value |
+|---|---|
+| `algorithm` | SHA-1 |
+| `digits` | 6 |
+| `period` | 30 seconds |
+| Secret | 20 random bytes, base32-encoded |
+| `issuer` | `<base URL>/realms/<realm_name>`, the realm's issuer URL |
+| Label | The user's email address |
 
-| Parameter | Value | Description |
-|---|---|---|
-| `algorithm` | SHA-1 | Hash function used for code generation |
-| `digits` | 6 | Length of the generated code |
-| `period` | 30 seconds | How often the code rotates |
-| `issuer` | FerrisKey (configurable) | Display name in the authenticator app |
+There is no per-realm setting for the issuer name an authenticator app displays.
 
-## Setup Flow
+## Enrolment
+
+A user gets an authenticator in one of two ways, and both end in the same credential. At sign-in, the `configure_otp` required action sends them through the steps below. From the account page, they follow the self-service flow described in [Account security](/en/modules/account/security#authenticator-app-totp), which needs a fresh password check first.
+
+### Enrolment at sign-in
 
 ::::step-group
-:::step{title="Initiate MFA enrollment"}
-The user navigates to MFA settings (or has the `ConfigureOtp` required action pending). FerrisKey generates a random 20-byte secret and encodes it in base32.
+:::step{title="Start the enrolment"}
+The portal calls `GET /login-actions/setup-otp` with the step token. FerrisKey generates the secret and keeps it on the server for 5 minutes. The response carries `secret`, `otpauth_url` and `issuer`.
 :::
 
-:::step{title="Display QR code"}
-FerrisKey returns a `otpauth://` URI containing the secret, issuer, algorithm, digits, and period. The client renders this as a QR code:
+:::step{title="Show the QR code"}
+The client renders `otpauth_url` as a QR code. The URI has this shape, with the label and the issuer URL-encoded:
 
-```
-otpauth://totp/FerrisKey:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=FerrisKey&algorithm=SHA1&digits=6&period=30
+```text
+otpauth://totp/alice%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=https%3A%2F%2Fiam.example.com%2Frealms%2Facme&algorithm=SHA1&digits=6&period=30
 ```
 :::
 
-:::step{title="Scan and verify"}
-The user scans the QR code with their authenticator app, then submits the current 6-digit code to FerrisKey. FerrisKey validates the code against the secret to confirm the app is configured correctly.
+:::step{title="Confirm with a code"}
+The user scans the code and types the six digits the app shows. The client sends `POST /login-actions/verify-otp` with the `code` and a `label` for the device. The request does not repeat the secret: FerrisKey reads the one it stored, so the client cannot choose its own.
+
+The stored enrolment is single-use. The call consumes it whether or not the code is right, so a wrong code means starting again from the first step. FerrisKey also refuses the call with a 403 unless `configure_otp` is actually due for this sign-in.
 :::
 
 :::step{title="Credential stored"}
-On successful verification, the TOTP credential is saved. The credential includes the encrypted secret, algorithm, digit count, and period. The `ConfigureOtp` required action is removed.
+On a valid code, FerrisKey saves the credential (type `otp`), replaces any authenticator the user already had, removes the `configure_otp` required action and lets the sign-in continue.
 :::
 ::::
 
-## Verification during login
+## Verification at sign-in
 
-After password validation, if the user has a TOTP credential:
+After the password, a user who has an authenticator gets this:
 
-1. FerrisKey returns `status: requires_otp_challenge` with a temporary token
-2. The client collects the 6-digit code from the user
-3. The client submits the code with the temporary token
-4. FerrisKey computes the expected code from the stored secret and current time
-5. If the code matches (with a small time-window tolerance), authentication succeeds
+1. `POST /login-actions/authenticate` answers with `status: "RequiresOtpChallenge"` and the user's `email`, and sets the step token cookie.
+2. The client collects the six-digit code.
+3. The client sends `POST /login-actions/challenge-otp` with `{ "code": "123456" }`. The code must be exactly six characters.
+4. FerrisKey accepts the code of the current 30-second window and of the windows just before and after it, so a device whose clock is one step off still passes.
+5. On success the response carries the `url` with the authorization code, or the `required_actions` still due.
 
-:::callout{variant="warning" title="Time synchronization"}
-TOTP depends on both FerrisKey and the authenticator app agreeing on the current time. If the server clock drifts significantly, codes will fail validation. Use NTP to keep your server clock accurate.
-:::
+<Callout variant="warning" title="Time synchronization">
 
-## Customization
+TOTP depends on FerrisKey and the authenticator app agreeing on the time. If the server clock drifts by more than one step, valid codes fail. Keep the server clock synchronized with NTP.
 
-### Changing the Issuer
-The issuer name displayed in authenticator apps comes from the TOTP credential configuration. Customize it per realm to show your application's name instead of "FerrisKey".
+</Callout>
 
-### Enforcing TOTP for every user
-Add `ConfigureOtp` to the list of required actions for every new user created in the realm. This makes MFA enrollment mandatory, users cannot get full tokens until they set up TOTP.
+### Lockout
 
-### Time window tolerance
-FerrisKey accepts codes from the current and adjacent time windows to account for minor clock skew. This means a code from the previous or next 30-second window may also be accepted.
+A wrong code counts as a failed sign-in. It feeds the same counter as a wrong password: once the counter reaches the realm's `lockout_threshold` (10 by default), the account is locked for `lockout_duration_seconds` (900 by default). A locked account is refused at the challenge, and every other sign-in. A correct code resets the counter.
+
+## Where the secret is stored
+
+The secret lives in the credential's `secret_data` column. FerrisKey seals it with AES-256-GCM only when `SECRETS_ENCRYPTION_KEYS` is set. Without the variable the base32 secret is stored in clear, and so is a secret that is still waiting for its first code. See [Secrets at rest](/en/discover/guides/secrets-at-rest) for the key format and rotation.
+
+## Making TOTP mandatory
+
+Set `require_mfa` on the realm, or on a role. Any user it covers who has no authenticator picks up `configure_otp` at the next sign-in and cannot finish signing in until they clear it. You can also add `configure_otp` to a single user's required actions from the console or the user API.
+
+## Losing the authenticator
+
+A user who still holds a recovery code can [answer the challenge with it](/en/modules/trident/recovery-codes). Otherwise an administrator deletes the one-time password credential from the user's page in the console, and the user enrols a new authenticator.

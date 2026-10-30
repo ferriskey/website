@@ -1,97 +1,102 @@
 ---
-title: Federation Flow
-description: "How the Abyss federation flow works: redirect, callback, token exchange, and account linking."
+title: Federation flow
+description: "How the Abyss broker flow works: redirect, callback, token exchange, profile lookup and account resolution."
 icon: git-branch
 order: 42
 ---
 
-# Federation Flow
+# Federation flow
 
-When a user authenticates through an external provider, Abyss orchestrates a multi-step flow that transforms an external identity into a FerrisKey session with full tokens.
+When a user signs in through an external provider, FerrisKey runs the OAuth2 authorization code flow against that provider, turns the result into a local user, and gives your application an ordinary FerrisKey authorization code. The provider's tokens never leave FerrisKey.
 
-## Step-by-Step Flow
+## Step by step
 
 ::::step-group
-:::step{title="1. User selects a provider"}
-On the login page, the user clicks "Sign in with Google" (or another configured provider). The client sends the selected provider ID to FerrisKey.
+:::step{title="The user picks a provider"}
+The login page lists the realm's enabled providers. Each button points at `GET /realms/{realm}/broker/{alias}/login`, carrying the `client_id` and `redirect_uri` of your application, plus `response_type` (default `code`) and optionally `scope`, `state`, `nonce`, `session_id`, `code_challenge` and `code_challenge_method`.
+
+FerrisKey checks that the client exists, that the `redirect_uri` is one of its enabled redirect URIs, and that the provider exists and is enabled (a disabled provider answers 403). If the client requires PKCE, the request must carry an S256 `code_challenge`.
 :::
 
-:::step{title="2. FerrisKey builds the authorization URL"}
-FerrisKey constructs the OAuth2 authorization URL with:
-- The provider's `authorization_url`
-- The configured `client_id`
-- The requested `scopes`
-- A `redirect_uri` pointing back to FerrisKey
-- A CSRF `state` parameter
-- A `nonce` for OIDC flows
+:::step{title="FerrisKey redirects to the provider"}
+FerrisKey stores a broker session for ten minutes and answers with a 302 to the provider's `authorization_url`. The URL carries:
+
+- the provider's `client_id`
+- a `redirect_uri` of `{base URL}/realms/{realm}/broker/{alias}/endpoint`
+- `response_type=code`
+- a random `state` that identifies the broker session
+- the `scope`, when `scopes` is not empty
+- a `code_challenge` with `code_challenge_method=S256`, when `use_pkce` is on
+- the `nonce` your application sent, if any
 :::
 
-:::step{title="3. User is redirected"}
-The browser redirects the user to the external provider's login page. FerrisKey records this as an `idp_redirect` step in Compass (if enabled).
+:::step{title="The user authenticates at the provider"}
+FerrisKey is not involved. The user signs in with whatever the provider asks for, including its own multi-factor prompts.
 :::
 
-:::step{title="4. User authenticates externally"}
-The user authenticates with the external provider using their existing credentials (Google account, GitHub account, etc.). FerrisKey is not involved in this step.
+:::step{title="The provider calls back"}
+The provider redirects the browser to `GET /realms/{realm}/broker/{alias}/endpoint` with `code` and `state`. FerrisKey looks the `state` up among the broker sessions of the realm. An unknown or expired session is a 400, and an `error` parameter from the provider ends the flow with a 401 that repeats the provider's error and description.
+
+If the realm records flows in [Compass](/en/modules/compass/overview), the exchange appears as a flow named `broker_<alias>`, with an `idp_redirect` step and an `idp_callback` step. Both are written when the callback arrives.
 :::
 
-:::step{title="5. Callback to FerrisKey"}
-The external provider redirects the user back to FerrisKey with an authorization code. FerrisKey records this as an `idp_callback` step in Compass.
+:::step{title="FerrisKey exchanges the code"}
+FerrisKey posts `grant_type=authorization_code`, the `code`, the callback URL, the `client_id` and the `client_secret` to the provider's `token_url`, as form fields. When PKCE is on it adds the `code_verifier`. The call has a 5 second connect timeout and a 10 second total timeout, and does not follow redirects.
 :::
 
-:::step{title="6. Token exchange"}
-FerrisKey exchanges the authorization code for tokens at the provider's `token_url`, using the configured `client_id` and `client_secret`.
+:::step{title="FerrisKey reads the profile"}
+With both `jwks_url` and `issuer` configured and an ID token in the response, FerrisKey verifies the token and reads the claims from it. Otherwise it calls `userinfo_url` with the provider's access token. See [ID token or userinfo](/en/modules/abyss/overview#id-token-or-userinfo).
 :::
 
-:::step{title="7. Fetch user information"}
-If a `userinfo_url` is configured, FerrisKey calls it with the provider's access token to get the user's profile (email, name, etc.). For OIDC providers, claims may already be in the ID token.
+:::step{title="FerrisKey resolves the account"}
+The profile is matched to a local user, or a new user is created. The rules are in the next section.
 :::
 
-:::step{title="8. Account resolution"}
-FerrisKey resolves the external identity to a local user:
-- **Existing link found**: The user has a federated credential for this provider. Log them in.
-- **Email match**: A local user with the same email exists. Link the external identity and log them in.
-- **New user**: No match found. Create a new local user from the provider's attributes and store a federated credential.
-:::
-
-:::step{title="9. FerrisKey tokens issued"}
-FerrisKey generates its own access, refresh, and ID tokens for the now-authenticated user. The provider's tokens are not forwarded to the client.
+:::step{title="FerrisKey issues its own authorization code"}
+FerrisKey creates an authorization code, or completes the login session that started on the login page. If the client needs the user's consent, the browser goes to the consent screen first. Otherwise it is redirected to your `redirect_uri` with `code` and your original `state`. Your application then exchanges that code at the token endpoint like any other.
 :::
 ::::
 
-## Federated Credentials
+## Account resolution
 
-When a user authenticates through an external provider, FerrisKey stores a **federated credential** on the user:
+FerrisKey tries the rules in this order and stops at the first that applies.
 
-```json
-{
-  "credential_type": "Federated",
-  "credential_data": {
-    "provider_id": "google-oauth2",
-    "provider_type": "oauth2"
-  }
-}
-```
-
-This links the local user to their external identity. A user can have federated credentials from multiple providers simultaneously, allowing them to sign in with Google one day and GitHub the next, both resolving to the same account.
-
-## Federation types
-
-Abyss also supports directory-based federation for enterprise use cases:
-
-| Type | Description | Sync Mode |
-|---|---|---|
-| **LDAP** | Active Directory / OpenLDAP | Import, Force, or LinkOnly |
-| **Kerberos** | Kerberos/SPNEGO authentication | LinkOnly |
-| **Custom** | Custom federation provider | Configurable |
-
-### Sync Modes
-
-| Mode | Behavior |
+| Situation | Result |
 |---|---|
-| **Import** | Import users from the external directory into FerrisKey on first login |
-| **Force** | Sync user attributes from the directory on every login (overwrite local data) |
-| **LinkOnly** | Authenticate against the directory but don't sync attributes |
+| A link exists for this provider and the provider's `sub` | The user signs in as the linked account. With `store_token` on, the stored provider token is refreshed |
+| No link, and a local user in the realm has the same email, `trust_email` is on, the provider reported `email_verified: true`, and the local user's email is verified too | FerrisKey creates a link to that account and the user signs in |
+| Nothing above, and `link_only` is on | The sign-in is refused with a 403: "No existing account found for linking" |
+| Nothing above, and `link_only` is off | FerrisKey creates a new account and a link to it |
 
-:::callout{variant="warning" title="SAML and LDAP are planned"}
-SAML and LDAP federation are on the roadmap. OAuth2 and OIDC providers are fully supported today.
-:::
+Linking by email needs all three conditions because an email address is only evidence of identity when someone has checked it. If one condition is missing, FerrisKey does not link; it moves on to the last two rows. A matching email then makes the account creation fail, because emails are unique in a realm. The user sees an error rather than someone else's account.
+
+A new account takes its username from `preferred_username`, then the email, then `{alias}_{sub}`. If that username is already taken in the realm, the sign-in fails. The account is enabled, has no password, and has `email_verified` set only when the provider said so and `trust_email` is on.
+
+After resolution, a disabled account is sent back to the login page with the message "User account is disabled".
+
+## Links
+
+A link is a row in `identity_provider_links`. It ties one local user to one identity at one provider, and records the provider's subject (`sub`), the username the provider reported and, when `store_token` is on, the provider's access token. A user has at most one link per provider, and an identity at a provider links to at most one user.
+
+Links are created by the flow, never through the API. An administrator can list a user's links and remove one; the account stays and only that way in disappears. See [Links on a user](/en/modules/abyss/providers#links-on-a-user).
+
+A brokered account has no credential record: the user can sign in because the link exists, not because a password or another credential was stored. Accounts imported from a directory differ, since [user federation](/en/modules/abyss/user-federation) adds a marker credential to them.
+
+## When it fails
+
+| Cause | Response |
+|---|---|
+| Provider disabled | 403 "Provider is disabled" |
+| Unknown or expired broker session | 400 |
+| The provider returned an `error` | 401, with the provider's error and description |
+| Token exchange or userinfo call failed | 503 |
+| ID token failed verification | 400 "Invalid ID token from identity provider" |
+| A provider endpoint resolves to a private, loopback or link-local address, or uses plain `http` | 400 "Invalid provider URL" |
+| `link_only` and no matching account | 403 "No existing account found for linking" |
+| The account is disabled | Redirect to the login page with the message "User account is disabled" |
+
+The address check applies to the token, userinfo and JWKS endpoints, which FerrisKey calls from the server. It is the same guard webhooks use, and `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` relaxes it for development.
+
+## Directories
+
+A directory does not use this flow. LDAP and Active Directory accounts are imported by a synchronisation and checked with a bind at sign-in: see [user federation](/en/modules/abyss/user-federation).

@@ -1,6 +1,6 @@
 ---
 title: Users
-description: "User accounts in FerrisKey: lifecycle, properties, required actions, service accounts, sessions, and security."
+description: "User accounts in FerrisKey: lifecycle, properties, required actions, service accounts, sessions, lockout, and listing."
 icon: user
 order: 12
 ---
@@ -17,34 +17,57 @@ The user record itself is small. It describes who someone is; credentials, roles
 
 | Property | Description |
 |---|---|
-| `id` | Stable internal identifier (UUID). Used everywhere tokens reference the subject. |
+| `id` | Stable identifier (UUID). Used everywhere tokens reference the subject. Generated, unless you supply one when you create the user. |
 | `username` | Unique identifier within the realm. The login handle. |
-| `email` | Email address. Optional unless the realm requires it. |
-| `firstname` | Given name. |
-| `lastname` | Family name. |
+| `email` | Email address. Optional on the record, but without one the user cannot receive a reset link, a magic link or a verification email. |
+| `firstname`, `lastname` | Given name and family name. |
 | `email_verified` | Whether the email has been confirmed. |
 | `enabled` | Whether the account is active. A disabled user cannot authenticate. |
-| `client_id` | Set only on service account users; links them to their owning client. |
+| `required_actions` | What the user still owes before a login completes. |
+| `locale` | The language the user chose, or `null` to follow the realm default. See [Localization](/en/discover/guides/localization). |
+| `failed_login_attempts`, `locked_until` | Lockout state. See [Lockout](#lockout). |
+| `federation_provider_id` | The user federation provider the account comes from, if any. |
+| `client_id` | Set only on service account users, where it links them to their owning client. Left out otherwise. |
 | `realm_id` | The realm this user belongs to. |
+| `created_at`, `updated_at` | Timestamps. |
 
 A representative JSON payload returned by the admin API:
 
 ```json
 {
-  "id": "9a3b1c7e-2c4f-4d5a-9e7b-3c5e8a2d1f0b",
+  "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f",
+  "realm_id": "0199a4ee-91d0-7c3a-8e21-5b7f0c2d4a18",
   "username": "alice",
-  "email": "alice@example.com",
   "firstname": "Alice",
   "lastname": "Martin",
+  "email": "alice@example.com",
   "email_verified": true,
   "enabled": true,
-  "realm_id": "home"
+  "required_actions": [],
+  "created_at": "2026-10-30T20:36:41.347264Z",
+  "updated_at": "2026-10-30T20:36:41.347264Z",
+  "failed_login_attempts": 0,
+  "locked_until": null,
+  "locale": null,
+  "federation_provider_id": null
 }
 ```
 
-:::callout{variant="info" title="Identifiers"}
-Use `id` to reference a user from other resources (role assignments, audit logs, tokens). `username` is a human-facing handle and may change; `id` is immutable.
-:::
+<Callout variant="info" title="Identifiers">
+
+Use `id` to reference a user from other resources (role assignments, audit logs, tokens). `username` is a human-facing handle and a realm can let users change their own; `id` never changes.
+
+</Callout>
+
+### Creating a user
+
+```
+POST /realms/{realm_name}/users
+```
+
+The body takes `username`, plus optional `email`, `email_verified`, `firstname` and `lastname`. A new user has no credential yet: give it a password with [reset-password](#credentials).
+
+The body also takes an optional `id`. Supply one when another system already identifies the person by a UUID and the `sub` claim of their tokens has to match. If any user in any realm already has that id, the request fails with `409` and the reason `user_id_already_exists`. Without an `id`, FerrisKey generates one.
 
 ## Realm scoping
 
@@ -78,52 +101,62 @@ stateDiagram-v2
     Deleted --> [*]
 ```
 
-**Provisioned.** The account exists but may still have pending [required actions](#required-actions): verify an email, set a permanent password, enroll in MFA. Until those are cleared, authentication only produces a temporary token.
+| State | What it means |
+|---|---|
+| Provisioned | The account exists but may still have pending [required actions](#required-actions): verify an email, set a permanent password, enroll in MFA. Until those are cleared, authentication only produces a temporary token. |
+| Active | Authentication produces full tokens, and role assignments apply. |
+| Disabled | `enabled = false`. The account is kept but cannot authenticate. |
+| Deleted | The record is removed. |
 
-**Active.** Authentication produces full tokens, and role assignments apply.
+Disabling a user cuts access at once. FerrisKey ends the user's sessions and revokes their refresh tokens and access tokens, and its own API refuses those access tokens from that moment. An API that only checks the JWT signature offline keeps accepting an access token until it expires, 300 seconds by default. Re-enabling the account lets the user sign in again; it does not bring the revoked sessions back.
 
-**Disabled.** `enabled = false`. The account is kept but cannot authenticate. Tokens already issued stay valid until they expire, so revoke sessions when you need an immediate cutoff.
-
-**Deleted.** The record is removed, and the sessions and refresh tokens attached to it are invalidated.
+Deleting a user, one at a time or in bulk, ends the sessions and revokes the tokens before the record goes.
 
 ## Required actions
 
-A required action is something a user has to finish before full authentication is granted. While any are pending, the authentication chain hands back a temporary token instead of a full token set.
+A required action is something a user has to finish before full authentication is granted. While any are pending, the sign-in answers with the actions still owed instead of redirecting back to the application.
 
 | Action | When it is added | What the user must do |
 |---|---|---|
-| `verify_email` | The email changed, or realm policy requires verification | Click the link sent by the [Trident](/en/modules/trident/overview) module |
-| `update_password` | An admin marked the credential temporary, or the password expired | Set a new password |
-| `configure_otp` | The realm requires MFA and the user has no TOTP credential yet | Enroll a TOTP authenticator |
-| `configure_passkey` | The realm requires a passkey and the user has none registered | Register a WebAuthn passkey |
+| `verify_email` | The user registered themselves in a realm with email verification on, or an administrator assigned it | Click the link sent by the [Trident](/en/modules/trident/overview) module |
+| `update_password` | An administrator reset the password as temporary, or assigned the action | Set a new password |
+| `configure_otp` | The realm, or one of the user's roles, requires MFA and the user has no TOTP credential yet. It waits until a temporary password has been replaced | Enroll a TOTP authenticator |
+| `configure_passkey` | An administrator assigned it, and the user has at least one credential | Register a WebAuthn passkey |
+
+`configure_otp` is worked out at each sign-in from the realm's `require_mfa` setting and the user's roles. It is never stored on the user, so you cannot clear it by editing the user: enrolling an authenticator, or lifting the requirement, does that.
 
 ### How they flow
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
+    participant P as Sign-in page
     participant FK as FerrisKey
     participant U as User
 
-    C->>FK: POST /token (grant_type=password)
+    P->>FK: POST /realms/{realm}/login-actions/authenticate
     FK->>FK: Validate credentials
     FK->>FK: Detect required actions
-    FK-->>C: 200 { temp_token, required_actions: [...] }
-    C->>U: Walk through each action
-    U->>FK: Complete action (using temp_token)
-    FK-->>U: Action cleared
-    Note over C,FK: Loop until no actions remain
-    C->>FK: POST /token (with temp_token)
-    FK-->>C: 200 { access_token, refresh_token, id_token }
+    FK-->>P: 200 { status: "RequiresActions", required_actions: [...] }
+    P->>U: Walk through each action
+    U->>FK: Complete the action (login-actions endpoint)
+    FK-->>P: 200 { required_actions: [...remaining] }
+    Note over P,FK: Loop until no actions remain
+    FK-->>P: 200 { url: redirect back to the client }
 ```
 
-:::callout{variant="info" title="Temporary tokens"}
-A temporary token is a short-lived JWT that authorizes the required-action endpoints and nothing else. It cannot reach a protected resource, call userinfo, or refresh into a full session.
-:::
+The sign-in page is the browser-based authorization code flow. The `password` grant on the token endpoint does not walk through these steps: it refuses to issue tokens for an account that still owes one, and tells the client to use the browser flow.
 
-:::callout{variant="warning" title="Order matters"}
+<Callout variant="info" title="Temporary tokens">
+
+The temporary token that comes with a pending action is a short-lived JWT, sent as an HTTP-only cookie limited to `/realms/{realm}/login-actions`. It authorizes the required-action endpoints and nothing else. It cannot reach a protected resource or call userinfo.
+
+</Callout>
+
+<Callout variant="warning" title="Order matters">
+
 Required actions are evaluated in a fixed order, usually `verify_email`, then `update_password`, then the MFA enrollment actions. Read the `required_actions` array in the response rather than hard-coding that order in a client.
-:::
+
+</Callout>
 
 ## Service account users
 
@@ -158,6 +191,29 @@ The console groups everything about one account behind five tabs: overview, cred
 <img class="only-light" src="/dashboard/user_credentials-light.jpg" alt="FerrisKey user credentials tab showing the registered password, the reset form and its validity choice" />
 <img class="only-dark" src="/dashboard/user_credentials-dark.jpg" alt="FerrisKey user credentials tab showing the registered password, the reset form and its validity choice" />
 
+### Listing users
+
+```
+GET /realms/{realm_name}/users
+```
+
+The list is paginated: `page`, `limit` (1 to 100, 20 by default) and the answer comes back as `{ data, metadata }`. See [Paginated listings](/en/discover/guides/api-listings) for the shared contract.
+
+| Parameter | What it does |
+|---|---|
+| `search` | Matches anywhere in the username, email, first name or last name, ignoring case |
+| `username`, `email`, `firstname`, `lastname` | Matches anywhere in that one field, ignoring case |
+| `enabled`, `email_verified` | Exact match on the flag |
+| `service_account` | `true` keeps only service account users, `false` keeps only people. Without it both are listed |
+| `role_id` | Keeps the users the role is assigned to |
+| `ids` | A comma-separated list of at most 100 user ids |
+| `not_in_group` | An organization group id: keeps the users who are not members of that group |
+| `not_in_organization` | An organization id: keeps the users who are not members of it |
+| `created_from`, `created_to` | Bounds on the creation date, RFC 3339 with an offset. `created_from` is inclusive, `created_to` is exclusive |
+| `order_by` | `username`, `email`, `firstname`, `lastname`, `enabled`, `created_at` (the default) or `updated_at` |
+
+Filters combine with AND. A parameter that is not in the table, `offset` included, is refused with `400` and the reason `invalid_query`.
+
 ### Credentials
 
 ```
@@ -167,20 +223,24 @@ PUT    /realms/{realm_name}/users/{user_id}/reset-password
 POST   /realms/{realm_name}/users/{user_id}/credentials/import
 ```
 
-A read lists the authentication methods registered on the account — password, authenticator, passkeys — never the secrets. The stored password is not displayed anywhere: it can only be replaced.
+A read lists the authentication methods registered on the account (password, authenticator, passkeys), never the secrets. For a password it shows the `algorithm` of the stored hash. The stored password is not displayed anywhere: it can only be replaced.
 
-A reset takes a **validity**:
+A reset takes a `value` and a `temporary` flag, which the console presents as a validity:
 
 | Validity | Effect |
 |---|---|
 | Temporary | The user must change it at their next sign-in. Sets the `update_password` required action |
 | Permanent | It stays valid until the user changes it themselves |
 
-:::callout{variant="warning" title="Two asymmetries worth knowing"}
-Resetting a password replaces it immediately but **leaves open sessions valid** — an administrative reset alone does not cut access, so revoke the sessions too when that is the intent. And deleting a credential is immediate, irreversible, and the user is **not notified**: they discover it at their next sign-in.
-:::
+The new password has to satisfy the realm's [password policy](/en/discover/core-concepts/password-policy). A reset ends all of the user's sessions and revokes their tokens, so the person signs in again with the new password.
 
-`credentials/import` is the migration path for hashes coming from another IAM — see [Export & Import](/en/discover/guides/portability#password-hashes).
+<Callout variant="warning" title="Deleting a credential is quiet">
+
+Deleting a credential is immediate and irreversible. It does not end the user's sessions, and the user is not notified: they discover it at their next sign-in.
+
+</Callout>
+
+`credentials/import` is the migration path for hashes coming from another IAM. See [Export & Import](/en/discover/guides/portability#password-hashes).
 
 ### Roles
 
@@ -195,7 +255,7 @@ GET    /realms/{realm_name}/users/{user_id}/permissions
 GET    /realms/{realm_name}/users/{user_id}/organizations
 ```
 
-`permissions` is the resolved set — the union of every role the account holds — which is what to read when you are debugging "why can this user do that". `roles` is the assignment list; `permissions` is the consequence.
+`permissions` is the resolved set, the union of every role the account holds. It is what to read when you are debugging "why can this user do that". `roles` is the assignment list; `permissions` is the consequence.
 
 ### Attributes
 
@@ -205,7 +265,7 @@ PUT    /realms/{realm_name}/users/{user_id}/attributes
 DELETE /realms/{realm_name}/users/{user_id}/attributes/{key}
 ```
 
-Free-form key-value metadata. Attributes reach tokens only through a [protocol mapper](/en/modules/aegis/protocol-mappers#oidc-usermodel-attribute-mapper) on an active scope — storing one changes nothing on its own.
+Free-form key-value metadata. Attributes reach tokens only through a [protocol mapper](/en/modules/aegis/protocol-mappers#oidc-usermodel-attribute-mapper) on an active scope: storing one changes nothing on its own.
 
 ### Lifecycle operations
 
@@ -214,9 +274,9 @@ DELETE /realms/{realm_name}/users/bulk
 POST   /realms/{realm_name}/users/{user_id}/unlock
 ```
 
-`bulk` deletes several accounts in one call, and it reports the batch as a batch: **one** `user.bulk_deleted` webhook carrying the id list, and **one** `user_deleted` audit event whose details hold `user_ids`. Neither produces one record per account, so a consumer that counts rows will undercount a bulk delete.
+`bulk` deletes several accounts in one call, and it reports the batch as a batch: one `user.bulk_deleted` webhook carrying the id list, and one `user_deleted` audit event whose details hold `user_ids`. Neither produces one record per account, so a consumer that counts rows will undercount a bulk delete.
 
-`unlock` clears a lockout before its window expires. See below.
+`unlock` clears a lockout before its window expires. See [Lockout](#lockout).
 
 ### Identity provider links
 
@@ -225,17 +285,19 @@ GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
 DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
 ```
 
-The external identities [brokered](/en/modules/abyss/providers) onto this account. Deleting a link does not delete the account; the user simply can no longer sign in through that provider, and removal raises `identity_provider_link_removed` in the audit log.
+The external identities [brokered](/en/modules/abyss/providers) onto this account. Deleting a link does not delete the account; the user can no longer sign in through that provider, and removal raises `identity_provider_link_removed` in the audit log.
 
-**Required permissions:** `view_users` or `manage_users` to read, `manage_users` to write. `manage_realm` grants both.
+Required permissions: `view_users` or `manage_users` to read, `manage_users` to write. `manage_realm` grants both.
 
 ## Lockout
 
 After too many failed attempts an account locks itself, governed by two realm settings: `lockout_threshold` (default 10 attempts) and `lockout_duration_seconds` (default 900, so fifteen minutes).
 
-The user carries the state: `failed_login_attempts` and `locked_until`. A locked account authenticates again on its own once the window passes — or immediately, if an administrator calls `unlock`.
+The counter goes up on a wrong password and on a wrong one-time code at the MFA challenge, so a guessed OTP is throttled like a guessed password. A successful sign-in resets it. While the account is locked, even a correct password or code is refused.
 
-Failed attempts are recorded as `login_failure` in [SeaWatch](/en/modules/seawatch/event-types), which is what makes "one IP, forty accounts, nine attempts each" visible before the threshold quietly absorbs it.
+The user carries the state: `failed_login_attempts` and `locked_until`. A locked account authenticates again on its own once the window passes, or immediately if an administrator calls `unlock`.
+
+Failed attempts are recorded as `login_failure` in [SeaWatch](/en/modules/seawatch/event-types), against the account that was targeted. SeaWatch events carry no IP address, so the source of a spray such as "one IP, forty accounts, nine attempts each" shows up in [Compass](/en/modules/compass/overview) instead, whose flows are searchable by `ip_address`.
 
 ## Sessions
 
@@ -243,11 +305,11 @@ A user can hold several sessions at once, one per browser, device, or service ho
 
 | Concept | Lifetime | What it represents |
 |---|---|---|
-| **Auth session** | Seconds to minutes | An in-progress login (state, nonce, code, MFA challenge). Discarded once tokens are issued. |
-| **User session** | Hours to days | An authenticated session. Backed by a refresh token. |
-| **Access token** | Minutes | Short-lived bearer token derived from a user session. |
+| Auth session | Seconds to minutes | An in-progress login (state, nonce, code, MFA challenge). Discarded once tokens are issued. |
+| User session | Hours to days | An authenticated session. Backed by a refresh token. |
+| Access token | Minutes | Short-lived bearer token derived from a user session. |
 
-Revoking a refresh token ends the user session immediately. Access tokens issued from it cannot be refreshed and simply expire on their own. [Tokens](/en/discover/core-concepts/tokens) and [Authentication, auth sessions](/en/discover/core-concepts/authentication#auth-sessions) have the details.
+Ending a user session revokes its refresh token, and FerrisKey's own API refuses the access tokens issued from it from then on. An API that only checks the signature offline accepts them until they expire. [Tokens](/en/discover/core-concepts/tokens) and [Authentication, auth sessions](/en/discover/core-concepts/authentication#auth-sessions) have the details.
 
 ### Listing and revoking
 
@@ -256,23 +318,27 @@ GET    /realms/{realm_name}/users/{user_id}/sessions
 DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}
 ```
 
-:::callout{variant="info" title="API only"}
-These two have no screen in the admin console — a user's sessions are reachable through the API only. The user's own [account page](/en/modules/account/overview) does have a sessions tab, so the person can review their own.
-:::
+The list is paginated and includes expired sessions. It filters on `search` (IP address or user agent), `ip_address`, `user_agent`, `persistent` and the `created_from` and `created_to` bounds, and sorts on `last_seen_at`, `expires_at` or `created_at`. See [Paginated listings](/en/discover/guides/api-listings).
+
+<Callout variant="info" title="API only">
+
+These two have no screen in the admin console: a user's sessions are reachable through the API only. The user's own [account page](/en/modules/account/overview) does have a sessions tab, so the person can review their own.
+
+</Callout>
 
 Session creation and revocation are both audited, as `session_created` and `session_revoked`.
 
 ## Security considerations
 
-**Disable rather than delete.** Disabling keeps the audit history and the role assignments. Delete only when you are certain the identity will never come back.
+Disable rather than delete. Disabling keeps the audit history and the role assignments, and it ends the user's access immediately. Delete only when you are certain the identity will never come back.
 
-**Force a password rotation** by marking the password credential temporary. The next login triggers the `update_password` required action.
+To force a password rotation, reset the password as temporary. The next sign-in triggers the `update_password` required action. A password never expires on its own, because the realm's `max_age_days` is not applied; see [Password Policy](/en/discover/core-concepts/password-policy#expiry-is-stored-not-applied).
 
-**Force MFA enrollment** by setting `require_mfa` on the realm. Existing users without a TOTP credential get `configure_otp` on their next login.
+To force MFA enrollment, set `require_mfa` on the realm. Existing users without a TOTP credential get `configure_otp` on their next sign-in.
 
-**Revoke active sessions.** Disabling a user leaves already-issued access tokens working. Revoke the refresh tokens to cut access straight away.
+To cut a user's access without disabling the account, end their sessions with the `DELETE` above, or reset their password.
 
-**Reference users by `id`** in logs and external systems. Usernames and emails change; the id does not.
+Reference users by `id` in logs and external systems. Usernames and emails change; the id does not.
 
 ## Related concepts
 

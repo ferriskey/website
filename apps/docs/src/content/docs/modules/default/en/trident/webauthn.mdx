@@ -1,78 +1,92 @@
 ---
 title: WebAuthn
-description: "FIDO2 passkeys in FerrisKey: hardware keys, biometrics, and passwordless authentication."
+description: "FIDO2 passkeys in FerrisKey: registration, passkey sign-in, and how a passkey interacts with the TOTP challenge and required actions."
 icon: fingerprint
 order: 12
 ---
 
-# WebAuthn (FIDO2 Passkeys)
+# WebAuthn (FIDO2 passkeys)
 
-WebAuthn enables passwordless authentication using hardware security keys, platform biometrics (Touch ID, Face ID, Windows Hello), or synced passkeys (iCloud Keychain, Google Password Manager). The private key never leaves the user's device. FerrisKey only stores the public key.
+WebAuthn lets users sign in with a hardware security key, platform biometrics (Touch ID, Face ID, Windows Hello) or a synced passkey (iCloud Keychain, Google Password Manager). The private key never leaves the user's device. FerrisKey only stores the public key.
 
 ## How it works
 
-WebAuthn uses public-key cryptography. During registration, the user's device creates a key pair. The public key is sent to FerrisKey; the private key stays on the device. During authentication, the device signs a challenge with the private key, and FerrisKey verifies the signature with the stored public key.
+WebAuthn uses public-key cryptography. During registration the user's device creates a key pair and sends the public key to FerrisKey. During sign-in the device signs a challenge with the private key, and FerrisKey checks the signature against the stored public key. There is no shared secret to phish or to leak from the server, and the biometric or PIN check happens on the device.
 
-This means:
-- **No shared secrets**: nothing to phish or leak from the server
-- **Cryptographic proof**: the device proves possession of the private key
-- **User verification**: biometric or PIN verification happens locally on the device
+FerrisKey requires that check. An assertion the authenticator did not mark as user-verified is refused with a 401, so a security key that only needs a touch, with no PIN or biometric, cannot sign anyone in.
 
-## Registration Flow
+<Callout variant="info" title="A passkey is a way in, not a second factor">
+
+A passkey signs the user in on its own. FerrisKey does not ask for a passkey after a password: the only second-factor challenge it issues is the TOTP one. A user who has passkeys but no authenticator faces no further challenge once the password is right.
+
+</Callout>
+
+## Where the origin comes from
+
+The WebAuthn origin is the web app URL (`WEBAPP_URL`, or the request's host when `WEBAPP_URL_FROM_REQUEST` is on), and the relying-party ID is that URL's hostname. A passkey registered at `login.example.com` does not work at `auth.example.com`. Pick the hostname before users start registering. [Configuration](/en/discover/guides/configuration) lists both variables.
+
+## Registering a passkey
+
+A user gets a passkey in one of two ways. From the account page, they use the self-service flow in [Account security](/en/modules/account/security#passkeys), which needs a fresh password check. At sign-in, the `configure_passkey` required action sends them through the steps below.
+
+When an administrator updates a user's required actions, FerrisKey refuses `configure_passkey` for a user who has no credential at all, so a passkey is added on top of an existing way to sign in.
 
 ::::step-group
-:::step{title="Start registration"}
-FerrisKey generates a WebAuthn registration challenge containing the realm's relying party information and a random challenge value. The challenge is stored on the auth session.
+:::step{title="Ask for creation options"}
+The portal calls `POST /login-actions/webauthn-public-key-create-options` with the step token. FerrisKey builds a registration challenge, excludes the passkeys the user already holds, and stores the challenge on the auth session.
 :::
 
-:::step{title="Browser prompts user"}
-The browser's WebAuthn API (`navigator.credentials.create()`) prompts the user to create a credential, typically a Touch ID scan, Face ID, or a tap on a hardware key.
+:::step{title="The browser prompts the user"}
+The browser's `navigator.credentials.create()` asks for a Touch ID scan, Face ID, or a tap on a hardware key. The authenticator returns the public key, the credential ID and attestation data.
 :::
 
-:::step{title="Credential created"}
-The authenticator generates a new key pair and returns the public key, credential ID, and attestation data to the browser.
-:::
-
-:::step{title="Server verification"}
-FerrisKey validates the attestation, stores the public key and credential metadata as a `WebAuthnPublicKeyCredential`, and links it to the user.
+:::step{title="Send the credential back"}
+The portal calls `POST /login-actions/webauthn-public-key-create`. FerrisKey refuses it with a 403 unless `configure_passkey` is still due for this sign-in. It checks the response against the stored challenge, which stays valid for 5 minutes, then saves the public key as a credential of type `webauthn-public-key-credential` and removes the required action.
 :::
 ::::
 
-## Authentication Flow
+## Signing in with a passkey
+
+Turn on `passkey_enabled` on the realm (**Authentication** > **Sign-in methods** in the console) and the sign-in page shows a passkey button. The setting only controls that button: the passkey endpoints do not check it.
 
 ::::step-group
-:::step{title="Challenge issued"}
-FerrisKey generates an authentication challenge and includes the list of registered credential IDs for the user.
+:::step{title="Ask for request options"}
+The portal calls `POST /login-actions/passkey-request-options`. With a `username` in the body, the challenge is scoped to that user's passkeys, and a user with none gets a 401. Without one, the challenge is discoverable and the browser proposes the passkeys it holds, so the page cannot be used to probe which accounts exist.
 :::
 
-:::step{title="User authenticates"}
-The browser calls `navigator.credentials.get()`. The authenticator prompts the user (biometric, PIN, or button press) and signs the challenge with the private key.
+:::step{title="The user authenticates"}
+The browser calls `navigator.credentials.get()`. The authenticator prompts for a biometric or PIN and signs the challenge.
 :::
 
 :::step{title="Signature verified"}
-FerrisKey verifies the signed assertion against the stored public key. If valid, the MFA challenge is satisfied.
+The portal calls `POST /login-actions/passkey-authenticate` with the assertion. FerrisKey verifies the signature, checks that the credential belongs to the user named by the assertion's user handle, and requires user verification. On success the response carries `login_url`, which holds the authorization code, and the SSO session cookie is set.
 :::
 ::::
 
-## Supported Authenticators
+### Required actions still apply
 
-| Type | Examples | Cross-Device |
+A user-verified passkey answers the TOTP challenge, so a user who has both a passkey and an authenticator is not asked for a code. It does not skip required actions: if `update_password`, `verify_email` or `configure_otp` is due, `passkey-authenticate` answers 403 and the sign-in does not complete. The client's maintenance and consent rules apply as well.
+
+## Supported authenticators
+
+| Type | Examples | Cross-device |
 |---|---|---|
-| **Platform** | Touch ID, Face ID, Windows Hello, Android biometrics | No |
-| **Roaming** | YubiKey, SoloKeys, Titan Security Key | Yes |
-| **Synced Passkeys** | iCloud Keychain, Google Password Manager | Yes |
+| Platform | Touch ID, Face ID, Windows Hello, Android biometrics | No |
+| Roaming | YubiKey, SoloKeys, Titan Security Key | Yes |
+| Synced passkeys | iCloud Keychain, Google Password Manager | Yes |
 
-## Real-World Patterns
+## Patterns
 
-### Passwordless Login
-Combine WebAuthn with the authorization code flow. The user clicks "Sign in with passkey", authenticates with their device, and receives tokens, no password involved. This is the most phishing-resistant flow available.
+### Passkey-first sign-in
 
-### Second factor with hardware keys
-For high-security environments (finance, healthcare, government), require a hardware security key as the second factor after password authentication. Users carry a YubiKey and tap it when prompted.
+Combine passkeys with the authorization code flow. The user clicks the passkey button, authenticates with their device and is redirected back with a code, with no password typed. The password stays accepted next to the passkey, so this removes typing rather than the password itself.
 
-### Progressive Enhancement
-Register WebAuthn as an optional authenticator. Users who have compatible devices get the smooth passkey experience; others fall back to TOTP. Both paths lead to the same token endpoint.
+### Passkeys next to TOTP
 
-:::callout{variant="info" title="Multiple passkeys"}
-Users can register multiple WebAuthn credentials, for example, a Touch ID on their laptop and a YubiKey as a backup. Each credential is stored independently and any one can satisfy the MFA challenge.
-:::
+Offer passkeys to users whose devices support them. Those who do not keep their password and, if you require it, an authenticator. Both paths end at the same token endpoint.
+
+<Callout variant="info" title="Multiple passkeys">
+
+Users can register several passkeys, for example Touch ID on a laptop and a YubiKey as a backup. Each is stored on its own and any one of them signs the user in. Removing one is refused if it would leave the account with no way to sign in.
+
+</Callout>

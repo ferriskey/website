@@ -1,17 +1,17 @@
 ---
-title: User Federation
-description: "Connect an LDAP or Active Directory tree to a realm: connection, search, and synchronisation."
+title: User federation
+description: "Connect an LDAP or Active Directory tree to a realm: connection, search, synchronisation and sign-in."
 icon: folder-tree
 order: 43
 ---
 
-# User Federation
+# User federation
 
 Federation comes in two shapes, and Abyss covers both.
 
-**Identity brokering** sends the user to another provider to authenticate. FerrisKey never sees the credential; it receives an assertion and mints its own tokens. That is what [Configuring Providers](/en/modules/abyss/providers) is about.
+Identity brokering sends the user to another provider to authenticate. FerrisKey never sees the credential; it receives an assertion and issues its own authorization code. That is what [Configuring providers](/en/modules/abyss/providers) is about.
 
-**User federation** is the other shape: the accounts live in a directory you already run, and FerrisKey reads them. The user types their password into *your* login page, FerrisKey binds against the directory to check it, and the account is imported so roles, groups and organizations can be attached to it locally.
+User federation is the other shape: the accounts live in a directory you already run, and FerrisKey reads them. A synchronisation imports the accounts into the realm, so roles, groups and organizations can be attached to them locally. At sign-in the user types their password into your login page, and FerrisKey binds against the directory to check it. The password is never stored in FerrisKey.
 
 Reach for user federation when an existing LDAP or Active Directory tree is the source of truth for who exists, and for brokering when another system is the source of truth for who is signing in.
 
@@ -19,14 +19,14 @@ Reach for user federation when an existing LDAP or Active Directory tree is the 
 
 | Type | Status |
 |---|---|
-| LDAP | Supported. Connection tested, accounts searched, imported and synchronised |
+| LDAP and Active Directory | Supported. Connection tested, accounts searched, imported and checked at sign-in. The API calls the types `Ldap` and `ActiveDirectory`, and treats them the same way |
 | Kerberos | Stored only. The server keeps the provider record but neither synchronises nor tests it |
 
 Everything below describes an LDAP provider.
 
 ## Creating a provider
 
-Open **User Federation** in the admin console and add a provider. The form is split into the four things a directory integration has to settle: who the provider is, how to reach it, how to find an account, and when to walk the tree again.
+Open User Federation in the admin console and add a provider. The form is split into the four things a directory integration has to settle: who the provider is, how to reach it, how to find an account, and how to run the synchronisation.
 
 <img class="only-light" src="/dashboard/ldap_provider-light.jpg" alt="FerrisKey new LDAP provider form showing basic settings and connection settings" />
 <img class="only-dark" src="/dashboard/ldap_provider-dark.jpg" alt="FerrisKey new LDAP provider form showing basic settings and connection settings" />
@@ -36,10 +36,10 @@ Open **User Federation** in the admin console and add a provider. The form is sp
 | Field | Description |
 |---|---|
 | Provider name | Names the provider in the console. Must be unique in the realm |
-| Priority | Order in which providers are queried when an account is looked up. A secondary provider is only queried when the primary does not answer |
-| Enabled | A disabled provider is no longer queried and no longer synchronises. Accounts it already imported stay linked |
+| Priority | The console offers Primary, Secondary, Development and Legacy, stored as 0, 10, 20 and 30. The server keeps the number and uses it to sort the provider list. Sign-in does not consult it |
+| Enabled | A disabled provider refuses the sign-in of the accounts it manages. The console greys out its synchronisation, but the API still runs one if asked. Accounts it already imported stay linked |
 
-Disabling rather than deleting is the safe way to take a directory out of the loop: deleting the provider is what severs the link to the accounts it imported.
+Disabling a provider takes the directory out of the loop, and locks its accounts out with it: every account it manages fails to sign in until you enable it again. Deleting the provider is what severs the link to the accounts it imported.
 
 ### Connection settings
 
@@ -48,18 +48,28 @@ Disabling rather than deleting is the safe way to take a directory out of the lo
 | Connection URL | Directory address. Without a scheme, `ldaps://` is assumed when TLS is on and `ldap://` otherwise |
 | Base DN | Root under which accounts are searched, for example `dc=example,dc=com` |
 | Bind DN | Service account used to read the directory. Left empty, the directory is read anonymously |
-| Bind credential | Stored encrypted and never returned once saved |
+| Bind credential | The service account's password. Stored as sent and never returned: reads show `********` |
 | Use TLS | Encrypts the connection to the directory |
 
-:::callout{variant="warning" title="Anonymous bind is rarely what you want"}
+<Callout variant="warning" title="The bind credential is not encrypted">
+
+The credential lives in the provider's `config`, under `bind.bind_password_encrypted`. Despite that name, nothing encrypts it. The console base64-encodes the value before it sends it, and that is an encoding, not protection. The server decodes the value as base64 when it can and uses it as it is otherwise, so send the base64 form when you create a provider through the API. `SECRETS_ENCRYPTION_KEYS` does not cover this column. Treat the credential as a clear-text secret, give the service account read-only rights, and see [Secrets at rest](/en/discover/guides/secrets-at-rest).
+
+</Callout>
+
+<Callout variant="warning" title="Anonymous bind is rarely what you want">
+
 Most directories return a reduced view, or nothing at all, to an anonymous bind. If a connection test passes but a sync imports no account, a missing Bind DN is the first thing to check.
-:::
 
-**Test connection** validates the address and the bind without touching any account, so it is safe to run against production before the first sync:
+</Callout>
 
-```
+Test connection connects, binds, reads the base DN and tries the search filter. It touches no account, so it is safe to run against production before the first sync:
+
+```text
 POST /realms/{realm_name}/federation/providers/{id}/test-connection
 ```
+
+The answer carries `success`, a `message` and, when the connection got far enough, `details.latency_ms`. A provider that is not LDAP or Active Directory answers `success: false` with "Provider type not supported for connection testing".
 
 ### User search settings
 
@@ -69,36 +79,37 @@ POST /realms/{realm_name}/federation/providers/{id}/test-connection
 
 Narrow this to the subtree or the object class that actually holds your people. A filter that matches service or machine objects imports them as users.
 
+The filter may contain `{username}` or `{0}`. At sign-in FerrisKey replaces it with the login name, and during a synchronisation with `*`. A filter without a placeholder, like the default, returns every matching entry at sign-in, and FerrisKey picks the one whose username attribute equals the login name.
+
 ## Synchronisation
 
 <img class="only-light" src="/dashboard/ldap_sync-light.jpg" alt="FerrisKey LDAP provider synchronisation settings showing sync mode and interval" />
 <img class="only-dark" src="/dashboard/ldap_sync-dark.jpg" alt="FerrisKey LDAP provider synchronisation settings showing sync mode and interval" />
 
-| Field | Description |
-|---|---|
-| Scheduled synchronisation | Turned off, the provider only synchronises when asked from this page or through the API |
-| Sync mode | What a scheduled run does with the accounts it meets |
-| Sync interval | Time between two runs. The server keeps whole minutes, 60 seconds at the least |
+The form has three synchronisation settings: Scheduled synchronisation, Sync mode (Import, Force or Link only) and Sync interval. The server stores and returns them but does not act on them: in 0.10.0 it runs no synchronisation on a schedule, and nothing reads the stored mode when a run starts.
 
-### Sync modes
+A run happens only when someone asks for it, from the provider page or with the API, and it always behaves as an import:
 
-| Mode | Behaviour |
-|---|---|
-| Import | Creates the accounts that are missing and updates the ones that exist |
-| Force | Also **disables** the local accounts the directory no longer returns |
-| Link only | Links accounts already present locally, never creates one |
-
-:::callout{variant="warning" title="Force acts on absence, and a bad filter looks like absence"}
-Force disables every local account the directory did not return in that run. A search filter that is briefly too narrow, or a subtree that fails to answer, is indistinguishable from accounts that were deleted upstream. Run Import until you trust the filter, then switch.
-:::
-
-A run started by hand always imports, whatever the configured mode. Triggering one:
-
-```
+```text
 POST /realms/{realm_name}/federation/providers/{id}/sync-users
 ```
 
-`Link only` is the mode for a migration: import the accounts once by another route, then let the provider attach each one to its directory entry without creating anything.
+<Callout variant="warning" title="Force and Link only do not run">
+
+No endpoint starts a run in Force or Link only mode, so an account that disappears from the directory is not disabled by a synchronisation. It stops being able to sign in with its password, because the bind fails, but nothing disables the account or ends its sessions. Disable or delete it yourself.
+
+</Callout>
+
+An import reads every entry the search filter returns and reconciles it with the realm:
+
+| Directory entry | What the run does |
+|---|---|
+| Not imported yet, and no local account has that username | Creates the account: username, email, first and last name from the mapped attributes, enabled, email not verified. It also records the link to the directory entry and a marker credential that tells the console the account signs in through the directory |
+| Already imported, and the email or a name differs | Updates them and sets the account enabled |
+| Already imported, nothing differs | Does nothing |
+| Not imported yet, but a local account has that username | Leaves the local account untouched and counts the entry in `failed`. A directory cannot claim an account that already exists |
+
+The response reports the run: `total_processed`, `created`, `updated`, `disabled`, `failed`, `started_at` and `completed_at`. `disabled` is always 0 for an import. The provider record does not keep the outcome of past runs: `last_sync_at` and `last_sync_status` stay empty, so keep the response if you want a history.
 
 ## API reference
 
@@ -112,19 +123,57 @@ POST /realms/{realm_name}/federation/providers/{id}/sync-users
 | `POST` | `/realms/{realm_name}/federation/providers/{id}/test-connection` | Validate address and bind |
 | `POST` | `/realms/{realm_name}/federation/providers/{id}/sync-users` | Run a synchronisation now |
 
-**Required permissions:** `view_realm` to read, `manage_realm` to create, update, delete, test or synchronise.
+```json title="POST /realms/acme/federation/providers"
+{
+  "name": "Corporate directory",
+  "provider_type": "Ldap",
+  "enabled": true,
+  "priority": 0,
+  "sync_enabled": false,
+  "sync_mode": "Import",
+  "config": {
+    "connection": {
+      "server_url": "ldap.example.com",
+      "port": 636,
+      "use_tls": true,
+      "use_starttls": false,
+      "connection_timeout_seconds": 30
+    },
+    "bind": {
+      "bind_dn": "cn=ferriskey,ou=service,dc=example,dc=com",
+      "bind_password_encrypted": "<base64 of the bind password>"
+    },
+    "search": {
+      "base_dn": "dc=example,dc=com",
+      "user_search_filter": "(objectClass=person)"
+    },
+    "attributes": {
+      "username": "uid",
+      "email": "mail",
+      "first_name": "givenName",
+      "last_name": "sn"
+    }
+  }
+}
+```
 
-The bind credential is never returned by a read, so a `PUT` that omits it leaves the stored one in place.
+`sync_mode` must be `Import`, `Force` or `LinkOnly`, and any other value is a 400, even though the server stores the mode without acting on it.
+
+The list is paginated, as described in [API listings](/en/discover/guides/api-listings). It filters on `search`, `name`, `provider_type`, `provider_family` (`ldap` or `kerberos`), `enabled`, `sync_enabled`, `synced`, `sync_mode`, `created_from` and `created_to`, and sorts on `name`, `priority`, `enabled`, `last_sync_at`, `created_at` or `updated_at`.
+
+Permissions: `view_realm` to read, `manage_realm` to create, update, delete, test or synchronise.
+
+A `PUT` that carries no `config` leaves the stored configuration, bind credential included, as it is. A `PUT` that carries `config` replaces it whole, so send the credential again in the same request. That is why the console asks you to retype it whenever you change the connection.
 
 ## What gets recorded
 
-A synchronisation is not silent. Account creations raise `user_created` in [SeaWatch](/en/modules/seawatch/overview), and the same events feed [Webhooks](/en/modules/webhooks/overview) — which is the practical way to notice that a run imported four thousand accounts it should not have.
+A synchronisation is not recorded anywhere except in its response. The federation service writes no [SeaWatch](/en/modules/seawatch/overview) event and fires no [webhook](/en/modules/webhooks/overview), so the accounts a run creates do not raise `user_created` or `user.created`. If an import brings in four thousand accounts it should not have, the response of the run is where you find out.
 
 ::::card-group{cols=2}
-:::card{label="Configuring Providers" icon="lucide:link" href="/en/modules/abyss/providers"}
+:::card{label="Configuring providers" icon="lucide:link" href="/en/modules/abyss/providers"}
 The other shape of federation: Google, GitHub and any OAuth2 or OIDC provider.
 :::
-:::card{label="Password Policy" icon="lucide:key-round" href="/en/discover/core-concepts/password-policy"}
+:::card{label="Password policy" icon="lucide:key-round" href="/en/discover/core-concepts/password-policy"}
 Local policy still applies to the passwords FerrisKey stores itself.
 :::
 ::::

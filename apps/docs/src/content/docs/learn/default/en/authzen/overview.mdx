@@ -1,15 +1,15 @@
 ---
-title: What is AuthZen?
-description: "Fine-grained authorization and the interop problem AuthZen is trying to solve."
+title: What is AuthZEN?
+description: "Fine-grained authorization and the interop problem AuthZEN is trying to solve."
 icon: shield-check
 order: 1
 ---
 
-# What is AuthZen?
+# What is AuthZEN?
 
 OAuth2 and OIDC handle authentication and coarse-grained delegation. They don't really handle authorization, in the sense of _"can this specific user do this specific thing to this specific resource right now?"_
 
-That's the question AuthZen tries to answer in a standard way.
+That's the question AuthZEN tries to answer in a standard way.
 
 ## The fine-grained authorization problem
 
@@ -39,9 +39,9 @@ Every fine-grained authz tool speaks a different dialect:
 
 Change tools, rewrite everything. Run multiple apps, and they often pick different tools and end up unable to talk to each other.
 
-AuthZen is a draft standard from the OpenID Foundation that tries to fix this. It defines a wire-level API for asking and answering authorization questions. Different policy engines can implement the same API, and applications can switch between them, or talk to several at once, without changing a line of code.
+AuthZEN is a specification from the OpenID Foundation that tries to fix this. It defines a wire-level API for asking and answering authorization questions. Different policy engines can implement the same API, and applications can switch between them, or talk to several at once, without changing a line of code.
 
-## What AuthZen looks like
+## What AuthZEN looks like
 
 The core idea is a request/response shape:
 
@@ -51,7 +51,7 @@ POST /access/v1/evaluation
 
 ```json
 {
-  "subject": { "id": "alice@example.com" },
+  "subject": { "type": "user", "id": "alice@example.com" },
   "action":  { "name": "edit" },
   "resource": {
     "type": "invoice",
@@ -68,46 +68,53 @@ POST /access/v1/evaluation
 
 Read it as: _"may subject S perform action A on resource R in context C? Yes or no."_
 
-AuthZen does not say _how_ the engine reaches that decision. That's up to the policy engine, whether OPA, Cerbos, Cedar, OpenFGA, or something else. AuthZen only standardizes the conversation.
+AuthZEN does not say _how_ the engine reaches that decision. That's up to the policy engine, whether OPA, Cerbos, Cedar, OpenFGA, or something else. AuthZEN only standardizes the conversation.
 
 ## Why this matters
 
-If AuthZen takes hold:
+If AuthZEN takes hold:
 
 - **Vendor swap.** Try Cedar, decide you want Cerbos, swap the URL. Policies still need migrating, but the apps don't.
 - **Multi-engine deploys.** Use one engine for relationship-based queries and another for attribute-based rules. Apps speak one wire protocol either way.
-- **Tooling and gateways.** API gateways, service meshes, and IAM platforms can speak AuthZen to _any_ policy engine.
+- **Tooling and gateways.** API gateways, service meshes, and IAM platforms can speak AuthZEN to _any_ policy engine.
 
-## AuthZen vs OAuth2 scopes
+## AuthZEN vs OAuth2 scopes
 
 A scope is a coarse capability label: "this token can read orders." Useful as a first filter.
 
 A fine-grained authorization decision asks: "can this user read **this** order right now?" Scopes can't express that without exploding into hundreds of named scopes.
 
-The healthy pattern: scopes gate the API at the door (is this token even allowed here?); AuthZen-style decisions happen inside the API (and is this specific action allowed?).
+The healthy pattern: scopes gate the API at the door (is this token even allowed here?); AuthZEN-style decisions happen inside the API (and is this specific action allowed?).
 
 ## A mental model
 
-OAuth2 scopes are the bouncer at the front door: token has the right sticker, you can come in. AuthZen is the manager inside: "you're allowed in the building, but this particular room? Let me check the schedule, the booking, and whether you have your badge upgraded today."
+OAuth2 scopes are the bouncer at the front door: token has the right sticker, you can come in. AuthZEN is the manager inside: "you're allowed in the building, but this particular room? Let me check the schedule, the booking, and whether you have your badge upgraded today."
 
 Coarse and fine, working together.
 
 ## Where to go next
 
 ::::card-group{cols=2}
-:::card{label="The AuthZen ecosystem" icon="lucide:network" href="/en/learn/authzen/ecosystem"}
-OPA, Cerbos, Cedar, OpenFGA, and the engines that AuthZen connects.
+:::card{label="The AuthZEN ecosystem" icon="lucide:network" href="/en/learn/authzen/ecosystem"}
+OPA, Cerbos, Cedar, OpenFGA, and the engines that AuthZEN connects.
 :::
 :::card{label="Scopes & Consent" icon="lucide:badge-check" href="/en/learn/oauth2/scopes"}
-The coarser cousin AuthZen complements.
+The coarser cousin AuthZEN complements.
 :::
 ::::
 
 ## In FerrisKey
 
-FerrisKey issues identity and coarse-grained authorization (scopes, roles, claims), which are the inputs an AuthZen-compatible engine needs. Integration with external policy engines is part of the roadmap; today, applications can use FerrisKey tokens as the `subject` payload sent to their PDP of choice.
+FerrisKey is an AuthZEN 1.0 policy decision point, one per realm, with Cedar as the engine behind it. You upload a Cedar schema and write policies. An application authenticated as a service account then sends a request shaped like the one above to `POST /realms/{realm_name}/authzen/access/v1/evaluation`, naming resource types with the schema's namespace (`App::Invoice` rather than `invoice`), and FerrisKey answers `{ "decision": true }` or `{ "decision": false }`. A second endpoint takes up to 100 questions in one call, and a metadata document at `/.well-known/authzen-configuration/realms/{realm_name}/authzen` tells a client where both live.
+
+The identity half stays with FerrisKey. When the subject is a `FerrisKey::User`, its roles, groups, organizations and attributes are read from the realm, so policies can use what you already manage. If you run another engine, nothing changes for it: the scopes, roles and claims in FerrisKey's tokens are still the input.
+
+The module is off until the operator sets `AUTHZ_ENABLED`, and each realm switches it on for itself.
 
 ::::card-group{cols=2}
+:::card{label="Authz module" icon="lucide:scale" href="/en/modules/authz/overview"}
+Write the schema and the policies, and call the evaluation endpoints.
+:::
 :::card{label="What is FerrisKey?" icon="lucide:shield" href="/en/discover/what-is-ferriskey"}
 The identity foundation FerrisKey provides.
 :::

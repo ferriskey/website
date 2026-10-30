@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: "Organizations in FerrisKey: B2B tenancy that groups users with shared membership and custom attributes."
+description: "Organizations in FerrisKey: B2B tenancy that groups users with shared membership, groups, roles and custom attributes."
 icon: building-2
 order: 80
 ---
@@ -9,9 +9,11 @@ order: 80
 
 Organizations are a B2B grouping layer inside a realm. One realm holds many organizations, a user can belong to several at once, each organization carries custom key-value metadata, and members can be given roles scoped to the organization. That covers the usual multi-tenant SaaS shape: customers are organizations, users are members.
 
-:::callout{variant="info" title="New to B2B identity?"}
+<Callout variant="info" title="New to B2B identity?">
+
 For conceptual background on how customer-facing (B2B/CIAM) identity differs from workforce IAM, see [What is CIAM?](/en/learn/ciam/overview) and [Branding, Portals & Org Policies](/en/learn/ciam/org-policies) in the Learn section.
-:::
+
+</Callout>
 
 ## Why organizations?
 
@@ -29,28 +31,56 @@ Use a separate realm per tenant instead when you need complete credential isolat
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `id` | UUID v7 | generated | Identifier |
-| `realm_id` | UUID | generated | The realm this organization belongs to |
+| `id` | UUID v7 | Generated | Identifier |
+| `realm_id` | UUID | Generated | The realm this organization belongs to |
 | `name` | String (1 to 255) | Yes | Human-readable label |
-| `alias` | String (1 to 255) | Yes | URL-safe identifier: lowercase alphanumeric, `-`, and `_`. Unique per realm |
+| `alias` | String (1 to 255) | Yes | URL-safe identifier: lowercase ASCII letters, digits, `-` and `_`. Unique per realm |
 | `domain` | String (up to 255) | No | Email domain. Stored and validated, but not yet used for automatic onboarding. See the roadmap below |
 | `redirect_url` | String | No | Callback URL |
 | `description` | String | No | Free-text description |
 | `enabled` | Boolean | No | Defaults to `true`. A disabled organization rejects new member additions |
-| `created_at` | DateTime (UTC) | generated | Creation timestamp |
-| `updated_at` | DateTime (UTC) | generated | Last-modified timestamp |
+| `created_at` | DateTime (UTC) | Generated | Creation timestamp |
+| `updated_at` | DateTime (UTC) | Generated | Last-modified timestamp |
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations` | List the realm's organizations |
+| `POST` | `/realms/{realm_name}/organizations` | Create an organization. Answers `201` |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}` | Read one organization |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}` | Update an organization. Fields you leave out keep their value |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}` | Delete an organization. Answers `204` |
+
+Deleting an organization deletes its attributes, its memberships and its groups with them. The users stay.
+
+### Listing organizations
+
+The list is paginated, as described in [API listings](/en/discover/guides/api-listings). On top of the shared parameters it filters on:
+
+| Parameter | Matches |
+|---|---|
+| `search` | Case-insensitive substring of the name, alias, domain or description |
+| `name`, `alias`, `domain`, `description` | Case-insensitive substring of that field |
+| `enabled` | `true` or `false` |
+| `has_domain` | `true` keeps organizations with a domain, `false` the ones without |
+| `without_member` | A user id: keeps the organizations that user has not joined |
+| `ids` | A comma-separated list of at most 100 organization ids |
+| `created_from`, `created_to` | RFC 3339 date-times, inclusive and exclusive |
+
+`order_by` accepts `name`, `alias`, `enabled`, `created_at` (the default) and `updated_at`.
 
 ## Realm scoping
 
 Every organization belongs to exactly one realm. All API endpoints are realm-scoped:
 
-```
+```text
 /realms/{realm_name}/organizations
 ```
 
 A user and the organization they join must be in the same realm. Cross-realm membership is rejected.
 
-The `alias` must be unique within the realm. Attempting to create or update an organization with a duplicate alias returns a `AlreadyExists` error.
+The `alias` must be unique within the realm. Creating or updating an organization with an alias that is already taken answers 400 with the reason `already_exists`.
 
 ## The `enabled` flag
 
@@ -58,22 +88,24 @@ Setting `enabled: false` freezes membership additions: `POST /members` starts re
 
 ## Permissions
 
+Organizations have their own permissions, `view_organizations` and `manage_organizations`, and `manage_realm` is accepted wherever either is. The user permissions `manage_users` and `view_users` do not give access to organizations, because administering a realm's users is a different authority from administering its organizations.
+
 | Action | Required permission |
 |---|---|
-| List, view organization | `ManageRealm` or `ManageUsers` or `ViewUsers` |
-| Create, update organization | `ManageRealm` or `ManageUsers` |
-| Manage members and attributes | `ManageRealm` or `ManageUsers` |
-| Delete organization | `ManageRealm` only |
+| List and read organizations, members, member roles, groups, group members, group roles and attributes. List the organizations of a user | `view_organizations`, `manage_organizations` or `manage_realm` |
+| Create, update and delete an organization. Add and remove members. Assign and revoke roles. Create, update and delete groups. Change attributes | `manage_organizations` or `manage_realm` |
 
-There are no organization-specific permissions. All access control uses the realm-level permissions above.
+An administrator holding only `view_organizations` can browse an organization and change nothing in it.
 
-:::callout{variant="info" title="Roadmap"}
+<Callout variant="info" title="Roadmap">
+
 Still missing:
 
 - Domain-based auto-onboarding. The `domain` field is stored and validated, but nothing assigns users to an organization from their email domain yet.
-- Organization policies. Forced SSO, domain-matching rules, and org-level authentication policies are not shipped.
+- Organization policies. Forced SSO, domain-matching rules and org-level authentication policies are not shipped.
 - Soft delete. Deletes are permanent, with no archive or restore.
-:::
+
+</Callout>
 
 ## Organizations or separate realms?
 

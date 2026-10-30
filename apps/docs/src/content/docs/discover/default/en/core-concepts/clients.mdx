@@ -1,6 +1,6 @@
 ---
 title: Clients
-description: "OAuth2/OIDC clients in FerrisKey: application registration, client types, and token configuration."
+description: "OAuth2/OIDC clients in FerrisKey: client types, authentication methods, redirect URIs, capability switches and token settings."
 icon: app-window
 order: 11
 ---
@@ -23,6 +23,8 @@ There are three:
 Pick confidential when your application has a backend that can hold the secret safely. Pick public for anything running in a browser or on a device, where the secret would end up in the user's hands anyway.
 :::
 
+A client also records where it came from in `registration_source`: `admin` for a client created through the console or the administration API, `dynamic` for one that registered itself anonymously, and `metadata_document` for one resolved from a client ID metadata document. The last two always require consent and never get access to the administration API. See [MCP](/en/discover/core-concepts/mcp).
+
 ## Capability config
 
 Which flows a client may take is set on its settings screen, and two of the choices are permanent.
@@ -30,17 +32,19 @@ Which flows a client may take is set on its settings screen, and two of the choi
 <img class="only-light" src="/dashboard/client_settings-light.jpg" alt="FerrisKey client settings showing general fields and the capability config with public/confidential and grant switches" />
 <img class="only-dark" src="/dashboard/client_settings-dark.jpg" alt="FerrisKey client settings showing general fields and the capability config with public/confidential and grant switches" />
 
-**Client authentication is set at creation and final.** A client cannot move between confidential and public afterwards. Pick confidential when a backend can hold a secret server-side, public for SPAs, mobile apps and CLIs where a secret would end up in the user's hands anyway.
+**Client authentication is set at creation and final.** A client cannot move between confidential and public afterwards. Pick confidential when a backend can hold a secret server-side, public for SPAs, mobile apps and CLIs where a secret would end up in the user's hands anyway. The protocol (OpenID Connect or SAML 2.0) is the other permanent choice.
 
 The grant switches are not permanent, and each one widens the attack surface:
 
 | Switch | Turn it on when |
 |---|---|
-| Direct access grants | Never, for anything new — it is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner--deprecated) |
+| Direct access grants | Never, for anything new. It is the [deprecated password grant](/en/discover/core-concepts/authentication#password-resource-owner) |
 | OAuth 2.0 device authorization grant | The client is browserless: a CLI, an IoT device, a TV app |
-| Token exchange | A confidential client must swap user tokens for narrower ones or for another service. Off by default. See [Token Exchange](/en/discover/core-concepts/token-exchange) |
+| OAuth 2.0 token exchange | The client is a backend service that trades a user's access token for one aimed at another service. See [token exchange](/en/discover/core-concepts/token-exchange) |
 
-A disabled client keeps its whole configuration and rejects every request — which is what makes it different from [maintenance mode](/en/modules/maintenance/overview), where a whitelist still gets through.
+**Require PKCE** goes the other way: leave it on. A client created through the console or the API requires PKCE unless the request says otherwise, and an authorization request without an S256 code challenge is then refused. S256 is the only method discovery advertises.
+
+A disabled client keeps its whole configuration and rejects every request, which is what makes it different from [maintenance mode](/en/modules/maintenance/overview), where a whitelist still gets through.
 
 ## Client properties
 
@@ -48,15 +52,37 @@ A disabled client keeps its whole configuration and rejects every request — wh
 |---|---|
 | `client_id` | Public identifier used in OAuth2 flows |
 | `secret` | Client secret (confidential clients only) |
-| `protocol` | Protocol type (e.g., `openid-connect`) |
+| `protocol` | Protocol type, `openid-connect` or `saml`. Fixed at creation |
 | `enabled` | Whether the client can initiate authentication |
 | `redirect_uris` | Allowed redirect URIs after authentication |
 | `direct_access_grants_enabled` | Allow the deprecated password grant type |
 | `oauth_device_code_grant_enabled` | Allow the device code grant, used by CLIs and other browserless clients |
-| `token_exchange_enabled` | Allow the [token exchange](/en/discover/core-concepts/token-exchange) grant (RFC 8693) |
-| `require_pkce` | Require PKCE on the authorization code flow |
+| `require_pkce` | Require an S256 code challenge on the authorization code flow. `true` by default on new clients |
 | `public_client` | Public client: no secret, so PKCE carries the protection |
 | `service_account_enabled` | Enable client credentials grant |
+| `token_exchange_enabled` | Allow the RFC 8693 token exchange grant. `false` by default |
+| `backchannel_logout_uri` | Where FerrisKey POSTs a logout token when a session this client took part in ends. Unset by default, which opts out. See [back-channel logout](/en/discover/core-concepts/backchannel-logout) |
+| `backchannel_logout_session_required` | Records that the client needs the `sid` claim in its logout tokens. `true` by default, and FerrisKey always sends `sid` |
+| `consent_required` | Ask the user's consent when the client requests optional scopes. `false` by default |
+| `registration_source` | `admin`, `dynamic` or `metadata_document` |
+
+`consent_required` is not in the console: set it through the API, in the body of `POST /realms/{realm_name}/clients` or `PATCH /realms/{realm_name}/clients/{client_id}`. A client that registered itself requires consent whatever this flag says. See [consent](/en/discover/core-concepts/consent).
+
+## Authenticating at the token endpoint
+
+A confidential client proves who it is with `client_secret_basic` (an HTTP Basic header) or `client_secret_post` (`client_id` and `client_secret` in the form body). A public client sends only its `client_id`, which discovery lists as `none`. Those three are the whole list: `private_key_jwt` and the other assertion-based methods are not supported.
+
+The username and password of a Basic header are form-decoded, as RFC 6749 §2.3.1 requires. A secret that contains `+` or `%` must therefore be percent-encoded before it is base64-encoded, or FerrisKey reads a different secret than the one you meant to send.
+
+The `client_credentials` grant needs a confidential client with `service_account_enabled`, and it returns an access token with no refresh token. The [token endpoint](/en/discover/core-concepts/authentication#the-token-endpoint) section lists the errors and the throttles that apply.
+
+## Redirect URIs
+
+FerrisKey compares the `redirect_uri` of an authorization request with the enabled redirect URIs of the client. An entry is a literal address, and it must match character for character. An entry written `^...$`, anchored at both ends, is read as a regular expression that must match the whole value. An expression that also matches the empty string never matches anything.
+
+Prefer literal addresses. A loose pattern lets an authorization code leave for an address you did not intend. Post-logout redirect URIs are compared exactly, and the pattern form does not apply to them.
+
+`PUT .../redirects/{uri_id}` only toggles `enabled`. To change an address, create the new entry and delete the old one.
 
 ## Token lifetime overrides
 
@@ -69,11 +95,11 @@ Clients inherit token lifetimes from their realm. Override them per client when 
 | `id_token_lifetime` | ID token TTL in seconds |
 | `temporary_token_lifetime` | Temporary token TTL in seconds |
 
-A value set on the client wins over the realm default. Leave it `null` and the realm default applies.
+A value set on the client wins over the realm default. Leave it `null` and the realm default applies. The refresh token lifetime also sets how long the user's SSO session lives for a login through this client.
 
 ## Direct access grants
 
-With this enabled, a client can use the resource owner password credentials grant, sending a username and password straight to the token endpoint. It is handy for trusted first-party applications and for testing. Do not enable it for third-party clients.
+With this enabled, a client can use the resource owner password credentials grant, sending a username and password straight to the token endpoint. It is handy for trusted first-party applications and for testing. Do not enable it for third-party clients. The grant refuses any account that still owes MFA or a required action, so it cannot stand in for a browser login.
 
 ## Sub-resources
 
@@ -86,11 +112,11 @@ A client is not one object: several of its properties are collections with their
 | Web origins | `GET POST` `…/{client_id}/web-origins`, `DELETE` `…/web-origins/{web_origin_id}` | Browser origins allowed to call realm-scoped routes |
 | Client roles | `GET POST` `…/{client_id}/roles` | Roles scoped to this client |
 | Client secret | `GET` `…/{client_id}/client-secret` | Reading it raises `client_secret_viewed` in the audit log |
-| Scope assignment | `PUT DELETE` `…/default-client-scopes/{scope_id}` and `…/optional-client-scopes/{scope_id}` | See [Client Scopes](/en/discover/core-concepts/client-scopes) |
-| Token exchange policies | `GET POST` `…/{client_id}/token-exchange-policies`, `DELETE` `…/token-exchange-policies/{policy_id}` | Which audiences this client may exchange tokens for, see [Token Exchange](/en/discover/core-concepts/token-exchange#delegation-policies) |
+| Scope assignment | `PUT DELETE` `…/default-client-scopes/{scope_id}` and `…/optional-client-scopes/{scope_id}` | See [Client scopes](/en/discover/core-concepts/client-scopes) |
+| Token exchange policies | `GET POST` `…/{client_id}/token-exchange-policies`, `DELETE` `…/token-exchange-policies/{policy_id}` | Which other clients this client may obtain tokens for. See [token exchange](/en/discover/core-concepts/token-exchange) |
 
 :::callout{variant="info" title="Web origins are per realm-scoped route only"}
-A client's web origins cover the realm-scoped routes. They do **not** cover `/config`, the health probes or the API documentation, which carry no realm — those need the server-wide `ALLOWED_ORIGINS`. A console served from a different origin than the API needs both.
+A client's web origins cover the realm-scoped routes. They do not cover `/config`, the health probes or the API documentation, which carry no realm, so those need the server-wide `ALLOWED_ORIGINS`. A console served from a different origin than the API needs both.
 :::
 
 ### Previewing the token a client would get
@@ -99,7 +125,7 @@ A client's web origins cover the realm-scoped routes. They do **not** cover `/co
 POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes
 ```
 
-Returns the claims this client's active scopes would produce, without a login. It is the fastest way to check a [protocol mapper](/en/modules/aegis/protocol-mappers) before wiring an application to it.
+Takes a `user_id` and an optional `scope`, and returns the claims this client's scopes would produce for that user, without a login or a signed token. It is the fastest way to check a [protocol mapper](/en/modules/aegis/protocol-mappers) before wiring an application to it.
 
 ## Service accounts
 

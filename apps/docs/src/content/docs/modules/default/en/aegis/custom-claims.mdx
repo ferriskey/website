@@ -5,7 +5,7 @@ icon: plus
 order: 52
 ---
 
-# Custom Claims
+# Custom claims
 
 FerrisKey's default scopes cover the standard OIDC claims. Real applications need more: roles a gateway can enforce, a tenant identifier, a plan tier, feature flags. Custom claims put exactly that data in the token so your backend decides without a second call.
 
@@ -15,8 +15,7 @@ Every config below uses the dotted Keycloak-style keys the mappers actually read
 
 Your gateway enforces role-based access on routes. The realm role mapper already writes roles into the token; the only decision is where.
 
-**Scope:** `roles` (default, seeded in every realm)
-**Mapper:** `oidc-usermodel-realm-role-mapper`
+The scope is `roles`, a default scope seeded in every realm, and the mapper is `oidc-usermodel-realm-role-mapper`.
 
 ```json
 {
@@ -34,18 +33,25 @@ Your gateway enforces role-based access on routes. The realm role mapper already
 }
 ```
 
-The gateway reads `realm_access.roles` and allows or denies the route without calling back to FerrisKey. Setting `id.token.claim` to `false` keeps roles out of the ID token, which the browser can read — the gateway is the only party that needs them.
+The gateway reads `realm_access.roles` and allows or denies the route without calling back to FerrisKey. Setting `id.token.claim` to `false` keeps roles out of the ID token, which the browser can read. The gateway is the only party that needs them.
 
-:::callout{variant="info" title="Flat claim instead of nested"}
+<Callout variant="info" title="Flat claim instead of nested">
+
 `claim.name` supports dotted paths, so `realm_access.roles` nests. If your gateway expects a flat array under `roles`, set `claim.name` to `roles` instead. The default is the nested form because that is what Keycloak-compatible libraries look for.
-:::
+
+</Callout>
+
+<Callout variant="warning" title="Claim names have limits">
+
+A claim name is a dotted path of at most 8 non-empty segments and at most 255 characters. The API rejects a longer `claim.name` or `token.claim.name` with a 422 `invalid_claim_name` when you create or update the mapper. A name that still gets through, such as a long `user.attribute` that a mapper falls back on when it has no `claim.name`, is dropped silently at token time. The mapper looks configured and the claim never shows up.
+
+</Callout>
 
 ## Tenant identifier for a multi-tenant backend
 
 Each realm is a tenant, and the backend needs to know which tenant database to query.
 
-**Scope:** a `tenant` scope, assigned as default
-**Mapper:** `oidc-hardcoded-claim-mapper`
+The scope is a `tenant` scope assigned as default, and the mapper is `oidc-hardcoded-claim-mapper`.
 
 ```json
 {
@@ -59,33 +65,36 @@ Each realm is a tenant, and the backend needs to know which tenant database to q
 
 Since the value is realm-specific, you create this scope in each realm with the right value.
 
-:::callout{variant="info" title="When the tenant is per-user, not per-realm"}
-Store it as a user attribute and use `oidc-usermodel-attribute-mapper` with `"user.attribute": "tenant"` instead. And if tenancy is modelled with the [Organizations module](/en/modules/organization/overview), skip both: `oidc-organization-membership-mapper` writes the user's organizations, by alias, with no per-realm setup.
-:::
+<Callout variant="info" title="When the tenant is per-user, not per-realm">
 
-## A numeric claim from a user attribute
+Store it as a user attribute and use `oidc-usermodel-attribute-mapper` with `"user.attribute": "tenant"` instead. And if tenancy is modelled with the [Organizations module](/en/modules/organization/overview), skip both: `oidc-organization-membership-mapper` writes the user's organizations, by alias, with no per-realm setup. The seeded `organization` scope already does it.
 
-User attributes are stored as strings. `jsonType.label` casts on the way into the token, so the consumer gets a number rather than a string holding a number.
+</Callout>
 
-**Mapper:** `oidc-usermodel-attribute-mapper`
+## A user attribute as a claim
+
+Use `oidc-usermodel-attribute-mapper` to carry business data that lives on the user, such as a plan tier or a seat limit.
 
 ```json
 {
   "user.attribute": "seat_limit",
   "claim.name": "seat_limit",
-  "jsonType.label": "Integer",
   "access.token.claim": "true",
   "id.token.claim": "false"
 }
 ```
 
-`Boolean` works the same way, turning the string `"true"` into a real JSON boolean.
+```json title="Resulting claim"
+{
+  "seat_limit": "25"
+}
+```
+
+User attributes are stored as strings and this mapper emits them as strings. It does not read `jsonType.label`, so a number or a boolean arrives as text, and the consumer has to parse it. The cast exists on `oidc-usermodel-property-mapper` and `oidc-hardcoded-claim-mapper`, not here.
 
 ## Audience for several resource servers
 
-Your tokens have to be accepted at both `api.yourapp.com` and `admin.yourapp.com`. Add one mapper per audience.
-
-**Mapper:** `oidc-audience-mapper`, twice
+Your tokens have to be accepted at both `api.yourapp.com` and `admin.yourapp.com`. Add one mapper per audience, using `oidc-audience-mapper` twice.
 
 ```json title="Mapper 1"
 {
@@ -103,22 +112,25 @@ Your tokens have to be accepted at both `api.yourapp.com` and `admin.yourapp.com
 }
 ```
 
-```json title="Resulting claim"
+```json title="Resulting claim in the access token"
 {
-  "aud": ["my-client", "api.yourapp.com", "admin.yourapp.com"]
+  "aud": ["acme-realm", "account", "api.yourapp.com", "admin.yourapp.com"]
 }
 ```
 
-:::callout{variant="warning" title="aud needs this mapper specifically"}
-`aud` is a reserved claim name: it is stripped after mappers run, so a hardcoded claim mapper pointed at `aud` silently does nothing. The audience mapper contributes audiences through a separate channel, which is why it works.
-:::
+The access token's `aud` always starts with the realm audience (`<realm_name>-realm`) and `account`, and the mappers append to it. A token request that carries a `resource` parameter replaces the whole list with that resource.
+
+<Callout variant="warning" title="aud needs this mapper specifically">
+
+`aud` is a reserved claim name: it is stripped after mappers run, so a hardcoded claim mapper pointed at `aud` silently does nothing. The audience mapper contributes audiences through a separate channel, which is why it works. That channel only feeds the access token. The ID token's `aud` is always the client's own `client_id`.
+
+</Callout>
 
 ## Feature flags in the ID token
 
-The frontend decides which features to render, so the flags belong in the ID token it can read — not in the access token the API validates.
+The frontend decides which features to render, so the flags belong in the ID token it can read, not in the access token the API validates.
 
-**Scope:** a `features` scope, assigned as **optional** so only the clients that ask for it pay the token size
-**Mapper:** `oidc-hardcoded-claim-mapper`
+The scope is a `features` scope assigned as **optional**, so only the clients that ask for it pay the token size. The mapper is `oidc-hardcoded-claim-mapper`.
 
 ```json
 {
@@ -140,9 +152,11 @@ The frontend decides which features to render, so the flags belong in the ID tok
 
 The dotted `claim.name` nests each flag under one `features` object, so a second mapper writing `features.beta_export` merges into the same object instead of overwriting it.
 
+The client has to name `features` in its `scope` for an optional scope to apply, and the request must include `openid`: FerrisKey only builds ID-token claims from mappers when `openid` is in the scope.
+
 ## Group membership for a hierarchy-aware app
 
-**Mapper:** `oidc-group-membership-mapper`
+The mapper is `oidc-group-membership-mapper`.
 
 ```json
 {
@@ -154,11 +168,11 @@ The dotted `claim.name` nests each flag under one `features` object, so a second
 }
 ```
 
-`direct` emits only the groups the user is a direct member of. The default, `effective`, also emits every ancestor path — pick that one when the consumer checks for a parent group without reconstructing the hierarchy itself, and `direct` when you want smaller tokens and less org structure in them.
+`direct` emits only the groups the user is a direct member of. The default, `effective`, also emits every ancestor path. Pick that one when the consumer checks for a parent group without reconstructing the hierarchy itself, and `direct` when you want smaller tokens and less org structure in them.
 
 ## Scope assignment strategy
 
-| Assign as Default when… | Assign as Optional when… |
+| Assign as default when | Assign as optional when |
 |---|---|
 | Every request from this client needs the claim | The claim carries sensitive data |
 | The claim is needed for an authorization decision | The claim is large and would bloat every token |
@@ -166,16 +180,16 @@ The dotted `claim.name` nests each flag under one `features` object, so a second
 
 ## Before you debug the claim, check the key
 
-A mapper whose config key is misspelled is accepted by the API and then ignored at token time — the `config` field is free-form JSON and nothing validates it. When a claim does not show up:
+A mapper whose config key is misspelled is accepted by the API and then ignored at token time. The `config` field is free-form JSON, and the only thing validated is the shape of `claim.name`. The same goes for a `mapper_type` that is not one of the eleven types: the API stores it and the token builder skips it with a warning in the server log. When a claim does not show up:
 
-1. Check the keys are the dotted ones (`claim.name`, not `claim_name`).
-2. Check the claim name is not [reserved](/en/modules/aegis/protocol-mappers#reserved-claim-names).
-3. Check the scope is actually active on the client, default or requested by name.
-4. Use `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` to see the claims a client would get, without a full login.
+1. Check the `mapper_type` and the keys. They are the dotted ones (`claim.name`, not `claim_name`).
+2. Check the claim name is not [reserved](/en/modules/aegis/protocol-mappers#reserved-claim-names), and that it stays within 8 segments and 255 characters.
+3. Check the scope is actually active on the client, default or requested by name, and that `openid` is in the request if the claim belongs in the ID token.
+4. Use `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` with a `user_id` and an optional `scope` to see the claims a client would get, without a full login. The console has the same preview under **Evaluate** on the client's Client Scopes tab.
 
 ::::card-group{cols=2}
 :::card{label="Protocol Mappers" icon="lucide:arrow-right-left" href="/en/modules/aegis/protocol-mappers"}
-All ten mapper types and every config key they read.
+All eleven mapper types and every config key they read.
 :::
 :::card{label="JWT Claims" icon="lucide:file-json" href="/en/learn/jwt/claims"}
 What the standard claims mean before you add your own.

@@ -15,7 +15,7 @@ This is what gets an application that only supports SAML, and there are plenty o
 This page is about FerrisKey being the IdP that other applications trust. Signing in *through* an external SAML provider is the opposite direction, handled by federation in [Abyss](/en/modules/abyss/overview), and it is not shipped yet.
 :::
 
-The sign-in itself is not SAML-specific: a SAML request runs the same [authentication chain](/en/discover/core-concepts/authentication#authentication-chain) as an OIDC one — same login, same MFA, same lockout, same audit events — and only the front door and the response format differ. That page also sets the two protocols side by side if you are deciding which one an application should use.
+The sign-in itself is not SAML-specific: a SAML request runs the same [authentication chain](/en/discover/core-concepts/authentication#authentication-chain) as an OIDC one, with the same login, MFA, lockout and audit events. Only the front door and the response format differ. That page also sets the two protocols side by side if you are deciding which one an application should use.
 
 ## Endpoints
 
@@ -32,16 +32,16 @@ The descriptor is what most service providers want: point them at that URL, or d
 
 ## The entity id and SERVER_PUBLIC_URL
 
-The IdP entity id is derived from the public base URL and the realm name:
+The IdP entity id is built from `SERVER_PUBLIC_URL` and the realm name:
 
 ```
 https://sso.example.com/realms/home
 ```
 
-It is signed into every assertion, which means it cannot move. If it is derived from the request's `Host` header and a request arrives through a different hostname, the entity id changes and service providers reject the assertion.
+It is signed into every assertion, which means it cannot move. A host name taken from the request could differ from one request to the next, so SAML never takes it from there.
 
-:::callout{variant="warning" title="Set SERVER_PUBLIC_URL before using SAML"}
-Leave `SERVER_PUBLIC_URL` unset and FerrisKey falls back to the `Host` header, which is fine for OIDC and wrong for SAML. Set it to the origin browsers and service providers actually reach, as `scheme://host[:port]`. See [Configuration](/en/discover/guides/configuration).
+:::callout{variant="warning" title="SAML does not run without SERVER_PUBLIC_URL"}
+With `SERVER_PUBLIC_URL` unset, every well-formed SSO request and the descriptor answer HTTP 500 with "Single sign-on is not configured on this server. Set SERVER_PUBLIC_URL." Set it to the origin browsers and service providers actually reach, as `scheme://host[:port]`. OIDC does not read this variable, so a deployment that only ever served OIDC may not have it. See [Configuration](/en/discover/guides/configuration).
 :::
 
 ## Registering a service provider
@@ -58,11 +58,17 @@ A SAML service provider is a FerrisKey client carrying a SAML configuration.
 | `sp_entity_id` | required | The service provider's entity id. FerrisKey resolves incoming requests by their issuer, so this must match exactly |
 | `acs_url` | required | Assertion Consumer Service URL, where the signed response is posted |
 | `name_id_format` | `emailAddress` | Format of the subject identifier |
-| `sign_assertions` | | Sign the assertion element |
-| `sign_documents` | | Sign the response document |
-| `want_authn_requests_signed` | | Expect the service provider to sign its `AuthnRequest` |
+| `sign_assertions` | `true` | Stored with the configuration. See below |
+| `sign_documents` | `false` | Stored with the configuration. See below |
+| `want_authn_requests_signed` | `false` | Leave it `false`. See below |
 
 If an `AuthnRequest` names an ACS URL that does not match the registered one, the request is rejected rather than redirected. That is deliberate: an unchecked ACS URL in a request is an open redirect with an assertion attached.
+
+FerrisKey signs the assertion with the realm's signing key on every response, whatever `sign_assertions` says, and it does not sign the response document. `sign_assertions` and `sign_documents` are stored and returned by the API, but issuing an assertion does not read them in 0.10.0. The descriptor publishes the signing certificate.
+
+:::callout{variant="warning" title="Do not set want_authn_requests_signed"}
+FerrisKey does not verify the signature of an `AuthnRequest` yet. A service provider whose configuration sets `want_authn_requests_signed` to `true` therefore has every request refused, with HTTP 400 "This single sign-on request was refused." The descriptor advertises `WantAuthnRequestsSigned="false"` for the same reason.
+:::
 
 ### Name ID formats
 
@@ -73,7 +79,16 @@ If an `AuthnRequest` names an ACS URL that does not match the registered one, th
 | `transient` | `urn:oasis:names:tc:SAML:2.0:nameid-format:transient` |
 | `unspecified` | `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified` |
 
-The short name and the full URN are both accepted when writing the config. A format the user cannot satisfy fails the flow: asking for `emailAddress` on a user with no email address produces an error rather than an empty subject.
+The short name and the full URN are both accepted when writing the config. The subject comes from the user:
+
+| Format | Subject |
+|---|---|
+| `emailAddress` | The email address, only when the user's `email_verified` is `true` |
+| `persistent` | The user's id |
+| `transient` | The id of the login session, which changes with each login |
+| `unspecified` | The username |
+
+A format the user cannot satisfy fails the flow: asking for `emailAddress` for a user with no email address, or an unverified one, produces an error rather than an empty subject.
 
 ## Attribute mappers
 
@@ -85,7 +100,9 @@ Beyond the subject, a service provider usually wants attributes. Mappers say whi
 | `POST` | `/realms/{realm_name}/clients/{client_id}/saml-attribute-mappers` | Create a mapper |
 | `DELETE` | `/realms/{realm_name}/clients/{client_id}/saml-attribute-mappers/{mapper_id}` | Delete a mapper |
 
-A mapper has a `name`, a `name_format`, and a `source`.
+A mapper has a `name`, a `name_format` (`basic` unless you say otherwise), and a `source`.
+
+A source that has no value for the user is left out of the assertion rather than sent empty. `user:email` has a value only when the user's `email_verified` is `true`.
 
 Sources are written as prefixed strings:
 
