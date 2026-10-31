@@ -19,6 +19,25 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.10.1',
+    publishedAt: '2026-10-31T03:07:23Z',
+    title: 'A privilege escalation fix, passkeys that satisfy OTP, and a cheaper token path',
+    summary:
+      'A patch for the 0.10 line that fixes a high-severity privilege escalation (GHSA-rpr6-r33g-3fqr): a realm admin holding only manage_users could reset the password of an account holding more, such as a manage_realm admin, and take the realm. It also lets a passkey login answer the OTP challenge and brings the token and session performance work merged after 0.10.0.',
+    kind: 'patch',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.10.1',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.10.0...v0.10.1',
+    highlights: [
+      'Bounds every change to an account by the permissions of the caller: resetting a password, importing or deleting a credential, updating a profile, deleting a user, removing a role, editing attributes and unlocking an account are refused when the target holds a permission the caller does not, unless the caller holds manage_realm. Role assignment already followed this rule. Exploiting the issue required an admin role in the same realm.',
+      'Lets a passkey login answer the OTP challenge, so a user with both a passkey and TOTP is no longer stuck at the second step.',
+      'Verifies the token signature before loading its user, and reports a token inactive at introspection once the session it names has ended.',
+      'Makes the refresh grant cheaper and stops storing every issued access token, keeps live sessions and unrevoked tokens in memory between requests, builds the realm JWKS once, keeps the parsed RSA key pair, and ships a smaller default database pool with bounded config caches.',
+      'Uses the full email as username at registration and shows register errors on portal pages. This release ships database migrations, which run at startup.',
+    ],
+    transition:
+      'Every commit merged on main since 0.10.0, cherry-picked onto the 0.10 line, so deployments get the security fix and the performance work without waiting for 0.11.',
+  },
+  {
     version: 'v0.10.0',
     publishedAt: '2026-10-27T15:52:20Z',
     title: 'Authorization server for MCP, tenant authorization with Cedar, and a hardened login path',
@@ -331,6 +350,21 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.10.1': {
+      title:
+        "Une élévation de privilèges corrigée, des passkeys qui valident l'OTP et un parcours de token moins coûteux",
+      summary:
+        "Un patch pour la ligne 0.10 qui corrige une élévation de privilèges de sévérité haute (GHSA-rpr6-r33g-3fqr) : un admin de realm qui n'avait que manage_users pouvait réinitialiser le mot de passe d'un compte aux droits plus larges, comme un admin manage_realm, et prendre le contrôle du realm. Il permet aussi à un login par passkey de répondre au challenge OTP et apporte le travail de performance sur les tokens et les sessions mergé après la 0.10.0.",
+      highlights: [
+        "Borne toute modification d'un compte par les permissions de l'appelant : réinitialiser un mot de passe, importer ou supprimer un credential, modifier un profil, supprimer un utilisateur, retirer un rôle, modifier des attributs et déverrouiller un compte sont refusés quand la cible détient une permission que l'appelant n'a pas, sauf si l'appelant détient manage_realm. L'assignation de rôles suivait déjà cette règle. Exploiter la faille demandait un rôle d'admin dans le même realm.",
+        "Permet à un login par passkey de répondre au challenge OTP : un utilisateur qui a à la fois une passkey et un TOTP n'est plus bloqué à la deuxième étape.",
+        "Vérifie la signature du token avant de charger son utilisateur, et signale un token inactif à l'introspection dès que la session qu'il désigne est terminée.",
+        "Rend le refresh grant moins coûteux et arrête de stocker chaque access token émis, garde en mémoire entre les requêtes les sessions actives et les tokens non révoqués, construit une seule fois le JWKS du realm, conserve la paire de clés RSA parsée, et livre un pool de base de données par défaut plus petit avec des caches de configuration bornés.",
+        "Utilise l'email complet comme nom d'utilisateur à l'inscription et affiche les erreurs d'inscription sur les pages du portail. Cette version embarque des migrations de base de données, exécutées au démarrage.",
+      ],
+      transition:
+        "Tous les commits mergés sur main depuis la 0.10.0, rétroportés sur la ligne 0.10, pour que les déploiements reçoivent le correctif de sécurité et le travail de performance sans attendre la 0.11.",
+    },
     'v0.10.0': {
       title:
         "Serveur d'autorisation pour MCP, autorisation des tenants avec Cedar et un parcours de login durci",
