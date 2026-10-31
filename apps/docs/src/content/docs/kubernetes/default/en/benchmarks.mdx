@@ -1,0 +1,181 @@
+---
+title: Benchmarks
+description: "FerrisKey measured against Keycloak 26.8.1 on the same Kubernetes bench: load held, latency, CPU, memory and database load for six scenarios."
+icon: gauge
+order: 5
+---
+
+# Benchmarks
+
+FerrisKey and Keycloak 26.8.1 were run through the same load scale on the same local Kubernetes cluster, six scenarios each: `client_credentials`, `password`, `refresh`, `introspect`, `userinfo` and `jwks`. Measured by Nathaël Bonnal on 2026-10-26 and 2026-10-27.
+
+:::callout{variant="info" title="Build measured: sha-d73af3e"}
+The FerrisKey image is `ghcr.io/ferriskey/ferriskey-api:sha-d73af3e`, a build of `main` from 2026-10-26, between 0.9.0 and 0.10.0. The 0.10 releases changed the paths this run measured: the refresh grant no longer stores every issued token ([#1875](https://github.com/ferriskey/ferriskey/pull/1875)), `userinfo` reuses the authenticated user ([#1863](https://github.com/ferriskey/ferriskey/pull/1863)), sessions and token state are cached between requests ([#1870](https://github.com/ferriskey/ferriskey/pull/1870)), the database pool defaults to 20 connections instead of 100 ([#1866](https://github.com/ferriskey/ferriskey/pull/1866)) and the configuration caches are bounded ([#1867](https://github.com/ferriskey/ferriskey/pull/1867)). A rerun on 0.10.1 is tracked in [ferriskey#1621](https://github.com/ferriskey/ferriskey/issues/1621).
+:::
+
+FerrisKey `sha-d73af3e` holds the same load as Keycloak 26.8.1 on 4 scenarios out of 6, with a p50 latency identical within 0.5 ms. Keycloak holds twice the load on `refresh` (1 600 against 800 req/s) and on `userinfo` (6 400 against 3 200 req/s), because FerrisKey uses 15 to 150 times more PostgreSQL CPU on those two. FerrisKey uses 2 to 6 times less memory at rest and on the light endpoints, but its memory grows with load and is not returned to the system.
+
+Bench: local k3d, 8 shared vCPU, open-model steps of 60 s, 100 steps in total. Without a CPU limit, FerrisKey uses up to 6.4 cores while Keycloak is capped at about 3.5 cores by `-XX:ActiveProcessorCount=3`. Throughput peaks are therefore to be read together with the CPU consumed, not alone.
+
+## Summary
+
+A step is **held** when the served throughput reaches at least 95 % of the target and the error rate stays under 1 %. The latency given is that of the highest step held by all three configurations at once. No HTTP error was measured over the 100 steps.
+
+| Scenario | Held, FK 1 replica (req/s) | Held, FK 3 replicas (req/s) | Held, Keycloak (req/s) | Compared step (req/s) | p50 FK 1 / FK 3 / KC (ms) | p95 FK 1 / FK 3 / KC (ms) | CPU FK 1 / FK 3 / KC (cores) |
+|---|---|---|---|---|---|---|---|
+| `client_credentials` | 3 200 (max tested) | 3 200 (max tested) | 3 200 (max tested) | 3 200 | 3.5 / 3.2 / 3.2 | 20.8 / 11.0 / 10.5 | 3.92 / 4.02 / 3.63 |
+| `password` | 160 (peak 268) | 160 (peak 277) | 160 (peak 155) | 160 | 30.3 / 26.0 / 21.5 | 72.7 / 35.0 / 32.3 | 3.11 / 2.75 / 3.29 |
+| `refresh` | not tested | 800 (peak 1 047) | 1 600 (max tested) | 800 | n/a / 22.4 / 2.3 | n/a / 57.9 / 4.9 | n/a / 3.62 / 1.76 |
+| `introspect` | not tested | 6 400 (max tested) | 6 400 (max tested) | 6 400 | n/a / 0.7 / 0.7 | n/a / 2.0 / 3.5 | n/a / 0.97 / 1.55 |
+| `userinfo` | not tested | 3 200 (peak 4 979) | 6 400 (max tested) | 3 200 | n/a / 2.4 / 0.5 | n/a / 6.3 / 1.2 | n/a / 1.76 / 0.75 |
+| `jwks` | not tested | 6 400 (max tested) | 6 400 (max tested) | 6 400 | n/a / 0.4 / 0.5 | n/a / 1.4 / 1.4 | n/a / 0.55 / 1.00 |
+
+"Max tested" means the load scale stops there without saturation: the real limit is higher, and this bench does not measure it. On `password`, the peak is reached from the 320 req/s step; the three configurations then serve about 45 req/s per core consumed.
+
+## Configurations compared
+
+None of the three configurations has a CPU limit; only the reservation (request) differs. The "cores consumed" column gives the maximum measured over all steps.
+
+| Configuration | Image | Replicas | CPU reserved | Memory (request = limit) | CPU setting |
+|---|---|---|---|---|---|
+| FerrisKey 1 replica | `ghcr.io/ferriskey/ferriskey-api:sha-d73af3e` | 1 | 3 cores | 1 536 MiB | none (tokio runtime on the 8 vCPU) |
+| FerrisKey 3 replicas | `ghcr.io/ferriskey/ferriskey-api:sha-d73af3e` | 3 | 3 × 1 core | 3 × 1 024 MiB | none |
+| Keycloak | `quay.io/keycloak/keycloak:26.8.1`, `start` mode, `KC_CACHE=local` | 1 | 3 cores | 1 536 MiB | `-XX:ActiveProcessorCount=3` |
+
+Each system has its own CloudNativePG PostgreSQL 17 (1 core reserved, 3 GiB, `max_connections` 400); the database of the idle system is hibernated. FerrisKey opens a pool of 100 connections per replica. The Keycloak results are shared by both comparisons: FerrisKey 1 replica was run on 2026-10-27 on the same cluster, the same database and the same load scale.
+
+## Per scenario
+
+### client_credentials
+
+3 200 req/s held everywhere. At that step, p95 is 20.8 ms for FerrisKey 1 replica against 10.5 ms for Keycloak.
+
+Up to 1 600 req/s the three curves overlap: p50 between 1.4 and 5 ms, same CPU within 0.1 core. At 3 200 req/s, FerrisKey 1 replica keeps a p50 of 3.5 ms but its tail lengthens (p99 of 45.8 ms against 22.5 ms for Keycloak), a sign that the single pod is approaching its limit. The higher p50 at low load (5 ms at 50 req/s) is common to all three systems: it comes from the bench (connections rarely reused, idle CPU), not from the server.
+
+### password (Argon2id)
+
+160 req/s held everywhere. At that step, p95 is 72.7 ms for FerrisKey 1 replica against 32.3 ms for Keycloak.
+
+Argon2id hashing dominates the cost: Keycloak keeps a p50 lower by 4 to 9 ms at every held step. At 160 req/s, the single FerrisKey pod uses 3.1 cores and its p99 rises to 179 ms, while FerrisKey 3 replicas stays at 50 ms for the same load.
+
+At saturation, the served throughput follows the CPU consumed, not the product:
+
+| Configuration | Peak served (req/s) | Cores consumed | req/s per core |
+|---|---|---|---|
+| FerrisKey 1 replica | 268 | 5.79 | 46 |
+| FerrisKey 3 replicas | 277 | 6.41 | 43 |
+| Keycloak 26.8.1 | 155 | 3.40 | 46 |
+
+The saturated latencies (1.1 s for FerrisKey, 2.0 s for Keycloak) do not measure the server: they equal the ceiling of 300 k6 virtual users divided by the served throughput (Little's law). Only the served throughput is comparable at those steps.
+
+### refresh
+
+Keycloak holds 1 600 req/s; FerrisKey 3 replicas saturates at 1 047 req/s served.
+
+This is the widest gap of the bench. From 50 req/s, the FerrisKey p50 is 2 to 5 times that of Keycloak (12.4 against 5.4 ms). At 800 req/s, FerrisKey uses 3.62 cores plus 1.37 core of PostgreSQL, against 1.76 and 0.09 for Keycloak. The extra cost is in the database: the lead to check is the persistence of the rotation on every call, while Keycloak runs here with `KC_CACHE=local` and barely touches its database. FerrisKey memory goes from 361 to 1 267 MiB during this scenario, and stays at that level on the following scenarios (see [Memory](#memory)).
+
+### introspect
+
+6 400 req/s held by both; FerrisKey uses 37 % less CPU.
+
+Both hold 6 400 req/s, the highest load tested, with a p50 under 1 ms beyond 400 req/s. FerrisKey has a shorter tail (p99 of 3.3 against 7.8 ms at 6 400 req/s) and uses 0.97 core against 1.55. In exchange, FerrisKey queries the database on every introspection (0.66 PostgreSQL core at 6 400 req/s), Keycloak does not (0.01). The FerrisKey memory shown here (1.26 to 1.36 GiB) is inherited from the `refresh` scenario played just before.
+
+### userinfo
+
+Keycloak holds 6 400 req/s; FerrisKey 3 replicas saturates at 4 979 req/s served.
+
+From 400 req/s, the Keycloak p50 goes under 1 ms; the FerrisKey p50 stays between 1.3 and 2.4 ms. At 3 200 req/s, FerrisKey uses 1.76 core plus 1.51 PostgreSQL core, against 0.75 and 0.01 for Keycloak: FerrisKey reads the database on every `userinfo` call. At the last step, FerrisKey (3.5 cores), PostgreSQL (3.22 cores) and the load generator share the 8 vCPU of the VM: the throughput caps at 4 979 req/s for lack of CPU overall, not because of a limit of FerrisKey alone. The FerrisKey memory shown is inherited from the previous scenarios.
+
+### jwks
+
+6 400 req/s held by both; FerrisKey uses 45 % less CPU.
+
+Static endpoint: both hold 6 400 req/s with a p95 of 1.4 ms, far from the 20 ms SLO. FerrisKey has a lower p50 up to 400 req/s (0.7 against 1.0 ms) and uses 0.55 core against 1.00 at the last step. Neither touches the database.
+
+## Memory
+
+At rest and on the light endpoints, FerrisKey occupies 4 to 5 times less memory than Keycloak. Under load, its memory grows with the number of requests in flight, then stays at the level reached; Keycloak's, fixed by the JVM, varies little.
+
+| Scenario and load | FK 1 replica (MiB) | FK 3 replicas, total (MiB) | FK 3 replicas, per pod (MiB) | Keycloak (MiB) |
+|---|---|---|---|---|
+| Idle, after startup | 100 | 196 | 65 | 473 |
+| `client_credentials`, 50 to 3 200 req/s | 103 → 123 | 197 → 249 | 66 → 83 | 533 → 671 |
+| `password`, 10 to 160 req/s | 151 → 368 | 289 → 360 | 96 → 120 | 660 → 677 |
+| `password` saturated, 320 and 640 req/s | 604 → 623 | 1 395 → 1 423 | 465 → 474 | 595 → 614 |
+| `refresh`, 50 to 1 600 req/s | not tested | 361 → 1 267 | 120 → 422 | 676 → 682 |
+| `introspect`, `userinfo`, `jwks` | not tested | 1 262 → 1 382 (inherited) | 421 → 461 (inherited) | 680 → 744 |
+
+The values "a → b" are the minimum and the maximum over the steps of the scenario. FerrisKey 3 replicas at saturated `password` comes from the complementary run `2026-10-26_23-53-24_password-ext`, with pods recreated just before.
+
+The scenarios chain on the same pods. After `refresh`, FerrisKey keeps about 1.3 GiB on 3 pods while `introspect`, `userinfo` and `jwks` at low load do not need it: the memory is not returned to the system. Two possible causes remain to be settled, retention by the allocator or an application cache without eviction. In production, size the memory limit on the load peak, not on the consumption at rest. No pod was killed for lack of memory during these runs.
+
+## Database load
+
+Keycloak barely uses PostgreSQL in steady state; FerrisKey queries it on `refresh`, `introspect` and `userinfo`. PostgreSQL CPU measured at the highest step held by both systems:
+
+| Scenario | Step (req/s) | PostgreSQL, FerrisKey 3 replicas (cores) | PostgreSQL, Keycloak (cores) | Ratio |
+|---|---|---|---|---|
+| `userinfo` | 3 200 | 1.51 | 0.01 | ×151 |
+| `introspect` | 6 400 | 0.66 | 0.01 | ×66 |
+| `refresh` | 800 | 1.37 | 0.09 | ×15 |
+| `password` | 160 | 0.43 | 0.10 | ×4 |
+| `client_credentials` | 3 200 | 0.33 | 0.32 | ×1 |
+| `jwks` | 6 400 | 0.01 | 0.01 | ×1 |
+
+At 0.01 core, the ratio is mostly an order of magnitude. The FerrisKey database also occupies 1.2 to 1.7 GiB of memory, against 76 to 237 MiB for Keycloak's, with 300 connections opened by the 3 replicas. This database cost is what limits FerrisKey on `refresh` and `userinfo`: it reduces the CPU left to the server on a shared machine, and it adds a network round trip to every request. A cache of sessions and users on the FerrisKey side is the most direct lead.
+
+## Method
+
+- **Bench:** k3d cluster `iam-bench` on OrbStack, 8 vCPU shared by the load generator, the system under test and its database. Each role is pinned to its own k3d node (`agent-0` load, `agent-1` server, `agent-2` database), but the three nodes share the same VM.
+- **One system at a time:** the idle system is scaled to 0 replicas and its database is hibernated.
+- **Load:** k6, open model `constant-arrival-rate` (the load does not slow down when the server does), 300 virtual users at most. The same script, `k8s/k6/bench.js`, drives both systems; only the URL and the client secret change.
+- **Step:** 15 s of ramp-up, not measured, 60 s measured, 10 s of pause. The load doubles at each step. The whole scale is played, even after saturation.
+- **Data:** a test realm with 1 000 users and one confidential client, created by `k8s/seed/seed.sh`.
+- **Latency:** only the operation under test is timed, on the k6 side. The preparatory calls (obtaining the token to refresh, to introspect or to present to `userinfo`) are excluded.
+- **Served throughput:** correct responses in the measured window, divided by 60 s.
+- **CPU and memory:** Prometheus through cAdvisor, over the measured window. CPU is the mean of `container_cpu_usage_seconds_total`, summed over the pods. Memory is the maximum of `container_memory_working_set_bytes`, summed over the pods.
+- **Held step:** served throughput of at least 95 % of the target and under 1 % of errors. The SLOs (token p95 100 ms, p99 250 ms; `userinfo` 50 / 100 ms; JWKS 20 / 50 ms) are drawn on the graphs but are not part of this definition.
+
+## Known limits and biases
+
+- **Unequal CPU:** without a CPU limit, FerrisKey can use the 8 vCPU of the VM, while Keycloak is capped at about 3.5 cores by `-XX:ActiveProcessorCount=3`. The throughput peaks on `password` therefore reflect more cores, not a better yield. A strictly fair run needs either an identical CPU limit or Keycloak without `ActiveProcessorCount`.
+- **Shared machine:** load, server and database compete for 8 vCPU. The scenarios that saturate (`password`, `refresh`, `userinfo`) partly measure the VM. The absolute figures do not transfer to a production cluster; the relative gaps are more reliable.
+- **Truncated scale:** `client_credentials`, `introspect` and `jwks` saturated on neither system. This bench does not say which one goes further on those endpoints.
+- **Single repetition:** each step was played once. Differences under 1 ms in p50, or under 20 % in p99, are within the probable noise.
+- **Scenario order:** the scenarios chain on the same pods. The memory and the caches of each scenario depend on the previous ones.
+- **FerrisKey 1 replica partial:** only `client_credentials` and `password` were played, against the Keycloak results of the main run (same cluster, same database, same scale, played a few hours earlier).
+- **Argon2id parameters not aligned:** the memory and time costs of each product's hashing were not checked. A difference in parameters changes the `password` result directly.
+- **Saturated latency:** beyond saturation, the latency depends on the ceiling of 300 virtual users, not on the server.
+- **Unpublished image:** `sha-d73af3e` is a build of `main`. The commit first requested, `6ea8fa6`, had no image.
+
+## Reproduce
+
+The tooling lives in the `k8s/` directory of [IAM-performance-tester](https://github.com/ferriskey/IAM-performance-tester); `k8s/README.md` describes each variable.
+
+```bash
+./k8s/k3d.sh up                      # k3d cluster iam-bench (4 nodes)
+./k8s/bench.sh platform              # CloudNativePG + kube-prometheus-stack
+
+export FERRISKEY_TAG=sha-d73af3e FULL_LADDER=true DB_MEMORY=3Gi DB_MAX_CONNECTIONS=400
+export KEYCLOAK_CPU=3 KEYCLOAK_CPU_LIMIT= KEYCLOAK_MEMORY=1536Mi KEYCLOAK_JAVA_OPTS=-XX:ActiveProcessorCount=3
+export RATES_client_credentials="50 100 200 400 800 1600 3200" RATES_password="10 20 40 80 160 320 640"
+export RATES_refresh="50 100 200 400 800 1600" RATES_introspect="50 100 200 400 800 1600 3200 6400"
+export RATES_userinfo="50 100 200 400 800 1600 3200 6400" RATES_jwks="100 200 400 800 1600 3200 6400"
+
+# FerrisKey 3 replicas + Keycloak
+export FERRISKEY_REPLICAS=3 FERRISKEY_CPU=1 FERRISKEY_CPU_LIMIT= FERRISKEY_MEMORY=1Gi
+./k8s/bench.sh deploy && ./k8s/bench.sh seed && ./k8s/bench.sh run
+
+# FerrisKey 1 replica
+export FERRISKEY_REPLICAS=1 FERRISKEY_CPU=3 FERRISKEY_MEMORY=1536Mi SCENARIOS="client_credentials password"
+./k8s/bench.sh deploy && ./k8s/bench.sh seed ferriskey && ./k8s/bench.sh run ferriskey
+```
+
+Raw results, one JSON file per step with latencies, throughput, errors, and the CPU and memory of the server and of the database:
+
+| Run | Content |
+|---|---|
+| `results/k8s/2026-10-26_21-22-42_k3d-nolimit-fk3x-kc3cpu-d73af3e/` | FerrisKey 3 replicas and Keycloak, 6 scenarios |
+| `results/k8s/2026-10-26_23-53-24_password-ext/` | `password` at 320 and 640 req/s, both systems |
+| `results/k8s/2026-10-27_01-35-16_k3d-nolimit-fk1x-d73af3e/` | FerrisKey 1 replica, `client_credentials` and `password` |
+| `results/k8s/2026-10-26_20-38-13_ABORTED-db-oom/` | invalid run, interrupted: database killed for lack of memory with `max_connections` 200 |
