@@ -19,6 +19,7 @@ FerrisKey is built from `main` at `ace8c1a`, the same code as the `v0.10.1` tag 
 - It uses less CPU than Keycloak almost everywhere, often half as much at the same rate. The one exception is `userinfo` from 3,200 req/s up.
 - On `refresh`, at 800 req/s, FerrisKey's p95 is 5.7 ms against 14.5 ms, with 40 % less CPU.
 - Keycloak keeps a lower tail latency (p99) on `client_credentials` from 800 req/s, on `password`, and on `introspect` and `userinfo` from 3,200 req/s.
+- The gap is widest on the machine-to-machine endpoints (`client_credentials`, `refresh`, `introspect`, `jwks`); the human `password` login is where Keycloak keeps the lower tail.
 - FerrisKey uses less memory: 618 MiB at most, against 823 MiB for Keycloak.
 
 ## Sustained rate, latency and CPU
