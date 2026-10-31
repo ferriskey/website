@@ -1,0 +1,110 @@
+---
+title: Authentication
+description: "How the FerrisKey Terraform provider signs in: password and client credentials grants, environment variables, TLS, token refresh and retries."
+icon: key-round
+order: 3
+---
+
+# Authentication
+
+The provider gets an access token from the token endpoint of one realm, `{url}/realms/{realm}/protocol/openid-connect/token`, and sends it as a bearer token on every API call. What the token allows is what the roles of the signed-in user, or of the client's service account, allow. See [roles and permissions](/en/discover/core-concepts/roles).
+
+## Choosing the grant
+
+The provider picks the grant from the credentials it finds:
+
+| Credentials set | Grant | Use it for |
+|---|---|---|
+| `client_id`, `client_secret` | `client_credentials` | Every day: CI, pipelines, a workstation |
+| `client_id`, `username`, `password` | `password` | Once, to [bootstrap](/en/terraform/getting-started) the service account |
+
+Setting both `password` and `client_secret` is an error, and so is setting neither. The password grant sends no secret, so its `client_id` has to be a public client with **Direct access grants** on. The client credentials grant needs a confidential client with `service_account_enabled`.
+
+The password grant is [deprecated](/en/discover/core-concepts/authentication#password-resource-owner), and it fails for an admin who owes a required action or signs in with a passkey or a federated identity provider. Keep it for the bootstrap.
+
+## Provider arguments
+
+| Argument | Environment variable | Description |
+|---|---|---|
+| `url` | `FERRISKEY_URL` | Base URL of the API, with no `/realms` suffix. Required |
+| `realm` | `FERRISKEY_REALM` | Realm the provider signs in to, often `master`. Required |
+| `client_id` | `FERRISKEY_CLIENT_ID` | Client the token is requested for. Required |
+| `client_secret` | `FERRISKEY_CLIENT_SECRET` | Selects the client credentials grant. Sensitive |
+| `username` | `FERRISKEY_USERNAME` | User for the password grant |
+| `password` | `FERRISKEY_PASSWORD` | Selects the password grant. Sensitive |
+| `scope` | `FERRISKEY_SCOPE` | Scope sent with the token request. Optional |
+| `ca_cert` | `FERRISKEY_CA_CERT` | PEM certificate or bundle to trust, for an instance behind a private CA |
+| `tls_insecure_skip_verify` | `FERRISKEY_TLS_INSECURE` | Skip certificate verification. Development only |
+
+An argument set in the configuration wins over its environment variable.
+
+`url` is where the API answers, not where the console is. With the Helm chart, the API is served under `api.server.rootPath`, `/api` by default, so `url` is `https://auth.example.com/api`. A local server started on port 3333 with no root path is `http://localhost:3333`.
+
+`realm` is only where the provider signs in. Resources name their own realm, so one provider signed in to `master` can manage every realm of the instance.
+
+## Environment variables
+
+Keep credentials out of `.tf` files. A CI job sets the variables and the provider block only names what is not secret:
+
+```hcl
+provider "ferriskey" {
+  url       = "https://auth.example.com/api"
+  realm     = "master"
+  client_id = "terraform-runner"
+}
+```
+
+```bash
+export FERRISKEY_CLIENT_SECRET='<secret>'
+terraform plan
+```
+
+All of the provider block can come from the environment, in which case `provider "ferriskey" {}` is enough.
+
+## Several instances
+
+Use an alias per instance, and pass the alias to the resources that belong to it:
+
+```hcl
+provider "ferriskey" {
+  alias         = "staging"
+  url           = "https://auth.staging.example.com/api"
+  realm         = "master"
+  client_id     = "terraform-runner"
+  client_secret = var.staging_runner_secret
+}
+
+resource "ferriskey_realm" "acme_staging" {
+  provider = ferriskey.staging
+  name     = "acme"
+}
+```
+
+## TLS
+
+For an instance whose certificate comes from a private CA, pass the CA:
+
+```hcl
+provider "ferriskey" {
+  url     = "https://auth.internal.example/api"
+  realm   = "master"
+  ca_cert = file("${path.module}/ca.pem")
+}
+```
+
+`tls_insecure_skip_verify = true` turns verification off. It sends the client secret to whoever answers, so use it only against a local instance with a self-signed certificate.
+
+## Tokens and retries
+
+The provider requests a token on the first API call, keeps it, and gets a new one shortly before it expires: with the refresh token when it has one, with a new grant otherwise. A `401` makes it drop the token and retry the call once. A long `apply` does not need longer token lifetimes.
+
+Throttled and failing calls are retried up to three times with exponential backoff, honoring `Retry-After`:
+
+| Failure | Retried for |
+|---|---|
+| `429 Too Many Requests` | Every method |
+| `5xx`, connection error | `GET`, `HEAD`, `PUT` and `DELETE` only |
+
+A `POST` or `PATCH` that failed with a `5xx` is not retried, because the change may have been applied. Run `terraform plan` to see where the server stands, then apply again.
+
+Set `TF_LOG=DEBUG` to see token requests and retries in the output.

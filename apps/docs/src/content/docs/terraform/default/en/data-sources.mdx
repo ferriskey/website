@@ -1,0 +1,57 @@
+---
+title: Data sources
+description: "Read existing FerrisKey objects from Terraform: a realm and its settings, a role by name, and a realm's OpenID Connect discovery document."
+icon: search
+order: 5
+---
+
+# Data sources
+
+Data sources read objects Terraform does not manage, such as the `master` realm or the roles FerrisKey creates on its own.
+
+## ferriskey_realm
+
+```hcl
+data "ferriskey_realm" "master" {
+  name = "master"
+}
+
+output "access_token_lifetime" {
+  value = data.ferriskey_realm.master.settings.access_token_lifetime
+}
+```
+
+Takes `name` and returns `realm_id`, `created_at`, `updated_at` and `settings`, the same [realm settings](/en/discover/core-concepts/realms#realm-settings) that `ferriskey_realm_settings` manages.
+
+## ferriskey_role
+
+```hcl
+data "ferriskey_role" "realm_admin" {
+  realm = "master"
+  name  = "master-realm"
+}
+
+resource "ferriskey_user_role" "runner_realm_admin" {
+  realm   = "master"
+  user_id = ferriskey_client.terraform_runner.service_account_user_id
+  role_id = data.ferriskey_role.realm_admin.id
+}
+```
+
+Looks a role up by `realm` and `name`, and returns its UUID as `id`, its `description` and its `permissions`. Use it to assign a role that FerrisKey created, such as `master-realm` in the [bootstrap](/en/terraform/getting-started), or one that another state manages.
+
+## ferriskey_openid_configuration
+
+```hcl
+data "ferriskey_openid_configuration" "acme" {
+  realm = "acme"
+}
+
+output "token_endpoint" {
+  value = data.ferriskey_openid_configuration.acme.token_endpoint
+}
+```
+
+Reads the realm's [discovery document](/en/discover/core-concepts/authentication#openid-connect-discovery), which needs no authentication. It returns `issuer`, `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`, `introspection_endpoint`, `revocation_endpoint`, `end_session_endpoint`, `grant_types_supported` and `token_endpoint_auth_methods_supported`.
+
+Pass these values to the applications you configure in the same run, for example as environment variables of a Kubernetes deployment, instead of building the URLs by hand.
