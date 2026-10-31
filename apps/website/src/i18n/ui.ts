@@ -18,7 +18,7 @@ export const ui = {
     'hero.secondaryAction': 'View on GitHub',
     'hero.badge.oss': 'Open source',
     'hero.badge.license': 'Apache 2.0',
-    'hero.badge.version': 'Early Access · v0.9.0',
+    'hero.badge.version': 'Early Access · v0.10.0',
 
     // Features
     'whyNow.label': 'Why now',

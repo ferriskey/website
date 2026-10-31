@@ -1,0 +1,95 @@
+---
+title: Overview
+description: "The FerrisKey Terraform provider manages realms, clients, users, roles and organizations as code, through the FerrisKey REST API."
+icon: layers
+order: 1
+---
+
+# Terraform provider
+
+The `ferriskey/ferriskey` provider manages the configuration of a FerrisKey instance from Terraform: realms and their settings, clients, users, roles, organizations, identity providers, the password policy and SMTP. It is a client of the REST API, like `ferris-ctl`, with Terraform's plan, state and drift detection on top.
+
+It does not deploy FerrisKey. The [Helm chart or the operator](/en/kubernetes/overview) runs the server, and the provider configures what is inside it.
+
+::::card-group{cols=3}
+:::card{label="Getting started" icon="lucide:rocket" href="/en/terraform/getting-started"}
+Bootstrap a fresh instance in two phases: a service account first, then everything else.
+:::
+:::card{label="Authentication" icon="lucide:key-round" href="/en/terraform/authentication"}
+Password and client credentials grants, environment variables, TLS, retries.
+:::
+:::card{label="Resources" icon="lucide:box" href="/en/terraform/resources"}
+Every resource, what it manages, what it leaves alone, and how to import it.
+:::
+::::
+
+## Requirements
+
+- Terraform 1.0 or later
+- A reachable FerrisKey instance, API 0.6 or later
+- A client the provider can authenticate with, see [authentication](/en/terraform/authentication)
+
+## Minimal configuration
+
+```hcl title="main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url           = "https://auth.example.com"
+  realm         = "master"
+  client_id     = "terraform-runner"
+  client_secret = var.ferriskey_client_secret
+}
+
+resource "ferriskey_realm" "acme" {
+  name = "acme"
+}
+
+resource "ferriskey_client" "web" {
+  realm         = ferriskey_realm.acme.name
+  client_id     = "acme-web"
+  name          = "Acme Web App"
+  client_type   = "confidential"
+  redirect_uris = ["https://app.acme.example/callback"]
+}
+```
+
+`terraform init` downloads the provider from the Terraform Registry. Leave `client_secret` out of the file and set `FERRISKEY_CLIENT_SECRET` instead: every provider argument has a [`FERRISKEY_*` equivalent](/en/terraform/authentication#environment-variables).
+
+## What it covers
+
+| Type | Name | Manages |
+|---|---|---|
+| Resource | [`ferriskey_realm`](/en/terraform/resources#ferriskey_realm) | A realm |
+| Resource | [`ferriskey_realm_settings`](/en/terraform/resources#ferriskey_realm_settings) | Token lifetimes, registration, passkeys, magic links, email verification |
+| Resource | [`ferriskey_client`](/en/terraform/resources#ferriskey_client) | An OpenID Connect client, its redirect URIs and its service account |
+| Resource | [`ferriskey_user`](/en/terraform/resources#ferriskey_user) | A user and its required actions |
+| Resource | [`ferriskey_role`](/en/terraform/resources#ferriskey_role) | A realm role and its permissions |
+| Resource | [`ferriskey_user_role`](/en/terraform/resources#ferriskey_user_role) | A role assigned to a user or a service account |
+| Resource | [`ferriskey_organization`](/en/terraform/resources#ferriskey_organization) | An organization |
+| Resource | [`ferriskey_organization_member`](/en/terraform/resources#ferriskey_organization_member) | A user's membership in an organization |
+| Resource | [`ferriskey_password_policy`](/en/terraform/resources#ferriskey_password_policy) | The realm's password policy |
+| Resource | [`ferriskey_smtp_config`](/en/terraform/resources#ferriskey_smtp_config) | The realm's SMTP settings |
+| Resource | [`ferriskey_identity_provider`](/en/terraform/resources#ferriskey_identity_provider) | An OIDC or SAML identity provider |
+| Data source | [`ferriskey_realm`](/en/terraform/data-sources#ferriskey_realm) | Reads a realm and its settings |
+| Data source | [`ferriskey_role`](/en/terraform/data-sources#ferriskey_role) | Looks up a role by name |
+| Data source | [`ferriskey_openid_configuration`](/en/terraform/data-sources#ferriskey_openid_configuration) | Reads the realm's discovery document |
+
+Client scopes, protocol mappers, token exchange policies, SAML service providers, webhooks and the modules (Compass, SeaWatch, maintenance) have no resource yet. Manage them in the console, with the API, or with [`ferris-ctl`](/en/cli/overview).
+
+## Identifiers
+
+Realm-scoped resources use a composite ID, `{realm}/{uuid}`, which is also what `terraform import` takes. A realm is identified by its name. Resources that exist once per realm (settings, password policy, SMTP) use the realm name as their ID.
+
+```bash
+terraform import ferriskey_realm.acme acme
+terraform import ferriskey_client.web acme/3a8c6128-1111-2222-3333-444455556666
+```
+
+The [resources](/en/terraform/resources) page lists the import ID of each one.

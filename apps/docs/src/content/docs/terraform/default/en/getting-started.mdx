@@ -1,0 +1,176 @@
+---
+title: Getting started
+description: "Bootstrap a fresh FerrisKey instance with Terraform: create a service account with the admin password, then manage everything else with it."
+icon: rocket
+order: 2
+---
+
+# Getting started
+
+A fresh FerrisKey instance has an admin user and nothing else. The credentials Terraform should use day to day, a confidential client with a service account, do not exist yet. The recommended setup therefore runs in two phases, each with its own state:
+
+```text
+FerrisKey deployed (admin user from ADMIN_USERNAME / ADMIN_PASSWORD)
+   └─> phase 1   auth: password grant, admin user
+          └─> creates the terraform-runner client and gives its service account a role
+                 └─> phase 2   auth: client credentials, terraform-runner
+                        └─> creates realms, clients, users, roles, ...
+```
+
+Keep the two phases in **separate states**, in separate directories or backends. If they shared one, a `terraform destroy` of your configuration could delete the client that runs the destroy.
+
+## Prerequisites
+
+- Terraform 1.0 or later
+- A running FerrisKey instance. To start one locally, follow the [deployment getting-started](/en/discover/getting-started)
+- The admin username and password of the `master` realm
+- A public client in `master` that allows the password grant, such as `admin-cli`. To create one, open **Clients**, choose **New client**, set **Client authentication** to **Public** and turn on **Direct access grants** under **Capability config**
+
+The password grant is [deprecated](/en/discover/core-concepts/authentication#password-resource-owner). Phase 1 uses it once, to create a client that does not need it. You can turn **Direct access grants** off again after phase 1.
+
+## Phase 1: the service account
+
+::::step-group
+:::step{title="Write the bootstrap configuration"}
+```hcl title="01-bootstrap/main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url       = "https://auth.example.com"
+  realm     = "master"
+  client_id = "admin-cli"
+  username  = "admin"
+  # password comes from FERRISKEY_PASSWORD
+}
+
+resource "ferriskey_client" "terraform_runner" {
+  realm                        = "master"
+  client_id                    = "terraform-runner"
+  name                         = "Terraform Runner"
+  client_type                  = "confidential"
+  service_account_enabled      = true
+  direct_access_grants_enabled = false
+}
+
+data "ferriskey_role" "realm_admin" {
+  realm = "master"
+  name  = "master-realm"
+}
+
+resource "ferriskey_user_role" "runner_realm_admin" {
+  realm   = "master"
+  user_id = ferriskey_client.terraform_runner.service_account_user_id
+  role_id = data.ferriskey_role.realm_admin.id
+}
+
+output "runner_client_id" {
+  value = ferriskey_client.terraform_runner.client_id
+}
+
+output "runner_client_secret" {
+  value     = ferriskey_client.terraform_runner.secret
+  sensitive = true
+}
+```
+
+`service_account_user_id` is the user behind the client's service account. A role given to that user is what the client can do once it authenticates with `client_credentials`. The `master-realm` role carries `manage_realm`, which grants everything. To give less, create a role with only the [permissions](/en/discover/core-concepts/roles#permissions-reference) your configuration needs and assign that one instead.
+:::
+
+:::step{title="Apply it"}
+```bash
+cd 01-bootstrap
+export FERRISKEY_PASSWORD='<admin password>'
+terraform init
+terraform apply
+```
+:::
+
+:::step{title="Store the secret"}
+```bash
+terraform output -raw runner_client_secret
+```
+
+The secret is also in this phase's state, in clear text, like every value Terraform reads. Store the state in an encrypted backend, and copy the secret to your secrets manager or your CI variables for phase 2.
+:::
+::::
+
+## Phase 2: everything else
+
+::::step-group
+:::step{title="Write the configuration"}
+```hcl title="02-resources/main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url       = "https://auth.example.com"
+  realm     = "master"
+  client_id = "terraform-runner"
+  # client_secret comes from FERRISKEY_CLIENT_SECRET
+}
+
+resource "ferriskey_realm" "acme" {
+  name = "acme"
+}
+
+resource "ferriskey_realm_settings" "acme" {
+  realm                     = ferriskey_realm.acme.name
+  access_token_lifetime     = 900
+  user_registration_enabled = true
+  passkey_enabled           = true
+}
+
+resource "ferriskey_client" "web" {
+  realm         = ferriskey_realm.acme.name
+  client_id     = "acme-web"
+  name          = "Acme Web App"
+  client_type   = "confidential"
+  redirect_uris = ["https://app.acme.example/callback"]
+}
+```
+
+`realm` in the provider block is the realm Terraform signs in to, `master` here. It does not restrict where resources live: each resource names its own realm.
+:::
+
+:::step{title="Apply it"}
+```bash
+cd 02-resources
+export FERRISKEY_CLIENT_SECRET='<runner secret>'
+terraform init
+terraform apply
+```
+:::
+::::
+
+Instead of copying the secret by hand, phase 2 can read the outputs of phase 1 with a `terraform_remote_state` data source. Phase 2 only reads that state and never writes it, so the two lifecycles stay apart:
+
+```hcl
+data "terraform_remote_state" "bootstrap" {
+  backend = "local"
+  config = {
+    path = "${path.module}/../01-bootstrap/terraform.tfstate"
+  }
+}
+
+provider "ferriskey" {
+  url           = "https://auth.example.com"
+  realm         = "master"
+  client_id     = data.terraform_remote_state.bootstrap.outputs.runner_client_id
+  client_secret = data.terraform_remote_state.bootstrap.outputs.runner_client_secret
+}
+```
+
+## Taking over an existing instance
+
+On an instance that was configured by hand, write the resources that match what exists, then [import](/en/terraform/resources) them before the first `apply`. A resource that is not imported is created from scratch, next to or in conflict with the one that already exists. `terraform plan` after the imports shows the differences between your files and the server.
