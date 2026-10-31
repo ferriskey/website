@@ -19,6 +19,25 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.10.0',
+    publishedAt: '2026-10-27T15:52:20Z',
+    title: 'Authorization server for MCP, tenant authorization with Cedar, and a hardened login path',
+    summary:
+      'FerrisKey 0.10.0 lets a realm act as the authorization server of an MCP server and adds tenant authorization rules evaluated with Cedar behind an AuthZEN endpoint. Most of the cycle went into the login path itself: an OIDC audit ended in around forty fixes, secrets are sealed at rest, and the token endpoint runs far fewer SQL statements per grant.',
+    kind: 'major',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.10.0',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.9.0...v0.10.0',
+    highlights: [
+      'Makes a realm the authorization server of an MCP server: RFC 8414 metadata, the iss authorization response parameter (RFC 9207), resource indicators (RFC 8707), Client ID Metadata Documents and Dynamic Client Registration (RFC 7591), so an MCP client discovers the realm, registers itself and signs the user in with no client created by hand. Both registration modes are realm toggles, off by default.',
+      'Adds tenant authorization: a realm stores its own rules, validates and evaluates them with Cedar, loads the facts of a principal from PostgreSQL, and answers its applications over an AuthZEN 1.0 evaluation endpoint called by a service account. The endpoint is disabled by default.',
+      'Lands around forty security and protocol fixes from an OIDC audit whose findings were first written as failing tests: atomic code redemption with revocation on replay, PKCE required on new clients, one client authentication method on every endpoint with throttling of failed attempts, management API routes that accept only tokens issued for them, brokered logins linked by email only to a verified account, and consent, maintenance mode and lockout applied to every way a login completes.',
+      'Seals realm signing keys, TOTP seeds and SMTP passwords with AES-256-GCM when SECRETS_ENCRYPTION_KEYS is set, with key rotation and a sweep at startup that seals the values still stored in clear. The console keeps its tokens per tab under a content security policy, and email templates are sanitized on the server.',
+      'Cuts the work of a login: realms, clients, scopes and mappers are served from memory between requests, audit and Compass writes are batched, a browser login goes from 79 to 51 SQL statements, and client_credentials tokens are issued without a database round trip. The Argon2 cost becomes a setting, and every listing of the API is paginated with one shared contract.',
+    ],
+    transition:
+      'Where 0.9 put the realm boundary under the compiler, 0.10 opens FerrisKey to two new callers, MCP clients and the policy enforcement points of tenant applications, and spends the rest of the cycle making the login path both stricter and cheaper.',
+  },
+  {
     version: 'v0.9.0',
     publishedAt: '2026-10-03T00:00:00Z',
     title: 'Token exchange, back-channel logout, and realm isolation enforced by the type system',
@@ -312,6 +331,21 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.10.0': {
+      title:
+        "Serveur d'autorisation pour MCP, autorisation des tenants avec Cedar et un parcours de login durci",
+      summary:
+        "FerrisKey 0.10.0 permet à un realm de servir de serveur d'autorisation à un serveur MCP et ajoute des règles d'autorisation par tenant, évaluées avec Cedar derrière un endpoint AuthZEN. L'essentiel du cycle est passé dans le parcours de login lui-même : un audit OIDC s'est conclu par une quarantaine de correctifs, les secrets sont scellés au repos et le token endpoint exécute beaucoup moins de requêtes SQL par grant.",
+      highlights: [
+        "Fait d'un realm le serveur d'autorisation d'un serveur MCP : métadonnées RFC 8414, paramètre iss dans la réponse d'autorisation (RFC 9207), resource indicators (RFC 8707), Client ID Metadata Documents et Dynamic Client Registration (RFC 7591). Un client MCP découvre le realm, s'enregistre et connecte l'utilisateur sans client créé à la main. Les deux modes d'enregistrement sont des options du realm, désactivées par défaut.",
+        "Ajoute l'autorisation des tenants : un realm stocke ses propres règles, les valide et les évalue avec Cedar, charge les faits d'un principal depuis PostgreSQL et répond à ses applications via un endpoint d'évaluation AuthZEN 1.0 appelé par un service account. L'endpoint est désactivé par défaut.",
+        "Livre une quarantaine de correctifs de sécurité et de protocole issus d'un audit OIDC dont les constats ont d'abord été écrits sous forme de tests en échec : échange du code atomique avec révocation en cas de rejeu, PKCE obligatoire sur les nouveaux clients, une seule méthode d'authentification client sur tous les endpoints avec limitation des échecs, routes de l'API de management qui n'acceptent que les tokens émis pour elles, logins fédérés liés par email uniquement à un compte vérifié, et consentement, mode maintenance et verrouillage appliqués à toutes les façons de terminer un login.",
+        "Scelle les clés de signature des realms, les seeds TOTP et les mots de passe SMTP en AES-256-GCM quand SECRETS_ENCRYPTION_KEYS est défini, avec rotation des clés et un balayage au démarrage qui scelle les valeurs encore stockées en clair. La console garde ses tokens par onglet sous une content security policy, et les templates d'email sont assainis côté serveur.",
+        "Réduit le travail d'un login : realms, clients, scopes et mappers sont servis depuis la mémoire entre les requêtes, les écritures d'audit et de Compass sont groupées, un login navigateur passe de 79 à 51 requêtes SQL et les tokens client_credentials sont émis sans aller-retour en base. Le coût Argon2 devient un réglage, et chaque listing de l'API est paginé avec un contrat commun.",
+      ],
+      transition:
+        "Là où la 0.9 plaçait la frontière entre realms sous le contrôle du compilateur, la 0.10 ouvre FerrisKey à deux nouveaux appelants, les clients MCP et les points d'application des politiques des applications tenantes, et consacre le reste du cycle à rendre le parcours de login à la fois plus strict et moins coûteux.",
+    },
     'v0.9.0': {
       title:
         "Token exchange, back-channel logout et isolation des realms garantie par le système de types",
