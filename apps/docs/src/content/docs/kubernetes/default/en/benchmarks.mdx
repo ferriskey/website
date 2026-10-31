@@ -1,0 +1,171 @@
+---
+title: Benchmarks
+description: "FerrisKey 0.10.1 measured against Keycloak 26.8.1 on the same Kubernetes bench: sustained rate, latency, CPU and memory for six endpoints."
+icon: gauge
+order: 5
+---
+
+# Benchmarks
+
+FerrisKey 0.10.1 and Keycloak 26.8.1 were run through the same load scale on the same Kubernetes cluster, with the same resources, the same PostgreSQL setup and the same 1,000 users, on six endpoints: `client_credentials`, `password`, `refresh`, `introspect`, `userinfo` and `jwks`. Measured by Nathaël Bonnal; the full report with every step is in [IAM-performance-tester](https://github.com/ferriskey/IAM-performance-tester/blob/main/reports/2026-10-31-ferriskey-vs-keycloak.md).
+
+:::callout{variant="info" title="Build measured"}
+FerrisKey is built from `main` at `ace8c1a`, the same code as the `v0.10.1` tag (the two differ only in documentation). It runs with `REFRESH_TOKEN_FORMAT=opaque` and `REFRESH_TOKEN_COMMIT=async`, two settings introduced in 0.10.1 that are off by default; see [refresh](#refresh) for what they change.
+:::
+
+## Summary
+
+- FerrisKey sustains the same highest step as Keycloak on all six endpoints.
+- It uses less CPU than Keycloak almost everywhere, often half as much at the same rate. The one exception is `userinfo` from 3,200 req/s up.
+- On `refresh`, at 800 req/s, FerrisKey's p95 is 5.7 ms against 14.5 ms, with 40 % less CPU.
+- Keycloak keeps a lower tail latency (p99) on `client_credentials` from 800 req/s, on `password`, and on `introspect` and `userinfo` from 3,200 req/s.
+- FerrisKey uses less memory: 618 MiB at most, against 823 MiB for Keycloak.
+
+## Sustained rate, latency and CPU
+
+The sustained rate is the highest step with under 1 % errors, at least 95 % of the target rate served, and a p95 under 250 ms. Latency and CPU are read at 800 req/s, except for `password` (80 req/s), where Argon2id hashing makes each request expensive by design. CPU is that of the IAM server alone, in cores, averaged over the measured minute.
+
+| Endpoint | FerrisKey sustained | Keycloak sustained | FerrisKey p95 | Keycloak p95 | FerrisKey CPU | Keycloak CPU |
+|---|---|---|---|---|---|---|
+| `client_credentials` | 3,200 req/s | 3,200 req/s | 2.7 ms | 2.0 ms | 0.66 cores | 0.94 cores |
+| `password` (80 req/s) | 160 req/s (highest step tested) | 160 req/s | 29.2 ms | 20.9 ms | 1.26 cores | 1.46 cores |
+| `refresh` | 1,600 req/s (highest step tested) | 1,600 req/s | 5.7 ms | 14.5 ms | 1.47 cores | 2.47 cores |
+| `introspect` | 6,400 req/s | 6,400 req/s | 1.6 ms | 2.7 ms | 0.28 cores | 0.57 cores |
+| `userinfo` | 6,400 req/s | 6,400 req/s | 1.7 ms | 2.6 ms | 0.21 cores | 0.51 cores |
+| `jwks` | 6,400 req/s | 6,400 req/s | 1.1 ms | 1.9 ms | 0.15 cores | 0.40 cores |
+
+## Memory
+
+Pod working set across all steps. FerrisKey starts low and grows as the scenarios run; Keycloak never goes below 530 MiB.
+
+| System | Lowest | Highest |
+|---|---|---|
+| FerrisKey | 62 MiB | 618 MiB |
+| Keycloak | 533 MiB | 823 MiB |
+
+## Endpoint by endpoint
+
+Each table gives latency (p50 / p95 / p99) and IAM server CPU at every step. "Not tested" means that system's ladder stopped lower.
+
+### client_credentials
+
+A client authenticates with its secret and gets an access token. FerrisKey has a lower median and uses less CPU at every step. Its tail is longer from 800 req/s, though: p99 of 65.6 ms at 800 req/s and 25.6 ms at 1,600 req/s, against under 7 ms for Keycloak. At 3,200 req/s FerrisKey still serves 3,181 req/s, but with 0.56 % errors and a p95 of 54 ms, while Keycloak stays at 10 ms.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 50 | 2.4 / 5.4 / 7.2 ms | 5.0 / 8.0 / 9.1 ms | 0.11 | 0.29 |
+| 100 | 1.4 / 3.9 / 10.3 ms | 3.4 / 6.7 / 7.5 ms | 0.17 | 0.34 |
+| 200 | 1.2 / 2.8 / 3.6 ms | 2.5 / 3.6 / 5.5 ms | 0.25 | 0.29 |
+| 400 | 1.1 / 2.2 / 3.3 ms | 1.7 / 2.6 / 3.9 ms | 0.41 | 0.60 |
+| 800 | 1.1 / 2.7 / 65.6 ms | 1.4 / 2.0 / 3.5 ms | 0.66 | 0.94 |
+| 1,600 | 1.1 / 4.0 / 25.6 ms | 1.5 / 3.7 / 6.7 ms | 1.51 | 2.02 |
+| 3,200 | 2.3 / 53.6 / 92.6 ms, 0.56 % errors | 3.2 / 10.5 / 22.5 ms | 2.64 | 3.63 |
+
+### password
+
+A user signs in with a password. Both systems hash with Argon2id (m=7168, t=5, p=1), which puts latency around 20 ms. Keycloak has a shorter tail: at 160 req/s its p95 is 32 ms against 87 ms. Keycloak saturates around 155 req/s. FerrisKey was not tested above 160 req/s.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 10 | 20.6 / 28.5 / 47.3 ms | 27.6 / 32.6 / 36.5 ms | 0.16 | 0.30 |
+| 20 | 19.7 / 24.1 / 30.4 ms | 18.6 / 21.5 / 23.6 ms | 0.26 | 0.31 |
+| 40 | 20.0 / 33.7 / 70.6 ms | 18.0 / 20.1 / 22.7 ms | 0.64 | 0.72 |
+| 80 | 22.2 / 29.2 / 46.0 ms | 18.4 / 20.9 / 26.7 ms | 1.26 | 1.46 |
+| 160 | 30.9 / 87.4 / 170 ms | 21.5 / 32.3 / 40.9 ms | 3.14 | 3.29 |
+| 320 | not tested | 2018 / 2216 / 2266 ms, 152 req/s served | n/a | 3.52 |
+| 640 | not tested | 1992 / 2077 / 2124 ms, 155 req/s served | n/a | 3.40 |
+
+### refresh
+
+A client trades its refresh token for a new set of tokens. On both sides the old refresh token is invalidated on every exchange (rotation is enabled on Keycloak). FerrisKey has a lower median at every step and uses about 40 % less CPU. Its p95 is better at 800 and 1,600 req/s. At 400 req/s an isolated spike takes its p99 to 206 ms, while the neighbouring steps stay under 13 ms. Keycloak tops out at 1,766 req/s. FerrisKey was not tested above 1,600 req/s.
+
+FerrisKey ran with `REFRESH_TOKEN_FORMAT=opaque` (the refresh token is a random string whose hash is stored, instead of a signed JWT) and `REFRESH_TOKEN_COMMIT=async` (rotations are written with `synchronous_commit=off`). Both default to off. With `async`, a database crash can lose the last rotations: each token consumed by a lost rotation works once more and its successor stops working. Revocations stay durable either way.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 50 | 4.2 / 9.2 / 18.4 ms | 5.3 / 7.8 / 12.5 ms | 0.17 | 0.37 |
+| 100 | 3.4 / 5.6 / 7.6 ms | 4.3 / 6.0 / 11.5 ms | 0.25 | 0.43 |
+| 200 | 2.5 / 4.4 / 7.5 ms | 4.0 / 6.2 / 13.4 ms | 0.43 | 0.74 |
+| 400 | 2.8 / 38.1 / 206 ms | 3.8 / 7.7 / 17.9 ms | 0.90 | 1.35 |
+| 800 | 2.6 / 5.7 / 12.1 ms | 4.0 / 14.5 / 34.0 ms | 1.47 | 2.47 |
+| 1,600 | 6.4 / 93.2 / 187 ms | 15.3 / 139 / 216 ms | 2.97 | 4.63 |
+| 3,200 | not tested | 162 / 232 / 274 ms, 1,766 req/s served | n/a | 5.27 |
+
+### introspect
+
+A service asks whether an access token is still valid. From 200 to 3,200 req/s both answer in under a millisecond at the median. FerrisKey uses less CPU at every step, up to three times less. From 3,200 req/s up, Keycloak has a lower p95 and p99.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 50 | 1.6 / 4.5 / 7.1 ms | 3.6 / 6.1 / 11.8 ms | 0.06 | 0.18 |
+| 100 | 1.2 / 3.4 / 5.6 ms | 2.9 / 4.8 / 6.4 ms | 0.09 | 0.25 |
+| 200 | 0.9 / 2.4 / 3.6 ms | 1.5 / 3.3 / 4.3 ms | 0.13 | 0.25 |
+| 400 | 0.7 / 1.9 / 3.4 ms | 0.8 / 2.9 / 3.8 ms | 0.19 | 0.37 |
+| 800 | 0.6 / 1.6 / 2.7 ms | 0.7 / 2.7 / 4.5 ms | 0.28 | 0.57 |
+| 1,600 | 0.7 / 1.9 / 4.8 ms | 0.7 / 2.4 / 5.2 ms | 0.45 | 0.63 |
+| 3,200 | 0.7 / 2.6 / 8.4 ms | 0.5 / 1.4 / 4.1 ms | 0.59 | 1.03 |
+| 6,400 | 1.1 / 6.0 / 19.8 ms | 0.7 / 3.5 / 7.8 ms | 1.33 | 1.55 |
+
+### userinfo
+
+A client reads the user's profile with its access token. Up to 1,600 req/s FerrisKey has a lower median and uses less CPU. Above that Keycloak takes the lead: at 6,400 req/s its p99 is 3.7 ms against 12.1 ms, and it uses 1.29 cores against 1.55.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 50 | 1.9 / 5.6 / 9.4 ms | 3.3 / 5.4 / 6.7 ms | 0.08 | 0.16 |
+| 100 | 1.3 / 3.8 / 5.6 ms | 2.8 / 4.5 / 5.6 ms | 0.09 | 0.24 |
+| 200 | 0.8 / 2.6 / 6.0 ms | 1.6 / 3.2 / 3.9 ms | 0.12 | 0.29 |
+| 400 | 0.5 / 1.8 / 3.3 ms | 0.7 / 2.7 / 3.6 ms | 0.13 | 0.33 |
+| 800 | 0.5 / 1.7 / 3.1 ms | 0.6 / 2.6 / 3.8 ms | 0.21 | 0.51 |
+| 1,600 | 0.6 / 1.7 / 3.4 ms | 0.6 / 2.8 / 4.7 ms | 0.42 | 0.74 |
+| 3,200 | 0.8 / 2.3 / 4.6 ms | 0.5 / 1.2 / 2.6 ms | 0.88 | 0.75 |
+| 6,400 | 1.0 / 4.3 / 12.1 ms | 0.6 / 1.7 / 3.7 ms | 1.55 | 1.29 |
+
+### jwks
+
+A client fetches the realm's public keys to check signatures. This is the lightest endpoint. FerrisKey uses 1.7 to 6 times less CPU than Keycloak. p99 stays under 5.2 ms on both sides.
+
+| Target (req/s) | FerrisKey p50 / p95 / p99 | Keycloak p50 / p95 / p99 | FerrisKey CPU (cores) | Keycloak CPU (cores) |
+|---|---|---|---|---|
+| 100 | 0.4 / 1.2 / 2.0 ms | 2.2 / 3.9 / 5.1 ms | 0.03 | 0.19 |
+| 200 | 0.4 / 1.1 / 1.8 ms | 1.5 / 2.9 / 4.0 ms | 0.05 | 0.25 |
+| 400 | 0.3 / 1.1 / 1.9 ms | 1.0 / 2.3 / 3.2 ms | 0.09 | 0.33 |
+| 800 | 0.3 / 1.1 / 2.1 ms | 0.6 / 1.9 / 3.0 ms | 0.15 | 0.40 |
+| 1,600 | 0.4 / 1.3 / 2.5 ms | 0.5 / 2.2 / 3.8 ms | 0.20 | 0.56 |
+| 3,200 | 0.4 / 1.5 / 3.2 ms | 0.4 / 1.2 / 3.1 ms | 0.30 | 0.64 |
+| 6,400 | 0.6 / 2.0 / 3.4 ms | 0.5 / 1.4 / 3.4 ms | 0.59 | 1.00 |
+
+## Test conditions
+
+- **Cluster:** k3d on OrbStack on a Mac, with 8 vCPUs shared by the load generator, the IAM server and PostgreSQL. Each role has its own k3d node, but the physical cores are shared.
+- **IAM server:** 1 replica, 3 CPUs requested, no CPU limit, 1,536 MiB of memory. Keycloak runs in production mode (`start`) with `-XX:ActiveProcessorCount=3`.
+- **Database:** PostgreSQL 17 (CloudNativePG), one per system, 1 CPU requested, 3 GiB, `max_connections` 400, on its own node.
+- **Load:** k6 at constant arrival rate (open model), 1,000 users, 15 s of warmup then 60 s measured per step.
+- **FerrisKey:** image built from `main` at `ace8c1a`, with `REFRESH_TOKEN_FORMAT=opaque` and `REFRESH_TOKEN_COMMIT=async`. Measured on 2026-10-31 with 300 pre-allocated k6 VUs.
+- **Keycloak:** image `quay.io/keycloak/keycloak:26.8.1`, realm with `revokeRefreshToken=true` and `refreshTokenMaxReuse=0`. Refresh measured on 2026-10-31 with 300 pre-allocated VUs. The other five endpoints were measured on 2026-10-26, with k6's default number of pre-allocated VUs.
+
+## What this bench does not tell you
+
+- **Shared machine:** load generator, server and database compete for 8 vCPUs. Absolute figures do not transfer to a production cluster; the gaps between the two systems are the reliable part.
+- **No CPU limit:** both servers request 3 CPUs without a limit, but Keycloak caps itself at 3 cores through `-XX:ActiveProcessorCount=3` while FerrisKey can use more. FerrisKey used less CPU anyway at every compared step; its highest reading is 3.14 cores, on `password` at 160 req/s.
+- **Single run:** each step was measured once. Differences under 1 ms in p50, or under 20 % in p99, are within the probable noise. The 206 ms p99 spike on `refresh` at 400 req/s is one such reading.
+- **Two dates for Keycloak:** five of its endpoints come from the 2026-10-26 run with k6's default VU allocation; FerrisKey and the Keycloak `refresh` were measured on 2026-10-31 with 300 pre-allocated VUs.
+- **Non-default refresh settings** on the FerrisKey side, described under [refresh](#refresh).
+- **Ladders stop early:** FerrisKey was not pushed past 160 req/s on `password` or 1,600 req/s on `refresh`; the table says where each system's limit is known and where it is not.
+- **Raw data:** the per-step JSON of the runs stays with the author outside the repository; the report names the three runs it is built from.
+
+## Reproduce
+
+The tooling is in [`k8s/`](https://github.com/ferriskey/IAM-performance-tester/tree/main/k8s) of IAM-performance-tester, with every variable documented in its [README](https://github.com/ferriskey/IAM-performance-tester/blob/main/k8s/README.md). One system runs at a time; `bench.sh` scales the other to zero before each phase.
+
+```bash
+cd k8s
+./bench.sh platform     # once per cluster: node roles, CNPG, kube-prometheus-stack
+./bench.sh deploy       # Postgres x2, FerrisKey, Keycloak
+./bench.sh seed         # realm perf, client perf-client, 1000 users, in both systems
+./bench.sh run          # every scenario, both systems, about 1h30 worst case
+```
+
+## Before 0.10.1
+
+The same bench run on 2026-10-26 against a build from before the 0.10 token-path work (`sha-d73af3e`) showed Keycloak holding twice the load on `refresh` (1,600 against 800 req/s) and on `userinfo` (6,400 against 3,200 req/s), because FerrisKey queried PostgreSQL on every one of those requests. The refresh grant was reworked in [#1875](https://github.com/ferriskey/ferriskey/pull/1875), `userinfo` reuses the authenticated user since [#1863](https://github.com/ferriskey/ferriskey/pull/1863), and sessions and token state are cached between requests since [#1870](https://github.com/ferriskey/ferriskey/pull/1870). All three shipped in 0.10.1, and the tables above are the result.
