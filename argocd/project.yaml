@@ -1,0 +1,25 @@
+# Argo CD project of the FerrisKey website. Apply it before application.yaml:
+#   kubectl apply -n argocd -f argocd/project.yaml
+# `default` is a destination because the chart owns the shared ferris-gateway
+# there (helm/templates/gateway.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ferriskey-website
+  namespace: argocd
+spec:
+  description: The FerrisKey website, docs and blog.
+  sourceRepos:
+    - https://github.com/ferriskey/website.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: ferriskey
+    - server: https://kubernetes.default.svc
+      namespace: default
+  # CreateNamespace=true in application.yaml
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
