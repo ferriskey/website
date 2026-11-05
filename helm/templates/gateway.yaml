@@ -1,0 +1,38 @@
+{{- if and .Values.gateway.enabled .Values.gateway.create }}
+{{- /*
+One HTTPS listener per routed host. cert-manager reads the issuer annotation and
+issues one certificate per listener, stored in the Secret named below. The
+Gateway API only accepts a Secret in certificateRefs: an issuer there makes the
+listener Invalid and Envoy resets every TLS connection.
+*/ -}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Values.gateway.namespace }}
+  labels:
+    {{- include "ferriskey-website.labels" (dict "root" $) | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.gateway.clusterIssuer }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  listeners:
+    {{- range $name, $app := .Values.apps }}
+    {{- if and $app.enabled $app.route.enabled }}
+    - name: {{ $name }}-https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ $app.host }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ printf "%s-tls" (replace "." "-" $app.host) }}
+      allowedRoutes:
+        namespaces:
+          from: All
+    {{- end }}
+    {{- end }}
+{{- end }}

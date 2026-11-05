@@ -7,12 +7,17 @@ ingress:
   clusterIssuer: letsencrypt-internal
 
 ## Gateway API shared config
-## Points at the pre-existing `ferris-gateway` (Envoy Gateway) in the `default`
-## namespace, which terminates TLS for *.ferriskey.rs / ferriskey.rs.
+## Routes attach to `ferris-gateway` (Envoy Gateway) in the `default` namespace.
+## With `create: true` the chart owns that Gateway and writes one HTTPS listener
+## per routed host; cert-manager issues each certificate from `clusterIssuer`.
+## Set `create: false` to attach to a Gateway managed elsewhere.
 gateway:
   enabled: true
+  create: true
   name: ferris-gateway
   namespace: default
+  className: eg
+  clusterIssuer: letsencrypt
 
 apps:
   website:
