@@ -17,7 +17,8 @@ export const ui = {
     'rss.description': 'Latest articles from the Explainer blog',
 
     // Footer
-    'footer.text': 'Built with Explainer v2',
+    'footer.text': '© 2025 Ferriskey · Apache 2.0',
+    'footer.tagline': 'Open-source identity and access management, written in Rust.',
 
     // Post layout
     'post.back': 'Back to writing',
@@ -65,7 +66,8 @@ export const ui = {
     'rss.description': 'Les derniers articles du blog Explainer',
 
     // Footer
-    'footer.text': 'Construit avec Explainer v2',
+    'footer.text': '© 2025 Ferriskey · Apache 2.0',
+    'footer.tagline': 'Gestion des identités et des accès open source, écrite en Rust.',
 
     // Post layout
     'post.back': "Retour aux articles",

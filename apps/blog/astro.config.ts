@@ -43,6 +43,7 @@ export default defineConfig({
     thumbnailIntegration({
       appName: 'Blog',
       content: { type: 'collection', dir: './src/content/posts' },
+      articleCards: true,
        primaryColor: '#F97316',
     }),
   ],

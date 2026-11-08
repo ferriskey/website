@@ -1,0 +1,61 @@
+---
+import { getSponsors, getSupporters } from '@explainer/ui/lib/sponsors'
+
+const supporters = [...getSponsors(), ...getSupporters()]
+// Quatre exemplaires : la moitié défilée (deux exemplaires, 3 700 px) couvre même un écran de 2 000 px, sans trou.
+const loop = [...supporters, ...supporters, ...supporters, ...supporters]
+const logo = 'h-8 max-w-[9rem] object-contain grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100'
+---
+
+<div class="relative z-10 border-t border-border bg-background">
+  <div class="flex items-stretch">
+    <p class="hidden shrink-0 items-center border-r border-border px-6 font-pixel text-[12px] uppercase tracking-[0.08em] text-muted-foreground sm:flex" data-t="supporters.label">
+      Supporters
+    </p>
+    <div class="supporters-marquee relative min-w-0 flex-1 overflow-hidden">
+      <div class="supporters-track flex w-max items-stretch">
+        {loop.map((s, i) => (
+          <a
+            href={s.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={s.name}
+            aria-hidden={i >= supporters.length ? 'true' : undefined}
+            tabindex={i >= supporters.length ? -1 : undefined}
+            class="group flex h-24 w-52 shrink-0 items-center justify-center border-r border-border transition-colors hover:bg-foreground/[0.04]"
+          >
+            {s.logoUrlLight === s.logoUrlDark ? (
+              <img src={s.logoUrlLight} alt={s.name} class={logo} loading="lazy" />
+            ) : (
+              <>
+                <img src={s.logoUrlLight} alt={s.name} class={`${logo} dark:hidden`} loading="lazy" />
+                <img src={s.logoUrlDark} alt={s.name} class={`${logo} hidden dark:block`} loading="lazy" />
+              </>
+            )}
+          </a>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .supporters-marquee {
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+  .supporters-track {
+    animation: supporters-scroll 36s linear infinite;
+  }
+  .supporters-marquee:hover .supporters-track {
+    animation-play-state: paused;
+  }
+  @keyframes supporters-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .supporters-track {
+      animation: none;
+    }
+  }
+</style>

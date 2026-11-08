@@ -1,0 +1,197 @@
+---
+// Trois usages de FerrisKey : CIAM, B2B & workforce, Agent IAM. Un onglet par
+// usage, avec un mini-panneau produit à droite. Les panneaux sont des
+// illustrations statiques en HTML : aucun chiffre, aucun faux client réel.
+const cases = [
+  { id: 'ciam', href: '/modules/compass' },
+  { id: 'b2b', href: '/modules/abyss' },
+  { id: 'agent', href: '/modules/aegis' },
+]
+
+const orgs = [
+  { name: 'acme-corp', idp: 'SAML', note: 'MFA required' },
+  { name: 'globex', idp: 'OIDC', note: 'Custom login theme' },
+  { name: 'initech', idp: 'LDAP', note: 'Workforce directory' },
+]
+
+const decisions = [
+  { agent: 'claude', action: 'call_tool', target: 'search_docs', permit: true },
+  { agent: 'claude', action: 'read_resource', target: 'tickets/42', permit: true },
+  { agent: 'mcp-agent', action: 'call_tool', target: 'delete_user', permit: false },
+  { agent: 'mcp-agent', action: 'get_prompt', target: 'summarize', permit: true },
+]
+---
+
+<section class="border-b border-border" id="use-cases" aria-labelledby="usecases-title">
+  <div class="mx-auto max-w-6xl border-x border-border">
+    <div class="border-b border-border px-5 py-20 sm:px-8 sm:py-32">
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="usecases.label">Use cases</p>
+      <h2 id="usecases-title" class="mt-6 max-w-2xl text-balance text-[clamp(2rem,4.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.035em]" data-t="usecases.title">
+        One identity platform, three jobs.
+      </h2>
+      <p class="mt-7 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground" data-t="usecases.description">
+        Whether you sign in customers, onboard business clients or give identities to AI agents, FerrisKey runs the same open-source core.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-3 border-b border-border" role="tablist" aria-label="Use cases">
+      {cases.map((c, i) => (
+        <button
+          type="button"
+          role="tab"
+          id={`uc-tab-${c.id}`}
+          aria-controls={`uc-panel-${c.id}`}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          data-uc-tab={c.id}
+          class="uc-tab cursor-pointer border-r border-border px-3 py-5 text-center font-pixel text-[11px] uppercase tracking-[0.06em] text-muted-foreground transition-colors last:border-r-0 hover:bg-foreground/[0.04] hover:text-foreground aria-selected:bg-foreground/[0.04] aria-selected:text-foreground sm:text-xs"
+        >
+          <span data-t={`usecases.${c.id}.tab`}>{c.id === 'ciam' ? 'CIAM' : c.id === 'b2b' ? 'B2B & workforce' : 'Agent IAM'}</span>
+        </button>
+      ))}
+    </div>
+
+    {cases.map((c, i) => (
+      <div
+        role="tabpanel"
+        id={`uc-panel-${c.id}`}
+        aria-labelledby={`uc-tab-${c.id}`}
+        data-uc-panel={c.id}
+        hidden={i !== 0}
+        class="grid lg:grid-cols-2"
+      >
+        <div class="flex flex-col justify-between gap-10 border-b border-border px-5 py-14 sm:px-10 lg:border-b-0 lg:border-r lg:py-20">
+          <div>
+            <h3 class="max-w-md text-balance text-2xl font-medium leading-tight tracking-[-0.02em] sm:text-3xl" data-t={`usecases.${c.id}.title`}>
+              {c.id === 'ciam' && 'Sign in your customers, on your brand.'}
+              {c.id === 'b2b' && 'Give every business customer their own space.'}
+              {c.id === 'agent' && 'Identities for AI agents, with a paper trail.'}
+            </h3>
+            <p class="mt-6 max-w-md text-[15px] leading-7 text-muted-foreground" data-t={`usecases.${c.id}.desc`}>
+              {c.id === 'ciam' && 'A fast, themeable login for the people who use your product. Passkeys, magic links and MFA are built in, and you shape the flow yourself.'}
+              {c.id === 'b2b' && 'Each organization gets members, groups and roles, and can bring its own identity provider. Your own workforce signs in the same way.'}
+              {c.id === 'agent' && 'Let agents act on behalf of users without sharing their credentials. Delegation is explicit, scoped and audited.'}
+            </p>
+            <ul class="mt-9 space-y-4">
+              {['b1', 'b2', 'b3'].map((b) => (
+                <li class="flex items-start gap-3 text-sm leading-6 text-foreground/90">
+                  <span class="mt-2 size-1.5 shrink-0 bg-primary" aria-hidden="true"></span>
+                  <span data-t={`usecases.${c.id}.${b}`}>
+                    {c.id === 'ciam' && b === 'b1' && 'Passkeys, TOTP, magic links and recovery codes'}
+                    {c.id === 'ciam' && b === 'b2' && 'Configurable login flows, consent and account lockout'}
+                    {c.id === 'ciam' && b === 'b3' && 'A login portal themed per realm'}
+                    {c.id === 'b2b' && b === 'b1' && 'Organizations with groups and member roles'}
+                    {c.id === 'b2b' && b === 'b2' && 'OIDC, SAML and LDAP federation'}
+                    {c.id === 'b2b' && b === 'b3' && 'Users, roles, clients and secrets isolated per realm'}
+                    {c.id === 'agent' && b === 'b1' && 'MCP authorization server with dynamic client registration'}
+                    {c.id === 'agent' && b === 'b2' && 'Token exchange keeps the full delegation chain'}
+                    {c.id === 'agent' && b === 'b3' && 'Cedar policies decide every tool call over AuthZEN'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <a href={c.href} class="inline-flex w-fit items-center gap-2 border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.04]">
+            <span data-t={`usecases.${c.id}.cta`}>
+              {c.id === 'ciam' && 'Explore login flows'}
+              {c.id === 'b2b' && 'Explore federation'}
+              {c.id === 'agent' && 'Explore authorization'}
+            </span>
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <!-- Panneau produit : illustration, pas de données réelles -->
+        <div class="flex items-center justify-center bg-surface-tint px-5 py-14 sm:px-10 lg:py-20" aria-hidden="true">
+          {c.id === 'ciam' && (
+            <div class="w-full max-w-sm border border-border bg-card p-6 shadow-[6px_6px_0_0_color-mix(in_srgb,var(--color-primary)_25%,transparent)]">
+              <div class="flex items-center gap-3">
+                <span class="flex size-8 items-center justify-center bg-primary font-pixel text-sm text-primary-foreground">A</span>
+                <span class="text-base font-semibold">Sign in to Acme</span>
+              </div>
+              <div class="mt-9 space-y-4">
+                <div class="border border-border bg-background px-3 py-2.5 text-sm text-muted-foreground">you@company.com</div>
+                <div class="bg-primary px-3 py-2.5 text-center text-sm font-semibold text-primary-foreground">Continue with a passkey</div>
+              </div>
+              <div class="my-5 flex items-center gap-3 font-pixel text-[10px] uppercase text-muted-foreground">
+                <span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-center text-sm">
+                <div class="border border-border px-3 py-2.5">Magic link</div>
+                <div class="border border-border px-3 py-2.5">Google</div>
+              </div>
+              <p class="mt-5 font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">Themed per realm</p>
+            </div>
+          )}
+
+          {c.id === 'b2b' && (
+            <div class="w-full max-w-md border border-border bg-card shadow-[6px_6px_0_0_color-mix(in_srgb,var(--color-primary)_25%,transparent)]">
+              <div class="flex items-center justify-between border-b border-border px-5 py-3">
+                <span class="font-pixel text-[11px] uppercase tracking-[0.06em]">Organizations</span>
+                <span class="font-pixel text-[10px] uppercase text-muted-foreground">Example</span>
+              </div>
+              {orgs.map((o) => (
+                <div class="flex items-center gap-4 border-b border-border px-5 py-4 last:border-b-0">
+                  <span class="flex size-9 shrink-0 items-center justify-center bg-primary/10 font-pixel text-xs uppercase text-primary">{o.name[0]}</span>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-semibold">{o.name}</p>
+                    <p class="truncate text-xs text-muted-foreground">{o.note}</p>
+                  </div>
+                  <span class="border border-border px-2 py-1 font-pixel text-[10px] uppercase">{o.idp}</span>
+                </div>
+              ))}
+              <div class="border-t border-border bg-surface-tint px-5 py-3 text-xs text-muted-foreground">
+                Members · Groups · Roles · Own identity provider
+              </div>
+            </div>
+          )}
+
+          {c.id === 'agent' && (
+            <div class="w-full max-w-md border border-border bg-card shadow-[6px_6px_0_0_color-mix(in_srgb,var(--color-primary)_25%,transparent)]">
+              <div class="flex items-center justify-between border-b border-border px-5 py-3">
+                <span class="font-pixel text-[11px] uppercase tracking-[0.06em]">Agent decisions</span>
+                <span class="font-pixel text-[10px] uppercase text-muted-foreground">Example</span>
+              </div>
+              <div class="border-b border-border bg-surface-tint px-5 py-3 font-mono text-[11px] leading-5 text-muted-foreground">
+                sub: alice <span class="text-primary">→</span> act: mcp-agent
+              </div>
+              {decisions.map((d) => (
+                <div class="flex items-center gap-3 border-b border-border px-5 py-3 last:border-b-0">
+                  <div class="min-w-0 flex-1 font-mono text-[11px] leading-5">
+                    <p class="truncate text-foreground">{d.agent} · {d.action}</p>
+                    <p class="truncate text-muted-foreground">{d.target}</p>
+                  </div>
+                  <span class={`shrink-0 px-2 py-1 font-pixel text-[10px] uppercase ${d.permit ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/15 text-red-600 dark:text-red-400'}`}>
+                    {d.permit ? 'Permit' : 'Deny'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
+
+<script is:inline>
+  function initUseCases() {
+    const root = document.getElementById('use-cases')
+    if (!root || root.dataset.ready) return
+    root.dataset.ready = '1'
+    const tabs = root.querySelectorAll('[data-uc-tab]')
+    const panels = root.querySelectorAll('[data-uc-panel]')
+    function select(id) {
+      tabs.forEach(function (t) {
+        t.setAttribute('aria-selected', t.dataset.ucTab === id ? 'true' : 'false')
+      })
+      panels.forEach(function (p) {
+        p.hidden = p.dataset.ucPanel !== id
+      })
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { select(t.dataset.ucTab) })
+    })
+  }
+  initUseCases()
+  document.addEventListener('astro:page-load', initUseCases)
+</script>

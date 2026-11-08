@@ -20,6 +20,7 @@ export default defineConfig({
     thumbnailIntegration({
       appName: 'Docs',
       content: { type: 'collection', dir: './src/content/docs' },
+      articleCards: { brand: 'FerrisKey Docs', kind: 'docs' },
       primaryColor: '#F97316',
     }),
   ],

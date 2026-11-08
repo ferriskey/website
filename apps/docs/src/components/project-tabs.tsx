@@ -12,8 +12,8 @@ export function ProjectTabs({ projects, currentProject, switchUrls }: ProjectTab
   if (projects.length <= 1) return null
 
   return (
-    <div className="border-b bg-background">
-      <div className="flex h-10 items-end overflow-x-auto overflow-y-hidden px-6 max-w-350 mx-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="border-t border-border bg-background">
+      <div className="flex h-10 items-end overflow-x-auto overflow-y-hidden border-x border-border px-6 max-w-[90rem] mx-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {projects.map((project, index) => {
           const isActive = project.name === currentProject
           return (
@@ -21,11 +21,10 @@ export function ProjectTabs({ projects, currentProject, switchUrls }: ProjectTab
               key={project.name}
               href={switchUrls[project.name] ?? '#'}
               className={cn(
-                'flex items-center gap-2 -mb-px border-b-2 px-4 py-2 text-sm whitespace-nowrap transition-colors',
-                index === 0 && 'pl-0',
+                'flex items-center gap-2 -mb-px border-b-2 px-4 py-2 font-pixel text-[11px] uppercase tracking-[0.06em] whitespace-nowrap transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-t-sm',
                 isActive
-                  ? 'border-primary text-foreground font-medium'
+                  ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40',
               )}
             >

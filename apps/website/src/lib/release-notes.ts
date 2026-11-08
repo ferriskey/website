@@ -19,6 +19,23 @@ export interface ReleaseNoteTranslation {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.10.2',
+    publishedAt: '2026-11-04T01:39:27Z',
+    title: 'A security follow-up on secrets and identity links, and a provider login that keeps its PKCE challenge',
+    summary:
+      'A patch on top of 0.10.1 that finishes the permission checks started in 0.10.1 for two more admin actions, and fixes a login through an external identity provider that lost its PKCE challenge. No database migration and no configuration change.',
+    kind: 'patch',
+    githubUrl: 'https://github.com/ferriskey/ferriskey/releases/tag/v0.10.2',
+    compareUrl: 'https://github.com/ferriskey/ferriskey/compare/v0.10.1...v0.10.2',
+    highlights: [
+      "Bounds the secret reveal and the link removal by the target's permissions: an admin can no longer reveal the secret of a client, or remove the identity provider links of a user, when that client's service account or that user holds permissions the admin does not hold.",
+      'Resumes the cookie session on provider login so that the PKCE challenge is kept through the round trip to the external identity provider.',
+      'The Helm chart is published as ferriskey 0.10.2.',
+    ],
+    transition:
+      'Patch release on top of 0.10.1: no database migration and no configuration change, so an upgrade is a straight image and chart bump.',
+  },
+  {
     version: 'v0.10.1',
     publishedAt: '2026-10-31T03:07:23Z',
     title: 'A privilege escalation fix, passkeys that satisfy OTP, and a cheaper token path',
@@ -350,6 +367,19 @@ export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
   fr: {
+    'v0.10.2': {
+      title:
+        "Une suite de correctifs de sécurité sur les secrets et les liens d'identité, et un login par fournisseur qui garde son challenge PKCE",
+      summary:
+        "Un patch sur la 0.10.1 qui termine les contrôles de permissions commencés en 0.10.1 pour deux autres actions d'administration, et corrige un login via un fournisseur d'identité externe qui perdait son challenge PKCE. Aucune migration de base de données ni changement de configuration.",
+      highlights: [
+        "Borne la révélation d'un secret et la suppression d'un lien par les permissions de la cible : un admin ne peut plus révéler le secret d'un client, ni supprimer les liens de fournisseur d'identité d'un utilisateur, quand le compte de service de ce client ou cet utilisateur détient des permissions que l'admin n'a pas.",
+        "Reprend la session par cookie lors d'un login par fournisseur, pour que le challenge PKCE soit conservé pendant l'aller-retour vers le fournisseur d'identité externe.",
+        "Le chart Helm est publié sous le nom ferriskey 0.10.2.",
+      ],
+      transition:
+        "Version de patch sur la 0.10.1 : aucune migration de base de données ni changement de configuration, la mise à jour se résume à un changement d'image et de chart.",
+    },
     'v0.10.1': {
       title:
         "Une élévation de privilèges corrigée, des passkeys qui valident l'OTP et un parcours de token moins coûteux",

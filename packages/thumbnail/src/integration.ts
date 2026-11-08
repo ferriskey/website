@@ -3,6 +3,8 @@ import matter from 'gray-matter'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateThumbnail } from './generator'
+import { generateBrandCard, PIXEL_CARD_WIDTH, type PixelCardOptions } from './card'
+import { articleCard } from './cards'
 import { renderThumbnail, renderThumbnailToFile } from './renderer'
 
 export interface ThumbnailConfig {
@@ -12,8 +14,13 @@ export interface ThumbnailConfig {
     | { type: 'collection'; dir: string }
     | {
         type: 'static'
-        pages: Array<{ path: string; title: string; description?: string }>
+        pages: Array<{ path: string; title: string; description?: string; card?: PixelCardOptions }>
       }
+  /**
+   * Carte de partage dans le style de ferrislabs.fr pour chaque contenu d'une
+   * collection (les articles du blog), à la place du gabarit commun.
+   */
+  articleCards?: boolean | { brand: string; kind: 'docs' }
 }
 
 interface ContentEntry {
@@ -21,8 +28,43 @@ interface ContentEntry {
   title: string
   description?: string
   shortDescription?: string
+  tags?: string[]
+  date?: string
+  author?: string
   /** URL pathname this entry maps to (without leading slash) */
   urlPath: string
+}
+
+
+/** Ce qu'il faut pour dessiner une image : la carte, ou le gabarit commun. */
+async function makeImage(
+  config: ThumbnailConfig,
+  meta: PageMeta,
+): Promise<{ svg: string; width: number }> {
+  if (meta.card) return { svg: await generateBrandCard(meta.card), width: PIXEL_CARD_WIDTH }
+  if (config.articleCards) {
+    const entry = meta.entry
+    const docs = typeof config.articleCards === 'object' ? config.articleCards : undefined
+    // Dans la documentation, le premier segment du chemin est le projet (discover, modules…).
+    const project = docs ? entry?.urlPath.split('/')[0] : undefined
+    const card = articleCard({
+      title: entry?.title ?? meta.title,
+      tags: docs ? (project ? [project] : undefined) : entry?.tags,
+      brand: docs?.brand,
+      eyebrow: docs ? `DOCS${project ? ` · ${project}` : ''}` : undefined,
+      lede: entry ? (entry.shortDescription ?? entry.description) : meta.description,
+      author: entry?.author,
+      date: entry?.date,
+    })
+    return { svg: await generateBrandCard(card), width: PIXEL_CARD_WIDTH }
+  }
+  const svg = await generateThumbnail({
+    headline: meta.headline,
+    title: meta.title,
+    description: meta.description,
+    primaryColor: config.primaryColor,
+  })
+  return { svg, width: 960 }
 }
 
 /**
@@ -54,6 +96,9 @@ async function buildContentIndex(
         title: data.title ?? urlPath.split('/').pop() ?? '',
         description: data.description,
         shortDescription: data.short_description,
+        tags: Array.isArray(data.tags) ? data.tags.map(String) : undefined,
+        date: data.date ? new Date(data.date).toISOString().slice(0, 10) : undefined,
+        author: data.author ? String(data.author) : undefined,
         urlPath,
       }
 
@@ -111,20 +156,9 @@ export function thumbnailIntegration(config: ThumbnailConfig): AstroIntegration 
                     }
 
                     try {
-                      const { headline, title, description } = resolvePageMeta(
-                        config,
-                        req.url,
-                        await getContentIndex(),
-                      )
-
-                      const svg = await generateThumbnail({
-                        headline,
-                        title,
-                        description,
-                        primaryColor: config.primaryColor,
-                      })
-
-                      const png = await renderThumbnail(svg)
+                      const meta = resolvePageMeta(config, req.url, await getContentIndex())
+                      const { svg, width } = await makeImage(config, meta)
+                      const png = await renderThumbnail(svg, width)
 
                       cache.set(req.url, png)
                       logger.info(`Dev thumbnail generated for ${req.url}`)
@@ -151,14 +185,14 @@ export function thumbnailIntegration(config: ThumbnailConfig): AstroIntegration 
         if (config.content.type === 'static') {
           for (const page of config.content.pages) {
             try {
-              const svg = await generateThumbnail({
+              const { svg, width } = await makeImage(config, {
                 title: page.title,
                 description: page.description,
-                primaryColor: config.primaryColor,
+                card: page.card,
               })
               const pagePath = page.path === '/' ? '' : page.path.replace(/^\//, '')
               const outputPath = join(outputDir, pagePath, 'thumbnail.png')
-              await renderThumbnailToFile(svg, outputPath)
+              await renderThumbnailToFile(svg, outputPath, width)
               logger.info(`Thumbnail generated for ${page.path}`)
             } catch (error) {
               logger.warn(`Failed to generate thumbnail for ${page.path}: ${error}`)
@@ -173,21 +207,10 @@ export function thumbnailIntegration(config: ThumbnailConfig): AstroIntegration 
           if (!pathname) return
 
           try {
-            const { headline, title, description } = resolveFromIndex(
-              pathname,
-              index,
-              config.appName,
-            )
-
-            const svg = await generateThumbnail({
-              headline,
-              title,
-              description,
-              primaryColor: config.primaryColor,
-            })
-
+            const meta = resolveFromIndex(pathname, index, config.appName)
+            const { svg, width } = await makeImage(config, meta)
             const outputPath = join(outputDir, pathname, 'thumbnail.png')
-            await renderThumbnailToFile(svg, outputPath)
+            await renderThumbnailToFile(svg, outputPath, width)
             logger.info(`Thumbnail generated for ${pathname}`)
           } catch (error) {
             logger.warn(`Failed to generate thumbnail for ${pathname}: ${error}`)
@@ -204,6 +227,10 @@ interface PageMeta {
   headline?: string
   title: string
   description?: string
+  /** Carte toute prête (pages statiques). */
+  card?: PixelCardOptions
+  /** Le contenu d'origine, pour les cartes d'article. */
+  entry?: ContentEntry
 }
 
 function resolvePageMeta(
@@ -217,6 +244,7 @@ function resolvePageMeta(
     return {
       title: page?.title ?? config.appName,
       description: page?.description,
+      card: page?.card,
     }
   }
 
@@ -241,6 +269,7 @@ function resolveFromIndex(
       headline: appName,
       title: direct.title,
       description: direct.shortDescription ?? direct.description,
+      entry: direct,
     }
   }
 
@@ -263,6 +292,7 @@ function resolveFromIndex(
           headline: appName,
           title: entry.title,
           description: entry.shortDescription ?? entry.description,
+          entry,
         }
       }
     }
@@ -277,6 +307,7 @@ function resolveFromIndex(
         headline: appName,
         title: entry.title,
         description: entry.shortDescription ?? entry.description,
+        entry,
       }
     }
   }

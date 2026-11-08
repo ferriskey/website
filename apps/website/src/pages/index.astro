@@ -2,18 +2,15 @@
 import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
 import HeroSection from '../components/hero-section.astro'
-import WhyNowSection from '../components/why-now-section.astro'
-import FeaturesSection from '../components/features-section.astro'
-import ComparisonSection from '../components/comparison-section.astro'
-import AuditFeedSection from '../components/audit-feed-section.astro'
+import UseCasesSection from '../components/use-cases-section.astro'
+import CapabilitiesSection from '../components/capabilities-section.astro'
+import ProblemsSection from '../components/problems-section.astro'
+import CommunitySection from '../components/community-section.astro'
+import SiteFooter from '../components/site-footer.astro'
 import UiShowcaseSection from '../components/ui-showcase-section.astro'
-import ModulesSection from '../components/modules-section.astro'
-import OssSection from '../components/oss-section.astro'
 import CoreTeamSection from '../components/core-team-section.astro'
 import SponsorsSection from '../components/sponsors-section.astro'
 import FranceNuageSection from '../components/france-nuage-section.astro'
-import SupportersMarquee from '../components/supporters-marquee.astro'
-import TestimonialsSection from '../components/testimonials-section.astro'
 import CtaSection from '../components/cta-section.astro'
 import LatestArticlesSection from '../components/latest-articles-section.astro'
 import { ui } from '../i18n/ui'
@@ -24,6 +21,8 @@ const appUrlOverrides = {
   blog: import.meta.env.PUBLIC_BLOG_URL,
 }
 
+const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
+const blogHref = appUrlOverrides.blog ?? '/'
 const translations = ui.fr
 const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
 ---
@@ -32,26 +31,17 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
   <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
 
   <HeroSection />
-  <WhyNowSection />
-  <FeaturesSection />
-  <ComparisonSection />
-  <AuditFeedSection />
+  <UseCasesSection />
+  <CapabilitiesSection />
+  <ProblemsSection />
   <UiShowcaseSection />
-  <ModulesSection />
-  <OssSection />
+  <CommunitySection />
   <CoreTeamSection />
   <SponsorsSection />
   <FranceNuageSection />
-  <SupportersMarquee />
-  {/* <TestimonialsSection /> */}
   <LatestArticlesSection />
-  <CtaSection docsHref={appUrlOverrides.docs} />
-
-  <footer class="border-t">
-    <div class="mx-auto max-w-7xl px-6 py-8 text-sm text-muted-foreground text-center" data-t="footer.text">
-      © 2025 Ferriskey · Apache 2.0
-    </div>
-  </footer>
+  <CtaSection docsHref={docsHref} />
+  <SiteFooter docsHref={docsHref} blogHref={blogHref} />
 </Base>
 
 <script is:inline define:vars={{ translations, thumbnails }}>

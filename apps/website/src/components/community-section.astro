@@ -1,0 +1,163 @@
+---
+// Communauté : chiffres GitHub lus au build, dernières versions, contributeurs,
+// et la place de FerrisKey dans le CNCF Landscape. Si l'API GitHub ne répond
+// pas, on affiche « – » plutôt qu'un faux zéro.
+const GITHUB_REPO = 'ferriskey/ferriskey'
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`
+const CNCF_URL = 'https://landscape.cncf.io/?item=provisioning--security-compliance--ferriskey'
+
+type Release = { date: string; title: string; tag: string; url: string }
+type Contributor = { login: string; avatar: string; url: string }
+
+let stars: number | null = null
+let forks: number | null = null
+let contributorCount: number | null = null
+let releaseCount: number | null = null
+let releases: Release[] = []
+let contributors: Contributor[] = []
+
+try {
+  // Sans jeton l'API limite à 60 requêtes par heure : GITHUB_TOKEN, s'il existe, évite de tomber en panne au build.
+  const token = import.meta.env.GITHUB_TOKEN ?? process.env.GITHUB_TOKEN
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github.v3+json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+  const [repoRes, releasesRes] = await Promise.all([
+    fetch(GITHUB_API, { headers }),
+    fetch(`${GITHUB_API}/releases?per_page=6`, { headers }),
+  ])
+
+  if (repoRes.ok) {
+    const repo = await repoRes.json()
+    stars = repo.stargazers_count ?? null
+    forks = repo.forks_count ?? null
+  }
+  if (releasesRes.ok) {
+    const raw: any[] = await releasesRes.json()
+    releaseCount = raw.length
+    releases = raw.slice(0, 5).map((r) => {
+      const d = new Date(r.published_at)
+      return {
+        date: `${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}`,
+        title: r.name || r.tag_name,
+        tag: r.tag_name,
+        url: r.html_url,
+      }
+    })
+  }
+  // Tous les contributeurs : on suit les pages jusqu'à la dernière (100 par page).
+  const all: any[] = []
+  for (let page = 1; page <= 10; page++) {
+    const res = await fetch(`${GITHUB_API}/contributors?per_page=100&page=${page}`, { headers })
+    if (!res.ok) break
+    const data: any[] = await res.json()
+    all.push(...data)
+    if (data.length < 100) break
+  }
+  const people = all.filter((c) => c.type !== 'Bot' && !c.login?.includes('[bot]'))
+  if (people.length > 0) {
+    contributorCount = people.length
+    contributors = people.map((c) => ({ login: c.login, avatar: c.avatar_url, url: c.html_url }))
+  }
+} catch (_) {
+  // Pas de réseau au build : les cellules affichent « – ».
+}
+
+const fmt = (n: number | null) => {
+  if (n === null) return '–'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(n)
+}
+
+const stats = [
+  { id: 'stars', value: fmt(stars), label: 'GitHub stars', href: `https://github.com/${GITHUB_REPO}/stargazers` },
+  { id: 'forks', value: fmt(forks), label: 'Forks', href: `https://github.com/${GITHUB_REPO}/forks` },
+  { id: 'contributors', value: fmt(contributorCount), label: 'Contributors', href: `https://github.com/${GITHUB_REPO}/graphs/contributors` },
+  { id: 'releases', value: fmt(releaseCount), label: 'Releases', href: `https://github.com/${GITHUB_REPO}/releases` },
+]
+---
+
+<section class="border-b border-border" id="community" aria-labelledby="community-title">
+  <div class="mx-auto max-w-6xl overflow-hidden border-x border-border">
+    <div class="border-b border-border px-5 py-20 sm:px-8 sm:py-32">
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="community.label">Community</p>
+      <h2 id="community-title" class="mt-6 max-w-2xl text-balance text-[clamp(2rem,4.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.035em]" data-t="community.title">
+        Built in the open, with the people who use it.
+      </h2>
+      <p class="mt-7 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground" data-t="community.description">
+        Public releases, a public roadmap, public contributors and an open governance.
+      </p>
+    </div>
+
+    <ul class="-mr-px grid grid-cols-2 lg:grid-cols-4">
+      {stats.map((s) => (
+        <li class="border-b border-r border-border">
+          <a href={s.href} target="_blank" rel="noopener noreferrer" class="group block px-5 py-10 transition-colors hover:bg-foreground/[0.03] sm:px-8 sm:py-12">
+            <p class="text-4xl font-medium tabular-nums tracking-[-0.03em] sm:text-5xl">{s.value}</p>
+            <p class="mt-2 font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground transition-colors group-hover:text-primary" data-t={`community.stat.${s.id}`}>{s.label}</p>
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    <div class="grid border-b border-border lg:grid-cols-[3fr_2fr]">
+      <div class="border-b border-border lg:border-b-0 lg:border-r">
+        <div class="flex items-center justify-between border-b border-border px-5 py-4 sm:px-8">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em]" data-t="community.releases">Latest releases</p>
+          <a href="/release-notes" class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-primary">
+            <span data-t="community.allReleases">All release notes</span> →
+          </a>
+        </div>
+        {releases.length > 0 ? (
+          <ul>
+            {releases.map((r) => (
+              <li class="border-b border-border last:border-b-0">
+                <a href={r.url} target="_blank" rel="noopener noreferrer" class="group flex items-center gap-4 px-5 py-6 transition-colors hover:bg-foreground/[0.03] sm:px-8">
+                  <span class="w-14 shrink-0 font-mono text-xs text-muted-foreground">{r.date}</span>
+                  <span class="min-w-0 flex-1 truncate text-sm transition-colors group-hover:text-primary">{r.title}</span>
+                  <span class="shrink-0 border border-border px-2 py-0.5 font-mono text-xs text-muted-foreground">{r.tag}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="px-5 py-8 text-sm text-muted-foreground sm:px-8">
+            <a href={`https://github.com/${GITHUB_REPO}/releases`} class="underline underline-offset-4">github.com/{GITHUB_REPO}/releases</a>
+          </p>
+        )}
+      </div>
+
+      <div class="flex flex-col">
+        <a href={CNCF_URL} target="_blank" rel="noopener noreferrer" class="group flex flex-1 flex-col justify-between gap-12 border-b border-border bg-surface-tint px-5 py-12 transition-colors hover:bg-foreground/[0.03] sm:px-8">
+          <div>
+            <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="cncf.label">CNCF Landscape</p>
+            <h3 class="mt-3 text-balance text-xl font-medium leading-tight tracking-[-0.02em]" data-t="cncf.title">Part of the cloud-native landscape.</h3>
+            <p class="mt-3 text-sm leading-6 text-muted-foreground" data-t="cncf.desc">
+              FerrisKey is listed in the CNCF Landscape under Security &amp; Compliance, and is preparing its CNCF Sandbox application.
+            </p>
+          </div>
+          <span class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground transition-colors group-hover:text-primary">
+            <span data-t="cncf.cta">See it on the landscape</span> →
+          </span>
+        </a>
+        <div class="grid grid-cols-2">
+          <a href={`https://github.com/${GITHUB_REPO}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer" class="border-r border-border px-5 py-7 text-center font-pixel text-[10px] uppercase tracking-[0.08em] transition-colors hover:bg-foreground/[0.04] sm:px-8" data-t="community.license">Apache 2.0</a>
+          <a href={`https://github.com/${GITHUB_REPO}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer" class="px-5 py-7 text-center font-pixel text-[10px] uppercase tracking-[0.08em] text-primary transition-colors hover:bg-foreground/[0.04] sm:px-8" data-t="community.contribute">Contribute on GitHub</a>
+        </div>
+      </div>
+    </div>
+
+    {contributors.length > 0 && (
+      <ul class="flex flex-wrap" aria-label="Contributors">
+        {contributors.map((c) => (
+          <li class="border-b border-r border-border">
+            <a href={c.url} target="_blank" rel="noopener noreferrer" title={c.login} class="block size-11 overflow-hidden sm:size-14">
+              <img src={`${c.avatar}&s=112`} alt={c.login} width="56" height="56" loading="lazy" class="size-full object-cover grayscale transition-[filter] duration-200 hover:grayscale-0" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>

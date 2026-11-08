@@ -17,7 +17,7 @@ export function AuthorCard({ author, label = 'Written by', className }: AuthorCa
       <img
         src={author.avatar}
         alt={author.name}
-        className="h-10 w-10 rounded-full ring-1 ring-border shrink-0"
+        className="h-10 w-10 ring-1 ring-border shrink-0"
         loading="lazy"
       />
       <div className="min-w-0">
@@ -29,7 +29,7 @@ export function AuthorCard({ author, label = 'Written by', className }: AuthorCa
 
   return (
     <div className={cn('border-t border-dashed border-border pt-4 mt-4', className)}>
-      <p className="text-sm font-medium mb-3">{label}</p>
+      <p className="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary mb-4">{label}</p>
       {author.href ? (
         <a
           href={author.href}

@@ -1,0 +1,248 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import { forklift } from './pixel/sprites'
+
+/**
+ * Deux décors dans les marges de l'en-tête des release notes, hors de la
+ * colonne centrale. Tout roule vers la droite, sans jamais faire demi-tour :
+ * les véhicules entrent par le bord gauche de l'écran ou sortent « derrière »
+ * la colonne centrale (clippés au bord de la marge).
+ *
+ * Gauche : un plateau chargé arrive, s'arrête sous la grue, qui lui prend son
+ * colis (le colis du plateau et celui du crochet occupent exactement la même
+ * place, le relais est invisible), puis un second plateau vide arrive et
+ * reçoit ce colis avant de repartir sous la colonne.
+ * Droite : des véhicules chargés surgissent de derrière la colonne et sortent
+ * par le bord droit de l'écran.
+ *
+ * CSS pur, un seul cycle de 24 s pour la grue et les deux plateaux.
+ */
+const flatbed = {
+  rows: [
+    '..........OOO..',
+    '..........OWWO.',
+    '..........OWWOO',
+    'DDDDDDDDDDOOOOO',
+    '.KKK....KKK.KKK',
+    '.KKK....KKK.KKK',
+  ],
+  palette: { O: '#f2670f', D: '#7a2d06', W: '#bcd2ff', K: '#1c1917' },
+}
+const tint = { a: '#ffb547', b: '#d9480f', c: '#f2670f' }
+---
+
+<div class="sc sc-left" aria-hidden="true">
+  <span class="mast"></span>
+  <span class="counter"></span>
+  <span class="jib"></span>
+  <span class="trolley">
+    <span class="cable">
+      <span class="hook"></span>
+      <span class="box carried" style={`background:${tint.c}`}></span>
+    </span>
+  </span>
+
+  <div class="veh fb fb-a">
+    <PixelSprite sprite={flatbed} className="block w-full" />
+    <span class="box on-bed on-a" style={`background:${tint.c}`}></span>
+  </div>
+  <div class="veh fb fb-b">
+    <PixelSprite sprite={flatbed} className="block w-full" />
+    <span class="box on-bed on-b" style={`background:${tint.c}`}></span>
+  </div>
+</div>
+
+<div class="sc sc-right" aria-hidden="true">
+  <div class="veh fb fb-r">
+    <PixelSprite sprite={flatbed} className="block w-full" />
+    <span class="box on-bed" style={`background:${tint.b}`}></span>
+    <span class="box on-bed on-top" style={`background:${tint.a}`}></span>
+  </div>
+  <div class="veh fk">
+    <PixelSprite sprite={forklift} className="block w-full" />
+    <span class="box fk-box" style={`background:${tint.a}`}></span>
+  </div>
+</div>
+
+<style>
+  .sc {
+    --u: 26px;
+    --ink: color-mix(in srgb, var(--color-foreground) 88%, transparent);
+    --jib-y: calc(var(--u) * 5.6);
+    --pick: 18%;
+    --drop: 60%;
+    position: absolute;
+    bottom: 0;
+    width: calc(50% - 36rem);
+    height: calc(var(--u) * 6.4);
+    overflow: hidden;
+    pointer-events: none;
+    display: none;
+  }
+  :global(.dark) .sc {
+    --ink: #3b3431;
+  }
+  .sc-left { left: 0; }
+  .sc-right { right: 0; }
+  @media (min-width: 1500px) {
+    .sc { display: block; }
+  }
+
+  .box {
+    position: absolute;
+    width: calc(var(--u) * 0.9);
+    height: calc(var(--u) * 0.9);
+    box-shadow:
+      inset 0 calc(var(--u) * 0.1) 0 rgba(255, 255, 255, 0.28),
+      inset calc(var(--u) * -0.1) calc(var(--u) * -0.1) 0 rgba(0, 0, 0, 0.22);
+  }
+
+  /* Véhicules : toujours tournés vers la droite */
+  .veh {
+    position: absolute;
+    bottom: 0;
+    left: -60%;
+  }
+  .fb { width: calc(var(--u) * 3.2); }
+  .on-bed {
+    left: calc(var(--u) * 0.62);
+    bottom: calc(var(--u) * 0.64);
+  }
+  .on-top { bottom: calc(var(--u) * 1.54); left: calc(var(--u) * 0.62); width: calc(var(--u) * 0.9); }
+
+  /* ---------- Grue ---------- */
+  .mast {
+    position: absolute;
+    right: 10%;
+    bottom: 0;
+    width: calc(var(--u) * 0.3);
+    height: var(--jib-y);
+    background: var(--ink);
+    background-image: repeating-linear-gradient(0deg, transparent 0 calc(var(--u) * 0.3), rgba(0, 0, 0, 0.35) calc(var(--u) * 0.3) calc(var(--u) * 0.36));
+  }
+  .jib {
+    position: absolute;
+    left: 6%;
+    right: 4%;
+    bottom: calc(var(--jib-y) - var(--u) * 0.04);
+    height: calc(var(--u) * 0.26);
+    background: var(--ink);
+    border-top: 2px solid var(--color-primary);
+  }
+  .counter {
+    position: absolute;
+    right: 4%;
+    bottom: calc(var(--jib-y) - var(--u) * 0.5);
+    width: calc(var(--u) * 0.7);
+    height: calc(var(--u) * 0.5);
+    background: color-mix(in srgb, var(--color-foreground) 55%, transparent);
+  }
+  .trolley {
+    position: absolute;
+    bottom: calc(var(--jib-y) - var(--u) * 0.3);
+    left: var(--pick);
+    width: calc(var(--u) * 0.5);
+    height: calc(var(--u) * 0.3);
+    translate: -50% 0;
+    background: var(--color-primary);
+    animation: sc-trolley 24s ease-in-out infinite;
+  }
+  .cable {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 2px;
+    translate: -50% 0;
+    background: var(--ink);
+    height: calc(var(--u) * 1);
+    animation: sc-cable 24s ease-in-out infinite;
+  }
+  .hook {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: calc(var(--u) * 0.3);
+    height: calc(var(--u) * 0.16);
+    translate: -50% 100%;
+    background: var(--color-primary);
+  }
+  .carried {
+    left: 50%;
+    top: 100%;
+    translate: -50% calc(var(--u) * 0.16);
+    opacity: 0;
+    animation: sc-carried 24s steps(1, end) infinite;
+  }
+  /* Le colis du plateau repose à 0.64u du sol : câble de 3.6u pour l'y poser ou l'y prendre. */
+  @keyframes sc-trolley {
+    0%, 24% { left: var(--pick); }
+    42%, 64% { left: var(--drop); }
+    84%, 100% { left: var(--pick); }
+  }
+  @keyframes sc-cable {
+    0%, 14% { height: calc(var(--u) * 1); }
+    19% { height: calc(var(--u) * 3.6); }
+    24%, 52% { height: calc(var(--u) * 1); }
+    58% { height: calc(var(--u) * 3.6); }
+    64%, 100% { height: calc(var(--u) * 1); }
+  }
+  @keyframes sc-carried {
+    0%, 18.99% { opacity: 0; }
+    19%, 57.99% { opacity: 1; }
+    58%, 100% { opacity: 0; }
+  }
+
+  /* Plateau A : chargé, arrive, attend la grue, repart sous la colonne */
+  .fb-a { animation: sc-a 24s infinite; }
+  @keyframes sc-a {
+    0% { left: -60%; animation-timing-function: ease-out; }
+    14%, 25% { left: calc(var(--pick) - var(--u) * 1.07); animation-timing-function: ease-in; }
+    47%, 100% { left: 120%; }
+  }
+  .on-a { animation: sc-on-a 24s steps(1, end) infinite; }
+  @keyframes sc-on-a {
+    0%, 18.99% { opacity: 1; }
+    19%, 100% { opacity: 0; }
+  }
+
+  /* Plateau B : vide, arrive, reçoit le colis, repart */
+  .fb-b { animation: sc-b 24s infinite; }
+  @keyframes sc-b {
+    0%, 34% { left: -60%; animation-timing-function: ease-out; }
+    52%, 66% { left: calc(var(--drop) - var(--u) * 1.07); animation-timing-function: ease-in; }
+    90%, 100% { left: 120%; }
+  }
+  .on-b { animation: sc-on-b 24s steps(1, end) infinite; }
+  @keyframes sc-on-b {
+    0%, 57.99% { opacity: 0; }
+    58%, 100% { opacity: 1; }
+  }
+
+  /* ---------- Droite : flux sortant ---------- */
+  .fb-r { animation: sc-out 20s linear infinite; }
+  .fk {
+    width: calc(var(--u) * 1.7);
+    animation: sc-out 15s linear infinite;
+    animation-delay: -9s;
+  }
+  .fk-box {
+    left: calc(var(--u) * 1.18);
+    bottom: calc(var(--u) * 0.44);
+    width: calc(var(--u) * 0.5);
+    height: calc(var(--u) * 0.5);
+  }
+  @keyframes sc-out {
+    from { left: -60%; }
+    to { left: 115%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trolley, .cable, .carried, .fb, .on-a, .on-b, .fk { animation: none; }
+    .fb-a { left: calc(var(--pick) - var(--u) * 1.07); }
+    .fb-b { left: calc(var(--drop) - var(--u) * 1.07); }
+    .on-b { opacity: 1; }
+    .on-a { opacity: 0; }
+    .fb-r { left: 10%; }
+    .fk { left: 60%; }
+  }
+</style>

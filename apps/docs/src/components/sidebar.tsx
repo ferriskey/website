@@ -61,7 +61,7 @@ function SidebarItem({ item, currentPath, depth = 0 }: { item: NavItem; currentP
   if (item.type === 'group') {
     return (
       <li className="mt-6 first:mt-0">
-        <div className="px-3 pb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="px-3 pb-2 font-pixel text-[10px] uppercase tracking-[0.08em] text-primary">
           {item.title}
         </div>
         <ul>
@@ -80,10 +80,10 @@ function SidebarItem({ item, currentPath, depth = 0 }: { item: NavItem; currentP
         <a
           href={item.href}
           className={cn(
-            'flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:text-foreground',
+            'flex items-center gap-2 border-l-2 px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:text-foreground',
             isActive
-              ? 'bg-primary/10 text-primary font-medium'
-              : 'text-muted-foreground hover:text-foreground',
+              ? 'border-primary bg-primary/[0.06] text-primary font-medium'
+              : 'border-transparent text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground',
           )}
           style={depth > 0 ? { paddingLeft: `${1.2 + depth}rem` } : undefined}
         >

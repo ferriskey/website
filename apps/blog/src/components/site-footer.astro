@@ -1,0 +1,199 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import { crab, crabAsleep, key } from './pixel/sprites'
+
+interface Props {
+  docsHref?: string
+  websiteHref?: string
+  tagline?: string
+  copyright?: string
+}
+const { docsHref = '/', websiteHref = '/', tagline = 'Open-source identity and access management, written in Rust.', copyright = '© 2025 Ferriskey · Apache 2.0' } = Astro.props
+
+const columns = [
+  {
+    key: 'footer.product',
+    title: 'Product',
+    links: [
+      { label: 'Documentation', href: docsHref },
+      { label: 'Website', href: websiteHref },
+      { label: 'Release notes', href: `${websiteHref}/release-notes` },
+      { label: 'Roadmap', href: 'https://github.com/orgs/ferriskey/projects/1' },
+    ],
+  },
+  {
+    key: 'footer.community',
+    title: 'Community',
+    links: [
+      { label: 'GitHub', href: 'https://github.com/ferriskey/ferriskey' },
+      { label: 'Discussions', href: 'https://github.com/ferriskey/ferriskey/discussions' },
+      { label: 'Contributing', href: 'https://github.com/ferriskey/ferriskey/blob/main/CONTRIBUTING.md' },
+    ],
+  },
+  {
+    key: 'footer.project',
+    title: 'Project',
+    links: [
+      { label: 'Blog', href: '/' },
+      { label: 'Governance', href: 'https://github.com/ferriskey/ferriskey/blob/main/GOVERNANCE.md' },
+      { label: 'Security', href: 'https://github.com/ferriskey/ferriskey/blob/main/SECURITY.md' },
+    ],
+  },
+]
+---
+
+<footer class="overflow-hidden">
+  <div class="mx-auto max-w-6xl border-x border-border">
+    <nav aria-label="Footer" class="grid border-b border-border md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+      <div class="flex flex-col justify-between gap-12 border-b border-border px-5 py-14 sm:px-10 md:border-b-0 md:border-r">
+        <div>
+          <a href="/" class="flex items-center gap-3 text-lg font-semibold tracking-tight">
+            <img src="/logo.svg" alt="" width="24" height="26" class="h-[26px] w-6" />
+            FerrisKey
+          </a>
+          <p class="mt-6 max-w-xs text-pretty text-xl font-medium leading-snug tracking-[-0.02em]">{tagline}</p>
+        </div>
+        <a href="mailto:contact@ferriskey.io" class="inline-flex w-fit items-center gap-2 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+          <span>Contact us</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      {columns.map((c) => (
+        <div class="border-b border-border px-5 py-12 last:border-b-0 sm:px-10 md:border-b-0 md:border-r md:last:border-r-0">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">{c.title}</p>
+          <ul class="mt-6 space-y-1">
+            {c.links.map((l) => (
+              <li>
+                <a
+                  href={l.href}
+                  class="inline-block py-2 text-base text-foreground transition-colors hover:text-primary"
+                  {...(l.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+
+    <p class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-6 text-xs text-muted-foreground sm:px-10">
+      <span>{copyright}</span>
+      <span class="font-pixel uppercase">Fait en Rust</span>
+    </p>
+
+    <!-- Le mot géant : rogné par le bas de la page, il se remplit au passage d'une clé. -->
+    <div class="fw relative px-5 pt-24 sm:px-10" data-footer-wordmark>
+      <div class="relative mx-auto w-full" style="aspect-ratio: 1000 / 275">
+        <svg viewBox="0 -40 1000 275" class="absolute inset-0 size-full" role="img" aria-label="FerrisKey">
+          <defs>
+            <linearGradient id="fw-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff8c42" />
+              <stop offset="55%" stop-color="#f2670f" />
+              <stop offset="100%" stop-color="#a83e08" />
+            </linearGradient>
+            <clipPath id="fw-reveal"><rect class="fw-reveal" x="0" y="-40" width="1000" height="275" /></clipPath>
+          </defs>
+          <text x="0" y="205" font-size="230" font-weight="700" textLength="1000" lengthAdjust="spacingAndGlyphs" style="font-family: var(--font-sans); letter-spacing: -0.03em" fill="none" stroke="var(--color-foreground)" stroke-opacity="0.2" stroke-width="2">FerrisKey</text>
+          <g clip-path="url(#fw-reveal)">
+            <text x="0" y="205" font-size="230" font-weight="700" textLength="1000" lengthAdjust="spacingAndGlyphs" style="font-family: var(--font-sans); letter-spacing: -0.03em" fill="url(#fw-fill)">FerrisKey</text>
+          </g>
+        </svg>
+
+        <span class="fw-key absolute" aria-hidden="true"><PixelSprite sprite={key} className="block w-full" /></span>
+
+        <span class="fw-crab absolute" aria-hidden="true">
+          <span class="fw-crab-asleep absolute inset-0"><PixelSprite sprite={crabAsleep} className="block w-full" /></span>
+          <span class="fw-crab-awake absolute inset-0"><PixelSprite sprite={crab} className="block w-full" /></span>
+          <span class="fw-zzz absolute font-pixel text-primary"><span>z</span><span>z</span><span>Z</span></span>
+        </span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  /* Tout se pose en coordonnées du viewBox (viewBox 1000 × 275), en pourcentages. */
+  .fw-key {
+    left: 0;
+    top: 60%;
+    width: 8%;
+    translate: 0 -50%;
+    opacity: 0;
+  }
+  .fw-crab {
+    left: 1.5%;
+    top: 5%;
+    width: 7%;
+    aspect-ratio: 1;
+  }
+  .fw-crab-awake { opacity: 0; }
+  .fw-zzz {
+    left: 90%;
+    top: -22%;
+    font-size: clamp(8px, 1.1vw, 14px);
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+  }
+
+  .fw-reveal {
+    transform-box: fill-box;
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+  }
+  .fw.is-in .fw-reveal {
+    animation: fw-reveal 2.4s cubic-bezier(0.45, 0, 0.3, 1) 0.3s forwards;
+  }
+  .fw.is-in .fw-key {
+    animation: fw-key 2.4s cubic-bezier(0.45, 0, 0.3, 1) 0.3s forwards;
+  }
+  .fw.is-in .fw-crab-asleep { animation: fw-hide 0.01s linear 2.7s forwards; }
+  .fw.is-in .fw-crab-awake { animation: fw-show 0.2s ease-out 2.7s forwards; }
+  .fw.is-in .fw-zzz { animation: fw-zzz 2.4s ease-in-out 0.3s 1 forwards; }
+
+  @keyframes fw-reveal {
+    to { transform: scaleX(1); }
+  }
+  @keyframes fw-key {
+    0% { left: -2%; opacity: 0; }
+    5% { opacity: 1; }
+    94% { left: 92%; opacity: 1; }
+    100% { left: 96%; opacity: 0; }
+  }
+  @keyframes fw-hide {
+    to { opacity: 0; }
+  }
+  @keyframes fw-show {
+    to { opacity: 1; }
+  }
+  @keyframes fw-zzz {
+    0%, 100% { opacity: 0; transform: translateY(2px); }
+    20%, 80% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fw-reveal { transform: scaleX(1); animation: none !important; }
+    .fw-key, .fw-zzz { display: none; }
+    .fw-crab-asleep { opacity: 0; }
+    .fw-crab-awake { opacity: 1; }
+  }
+</style>
+
+<script is:inline>
+  function initFooterWordmark() {
+    var el = document.querySelector('[data-footer-wordmark]')
+    if (!el || el.dataset.ready) return
+    el.dataset.ready = '1'
+    var observer = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) {
+        el.classList.add('is-in')
+        observer.disconnect()
+      }
+    }, { threshold: 0.4 })
+    observer.observe(el)
+  }
+  initFooterWordmark()
+  document.addEventListener('astro:page-load', initFooterWordmark)
+</script>

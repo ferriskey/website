@@ -20,11 +20,11 @@ export function SearchCommand() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors w-64 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex items-center gap-2 border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground transition-colors w-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Icon icon="lucide:search" className="size-4 shrink-0" />
         <span className="flex-1 text-left">Search docs...</span>
-        <kbd className="flex items-center gap-0.5 rounded border bg-background px-1.5 py-0.5 text-xs"><span className="text-[14px]">⌘</span><span className="text-[12px]">K</span></kbd>
+        <kbd className="flex items-center gap-0.5 border border-border bg-background px-1.5 py-0.5 text-xs"><span className="text-[14px]">⌘</span><span className="text-[12px]">K</span></kbd>
       </button>
       <SearchDialog open={open} onClose={() => setOpen(false)} />
     </>

@@ -1,0 +1,184 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import { abyssSprite, aegisSprite, compassSprite, crab, key, mcpSprite, orgSprite, policySprite, seawatchSprite, tridentSprite, webhooksSprite } from './pixel/sprites'
+
+// Une illustration par problème. Statique, en HTML : des cases bordées, des
+// sprites pixel, des filets. Elles montrent la réponse de FerrisKey.
+interface Props {
+  id: string
+}
+const { id } = Astro.props
+
+const apps = ['web app', 'mobile', 'api']
+const orgs = [
+  { name: 'acme-corp', idp: 'SAML', tint: '#f2670f' },
+  { name: 'globex', idp: 'OIDC', tint: '#3b6cf0' },
+  { name: 'initech', idp: 'LDAP', tint: '#16a34a' },
+]
+const chain = ['a3f9', '7c21', 'e08b', '51d4']
+---
+
+<div class="pv relative flex h-full w-full flex-col justify-center overflow-hidden border border-border bg-surface-tint p-6 sm:p-10">
+  <div class="bg-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+
+  {id === 'p1' && (
+    <div class="relative grid gap-8">
+      <div class="grid grid-cols-3 gap-3">
+        {apps.map((a, i) => (
+          <div class="pv-in border border-border bg-card px-3 py-4 text-center" style={`--i:${i}`}>
+            <p class="font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{a}</p>
+            <p class="mt-3 text-[11px] text-muted-foreground/70">validates token</p>
+          </div>
+        ))}
+      </div>
+      <div class="pv-in mx-auto flex h-10 w-px flex-col items-center justify-between" style="--i:3" aria-hidden="true">
+        <span class="h-full w-px bg-primary/50"></span>
+      </div>
+      <div class="pv-in mx-auto flex items-center gap-4 border-2 border-primary bg-card px-6 py-5" style="--i:4">
+        <PixelSprite sprite={crab} className="size-9" />
+        <div>
+          <p class="text-sm font-semibold">FerrisKey</p>
+          <p class="font-pixel text-[10px] uppercase tracking-[0.06em] text-primary">OIDC · OAuth 2.0</p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {id === 'p2' && (
+    <div class="relative grid gap-3">
+      {orgs.map((o, i) => (
+        <div class="pv-in flex items-center gap-4 border border-border bg-card" style={`--i:${i}`}>
+          <span class="h-full w-2 self-stretch" style={`background:${o.tint}`}></span>
+          <div class="min-w-0 flex-1 py-4">
+            <p class="text-sm font-semibold">{o.name}</p>
+            <p class="text-xs text-muted-foreground">own login · own members</p>
+          </div>
+          <span class="mr-4 border border-border px-2 py-1 font-pixel text-[10px] uppercase">{o.idp}</span>
+        </div>
+      ))}
+      <div class="pv-in mt-3 flex items-center justify-center gap-3 text-muted-foreground" style="--i:3">
+        <PixelSprite sprite={orgSprite} className="size-6" />
+        <p class="font-pixel text-[10px] uppercase tracking-[0.06em]">one realm · isolated organizations</p>
+      </div>
+    </div>
+  )}
+
+  {id === 'p3' && (
+    <div class="relative grid gap-4">
+      <div class="pv-in flex items-center justify-center gap-3 font-mono text-[11px]" style="--i:0">
+        <span class="border border-border bg-card px-3 py-2">alice</span>
+        <span class="text-primary">→</span>
+        <span class="border border-border bg-card px-3 py-2">mcp-agent</span>
+        <span class="text-primary">→</span>
+        <span class="border border-border bg-card px-3 py-2">tool</span>
+      </div>
+      <div class="pv-in border border-border bg-card" style="--i:1">
+        <div class="flex items-center gap-3 border-b border-border px-4 py-3">
+          <PixelSprite sprite={policySprite} className="size-5" />
+          <p class="font-pixel text-[10px] uppercase tracking-[0.06em]">Cedar policy</p>
+        </div>
+        <p class="px-4 py-4 font-mono text-[11px] leading-5 text-muted-foreground">
+          permit (principal is Agent,<br />
+          &nbsp;&nbsp;action == call_tool,<br />
+          &nbsp;&nbsp;resource is Tool);
+        </p>
+      </div>
+      <div class="pv-in grid grid-cols-2 gap-3" style="--i:2">
+        <p class="bg-emerald-500/15 px-3 py-2 text-center font-pixel text-[10px] uppercase text-emerald-600 dark:text-emerald-400">Permit · search_docs</p>
+        <p class="bg-red-500/15 px-3 py-2 text-center font-pixel text-[10px] uppercase text-red-600 dark:text-red-400">Deny · delete_user</p>
+      </div>
+    </div>
+  )}
+
+  {id === 'p4' && (
+    <div class="relative grid gap-8">
+      <div class="flex items-center">
+        {chain.map((h, i) => (
+          <>
+            <div class="pv-in border border-border bg-card px-2 py-4 text-center sm:px-3" style={`--i:${i}`}>
+              <p class="font-pixel text-[9px] uppercase text-muted-foreground">event {i + 1}</p>
+              <p class="mt-2 font-mono text-xs text-foreground">{h}…</p>
+            </div>
+            {i < chain.length - 1 && <span class="pv-in h-px min-w-3 flex-1 bg-primary" style={`--i:${i}`} aria-hidden="true"></span>}
+          </>
+        ))}
+      </div>
+      <div class="pv-in mx-auto flex items-center gap-6 text-muted-foreground" style="--i:4">
+        <div class="flex items-center gap-2"><PixelSprite sprite={seawatchSprite} className="size-6" /><span class="font-pixel text-[10px] uppercase">hash chain</span></div>
+        <span class="text-primary">→</span>
+        <div class="flex items-center gap-2"><PixelSprite sprite={webhooksSprite} className="size-6" /><span class="font-pixel text-[10px] uppercase">webhooks</span></div>
+      </div>
+    </div>
+  )}
+
+  {id === 'p5' && (
+    <div class="relative grid gap-4">
+      <div class="pv-in flex items-center gap-4 border-2 border-primary bg-card px-6 py-6" style="--i:0">
+        <PixelSprite sprite={crab} className="size-10" />
+        <div>
+          <p class="text-base font-semibold">one Rust service</p>
+          <p class="text-xs text-muted-foreground">API · admin console · login portal</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="pv-in border border-border bg-card px-4 py-4" style="--i:1">
+          <p class="font-pixel text-[10px] uppercase tracking-[0.06em] text-primary">Helm chart</p>
+          <p class="mt-2 text-xs text-muted-foreground">published as an OCI artifact</p>
+        </div>
+        <div class="pv-in border border-border bg-card px-4 py-4" style="--i:2">
+          <p class="font-pixel text-[10px] uppercase tracking-[0.06em] text-primary">Operator</p>
+          <p class="mt-2 text-xs text-muted-foreground">Kubernetes native</p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {id === 'p6' && (
+    <div class="relative grid gap-4">
+      <div class="pv-in flex items-center gap-4 border border-border bg-card px-5 py-5" style="--i:0">
+        <PixelSprite sprite={key} className="h-5 w-10" />
+        <div>
+          <p class="text-sm font-semibold">Apache 2.0</p>
+          <p class="text-xs text-muted-foreground">read it, fork it, run it yourself</p>
+        </div>
+      </div>
+      <div class="pv-in grid grid-cols-3 gap-3" style="--i:1">
+        {['OIDC', 'OAuth 2.0', 'SAML'].map((p) => (
+          <p class="border border-border bg-card px-2 py-3 text-center font-pixel text-[10px] uppercase tracking-[0.04em]">{p}</p>
+        ))}
+      </div>
+      <div class="pv-in flex items-center justify-center gap-3 border border-dashed border-primary/60 px-4 py-4 text-primary" style="--i:2">
+        <span class="font-pixel text-[10px] uppercase tracking-[0.06em]">your data · your exit</span>
+        <span aria-hidden="true">→</span>
+      </div>
+    </div>
+  )}
+</div>
+
+<style>
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--color-foreground) 5%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-foreground) 5%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  /* Les éléments se posent un par un quand le panneau devient actif. */
+  :global([data-active-panel='true']) .pv-in,
+  :global(.pv-static) .pv-in {
+    animation: pv-in 0.5s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+  :global(.pv-wrap:not([data-active-panel='true']):not(.pv-static)) .pv-in {
+    opacity: 0;
+  }
+  @keyframes pv-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pv-in {
+      animation: none !important;
+      opacity: 1 !important;
+    }
+  }
+</style>

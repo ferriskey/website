@@ -1,54 +1,39 @@
 ---
-import { Icon } from "@iconify/react";
-import { Button } from "@explainer/ui";
-import SectionHeader from './section-header.astro'
+import { PixelSprite } from './pixel/pixel-sprite'
+import { crab, key } from './pixel/sprites'
 
 interface Props {
-  docsHref?: string;
+  docsHref?: string
 }
-const { docsHref = '/' } = Astro.props;
+const { docsHref = '/' } = Astro.props
 ---
 
-<div class="w-full max-w-7xl mx-auto px-5 py-16 sm:py-24 lg:py-32">
-  <div
-    data-anim="scale"
-    class="relative overflow-hidden border rounded-2xl bg-primary/5 px-8 py-16 sm:px-16 sm:py-20 text-center"
-  >
-    <!-- Decorative grid -->
-    <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
-      <div
-        class="absolute inset-0 opacity-[0.08]"
-        style="background-image: linear-gradient(to right, var(--color-primary) 1px, transparent 1px), linear-gradient(to bottom, var(--color-primary) 1px, transparent 1px); background-size: 48px 48px; mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 0%, transparent 80%);"
-      >
+<section class="relative overflow-hidden border-b border-border" aria-labelledby="cta-title">
+  <div class="mx-auto max-w-6xl border-x border-border">
+    <div class="surface-brand relative px-5 py-28 text-center text-white sm:px-8 sm:py-44">
+      <div class="bg-pixel-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+      <div class="relative flex flex-col items-center">
+        <div class="flex items-center gap-3" aria-hidden="true">
+          <PixelSprite sprite={crab} className="size-8" />
+          <PixelSprite sprite={key} className="h-5 w-10" />
+        </div>
+        <p class="mt-8 font-pixel text-[11px] uppercase tracking-[0.08em] text-white/80" data-t="cta.label">Ready when you are</p>
+        <h2 id="cta-title" class="mt-6 max-w-3xl text-balance text-[clamp(2.25rem,5.5vw,4.5rem)] font-medium leading-[1.02] tracking-[-0.04em]" data-t="cta.title">
+          Your identity layer, your rules.
+        </h2>
+        <p class="mt-8 max-w-xl text-pretty text-lg leading-8 text-white/80" data-t="cta.description">
+          Self-hosted, Apache 2.0, built in Rust. Deploy Ferriskey in minutes and own your authentication stack outright, with no vendor holding the keys.
+        </p>
+        <div class="mt-12 flex flex-wrap justify-center gap-3">
+          <a href={docsHref} class="inline-flex items-center gap-2 bg-white px-6 py-3.5 text-sm font-semibold text-rust-900 transition-opacity hover:opacity-90">
+            <span data-t="cta.primary">Get started</span>
+            <span aria-hidden="true">→</span>
+          </a>
+          <a href="https://github.com/ferriskey/ferriskey" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+            <span data-t="cta.github">View on GitHub</span>
+          </a>
+        </div>
       </div>
-      <div class="absolute top-8 right-1/4 size-2.5 border border-primary/25"></div>
-      <div class="absolute bottom-10 left-[30%] size-2 border border-primary/20"></div>
-    </div>
-    <SectionHeader align="center" descriptionClass="max-w-xl" class="relative">
-      <span slot="label" data-t="cta.label">Ready when you are</span>
-      <span slot="title" data-t="cta.title">Your identity layer, your rules.</span>
-      <span slot="description" data-t="cta.description">
-        Self-hosted, Apache 2.0, built in Rust. Deploy Ferriskey in minutes and own your authentication stack outright, with no vendor holding the keys.
-      </span>
-    </SectionHeader>
-    <div class="mt-8 flex flex-wrap justify-center gap-3" data-anim="fade-up" style="transition-delay:120ms">
-      <Button size="lg" className="cursor-pointer" client:load>
-        <a href={docsHref} class="flex gap-2" rel="noopener noreferrer">
-          <span data-t="cta.primary">Get started</span>
-          <Icon icon="lucide:arrow-right" aria-hidden="true" className="size-5" client:load />
-        </a>
-      </Button>
-      <a
-        href="https://github.com/ferriskey/ferriskey"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
-        </svg>
-        <span data-t="cta.github">View on GitHub</span>
-      </a>
     </div>
   </div>
-</div>
+</section>

@@ -80,10 +80,10 @@ export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }:
 
   return (
     <>
-      <div className="mb-10 pb-6 border-b border-border flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+      <div className="border-b border-border px-5 py-6 sm:px-8 flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
         <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <span className="text-sm text-muted-foreground shrink-0">{t('index.filterLabel')}</span>
-          <span className="text-sm text-muted-foreground/60 shrink-0">{totalCount} {t('index.articleCount')}</span>
+          <span className="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground shrink-0">{t('index.filterLabel')}</span>
+          <span className="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary shrink-0">{totalCount} {t('index.articleCount')}</span>
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
             {tags.map((tag) => {
               const active = selectedTags.includes(tag.name)
@@ -94,10 +94,10 @@ export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }:
                   role="tab"
                   aria-selected={active}
                   onClick={() => toggleTag(tag.name)}
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide shrink-0 transition-colors cursor-pointer ${
+                  className={`border px-3 py-1.5 font-pixel text-[10px] uppercase tracking-[0.06em] shrink-0 transition-colors cursor-pointer ${
                     active
                       ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+                      : 'border-border text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground'
                   }`}
                 >
                   {tag.name}
@@ -114,13 +114,13 @@ export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }:
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('tagFilter.placeholder')}
-            className="w-full lg:w-64 rounded-md border border-border bg-transparent pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary/50"
+            className="w-full lg:w-64 border border-border bg-card pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary/50"
           />
         </div>
       </div>
 
       {hasActiveFilter && visibleCount === 0 && (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-border py-20">
+        <div className="flex flex-col items-center justify-center gap-4 border-b border-border py-24">
           <svg className="size-10 text-muted-foreground/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />

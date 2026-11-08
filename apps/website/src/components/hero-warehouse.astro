@@ -1,0 +1,836 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import {
+  abyssSprite,
+  aegisSprite,
+  compassSprite,
+  seawatchSprite,
+  tridentSprite,
+  webhooksSprite,
+} from './pixel/sprites'
+
+/**
+ * Une chaîne de tri d'identités, de gauche à droite.
+ *
+ *  1. Une grue dépose un colis au début du tapis (elle le prend sur un petit
+ *     tapis d'alimentation, qui l'amène depuis le bord de l'écran).
+ *  2. Le colis passe sous deux scanners. Chaque scanner affiche le module qui
+ *     traite ce colis (Compass, Trident, Abyss, Aegis puis SeaWatch, Webhooks)
+ *     et le colis prend l'étiquette correspondante.
+ *  3. En bout de tapis, un bras articulé saisit le colis et le range dans un
+ *     camion. Les camions arrivent par la gauche, se chargent de quatre colis
+ *     puis repartent vers la droite ; le suivant arrive pendant ce temps.
+ *
+ * Tout est en CSS pur, sur un seul cycle de 15 s : quatre colis (un toutes les
+ * 3 s) puis une période de creux, le temps que les camions se croisent. Les
+ * keyframes sont générés ci-dessous pour que chaque geste tombe au bon moment.
+ *
+ * Unités : --u pour les tailles et les hauteurs, des % de la largeur pour
+ * la position le long du tapis. Hauteurs mesurées depuis le bas de la scène.
+ */
+const P = 3
+const C = 15
+const TRAVEL = 12 // un colis met 12 s du début du tapis à la butée
+const T2 = C * 2 // les camions alternent : cycle de 30 s
+
+const BELT_Y = 2.0
+const BOX = 0.8
+const SHOULDER_Y = 3.9
+const L1 = 2
+const L2 = 2
+
+const mod = (t: number, n = C) => ((t % n) + n) % n
+const pct = (t: number, total: number) => +((t / total) * 100).toFixed(3)
+const fix = (n: number) => +n.toFixed(3)
+
+type Stop = [number, string]
+
+/** Keyframes à partir d'instants en secondes ; les instants doublés sont écrasés. */
+function kf(name: string, stops: Stop[], total = C) {
+  const byTime = new Map<number, string>()
+  for (const [t, v] of stops) byTime.set(fix(t), v)
+  const ordered = [...byTime.entries()].sort((a, b) => a[0] - b[0])
+  return `@keyframes ${name}{${ordered.map(([t, v]) => `${pct(t, total)}%{${v}}`).join('')}}`
+}
+
+/** Visible dans les fenêtres [début, fin], invisible ailleurs. */
+function windows(name: string, wins: [number, number][], total = C) {
+  const stops: Stop[] = [[0, 'opacity:0']]
+  for (const [s, e] of wins) {
+    stops.push([s, 'opacity:1'], [e, 'opacity:0'])
+  }
+  stops.push([total, 'opacity:0'])
+  return kf(name, stops, total)
+}
+
+/** Fenêtre qui peut passer par la fin du cycle. */
+function wrapWindow(name: string, start: number, end: number) {
+  const s = mod(start)
+  const e = mod(end)
+  if (s < e) return windows(name, [[s, e]])
+  return kf(name, [[0, 'opacity:1'], [e, 'opacity:0'], [s, 'opacity:1'], [C, 'opacity:1']])
+}
+
+/* ---------- Colis : le colis i est posé sur le tapis à l'instant i * P ---------- */
+const tints = ['#f2670f', '#ffb547', '#d9480f', '#f2670f']
+const boxes = tints.map((tint, i) => ({ tint, i, delay: -(C - i * P) }))
+
+/* ---------- Scanners ---------- */
+const gates = [
+  { f: 0.33, sprites: [compassSprite, tridentSprite, aegisSprite, abyssSprite] },
+  { f: 0.7, sprites: [seawatchSprite, webhooksSprite, seawatchSprite, webhooksSprite] },
+]
+const gateCss = gates
+  .map((g, gi) => {
+    const sprites = boxes.map((b) => {
+      const c = b.i * P + g.f * TRAVEL
+      return wrapWindow(`wh-gs-${gi}-${b.i}`, c - P / 2, c + P / 2)
+    })
+    const base = 'opacity:.25;box-shadow:none'
+    const glow = 'opacity:1;box-shadow:0 0 calc(var(--u)*.5) calc(var(--u)*.18) color-mix(in srgb,var(--color-primary) 55%,transparent)'
+    const stops: Stop[] = [[0, base]]
+    for (const b of boxes) {
+      const c = mod(b.i * P + g.f * TRAVEL)
+      stops.push([c - 0.25, base], [c, glow], [c + 0.35, base])
+    }
+    stops.push([C, base])
+    return sprites.join('') + kf(`wh-gl-${gi}`, stops)
+  })
+  .join('')
+
+/* ---------- Colis sur le tapis (temps local du colis) ---------- */
+const END = 'var(--endx)'
+const boxCss =
+  kf('wh-box', [
+    [0, 'left:var(--start);opacity:1'],
+    [TRAVEL, `left:${END};opacity:1`],
+    [TRAVEL + 0.4, `left:${END};opacity:1`],
+    [TRAVEL + 0.41, `left:${END};opacity:0`],
+    [C, `left:${END};opacity:0`],
+  ]) +
+  kf('wh-patch', [[0, 'opacity:0'], [gates[0].f * TRAVEL, 'opacity:1'], [TRAVEL + 0.41, 'opacity:0'], [C, 'opacity:0']]) +
+  kf('wh-sa', [[0, 'opacity:0'], [gates[0].f * TRAVEL, 'opacity:1'], [gates[1].f * TRAVEL, 'opacity:0'], [C, 'opacity:0']]) +
+  kf('wh-sb', [[0, 'opacity:0'], [gates[1].f * TRAVEL, 'opacity:1'], [TRAVEL + 0.41, 'opacity:0'], [C, 'opacity:0']])
+
+/* ---------- Grue : le câble et le chariot ne bougent jamais ensemble ---------- */
+// R : instant où le colis est posé sur le tapis ; G : où la grue le prend, 1,56 s plus tôt.
+const releases = [3, 6, 9, 15]
+const trolley: Stop[] = [[0, 'left:var(--start)'], [0.24, 'left:var(--start)']]
+const cable: Stop[] = [[0, 'height:calc(var(--u)*3.2)'], [0.24, 'height:calc(var(--u)*1.2)']]
+const carriedWins: [number, number][] = []
+const grabs: number[] = []
+for (const R of releases) {
+  const G = R - 1.56
+  trolley.push(
+    [R - 2.76, 'left:var(--start)'],
+    [R - 1.92, 'left:var(--pick)'],
+    [G + 0.24, 'left:var(--pick)'],
+    [R - 0.42, 'left:var(--start)'],
+    [R, 'left:var(--start)'],
+  )
+  cable.push(
+    [R - 2.76, 'height:calc(var(--u)*1.2)'],
+    [R - 1.92, 'height:calc(var(--u)*1.2)'],
+    [G, 'height:calc(var(--u)*4.86)'],
+    [G + 0.24, 'height:calc(var(--u)*1.2)'],
+    [R - 0.42, 'height:calc(var(--u)*1.2)'],
+    [R, 'height:calc(var(--u)*3.2)'],
+    [R + 0.24, 'height:calc(var(--u)*1.2)'],
+  )
+  grabs.push(G)
+  carriedWins.push([G, Math.min(R, C - 0.001)])
+}
+const craneCss =
+  kf('wh-trolley', trolley) +
+  kf('wh-cable', cable) +
+  windows('wh-carried', carriedWins) +
+  kf('wh-src', [
+    [0, 'left:var(--pick)'],
+    ...grabs.flatMap((G): Stop[] => [
+      [G, 'left:var(--pick)'],
+      [G + 0.01, 'left:-6%'],
+      [G + 0.9, 'left:var(--pick)'],
+    ]),
+    [C, 'left:var(--pick)'],
+  ])
+
+/* ---------- Bras articulé : cinématique inverse à deux segments ---------- */
+const ik = (x: number, y: number) => {
+  const dx = x
+  const dy = SHOULDER_Y - y
+  const d = Math.min(Math.hypot(dx, dy), L1 + L2 - 0.01)
+  const g = Math.acos((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))
+  const a1 = Math.atan2(dy, dx) + (dx < 0 ? g : -g)
+  const ex = L1 * Math.cos(a1)
+  const ey = L1 * Math.sin(a1)
+  const a12 = Math.atan2(dy - ey, dx - ex)
+  const deg = 180 / Math.PI
+  return { a1: a1 * deg, a2: (a12 - a1) * deg }
+}
+
+const PICK = { x: -3.0, y: BELT_Y + BOX }
+const HOVER = 1.0
+// Chaque camion reçoit 4 colis : deux au sol, deux dessus. y = haut du colis posé.
+const BED = 0.14 + 0.675
+const slots = [
+  { x: 1.0, y: BED + BOX },
+  { x: 2.0, y: BED + BOX },
+  { x: 1.0, y: BED + BOX * 2 },
+  { x: 2.0, y: BED + BOX * 2 },
+]
+// Instant où un colis arrive en butée, et l'emplacement qu'il prend dans le camion.
+const picks = [
+  { t: 12, k: 0 },
+  { t: 0, k: 1 },
+  { t: 3, k: 2 },
+  { t: 6, k: 3 },
+]
+type Pose = { a1: number; a2: number }
+const armStops: { t: number; p: Pose }[] = [{ t: 0, p: ik(PICK.x, PICK.y + HOVER) }]
+for (const { t, k } of picks) {
+  const s = slots[k]
+  armStops.push(
+    { t, p: ik(PICK.x, PICK.y + HOVER) },
+    { t: t + 0.4, p: ik(PICK.x, PICK.y) },
+    { t: t + 0.8, p: ik(PICK.x, PICK.y + HOVER) },
+    { t: t + 1.6, p: ik(s.x, s.y + HOVER) },
+    { t: t + 2.0, p: ik(s.x, s.y) },
+    { t: t + 2.4, p: ik(s.x, s.y + HOVER) },
+    { t: t + 3.0, p: ik(PICK.x, PICK.y + HOVER) },
+  )
+}
+armStops.push({ t: C, p: ik(PICK.x, PICK.y + HOVER) })
+const deg = (n: number) => `${n.toFixed(2)}deg`
+// Les angles restent continus d'une pose à l'autre : le bras passe par le haut, il ne se replie jamais à l'envers.
+armStops.sort((a, b) => a.t - b.t)
+for (let i = 1; i < armStops.length; i++) {
+  const prev = armStops[i - 1].p
+  const cur = armStops[i].p
+  while (cur.a1 - prev.a1 > 180) cur.a1 -= 360
+  while (cur.a1 - prev.a1 < -180) cur.a1 += 360
+  while (cur.a2 - prev.a2 > 180) cur.a2 -= 360
+  while (cur.a2 - prev.a2 < -180) cur.a2 += 360
+}
+const armCss =
+  kf('wh-a1', armStops.map(({ t, p }): Stop => [t, `rotate:${deg(p.a1)}`])) +
+  kf('wh-a2', armStops.map(({ t, p }): Stop => [t, `rotate:${deg(p.a2)}`])) +
+  kf('wh-cw', armStops.map(({ t, p }): Stop => [t, `rotate:${deg(-(p.a1 + p.a2))}`])) +
+  windows(
+    'wh-held',
+    picks.map(({ t }): [number, number] => [t + 0.4, t + 2.0]),
+  )
+
+/* ---------- Camions : cycle de 30 s, le second décalé de 15 s ---------- */
+// Le premier camion fait la queue derrière celui qui charge, avance à 9,6 s, s'arrête à 12 s,
+// reçoit ses colis à 14, 17, 20 et 23 s, puis repart à 23,4 s.
+const dropAt = [14, 17, 20, 23]
+const QUEUE = 'calc(var(--stop) - var(--u)*3.8)'
+const truckCss =
+  kf(
+    'wh-truck',
+    [
+      [0, 'left:calc(var(--u)*-5);animation-timing-function:linear'],
+      [1.8, 'left:calc(var(--u)*-5);animation-timing-function:cubic-bezier(.25,.6,.4,1)'],
+      [7.8, `left:${QUEUE};animation-timing-function:linear`],
+      [9.6, `left:${QUEUE};animation-timing-function:cubic-bezier(.45,0,.35,1)`],
+      [12, 'left:var(--stop);animation-timing-function:linear'],
+      [23.4, 'left:var(--stop);animation-timing-function:cubic-bezier(.45,0,.75,.75)'],
+      [27, 'left:calc(100% + var(--u));animation-timing-function:linear'],
+      [27.01, 'left:calc(var(--u)*-5)'],
+      [T2, 'left:calc(var(--u)*-5)'],
+    ],
+    T2,
+  ) +
+  dropAt
+    .map((d, k) => kf(`wh-tb-${k}`, [[0, 'opacity:0'], [d, 'opacity:1'], [27.01, 'opacity:0'], [T2, 'opacity:0']], T2))
+    .join('')
+
+// Camion à benne ouverte, cabine à droite : les colis se posent dans la benne.
+const truck = {
+  rows: [
+    'D.........DOOO..',
+    'D.........DOWWO.',
+    'D.........DOWWOO',
+    'DDDDDDDDDDDOOOOO',
+    '.KKK...KKK.KKK..',
+    '.KKK...KKK.KKK..',
+  ],
+  palette: { O: '#f2670f', D: '#7a2d06', W: '#bcd2ff', K: '#1c1917' },
+}
+const slotLeft = [0.25, 1.25, 0.25, 1.25]
+const slotBottom = [0.675, 0.675, 0.675 + BOX, 0.675 + BOX]
+const truckTints = ['#ffb547', '#d9480f', '#f2670f', '#ffb547']
+
+const css = gateCss + boxCss + craneCss + armCss + truckCss
+
+// Fond : des étagères lointaines, très pâles.
+let seed = 3
+const rand = () => {
+  seed = (seed * 1664525 + 1013904223) % 4294967296
+  return seed / 4294967296
+}
+const racks = Array.from({ length: 16 }, (_, i) => ({
+  x: i * 6.4 + rand() * 2,
+  w: 3 + rand() * 2.5,
+  h: 1.6 + rand() * 1.9,
+}))
+const legs = Array.from({ length: 8 }, (_, i) => i / 7)
+const at = (f: number) => `calc(var(--start)*${(1 - f).toFixed(3)} + var(--endx)*${f.toFixed(3)})`
+---
+
+<style is:global set:html={css}></style>
+
+<div class="wh relative z-10 w-full" style={`--cycle:${C}s`} aria-label="FerrisKey modules">
+  {racks.map((r) => (
+    <span class="rack" style={`left:${r.x}%; width:${r.w}%; height:calc(var(--u)*${r.h.toFixed(2)})`} aria-hidden="true"></span>
+  ))}
+
+  <div class="floor" aria-hidden="true"></div>
+
+  <!-- Grue d'alimentation, à gauche -->
+  <div class="crane" aria-hidden="true">
+    <span class="feed"><span class="treads"></span></span>
+    <span class="src"></span>
+    <span class="mast"></span>
+    <span class="counter"></span>
+    <span class="jib"></span>
+    <span class="trolley">
+      <span class="cable">
+        <span class="hook"></span>
+        <span class="carried"></span>
+      </span>
+    </span>
+  </div>
+
+  <!-- Tapis -->
+  {legs.map((f) => <span class="leg" style={`left:${at(f)}`} aria-hidden="true"></span>)}
+  <div class="belt" aria-hidden="true"><span class="treads"></span></div>
+  <span class="stopper" aria-hidden="true"></span>
+
+  <!-- Colis -->
+  <div class="lane">
+    {boxes.map((b) => (
+      <div class="box" style={`animation-delay:${b.delay}s`}>
+        <span class="face" style={`background:${b.tint}`}><span class="tape"></span></span>
+        <span class="patch" style={`animation-delay:${b.delay}s`}>
+          <span class="sticker" style={`animation-name:wh-sa; animation-delay:${b.delay}s`}>
+            <PixelSprite sprite={gates[0].sprites[b.i]} className="block h-full w-full" />
+          </span>
+          <span class="sticker" style={`animation-name:wh-sb; animation-delay:${b.delay}s`}>
+            <PixelSprite sprite={gates[1].sprites[b.i]} className="block h-full w-full" />
+          </span>
+        </span>
+      </div>
+    ))}
+  </div>
+
+  <!-- Scanners : un module par colis -->
+  {gates.map((g, gi) => (
+    <div class="gate" style={`left:${at(g.f)}`} aria-hidden="true">
+      <span class="g-post g-l"></span>
+      <span class="g-post g-r"></span>
+      <span class="g-lintel"><span class="g-light" style={`animation-name:wh-gl-${gi}`}></span></span>
+      {boxes.map((b) => (
+        <span class="g-sprite" style={`animation-name:wh-gs-${gi}-${b.i}`}>
+          <PixelSprite sprite={g.sprites[b.i]} className="block w-full" />
+        </span>
+      ))}
+    </div>
+  ))}
+
+  <!-- Bras articulé, en bout de tapis -->
+  <div class="pillar" aria-hidden="true"><span class="base"></span></div>
+  <div class="arm" aria-hidden="true">
+    <span class="a1">
+      <span class="joint"></span>
+      <span class="a2">
+        <span class="joint"></span>
+        <span class="grip">
+          <span class="cw">
+            <span class="claw"></span>
+            <span class="held"></span>
+          </span>
+        </span>
+      </span>
+    </span>
+  </div>
+
+  <!-- Camions : de gauche à droite, jamais de demi-tour -->
+  {['t1', 't2'].map((cls) => (
+    <div class={`truck ${cls}`} aria-hidden="true">
+      <PixelSprite sprite={truck} className="block w-full" />
+      {dropAt.map((_, k) => (
+        <span
+          class="tb"
+          style={`left:calc(var(--u)*${slotLeft[k]}); bottom:calc(var(--u)*${slotBottom[k]}); background:${truckTints[k]}; animation-name:wh-tb-${k}`}
+        ></span>
+      ))}
+    </div>
+  ))}
+</div>
+
+<style>
+  .wh {
+    --u: clamp(24px, min(4.4vw, 6.2vh), 56px);
+    --belt-y: calc(var(--u) * 2);
+    --ink: color-mix(in srgb, var(--color-foreground) 88%, transparent);
+    --start: 14%;
+    --pick: 7.6%;
+    --arm: 72%;
+    --endx: calc(var(--arm) - var(--u) * 3);
+    --stop: calc(var(--arm) + var(--u) * 0.35);
+    height: calc(var(--u) * 5.2);
+  }
+  :global(.dark) .wh {
+    --ink: #3b3431;
+  }
+
+  .rack {
+    position: absolute;
+    bottom: 0;
+    background:
+      repeating-linear-gradient(to top, transparent 0 calc(var(--u) * 0.5), color-mix(in srgb, var(--color-foreground) 18%, transparent) calc(var(--u) * 0.5) calc(var(--u) * 0.58)),
+      color-mix(in srgb, var(--color-foreground) 8%, transparent);
+    border-inline: 2px solid color-mix(in srgb, var(--color-foreground) 20%, transparent);
+  }
+  .floor {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: calc(var(--u) * 0.14);
+    background: var(--ink);
+  }
+
+  /* Tapis */
+  .leg {
+    position: absolute;
+    bottom: calc(var(--u) * 0.14);
+    width: calc(var(--u) * 0.14);
+    height: calc(var(--belt-y) - var(--u) * 0.42);
+    background: color-mix(in srgb, var(--color-foreground) 78%, transparent);
+  }
+  .belt {
+    position: absolute;
+    left: 9%;
+    width: calc(var(--endx) + var(--u) * 0.9 - 9%);
+    bottom: calc(var(--belt-y) - var(--u) * 0.28);
+    height: calc(var(--u) * 0.28);
+    background: var(--ink);
+    border-top: 2px solid var(--color-primary);
+    overflow: hidden;
+  }
+  .stopper {
+    position: absolute;
+    left: calc(var(--endx) + var(--u) * 0.5);
+    bottom: var(--belt-y);
+    width: calc(var(--u) * 0.16);
+    height: calc(var(--u) * 0.5);
+    background: var(--color-primary);
+  }
+  .treads {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 calc(var(--u) * 0.26), color-mix(in srgb, #000 40%, transparent) calc(var(--u) * 0.26) calc(var(--u) * 0.34));
+    animation: wh-treads 0.55s linear infinite;
+  }
+  @keyframes wh-treads {
+    to { background-position-x: calc(var(--u) * 0.34); }
+  }
+
+  /* Colis */
+  .lane {
+    position: absolute;
+    inset: auto 0 var(--belt-y) 0;
+    height: calc(var(--u) * 1.1);
+  }
+  .box {
+    position: absolute;
+    bottom: 0;
+    left: var(--start);
+    width: calc(var(--u) * 0.8);
+    height: calc(var(--u) * 0.8);
+    translate: -50% 0;
+    opacity: 0;
+    animation: wh-box var(--cycle) linear infinite;
+  }
+  .face {
+    position: absolute;
+    inset: 0;
+    box-shadow:
+      inset 0 calc(var(--u) * 0.1) 0 rgba(255, 255, 255, 0.28),
+      inset calc(var(--u) * -0.1) calc(var(--u) * -0.1) 0 rgba(0, 0, 0, 0.22);
+  }
+  .tape {
+    position: absolute;
+    left: 42%;
+    width: 16%;
+    top: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.28);
+  }
+  .patch {
+    position: absolute;
+    inset: 20%;
+    background: var(--color-background);
+    border: 2px solid var(--color-foreground);
+    opacity: 0;
+    animation: wh-patch var(--cycle) steps(1, end) infinite;
+  }
+  .sticker {
+    position: absolute;
+    inset: 10%;
+    opacity: 0;
+    animation-duration: var(--cycle);
+    animation-timing-function: steps(1, end);
+    animation-iteration-count: infinite;
+  }
+
+  /* Scanners */
+  .gate {
+    position: absolute;
+    bottom: var(--belt-y);
+    width: calc(var(--u) * 1.7);
+    height: calc(var(--u) * 2.65);
+    translate: -50% 0;
+    z-index: 2;
+  }
+  .g-post {
+    position: absolute;
+    bottom: 0;
+    width: calc(var(--u) * 0.2);
+    height: calc(var(--u) * 1.7);
+    background: var(--ink);
+  }
+  .g-l { left: 0; }
+  .g-r { right: 0; }
+  .g-lintel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--u) * 1.7);
+    height: calc(var(--u) * 0.3);
+    background: var(--ink);
+    border-top: calc(var(--u) * 0.08) solid var(--color-primary);
+  }
+  .g-light {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--u) * -0.08);
+    width: calc(var(--u) * 0.5);
+    height: calc(var(--u) * 0.06);
+    translate: -50% 0;
+    background: var(--color-primary);
+    opacity: 0.25;
+    animation-duration: var(--cycle);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  .g-sprite {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--u) * 2);
+    width: calc(var(--u) * 0.6);
+    translate: -50% 0;
+    opacity: 0;
+    animation-duration: var(--cycle);
+    animation-timing-function: steps(1, end);
+    animation-iteration-count: infinite;
+  }
+
+  /* Grue d'alimentation */
+  .crane {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .mast,
+  .jib,
+  .counter {
+    position: absolute;
+    background-color: color-mix(in srgb, var(--color-foreground) 88%, transparent);
+  }
+  .mast {
+    left: 2.4%;
+    bottom: calc(var(--u) * 0.14);
+    width: calc(var(--u) * 0.42);
+    height: calc(var(--u) * 6.3);
+    background-image: repeating-linear-gradient(45deg, transparent 0 calc(var(--u) * 0.18), var(--color-background) calc(var(--u) * 0.18) calc(var(--u) * 0.26));
+    background-color: color-mix(in srgb, var(--color-foreground) 85%, transparent);
+  }
+  .jib {
+    left: 0.6%;
+    width: 15.6%;
+    bottom: calc(var(--u) * 6.3);
+    height: calc(var(--u) * 0.3);
+    background-image: repeating-linear-gradient(45deg, transparent 0 calc(var(--u) * 0.16), var(--color-background) calc(var(--u) * 0.16) calc(var(--u) * 0.22));
+    background-color: color-mix(in srgb, var(--color-foreground) 85%, transparent);
+    border-top: calc(var(--u) * 0.08) solid var(--color-primary);
+  }
+  .counter {
+    left: 0.6%;
+    bottom: calc(var(--u) * 6);
+    width: calc(var(--u) * 0.7);
+    height: calc(var(--u) * 0.5);
+    background: var(--color-primary);
+  }
+  .trolley {
+    position: absolute;
+    left: var(--start);
+    bottom: calc(var(--u) * 6);
+    width: calc(var(--u) * 0.4);
+    height: calc(var(--u) * 0.3);
+    translate: -50% 0;
+    background: var(--ink);
+    animation: wh-trolley var(--cycle) ease-in-out infinite;
+  }
+  .cable {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--ink);
+    height: calc(var(--u) * 3.2);
+    animation: wh-cable var(--cycle) ease-in-out infinite;
+  }
+  .hook {
+    position: absolute;
+    left: -3px;
+    bottom: -6px;
+    width: 8px;
+    height: 8px;
+    background: var(--ink);
+  }
+  .carried,
+  .src,
+  .held,
+  .tb {
+    position: absolute;
+    width: calc(var(--u) * 0.8);
+    height: calc(var(--u) * 0.8);
+    background: #f2670f;
+    box-shadow:
+      inset 0 calc(var(--u) * 0.1) 0 rgba(255, 255, 255, 0.28),
+      inset calc(var(--u) * -0.1) calc(var(--u) * -0.1) 0 rgba(0, 0, 0, 0.22);
+  }
+  .carried {
+    left: calc(var(--u) * -0.4);
+    top: 100%;
+    opacity: 0;
+    animation: wh-carried var(--cycle) steps(1, end) infinite;
+  }
+  /* Petit tapis d'alimentation : un colis arrive du bord de l'écran, sous la grue. */
+  .feed {
+    position: absolute;
+    left: 0;
+    width: calc(var(--pick) + 3.2%);
+    bottom: calc(var(--u) * 0.14);
+    height: calc(var(--u) * 0.2);
+    background: var(--ink);
+    border-top: calc(var(--u) * 0.06) solid var(--color-primary);
+    overflow: hidden;
+  }
+  .src {
+    left: var(--pick);
+    bottom: calc(var(--u) * 0.34);
+    translate: -50% 0;
+    animation: wh-src var(--cycle) ease-out infinite;
+  }
+
+  /* Bras : épaule en bout de tapis, deux segments de 2u */
+  .pillar {
+    position: absolute;
+    left: calc(var(--arm) - var(--u) * 0.3);
+    bottom: calc(var(--u) * 0.14);
+    width: calc(var(--u) * 0.6);
+    height: calc(var(--u) * 3.5);
+    background:
+      repeating-linear-gradient(to top, transparent 0 calc(var(--u) * 0.5), rgba(0, 0, 0, 0.28) calc(var(--u) * 0.5) calc(var(--u) * 0.56)),
+      var(--ink);
+    z-index: 3;
+  }
+  .base {
+    position: absolute;
+    left: calc(var(--u) * -0.4);
+    right: calc(var(--u) * -0.4);
+    bottom: 0;
+    height: calc(var(--u) * 0.3);
+    background: var(--ink);
+    border-top: calc(var(--u) * 0.06) solid var(--color-primary);
+  }
+  /* Tourelle : le carter de l'épaule, sous le premier segment */
+  .pillar::after {
+    content: '';
+    position: absolute;
+    left: calc(var(--u) * -0.22);
+    right: calc(var(--u) * -0.22);
+    top: calc(var(--u) * -0.1);
+    height: calc(var(--u) * 0.66);
+    background:
+      linear-gradient(var(--color-primary) 0 calc(var(--u) * 0.1), transparent calc(var(--u) * 0.1)),
+      var(--ink);
+  }
+  .arm {
+    position: absolute;
+    left: var(--arm);
+    bottom: calc(var(--u) * 3.9);
+    width: 0;
+    height: 0;
+    z-index: 4;
+  }
+  .a1,
+  .a2 {
+    position: absolute;
+    top: calc(var(--u) * -0.15);
+    width: calc(var(--u) * 2);
+    height: calc(var(--u) * 0.3);
+    transform-origin: 0 50%;
+    animation-duration: var(--cycle);
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+  .a1 {
+    left: 0;
+    animation-name: wh-a1;
+  }
+  .a2 {
+    left: 100%;
+    animation-name: wh-a2;
+  }
+  /* Un segment effilé : large à l'épaule, plus fin au poignet. */
+  .a1::before,
+  .a2::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    clip-path: polygon(0 0, 100% 22%, 100% 78%, 0 100%);
+    background:
+      linear-gradient(var(--color-primary) 0 calc(var(--u) * 0.06), transparent calc(var(--u) * 0.06)),
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--u) * 0.46), rgba(0, 0, 0, 0.3) calc(var(--u) * 0.46) calc(var(--u) * 0.5)),
+      var(--ink);
+  }
+  /* Vérin : une tige claire parallèle au segment, sans clip. */
+  .a1::after,
+  .a2::after {
+    content: '';
+    position: absolute;
+    left: 18%;
+    right: 22%;
+    top: 70%;
+    height: calc(var(--u) * 0.05);
+    background: color-mix(in srgb, var(--color-background) 55%, transparent);
+  }
+  /* Articulation : un disque orange au centre d'un moyeu sombre */
+  .joint {
+    position: absolute;
+    left: calc(var(--u) * -0.24);
+    top: calc(var(--u) * -0.09);
+    width: calc(var(--u) * 0.48);
+    height: calc(var(--u) * 0.48);
+    clip-path: circle(50%);
+    background: radial-gradient(circle, var(--color-primary) 0 30%, var(--ink) 32%);
+    z-index: 2;
+  }
+  .grip {
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    width: 0;
+    height: 0;
+  }
+  .cw {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+    animation: wh-cw var(--cycle) ease-in-out infinite;
+  }
+  /* Pince : un poignet, une barre et deux doigts qui enserrent le colis */
+  .claw {
+    position: absolute;
+    left: calc(var(--u) * -0.46);
+    top: calc(var(--u) * -0.16);
+    width: calc(var(--u) * 0.92);
+    height: calc(var(--u) * 0.18);
+    background: var(--ink);
+    border-top: calc(var(--u) * 0.05) solid var(--color-primary);
+  }
+  .claw::before,
+  .claw::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    width: calc(var(--u) * 0.1);
+    height: calc(var(--u) * 0.36);
+    background: var(--ink);
+  }
+  .claw::before { left: 0; }
+  .claw::after { right: 0; }
+  .held {
+    left: calc(var(--u) * -0.4);
+    top: 0;
+    opacity: 0;
+    animation: wh-held var(--cycle) steps(1, end) infinite;
+  }
+
+  /* Camions */
+  .truck {
+    position: absolute;
+    bottom: calc(var(--u) * 0.14);
+    left: calc(var(--u) * -5);
+    width: calc(var(--u) * 3.6);
+    z-index: 5;
+    animation: wh-truck 30s infinite;
+  }
+  .tb {
+    opacity: 0;
+    animation-duration: 30s;
+    animation-timing-function: steps(1, end);
+    animation-iteration-count: infinite;
+  }
+  .t2,
+  .t2 .tb {
+    animation-delay: -15s;
+  }
+
+  /* Sous 1024 px la grue gênerait le titre : les colis apparaissent seuls. */
+  @media (max-width: 1023px) {
+    .crane {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .box,
+    .patch,
+    .sticker,
+    .treads,
+    .trolley,
+    .cable,
+    .carried,
+    .src,
+    .g-light,
+    .g-sprite,
+    .a1,
+    .a2,
+    .cw,
+    .held,
+    .truck,
+    .tb {
+      animation: none;
+    }
+    .patch { opacity: 1; }
+    .box:nth-child(1) { left: 30%; opacity: 1; }
+    .box:nth-child(2) { left: 45%; opacity: 1; }
+    .box:nth-child(n + 3) { display: none; }
+    .gate .g-sprite:first-of-type { opacity: 1; }
+    .t1 { left: var(--stop); }
+    .t2 { display: none; }
+    .t1 .tb:nth-child(-n + 4) { opacity: 1; }
+    .a1 { rotate: -35deg; }
+    .a2 { rotate: 60deg; }
+    .trolley { left: 10%; }
+    .cable { height: calc(var(--u) * 1.2); }
+  }
+</style>

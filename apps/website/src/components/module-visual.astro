@@ -1,0 +1,310 @@
+---
+/**
+ * Une petite scène animée par module, dans le même esprit que le reste du
+ * site : panneau à bordure, libellés en police pixel, bleu des modules et
+ * orange de la marque pour ce qui circule. Texte en HTML quand c'est de la
+ * lecture (journal, jeton), en SVG quand ça circule (fédération, webhooks,
+ * étapes). Boucle sans fin, une seule à la fois par page.
+ */
+interface Props {
+  slug: string
+  name: string
+}
+const { slug, name } = Astro.props
+
+const logRows = [
+  { ev: 'user.role.assigned', who: 'admin → alice', at: '12:41:03', hash: 'a3f9' },
+  { ev: 'client.updated', who: 'admin · api-gateway', at: '12:41:07', hash: '7c21' },
+  { ev: 'role.assigned', who: 'admin · viewer → alice', at: '12:41:09', hash: 'e08d' },
+  { ev: 'mfa.challenge', who: 'user/bob · TOTP', at: '12:41:12', hash: '51b4' },
+]
+const claims = [
+  ['sub', '"4f1c-…-9a2"'],
+  ['email', '"alice@corp.io"'],
+  ['roles', '["viewer", "billing"]'],
+  ['plan', '"enterprise"'],
+  ['exp', '1767225600'],
+]
+---
+
+<div class="mv relative overflow-hidden border border-border bg-card">
+  <div class="flex items-center justify-between border-b border-border px-4 py-2.5">
+    <span class="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary">{name}</span>
+    <span class="flex items-center gap-1.5 font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+      <span class="mv-live size-1.5 bg-primary"></span>live
+    </span>
+  </div>
+
+  <div class="bg-pixel-grid-soft px-4 py-6 sm:px-6 sm:py-8">
+    {slug === 'trident' && (
+      <div class="mx-auto flex max-w-sm flex-col items-center gap-5">
+        <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground">TOTP · RFC 6238</p>
+        <div class="flex gap-2" aria-hidden="true">
+          {['4', '8', '1', '7', '3', '6'].map((d, i) => (
+            <span class="mv-row grid h-14 w-10 place-items-center border border-border bg-background font-mono text-2xl font-semibold text-foreground sm:w-12" style={`--i:${i}`}>{d}</span>
+          ))}
+        </div>
+        <div class="h-1.5 w-full max-w-xs bg-foreground/10"><span class="mv-bar block h-full bg-primary"></span></div>
+        <span class="mv-badge border border-[#3b6cf0]/50 bg-[#3b6cf0]/10 px-3 py-1.5 font-pixel text-[10px] uppercase tracking-[0.08em] text-[#3b6cf0] dark:text-[#8fb0ff]">✓ Verified</span>
+        <p class="text-center text-xs text-muted-foreground">Passkeys · Magic links · Recovery codes</p>
+      </div>
+    )}
+
+    {slug === 'seawatch' && (
+      <ul class="mx-auto flex max-w-md flex-col font-mono text-[11px]" aria-hidden="true">
+        {logRows.map((r, i) => (
+          <li class="mv-row border border-border border-t-0 bg-background px-3 py-2.5 first:border-t" style={`--i:${i * 1.4}`}>
+            <div class="flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2 font-semibold text-foreground"><span class="size-1.5 bg-primary"></span>{r.ev}</span>
+              <span class="text-muted-foreground">{r.at}</span>
+            </div>
+            <div class="mt-1 flex items-center justify-between gap-3 text-muted-foreground">
+              <span>{r.who}</span>
+              <span class="text-[#3b6cf0] dark:text-[#8fb0ff]">#{r.hash}</span>
+            </div>
+          </li>
+        ))}
+        <li class="px-1 pt-3 text-muted-foreground"><span class="text-primary">$</span> tail -f audit.log<span class="mv-caret ml-1 inline-block h-3 w-1.5 translate-y-0.5 bg-primary"></span></li>
+      </ul>
+    )}
+
+    {slug === 'aegis' && (
+      <div class="mx-auto max-w-sm font-mono text-[11px]" aria-hidden="true">
+        <div class="border border-border bg-background px-3 py-2 text-muted-foreground">{'{ "alg": "RS256", "typ": "JWT" }'}</div>
+        <div class="mt-3 border border-primary/50 bg-background px-3 py-3">
+          <p class="font-pixel text-[9px] uppercase tracking-[0.08em] text-primary">Payload</p>
+          <ul class="mt-2 space-y-1.5">
+            {claims.map(([k, v], i) => (
+              <li class="mv-row flex gap-2" style={`--i:${i * 1.1}`}>
+                <span class="text-[#3b6cf0] dark:text-[#8fb0ff]">"{k}":</span>
+                <span class="text-foreground">{v}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-1.5">
+          {['openid', 'email', 'profile', 'roles'].map((s) => (
+            <span class="border border-border bg-background px-2 py-1 font-pixel text-[9px] uppercase tracking-[0.06em] text-muted-foreground">{s}</span>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {slug === 'compass' && (
+      <svg viewBox="0 0 360 190" class="mx-auto block w-full max-w-md" role="img" aria-label="Authentication flow steps with timings">
+        {[['Authorize', '2ms'], ['Credentials', '18ms'], ['MFA', '4ms'], ['Token', '1ms']].map(([label, ms], i) => (
+          <g style={`--i:${i}`}>
+            <rect class="mv-node mv-step-node" x={8 + i * 90} y="40" width="76" height="70" />
+            <text class="mv-px mv-step-dim" x={46 + i * 90} y="62" text-anchor="middle">STEP {i + 1}</text>
+            <text class="mv-label mv-step-label" x={46 + i * 90} y="82" text-anchor="middle">{label}</text>
+            <text class="mv-mono mv-step-dim" x={46 + i * 90} y="100" text-anchor="middle">{ms}</text>
+            {i < 3 && <path class="mv-link" d={`M${84 + i * 90} 75 H${98 + i * 90}`} />}
+          </g>
+        ))}
+        <rect class="mv-track" x="8" y="140" width="344" height="6" />
+        <rect class="mv-fill" x="8" y="140" height="6">
+          <animate attributeName="width" values="0;76;166;256;344;344;0" keyTimes="0;0.2;0.4;0.6;0.8;0.95;1" dur="6s" repeatCount="indefinite" />
+        </rect>
+        <text class="mv-mono mv-dim" x="180" y="172" text-anchor="middle">25ms total · success</text>
+      </svg>
+    )}
+
+    {slug === 'abyss' && (
+      <svg viewBox="0 0 360 250" class="mx-auto block w-full max-w-md" role="img" aria-label="Identity providers connected to FerrisKey">
+        <path class="mv-link" d="M90 125 H135" />
+        <path class="mv-link" d="M225 110 H250 V55 H270" />
+        <path class="mv-link" d="M225 140 H250 V195 H270" />
+        <rect class="mv-node mv-node-hub" x="135" y="90" width="90" height="70" />
+        <text class="mv-label" x="180" y="122" text-anchor="middle">Ferris</text>
+        <text class="mv-label" x="180" y="140" text-anchor="middle">Key</text>
+        <rect class="mv-node" x="10" y="95" width="80" height="60" />
+        <text class="mv-label" x="50" y="122" text-anchor="middle">Google</text>
+        <text class="mv-px mv-dim" x="50" y="140" text-anchor="middle">OIDC</text>
+        <rect class="mv-node" x="270" y="30" width="80" height="50" />
+        <text class="mv-label" x="310" y="52" text-anchor="middle">GitHub</text>
+        <text class="mv-px mv-dim" x="310" y="68" text-anchor="middle">OAuth2</text>
+        <rect class="mv-node" x="270" y="170" width="80" height="50" />
+        <text class="mv-label" x="310" y="192" text-anchor="middle">Discord</text>
+        <text class="mv-px mv-dim" x="310" y="208" text-anchor="middle">OAuth2</text>
+        {[
+          ['M90 125 H135', '0s'],
+          ['M270 55 H250 V110 H225', '1s'],
+          ['M270 195 H250 V140 H225', '2s'],
+        ].map(([path, begin]) => (
+          <rect class="mv-packet" x="-4" y="-4" width="8" height="8" opacity="0">
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.05;0.9;1" dur="2.4s" begin={begin} repeatCount="indefinite" />
+            <animateMotion dur="2.4s" begin={begin} repeatCount="indefinite" path={path} />
+          </rect>
+        ))}
+      </svg>
+    )}
+
+    {slug === 'webhooks' && (
+      <svg viewBox="0 0 360 250" class="mx-auto block w-full max-w-md" role="img" aria-label="An event fanning out to three endpoints">
+        <path class="mv-link" d="M110 125 H180 V45 H250" />
+        <path class="mv-link" d="M110 125 H250" />
+        <path class="mv-link" d="M110 125 H180 V205 H250" />
+        <rect class="mv-node mv-node-hub" x="10" y="90" width="100" height="70" />
+        <text class="mv-px mv-dim" x="60" y="112" text-anchor="middle">EVENT</text>
+        <text class="mv-label" x="60" y="132" text-anchor="middle">user.created</text>
+        {[['crm.acme.io', 20], ['slack.hook', 100], ['pagerduty', 180]].map(([host, y]) => (
+          <g>
+            <rect class="mv-node" x="250" y={y} width="100" height="50" />
+            <text class="mv-px mv-dim" x="300" y={Number(y) + 20} text-anchor="middle">POST</text>
+            <text class="mv-mono mv-fg" x="300" y={Number(y) + 37} text-anchor="middle">{host}</text>
+          </g>
+        ))}
+        {[
+          ['M110 125 H180 V45 H250', '0s'],
+          ['M110 125 H250', '0.4s'],
+          ['M110 125 H180 V205 H250', '0.8s'],
+        ].map(([path, begin]) => (
+          <rect class="mv-packet" x="-4" y="-4" width="8" height="8" opacity="0">
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.05;0.9;1" dur="2.2s" begin={begin} repeatCount="indefinite" />
+            <animateMotion dur="2.2s" begin={begin} repeatCount="indefinite" path={path} />
+          </rect>
+        ))}
+      </svg>
+    )}
+  </div>
+</div>
+
+<style>
+  .bg-pixel-grid-soft {
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--color-foreground) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-foreground) 6%, transparent) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Lignes qui apparaissent l'une après l'autre, puis la boucle repart. */
+  .mv-row {
+    opacity: 0;
+    animation: mv-in 9s ease-out infinite;
+    animation-delay: calc(var(--i, 0) * 0.5s);
+  }
+  @keyframes mv-in {
+    0% { opacity: 0; translate: 0 6px; }
+    8%, 86% { opacity: 1; translate: 0 0; }
+    94%, 100% { opacity: 0; translate: 0 0; }
+  }
+  .mv-bar {
+    animation: mv-bar 9s linear infinite;
+  }
+  @keyframes mv-bar {
+    0% { width: 100%; }
+    80%, 100% { width: 0; }
+  }
+  .mv-badge {
+    animation: mv-badge 9s steps(1, end) infinite;
+  }
+  @keyframes mv-badge {
+    0%, 38% { opacity: 0; }
+    39%, 90% { opacity: 1; }
+    91%, 100% { opacity: 0; }
+  }
+  .mv-live {
+    animation: mv-blink 1.6s steps(1, end) infinite;
+  }
+  .mv-caret {
+    animation: mv-blink 1s steps(1, end) infinite;
+  }
+  @keyframes mv-blink {
+    50% { opacity: 0; }
+  }
+
+  /* SVG : mêmes jetons que le reste du site */
+  .mv-node {
+    fill: var(--color-background);
+    stroke: var(--color-border);
+    stroke-width: 1.5;
+  }
+  .mv-node-hub {
+    stroke: #3b6cf0;
+    stroke-width: 2;
+  }
+  .mv-link {
+    fill: none;
+    stroke: var(--color-foreground);
+    stroke-opacity: 0.3;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+  }
+  .mv-track {
+    fill: color-mix(in srgb, var(--color-foreground) 10%, transparent);
+  }
+  .mv-fill {
+    fill: #3b6cf0;
+  }
+  .mv-packet {
+    fill: var(--color-primary);
+  }
+  .mv-label {
+    fill: var(--color-foreground);
+    font-family: var(--font-sans, inherit);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .mv-px {
+    fill: var(--color-muted-foreground);
+    font-family: var(--font-pixel);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .mv-mono {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    font-size: 10px;
+  }
+  .mv-dim {
+    fill: var(--color-muted-foreground);
+  }
+
+  /* Compass : chaque étape prend la couleur du module quand c'est son tour, 1,2 s chacune sur 6 s. */
+  .mv-step-node,
+  .mv-step-label,
+  .mv-step-dim {
+    animation-duration: 6s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    animation-delay: calc(var(--i, 0) * 1.2s);
+  }
+  .mv-step-node { animation-name: mv-step-node; }
+  .mv-step-label { animation-name: mv-step-label; }
+  .mv-step-dim { fill: var(--color-muted-foreground); animation-name: mv-step-dim; }
+  @keyframes mv-step-node {
+    0% { fill: var(--color-background); stroke: var(--color-border); }
+    2%, 20% { fill: #3b6cf0; stroke: #3b6cf0; }
+    24%, 100% { fill: var(--color-background); stroke: var(--color-border); }
+  }
+  @keyframes mv-step-label {
+    0% { fill: var(--color-foreground); }
+    2%, 20% { fill: #ffffff; }
+    24%, 100% { fill: var(--color-foreground); }
+  }
+  @keyframes mv-step-dim {
+    0% { fill: var(--color-muted-foreground); }
+    2%, 20% { fill: rgba(255, 255, 255, 0.75); }
+    24%, 100% { fill: var(--color-muted-foreground); }
+  }
+  .mv-fg {
+    fill: var(--color-foreground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mv-row,
+    .mv-bar,
+    .mv-badge,
+    .mv-live,
+    .mv-caret,
+    .mv-step-node,
+    .mv-step-label,
+    .mv-step-dim {
+      animation: none;
+      opacity: 1;
+    }
+    .mv-bar {
+      width: 100%;
+    }
+  }
+</style>

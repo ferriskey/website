@@ -1,101 +1,64 @@
 ---
-import SectionHeader from './section-header.astro'
 import { getSponsors } from '@explainer/ui/lib/sponsors'
 
 const sponsors = getSponsors()
-const lead = sponsors.find(s => s.tier === 'lead')
-const partners = sponsors.filter(s => s.tier === 'partner')
-
-const DOT_BG = 'background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px); background-size: 20px 20px; color: var(--color-primary);'
+const lead = sponsors.find((s) => s.tier === 'lead')
+const partners = sponsors.filter((s) => s.tier === 'partner')
+const logo = 'max-h-8 max-w-[120px] object-contain opacity-80 transition-opacity group-hover:opacity-100'
 ---
 
-<div class="w-full py-16 sm:py-24 lg:py-32">
-  <div class="relative w-full max-w-7xl mx-auto px-5">
-
-    <!-- dot pattern with progressive fade on all edges via mask -->
-    <div
-      class="absolute inset-0 pointer-events-none opacity-[0.06]"
-      style={`${DOT_BG}; mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);`}
-      aria-hidden="true"
-    ></div>
-
-    <div class="relative flex flex-col items-center">
-      <SectionHeader align="center" descriptionClass="max-w-xl" class="pt-8">
-        <span slot="label" data-t="sponsors.label">Sponsoring</span>
-        <span slot="title" data-t="sponsors.title">Backed by companies who share our vision</span>
-        <span slot="description" data-t="sponsors.description">
-          Our financial partners fund full-time development, infrastructure, and the long-term roadmap. That's what keeps Ferriskey independent and moving fast.
-        </span>
-      </SectionHeader>
-
-      <a
-        href="mailto:contact@ferriskey.io"
-        data-anim="fade-up"
-        class="inline-flex items-center gap-2 -mt-6 mb-12 sm:mb-16 border rounded-lg px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-foreground hover:bg-muted transition-colors"
-      >
+<section class="border-b border-border" id="sponsors" aria-labelledby="sponsors-title">
+  <div class="mx-auto max-w-6xl overflow-hidden border-x border-border">
+    <div class="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-12 sm:px-8 sm:py-14">
+      <div>
+        <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="sponsors.label">Sponsoring</p>
+        <h2 id="sponsors-title" class="mt-3 max-w-xl text-balance text-2xl font-medium tracking-[-0.02em] sm:text-3xl" data-t="sponsors.title">
+          Backed by companies who share our vision
+        </h2>
+      </div>
+      <a href="mailto:contact@ferriskey.io" class="inline-flex items-center gap-2 border border-border bg-card px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-foreground/[0.04]">
         <span data-t="sponsors.cta">Become a partner</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M7 17L17 7M7 7h10v10"/>
-        </svg>
+        <span aria-hidden="true">→</span>
       </a>
     </div>
 
-    <div class="relative flex flex-col gap-4 max-w-3xl mx-auto w-full">
+    <p class="max-w-2xl border-b border-border px-5 py-9 text-sm leading-7 text-muted-foreground sm:px-8" data-t="sponsors.description">
+      Our financial partners fund development, infrastructure, and the long-term roadmap. That's what keeps Ferriskey independent and moving fast.
+    </p>
 
-      <!-- Lead sponsor: Cloud IAM -->
-      {lead && (
-        <a
-          href={lead.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-anim="fade-up"
-          style="transition-delay:80ms"
-          class="group relative flex flex-col sm:flex-row items-center gap-6 sm:gap-10 border-2 border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors px-8 py-10 sm:py-12 overflow-hidden"
-        >
-          <span
-            class="absolute top-4 right-4 sm:top-5 sm:right-5 text-[10px] font-semibold uppercase tracking-widest text-primary border border-primary/40 px-2 py-1"
-            data-t="sponsors.leadBadge"
-          >
-            Lead Sponsor
-          </span>
-          <div class="shrink-0 flex items-center justify-center">
-            <img src={lead.logoUrlLight} alt={lead.name} class="max-h-12 max-w-[220px] object-contain dark:hidden" />
-            <img src={lead.logoUrlDark} alt={lead.name} class="max-h-12 max-w-[220px] object-contain hidden dark:block" />
-          </div>
-          <p class="text-sm sm:text-base text-muted-foreground leading-relaxed text-center sm:text-left" data-t="sponsors.cloudiamTagline">
-            Strategic partner: Cloud IAM operates our managed Keycloak offering and is building toward Ferriskey as a Service.
-          </p>
-        </a>
-      )}
+    {lead && (
+      <a href={lead.href} target="_blank" rel="noopener noreferrer" class="group relative flex flex-col items-start gap-8 border-b border-border bg-surface-tint px-5 py-16 transition-colors hover:bg-foreground/[0.03] sm:flex-row sm:items-center sm:gap-12 sm:px-8">
+        <span class="absolute right-5 top-4 font-pixel text-[10px] uppercase tracking-[0.08em] text-primary sm:right-8" data-t="sponsors.leadBadge">Lead Sponsor</span>
+        <div class="shrink-0">
+          <img src={lead.logoUrlLight} alt={lead.name} class="max-h-12 max-w-[220px] object-contain dark:hidden" />
+          <img src={lead.logoUrlDark} alt={lead.name} class="hidden max-h-12 max-w-[220px] object-contain dark:block" />
+        </div>
+        <p class="max-w-xl text-sm leading-7 text-muted-foreground" data-t="sponsors.cloudiamTagline">
+          Cloud IAM is a major supporter of Ferriskey. Their financial backing and identity expertise help the project grow in the open.
+        </p>
+      </a>
+    )}
 
-      <!-- Secondary partners -->
-      <div data-anim="fade-up" style="transition-delay:160ms" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {partners.map(s => (
-          <a
-            href={s.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-center justify-center border bg-muted/10 hover:bg-muted/20 transition-colors px-4 sm:px-6 py-8 overflow-hidden group"
-          >
+    <ul class="-mr-px grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      {partners.map((s) => (
+        <li class="border-b border-r border-border">
+          <a href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} class="group flex h-36 items-center justify-center px-4 transition-colors hover:bg-foreground/[0.03]">
             {s.logoUrlLight === s.logoUrlDark ? (
-              <img src={s.logoUrlLight} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
+              <img src={s.logoUrlLight} alt={s.name} class={logo} loading="lazy" />
             ) : (
               <>
-                <img src={s.logoUrlLight} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity dark:hidden" />
-                <img src={s.logoUrlDark} alt={s.name} class="max-h-8 max-w-[120px] object-contain opacity-80 group-hover:opacity-100 transition-opacity hidden dark:block" />
+                <img src={s.logoUrlLight} alt={s.name} class={`${logo} dark:hidden`} loading="lazy" />
+                <img src={s.logoUrlDark} alt={s.name} class={`${logo} hidden dark:block`} loading="lazy" />
               </>
             )}
           </a>
-        ))}
-        <a
-          href="https://github.com/sponsors/ferriskey"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center justify-center border border-dashed border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors px-4 sm:px-6 py-8 overflow-hidden"
-        >
-          <span class="text-xs font-semibold uppercase tracking-widest text-muted-foreground/40" data-t="sponsors.placeholder">Your Logo</span>
+        </li>
+      ))}
+      <li class="border-b border-r border-border">
+        <a href="https://github.com/sponsors/ferriskey" target="_blank" rel="noopener noreferrer" class="flex h-36 items-center justify-center px-4 transition-colors hover:bg-foreground/[0.03]">
+          <span class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground" data-t="sponsors.placeholder">Your Logo</span>
         </a>
-      </div>
-    </div>
+      </li>
+    </ul>
   </div>
-</div>
+</section>

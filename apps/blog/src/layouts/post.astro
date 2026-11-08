@@ -32,58 +32,63 @@ const t = useTranslations(locale)
 ---
 
 <Base title={title} description={description} thumbnail={thumbnail} locale={locale} locales={locales} localeSwitchUrls={localeSwitchUrls}>
-  <div class="mb-8">
-    <a href="/" class="text-sm font-medium text-primary hover:underline transition-colors">
-      &larr; {t('post.back')}
-    </a>
-  </div>
-
-  <div class="flex gap-8 relative">
-    <!-- Left column: Share buttons (sticky) -->
-    <aside class="hidden lg:block w-12 shrink-0">
-      <ShareButtons url={url} title={title} locale={locale} client:load />
-    </aside>
-
-    <!-- Center column: Article -->
-    <article class="min-w-0 flex-1 max-w-3xl">
-      <header class="mb-8">
-        <h1 class="text-4xl md:text-5xl font-bold tracking-tight leading-tight mb-4">{title}</h1>
-        <p class="text-lg text-muted-foreground mb-4">{description}</p>
-        <p class="text-sm text-muted-foreground">
-          {t('post.published')} {formatDate(date, locale)}
-        </p>
-      </header>
-      {tags.length > 0 && (
-        <div class="flex flex-wrap gap-2 mb-10">
-          {tags.map((tag) => (
-            <a
-              href={`/?tags=${encodeURIComponent(tag)}`}
-              class="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary transition-colors"
-            >
-              {tag}
-            </a>
-          ))}
+  <article>
+    <header class="border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border px-5 py-16 sm:px-8 sm:py-24">
+        <a href="/" class="font-pixel text-[11px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-primary">
+          &larr; {t('post.back')}
+        </a>
+        <h1 class="mt-8 max-w-4xl text-balance text-[clamp(2.25rem,5vw,4rem)] font-medium leading-[1.04] tracking-[-0.04em]">{title}</h1>
+        <p class="mt-6 max-w-2xl text-pretty text-lg leading-8 text-muted-foreground">{description}</p>
+        <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            {t('post.published')} {formatDate(date, locale)} · {readingTime} {t('hero.minRead')}
+          </p>
+          {tags.length > 0 && (
+            <ul class="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <li>
+                  <a href={`/?tags=${encodeURIComponent(tag)}`} class="inline-block border border-border px-2.5 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+                    {tag}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
-      {cover && (
-        <img
-          src={cover}
-          alt={title}
-          class="w-full aspect-2/1 object-cover rounded-xl mb-10"
-        />
-      )}
-      <div class="prose prose-neutral dark:prose-invert max-w-none">
-        <slot />
       </div>
-      <!-- Share buttons mobile (bottom of article) -->
-      <div class="lg:hidden mt-10">
-        <ShareButtons url={url} title={title} locale={locale} horizontal client:load />
-      </div>
-    </article>
+    </header>
 
-    <!-- Right column: Table of Contents (sticky) -->
-    <aside class="hidden xl:block w-56 shrink-0">
-      <TableOfContents headings={headings} locale={locale} author={author} client:load />
-    </aside>
-  </div>
+    {cover && (
+      <div class="border-b border-border">
+        <div class="mx-auto max-w-6xl border-x border-border">
+          <img src={cover} alt={title} class="aspect-[2/1] w-full object-cover" />
+        </div>
+      </div>
+    )}
+
+    <div class="border-b border-border">
+      <div class="mx-auto flex max-w-6xl gap-8 border-x border-border px-5 py-14 sm:px-8 sm:py-20">
+        <!-- Left column: share buttons (sticky) -->
+        <aside class="hidden w-12 shrink-0 lg:block">
+          <ShareButtons url={url} title={title} locale={locale} client:load />
+        </aside>
+
+        <!-- Center column: article body -->
+        <div class="min-w-0 max-w-3xl flex-1">
+          <div class="prose prose-neutral dark:prose-invert max-w-none prose-headings:font-medium prose-headings:tracking-tight">
+            <slot />
+          </div>
+          <div class="mt-12 lg:hidden">
+            <ShareButtons url={url} title={title} locale={locale} horizontal client:load />
+          </div>
+        </div>
+
+        <!-- Right column: table of contents (sticky) -->
+        <aside class="hidden w-56 shrink-0 xl:block">
+          <TableOfContents headings={headings} locale={locale} author={author} client:load />
+        </aside>
+      </div>
+    </div>
+  </article>
 </Base>

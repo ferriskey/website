@@ -1,7 +1,8 @@
 ---
 import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
-import { BackgroundAnimation } from '../components/background-animation'
+import SiteFooter from '../components/site-footer.astro'
+import ReleaseSideScenes from '../components/release-side-scenes.astro'
 import { latestRelease, releaseNotes, releaseNoteTranslations } from '../lib/release-notes'
 import { ui } from '../i18n/ui'
 
@@ -11,6 +12,8 @@ const appUrlOverrides = {
   blog: import.meta.env.PUBLIC_BLOG_URL,
 }
 
+const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
+const blogHref = appUrlOverrides.blog ?? '/'
 const translations = ui.fr
 
 const firstRelease = releaseNotes[releaseNotes.length - 1]
@@ -31,8 +34,8 @@ const kindLabel = {
 } as const
 
 const kindBadge = {
-  patch: 'border-border/70 bg-muted/20 text-muted-foreground',
-  minor: 'border-primary/25 bg-primary/8 text-primary',
+  patch: 'border-border text-muted-foreground',
+  minor: 'border-primary/30 bg-primary/10 text-primary',
   major: 'border-primary/30 bg-primary/10 text-primary',
 } as const
 
@@ -51,206 +54,139 @@ function formatDate(date: string, locale = 'en-US') {
 >
   <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
 
-  <main class="relative overflow-hidden pb-24">
-    <section class="relative px-4 sm:px-6 lg:px-8 flex flex-col py-24 sm:py-32 lg:py-40 pb-0! overflow-hidden">
-      <div>
-        <div class="absolute inset-0 w-full -z-10">
-          <BackgroundAnimation client:load />
-        </div>
-
-        <div
-          class="absolute inset-0 -z-5 pointer-events-none"
-          style="clip-path: inset(0 -100vw 0 -100vw);"
-          aria-hidden="true"
-        >
-          <div
-            class="absolute inset-0 opacity-[0.07]"
-            style="background-image: linear-gradient(to right, var(--color-primary) 1px, transparent 1px), linear-gradient(to bottom, var(--color-primary) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(ellipse 75% 65% at 50% 25%, black 0%, transparent 75%);"
-          >
-          </div>
-        </div>
-
-        <div class="absolute bottom-0 inset-x-0 h-px bg-linear-to-r from-transparent via-border to-transparent"></div>
-
-        <div class="w-full max-w-7xl mx-auto pb-24 lg:pb-32">
-          <div class="grid gap-10 lg:grid-cols-[1.4fr_0.8fr] items-start">
-        <div data-anim="fade-right">
-          <p class="text-sm font-semibold text-primary uppercase tracking-[0.24em]" data-t="releaseNotes.label">
-            Release notes
-          </p>
-          <h1 class="mt-4 max-w-4xl text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground text-balance" data-t="releaseNotes.title">
+  <main>
+    <section class="relative overflow-hidden border-b border-border">
+      <ReleaseSideScenes />
+      <div class="mx-auto grid max-w-6xl border-x border-border lg:grid-cols-[1.5fr_1fr]">
+        <div class="border-b border-border px-5 py-20 sm:px-8 sm:py-32 lg:border-b-0 lg:border-r">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="releaseNotes.label">Release notes</p>
+          <h1 class="mt-6 max-w-3xl text-balance text-[clamp(2.25rem,5vw,4.25rem)] font-medium leading-[1.03] tracking-[-0.04em]" data-t="releaseNotes.title">
             How Ferriskey has been taking shape, release after release.
           </h1>
-          <p class="mt-6 max-w-3xl text-lg sm:text-xl leading-relaxed text-muted-foreground text-balance" data-t="releaseNotes.description">
+          <p class="mt-7 max-w-xl text-pretty text-lg leading-8 text-muted-foreground" data-t="releaseNotes.description">
             A curated timeline of stable Ferriskey releases, condensed from the public GitHub history into product-level notes.
           </p>
-          <p class="mt-4 max-w-2xl text-sm text-muted-foreground" data-t="releaseNotes.basedOn">
+          <p class="mt-4 max-w-xl text-sm text-muted-foreground" data-t="releaseNotes.basedOn">
             Based on the public release history of ferriskey/ferriskey on GitHub.
           </p>
-
-          <div class="mt-8 flex flex-wrap gap-3">
-            <a
-              href={latestRelease.githubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors"
-            >
+          <div class="mt-10 flex flex-wrap gap-3">
+            <a href={latestRelease.githubUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
               <span data-t="releaseNotes.github">GitHub release</span>
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
+              <span aria-hidden="true">→</span>
             </a>
-            <a
-              href="/"
-              class="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background/70 px-5 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
+            <a href="/" class="inline-flex items-center gap-2 border border-border bg-card px-5 py-3 text-sm font-semibold transition-colors hover:bg-foreground/[0.04]">
               <span data-t="releaseNotes.back">Back to homepage</span>
             </a>
           </div>
         </div>
 
-        <aside data-anim="fade-left" class="rounded-2xl border bg-background/75 backdrop-blur p-6 sm:p-7">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary" data-t="releaseNotes.latest">Latest stable</p>
-              <h2 class="mt-3 text-3xl font-semibold text-foreground">{latestRelease.version}</h2>
-              <p class="mt-2 text-sm text-muted-foreground" data-release-version={latestRelease.version} data-release-field="title">{latestRelease.title}</p>
+        <aside class="flex flex-col bg-surface-tint">
+          <div class="flex-1 border-b border-border px-5 py-10 sm:px-8 sm:py-12">
+            <div class="flex items-start justify-between gap-4">
+              <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="releaseNotes.latest">Latest stable</p>
+              <span class="whitespace-nowrap border border-border px-2 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                {formatDate(latestRelease.publishedAt)}
+              </span>
             </div>
-            <span class="whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary sm:text-[11px]">
-              {formatDate(latestRelease.publishedAt)}
-            </span>
+            <h2 class="mt-6 text-5xl font-medium tracking-[-0.03em]">{latestRelease.version}</h2>
+            <p class="mt-3 text-sm leading-6 text-muted-foreground" data-release-version={latestRelease.version} data-release-field="title">{latestRelease.title}</p>
           </div>
-
-          <div class="mt-6 grid grid-cols-2 gap-3">
-            <div class="rounded-2xl border bg-muted/20 p-4">
-              <p class="text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-t="releaseNotes.stableCount">Stable releases</p>
-              <p class="mt-2 text-3xl font-semibold text-foreground">{releaseNotes.length}</p>
+          <div class="grid grid-cols-2">
+            <div class="border-r border-border px-5 py-7 sm:px-8">
+              <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground" data-t="releaseNotes.stableCount">Stable releases</p>
+              <p class="mt-3 text-3xl font-medium tabular-nums">{releaseNotes.length}</p>
             </div>
-            <div class="rounded-2xl border bg-muted/20 p-4">
-              <p class="text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-t="releaseNotes.timelineStart">Timeline start</p>
-              <p class="mt-2 text-lg font-semibold text-foreground">{firstRelease.version}</p>
+            <div class="px-5 py-7 sm:px-8">
+              <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground" data-t="releaseNotes.timelineStart">Timeline start</p>
+              <p class="mt-3 text-xl font-medium">{firstRelease.version}</p>
               <p class="mt-1 text-xs text-muted-foreground">{formatDate(firstRelease.publishedAt)}</p>
             </div>
           </div>
-
-          <p class="mt-6 text-sm leading-relaxed text-muted-foreground" data-t="releaseNotes.overview">
-            From the first public baseline to federation, observability, and recovery flows.
-          </p>
-          </aside>
-          </div>
-        </div>
+        </aside>
       </div>
     </section>
 
-    <section class="max-w-7xl mx-auto px-5 mt-20 sm:mt-24">
-      <div class="mb-10" data-anim="fade-up">
-        <p class="text-sm font-semibold text-primary uppercase tracking-[0.24em]" data-t="releaseNotes.timeline">
-          Stable release timeline
-        </p>
-        <p class="mt-3 max-w-2xl text-sm text-muted-foreground" data-t="releaseNotes.timelineHelp">
-          Newest first. Milestone releases ship new capabilities; patch releases are quick fixes to an existing line.
-        </p>
-      </div>
+    <section class="border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-12 sm:px-8 sm:py-14">
+          <div>
+            <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="releaseNotes.timeline">Stable release timeline</p>
+            <p class="mt-4 max-w-xl text-sm leading-7 text-muted-foreground" data-t="releaseNotes.timelineHelp">
+              Newest first. Milestone releases ship new capabilities; patch releases are quick fixes to an existing line.
+            </p>
+          </div>
+        </div>
 
-      <div class="relative">
-        <div class="absolute left-[1.1rem] top-2 bottom-2 hidden w-px bg-border sm:block sm:left-[7.25rem]"></div>
-
-        <div class="space-y-5">
+        <ol>
           {releaseNotes.map((release, index) => {
             const isLatest = index === 0
             const isMajor = release.kind === 'major'
             return (
-              <div class="relative sm:grid sm:grid-cols-[6.5rem_1fr] sm:gap-6" data-anim="fade-up" style={`transition-delay:${Math.min(index, 6) * 60}ms`}>
-                <div class="hidden pt-5 text-right sm:block">
-                  <p class="text-sm font-semibold text-foreground">{release.version}</p>
-                  <p class="mt-0.5 text-xs text-muted-foreground">{formatDate(release.publishedAt)}</p>
-                </div>
+              <li class:list={['relative grid border-b border-border last:border-b-0 md:grid-cols-[13rem_1fr]', isMajor && 'bg-surface-tint']}>
+                {isMajor && <span class="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden="true"></span>}
 
-                <span
-                  class:list={[
-                    "absolute left-[0.65rem] top-7 hidden size-2.5 -translate-x-1/2 rounded-full border-2 sm:left-[7.25rem] sm:block",
-                    isMajor ? "border-primary bg-primary/30" : "border-border bg-background",
-                  ]}
-                ></span>
-
-                <article
-                  class:list={[
-                    "relative rounded-xl border p-5 sm:p-6",
-                    isMajor ? "border-primary/25 bg-primary/[0.03]" : "border-border/70 bg-background/60",
-                  ]}
-                >
-                  {isMajor && <div class="absolute inset-y-5 left-0 w-1 rounded-r-full bg-primary"></div>}
-
-                  <div class="flex flex-wrap items-center gap-2 mb-2 sm:hidden">
-                    <span class="text-sm font-semibold text-foreground">{release.version}</span>
-                    <span class="text-xs text-muted-foreground">{formatDate(release.publishedAt)}</span>
-                  </div>
-
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${kindBadge[release.kind]}`} data-t={kindKey[release.kind]}>
+                <div class="px-5 pt-10 sm:px-8 md:border-r md:border-border md:py-12">
+                  <p class="text-2xl font-medium tracking-[-0.02em]">{release.version}</p>
+                  <p class="mt-2 text-xs text-muted-foreground">{formatDate(release.publishedAt)}</p>
+                  <div class="mt-5 flex flex-wrap gap-2">
+                    <span class={`border px-2 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] ${kindBadge[release.kind]}`} data-t={kindKey[release.kind]}>
                       {kindLabel[release.kind]}
                     </span>
                     {isLatest && (
-                      <span class="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400" data-t="releaseNotes.latestBadge">
+                      <span class="border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] text-emerald-600 dark:text-emerald-400" data-t="releaseNotes.latestBadge">
                         Latest release
                       </span>
                     )}
                   </div>
+                </div>
 
+                <article class="px-5 pb-12 pt-6 sm:px-10 md:py-12">
                   <h2
-                    class:list={["mt-3 text-balance font-semibold", isMajor ? "text-xl sm:text-2xl text-primary" : "text-base text-foreground"]}
+                    class:list={['text-balance font-medium tracking-[-0.02em]', isMajor ? 'text-2xl text-primary sm:text-3xl' : 'text-xl']}
                     data-release-version={release.version}
                     data-release-field="title"
                   >
                     {release.title}
                   </h2>
-                  <p class="mt-2 text-sm leading-relaxed text-muted-foreground" data-release-version={release.version} data-release-field="summary">
+                  <p class="mt-4 max-w-2xl text-[15px] leading-7 text-muted-foreground" data-release-version={release.version} data-release-field="summary">
                     {release.summary}
                   </p>
 
-                  <ul class="mt-4 space-y-1.5">
+                  <ul class="mt-7 max-w-2xl space-y-3">
                     {release.highlights.map((highlight, hIndex) => (
-                      <li class="flex gap-2 text-sm leading-relaxed text-muted-foreground" data-release-version={release.version} data-release-highlight-index={hIndex}>
-                        <span class="mt-[7px] size-1 shrink-0 rounded-full bg-primary/60"></span>
+                      <li class="flex gap-4 text-sm leading-6 text-foreground/85" data-release-version={release.version} data-release-highlight-index={hIndex}>
+                        <span class="mt-2 size-1.5 shrink-0 bg-primary" aria-hidden="true"></span>
                         <span>{highlight}</span>
                       </li>
                     ))}
                   </ul>
 
                   {release.transition && (
-                    <p class="mt-4 border-t pt-3 text-xs leading-relaxed text-muted-foreground/80" data-release-version={release.version} data-release-field="transition">
+                    <p class="mt-7 max-w-2xl border-t border-border pt-5 text-xs leading-6 text-muted-foreground" data-release-version={release.version} data-release-field="transition">
                       {release.transition}
                     </p>
                   )}
 
-                  <div class="mt-4 flex flex-wrap gap-2">
-                    <a
-                      href={release.githubUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary hover:bg-primary/15 transition-colors"
-                    >
-                      <span data-t="releaseNotes.github">GitHub release</span>
+                  <div class="mt-8 flex flex-wrap gap-2">
+                    <a href={release.githubUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 border border-border bg-card px-3.5 py-2 font-pixel text-[10px] uppercase tracking-[0.08em] text-foreground transition-colors hover:border-primary hover:text-primary">
+                      <span data-t="releaseNotes.github">GitHub release</span> <span aria-hidden="true">→</span>
                     </a>
                     {release.compareUrl && (
-                      <a
-                        href={release.compareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      >
+                      <a href={release.compareUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 border border-border px-3.5 py-2 font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                         <span data-t="releaseNotes.compare">Compare changes</span>
                       </a>
                     )}
                   </div>
                 </article>
-              </div>
+              </li>
             )
           })}
-        </div>
+        </ol>
       </div>
     </section>
   </main>
+
+  <SiteFooter docsHref={docsHref} blogHref={blogHref} />
 </Base>
 
 <script is:inline define:vars={{ translations, releaseNoteTranslations }}>

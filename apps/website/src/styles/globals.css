@@ -1,3 +1,94 @@
 @import '@explainer/ui/styles/globals.css';
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource/silkscreen/400.css';
+@import '@fontsource/silkscreen/700.css';
 
 @source "../../../../packages/ui/src";
+
+/* Angles droits partout, comme sur FerrisLabs. Une règle globale attrape aussi
+   les arrondis venant des variantes cva du paquet UI. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+/* Système « pixel », repris de ferrislabs.fr. Portée limitée à l'app website :
+   les tokens partagés vivent dans packages/ui et alimentent docs et blog. */
+@theme {
+  --font-sans: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-pixel: 'Silkscreen', ui-monospace, monospace;
+
+  --color-rust-950: #120f0e;
+  --color-rust-900: #1c1917;
+  --color-rust-700: #7a2d06;
+  --color-rust-600: #a83e08;
+  --color-rust-500: #f2670f;
+  --color-rust-400: #ff8c42;
+  --color-rust-300: #ffb07c;
+
+  --color-primary: #f2670f;
+  --color-primary-foreground: #ffffff;
+  --color-foreground: #1c1917;
+  --color-surface-tint: #fbf5f1;
+}
+
+/* Noir chaud teinté rust plutôt qu'un gris neutre. */
+.dark {
+  color-scheme: dark;
+  --color-background: #0e0c0b;
+  --color-foreground: #f3eee9;
+  --color-card: #161312;
+  --color-card-foreground: #f3eee9;
+  --color-popover: #161312;
+  --color-popover-foreground: #f3eee9;
+  --color-primary: #f2670f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1d1917;
+  --color-secondary-foreground: #f3eee9;
+  --color-muted: #1d1917;
+  --color-muted-foreground: #a8a09a;
+  --color-accent: #1d1917;
+  --color-accent-foreground: #f3eee9;
+  --color-border: #2a2422;
+  --color-input: #2a2422;
+  --color-surface-tint: #13100f;
+}
+
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal {
+  opacity: 0;
+  animation: reveal-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+}
+
+/* Aplat de marque : le dégradé rust du logo, et la grille de pixels posée dessus. */
+.surface-brand {
+  background:
+    radial-gradient(120% 120% at 0% 0%, var(--color-rust-400) 0%, transparent 55%),
+    linear-gradient(135deg, var(--color-rust-600) 0%, var(--color-rust-900) 100%);
+}
+.bg-pixel-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 44px 44px;
+}

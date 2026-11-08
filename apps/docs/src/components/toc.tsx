@@ -80,7 +80,7 @@ export function TableOfContents({ headings, contributors = [] }: TocProps) {
 
   return (
     <nav className="w-56 shrink-0 hidden xl:block sticky top-(--header-height,4rem) py-6 pl-4">
-      <p className="text-sm font-medium mb-3">On this page</p>
+      <p className="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary mb-4">On this page</p>
       <ul>
         {numbered.map((heading, i) => {
           const isActive = activeIds.has(heading.slug)

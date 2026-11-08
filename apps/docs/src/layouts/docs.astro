@@ -82,7 +82,7 @@ const appUrlOverrides = {
     <meta name="twitter:title" content={title} />
     {description && <meta name="twitter:description" content={description} />}
     <meta name="twitter:image" content={thumbnailUrl} />
-    <title>{title} | Explainer</title>
+    <title>{title} | FerrisKey Docs</title>
 
     <ClientRouter />
     <script is:inline>
@@ -136,13 +136,13 @@ const appUrlOverrides = {
       transition:animate="none"
     />
     <div id="docs-nav-data" data-items={JSON.stringify(navItems)} hidden />
-    <div class="flex max-w-350 mx-auto">
-      <div class="hidden lg:block w-64 shrink-0 border-r h-[calc(100vh-var(--header-height))] overflow-y-auto sticky top-(--header-height) py-6 pl-3 pr-3" transition:persist transition:animate="none">
+    <div class="mx-auto flex max-w-[90rem] border-x border-border">
+      <div class="hidden lg:block w-64 shrink-0 border-r border-border h-[calc(100vh-var(--header-height))] overflow-y-auto sticky top-(--header-height) py-8 pl-0 pr-0" transition:persist transition:animate="none">
         <Sidebar items={navItems} currentPath={currentPath} client:load />
       </div>
-      <main class="flex-1 min-w-0 px-4 sm:px-8 py-6" transition:animate="none">
+      <main class="flex-1 min-w-0 px-4 sm:px-10 py-10" transition:animate="none">
         {breadcrumb.length > 1 && (
-          <nav class="flex items-center gap-1.5 text-sm text-primary mb-4">
+          <nav class="mb-6 flex items-center gap-1.5 font-pixel text-[10px] uppercase tracking-[0.08em] text-primary">
             {breadcrumb.slice(0, -1).map((item, i) => (
               <>
                 {i > 0 && <span class="text-muted-foreground">/</span>}
@@ -155,7 +155,7 @@ const appUrlOverrides = {
             ))}
           </nav>
         )}
-        <article class="prose prose-neutral dark:prose-invert max-w-none" data-pagefind-body>
+        <article class="prose prose-neutral dark:prose-invert max-w-none prose-headings:font-medium prose-headings:tracking-tight" data-pagefind-body>
           <slot />
         </article>
         <Pagination prev={prev} next={next} client:load />

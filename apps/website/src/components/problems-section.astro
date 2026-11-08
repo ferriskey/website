@@ -1,0 +1,106 @@
+---
+import ProblemVisual from './problem-visual.astro'
+
+// Six problèmes, un visuel chacun. À gauche le texte défile ; à droite le
+// panneau reste en place et change au fil du scroll. Sous 1024 px, chaque
+// problème affiche son visuel juste en dessous du texte.
+const problems = [
+  { id: 'p1', problem: 'Authentication code is copied into every app.', answer: 'One OpenID Connect and OAuth 2.0 server. Your apps just validate tokens.' },
+  { id: 'p2', problem: 'Every business customer wants their own login and identity provider.', answer: 'Organizations, per-realm themes and federation over OIDC, SAML and LDAP.' },
+  { id: 'p3', problem: 'Agents and services run on shared secrets.', answer: 'Service accounts, token exchange with a delegation chain, and Cedar policies for every call.' },
+  { id: 'p4', problem: 'Nobody can prove who did what.', answer: 'Every security event goes into a hash-chained log, and webhooks carry it out.' },
+  { id: 'p5', problem: 'The IAM is heavier to run than the product it protects.', answer: 'One Rust service, a Helm chart and a Kubernetes operator.' },
+  { id: 'p6', problem: 'Your identity layer belongs to someone else.', answer: 'Apache 2.0, self-hosted, standard protocols. Leave whenever you want.' },
+]
+---
+
+<section class="border-b border-border" id="problems" aria-labelledby="problems-title">
+  <div class="mx-auto max-w-6xl border-x border-border">
+    <div class="border-b border-border px-5 py-20 sm:px-8 sm:py-32">
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="problems.label">Problems we solve</p>
+      <h2 id="problems-title" class="mt-6 max-w-2xl text-balance text-[clamp(2rem,4.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.035em]" data-t="problems.title">
+        The IAM problems teams keep hitting.
+      </h2>
+      <p class="mt-7 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground" data-t="problems.description">
+        Each one has a plain answer in FerrisKey.
+      </p>
+    </div>
+
+    <div class="grid lg:grid-cols-2" data-problems>
+      <ol class="lg:border-r lg:border-border">
+        {problems.map((p, i) => (
+          <li
+            class="problem-step flex flex-col justify-center border-b border-border px-5 py-16 transition-opacity duration-300 last:border-b-0 sm:px-10 lg:min-h-[78svh] lg:border-b-0 lg:py-24"
+            data-step={p.id}
+          >
+            <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">0{i + 1}</p>
+            <h3 class="mt-5 max-w-md text-balance text-2xl font-medium leading-tight tracking-[-0.02em] sm:text-3xl" data-t={`problems.${p.id}.problem`}>{p.problem}</h3>
+            <div class="mt-7 flex max-w-md gap-4">
+              <span class="mt-2 size-2 shrink-0 bg-primary" aria-hidden="true"></span>
+              <p class="text-[15px] leading-7 text-muted-foreground" data-t={`problems.${p.id}.answer`}>{p.answer}</p>
+            </div>
+
+            <div class="pv-wrap pv-static mt-10 h-[22rem] lg:hidden">
+              <ProblemVisual id={p.id} />
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div class="relative hidden lg:block">
+        <div class="sticky top-12 flex h-[calc(100svh-3rem)] items-center p-10">
+          <div class="relative h-[min(34rem,70svh)] w-full">
+            {problems.map((p, i) => (
+              <div
+                class="pv-wrap absolute inset-0 opacity-0 transition-opacity duration-300"
+                data-panel={p.id}
+                data-active-panel={i === 0 ? 'true' : 'false'}
+                aria-hidden="true"
+              >
+                <ProblemVisual id={p.id} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  function initProblems() {
+    var root = document.querySelector('[data-problems]')
+    if (!root || root.dataset.ready) return
+    root.dataset.ready = '1'
+    var steps = root.querySelectorAll('[data-step]')
+    var panels = root.querySelectorAll('[data-panel]')
+    function setActive(id) {
+      steps.forEach(function (s) {
+        s.style.opacity = s.dataset.step === id ? '1' : '0.35'
+      })
+      panels.forEach(function (p) {
+        var on = p.dataset.panel === id
+        p.style.opacity = on ? '1' : '0'
+        p.dataset.activePanel = on ? 'true' : 'false'
+      })
+    }
+    var wide = window.matchMedia('(min-width: 1024px)')
+    function apply() {
+      if (!wide.matches) {
+        steps.forEach(function (s) { s.style.opacity = '1' })
+        return
+      }
+      setActive(steps[0].dataset.step)
+    }
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && wide.matches) setActive(e.target.dataset.step)
+      })
+    }, { rootMargin: '-45% 0px -45% 0px' })
+    steps.forEach(function (s) { observer.observe(s) })
+    wide.addEventListener('change', apply)
+    apply()
+  }
+  initProblems()
+  document.addEventListener('astro:page-load', initProblems)
+</script>

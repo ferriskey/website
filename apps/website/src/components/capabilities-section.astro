@@ -1,0 +1,70 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import {
+  abyssSprite,
+  aegisSprite,
+  compassSprite,
+  mcpSprite,
+  orgSprite,
+  policySprite,
+  seawatchSprite,
+  tridentSprite,
+  webhooksSprite,
+} from './pixel/sprites'
+
+// Neuf capacités, une cellule chacune. Pas de chiffres : seulement ce que le
+// serveur sait faire aujourd'hui.
+const features = [
+  { id: 'trident', tag: 'Trident', title: 'Passkeys & MFA', desc: 'WebAuthn passkeys, TOTP, magic links and recovery codes, enforced per realm or per role.', sprite: tridentSprite },
+  { id: 'compass', tag: 'Compass', title: 'Login flows you design', desc: 'Compose authentication steps and conditions instead of patching a fixed login page.', sprite: compassSprite },
+  { id: 'abyss', tag: 'Abyss', title: 'Federation', desc: 'Federate OIDC identity providers and LDAP directories, and serve SAML applications.', sprite: abyssSprite },
+  { id: 'orgs', tag: 'Organizations', title: 'Organizations', desc: 'Members, groups and roles for each business customer, inside one realm.', sprite: orgSprite },
+  { id: 'aegis', tag: 'Aegis', title: 'Scopes & protocol mappers', desc: 'Shape the claims in every token and the scopes each client may request.', sprite: aegisSprite },
+  { id: 'authz', tag: 'AuthZEN', title: 'Fine-grained authorization', desc: 'Write Cedar policies per realm and evaluate access requests over the AuthZEN API.', sprite: policySprite },
+  { id: 'mcp', tag: 'MCP', title: 'MCP authorization server', desc: 'Let a realm authorize MCP servers, with dynamic client registration and token exchange for agents.', sprite: mcpSprite },
+  { id: 'seawatch', tag: 'SeaWatch', title: 'Tamper-evident audit', desc: 'Every security event lands in a hash-chained log, ready to stream out.', sprite: seawatchSprite },
+  { id: 'webhooks', tag: 'Webhooks', title: 'Reliable webhooks', desc: 'Events leave through a delivery outbox, with custom headers per webhook.', sprite: webhooksSprite },
+]
+---
+
+<section class="border-b border-border" id="features" aria-labelledby="capabilities-title">
+  <div class="mx-auto max-w-6xl overflow-hidden border-x border-border">
+    <div class="border-b border-border px-5 py-20 sm:px-8 sm:py-32">
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="capabilities.label">Features</p>
+      <h2 id="capabilities-title" class="mt-6 max-w-2xl text-balance text-[clamp(2rem,4.5vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.035em]" data-t="capabilities.title">
+        Everything an IAM needs, nothing bolted on.
+      </h2>
+      <p class="mt-7 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground" data-t="capabilities.description">
+        Each capability is a module of the same open-source server, so you switch on what you need and leave the rest.
+      </p>
+    </div>
+
+    <ul class="-mr-px grid sm:grid-cols-2 lg:grid-cols-3">
+      {features.map((f) => (
+        <li class="feature group relative border-b border-r border-border px-6 py-12 transition-colors hover:bg-foreground/[0.03] sm:px-10 sm:py-16">
+          <div class="flex items-center justify-between">
+            <PixelSprite sprite={f.sprite} className="feature-sprite block size-10" />
+            <span class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{f.tag}</span>
+          </div>
+          <h3 class="mt-10 text-lg font-medium tracking-[-0.01em]" data-t={`capabilities.${f.id}.title`}>{f.title}</h3>
+          <p class="mt-3 text-sm leading-7 text-muted-foreground" data-t={`capabilities.${f.id}.desc`}>{f.desc}</p>
+          <span class="absolute inset-x-0 bottom-0 h-0.5 origin-left scale-x-0 bg-primary transition-transform duration-300 group-hover:scale-x-100" aria-hidden="true"></span>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .feature-sprite {
+    transition: transform 0.2s ease;
+  }
+  .feature:hover .feature-sprite {
+    transform: translateY(-3px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .feature:hover .feature-sprite {
+      transform: none;
+    }
+  }
+</style>

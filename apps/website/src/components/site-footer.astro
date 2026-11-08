@@ -1,0 +1,231 @@
+---
+import { PixelSprite } from './pixel/pixel-sprite'
+import { crab, crabAsleep } from './pixel/sprites'
+
+interface Props {
+  docsHref?: string
+  blogHref?: string
+}
+const { docsHref = '/', blogHref = '/' } = Astro.props
+
+const columns = [
+  {
+    key: 'footer.product',
+    title: 'Product',
+    links: [
+      { label: 'Documentation', href: docsHref },
+      { label: 'Release notes', href: '/release-notes' },
+      { label: 'Roadmap', href: 'https://github.com/orgs/ferriskey/projects/1' },
+    ],
+  },
+  {
+    key: 'footer.community',
+    title: 'Community',
+    links: [
+      { label: 'GitHub', href: 'https://github.com/ferriskey/ferriskey' },
+      { label: 'Discussions', href: 'https://github.com/ferriskey/ferriskey/discussions' },
+      { label: 'Contributing', href: 'https://github.com/ferriskey/ferriskey/blob/main/CONTRIBUTING.md' },
+    ],
+  },
+  {
+    key: 'footer.project',
+    title: 'Project',
+    links: [
+      { label: 'Blog', href: blogHref },
+      { label: 'Governance', href: 'https://github.com/ferriskey/ferriskey/blob/main/GOVERNANCE.md' },
+      { label: 'Security', href: 'https://github.com/ferriskey/ferriskey/blob/main/SECURITY.md' },
+    ],
+  },
+]
+
+// « FerrisKey » en caisses : une grille de 49 × 9, une caisse par pixel allumé.
+const GLYPHS: Record<string, { rows: string[]; top: number }> = {
+  F: { top: 0, rows: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'] },
+  K: { top: 0, rows: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'] },
+  e: { top: 2, rows: ['01110', '10001', '11111', '10000', '01110'] },
+  r: { top: 2, rows: ['10110', '11001', '10000', '10000', '10000'] },
+  i: { top: 0, rows: ['1', '0', '1', '1', '1', '1', '1'] },
+  s: { top: 2, rows: ['01111', '10000', '01110', '00001', '11110'] },
+  y: { top: 2, rows: ['10001', '10001', '10001', '01111', '00001', '00001', '01110'] },
+}
+const WORD = 'FerrisKey'
+const crates: { x: number; y: number }[] = []
+let cursor = 0
+for (const ch of WORD) {
+  const g = GLYPHS[ch]
+  g.rows.forEach((row, r) => {
+    row.split('').forEach((v, c) => {
+      if (v === '1') crates.push({ x: cursor + c, y: g.top + r })
+    })
+  })
+  cursor += g.rows[0].length + 1
+}
+const COLS = cursor - 1
+const ROWS = 9
+const RAIL = -6
+const DROP_FROM = -4.6
+const COL_STEP = 0.07
+const ROW_STEP = 0.035
+const SWEEP = (COLS - 1) * COL_STEP
+const cells = crates.map((c) => ({
+  ...c,
+  dy: DROP_FROM - c.y,
+  delay: +(c.x * COL_STEP + (ROWS - 1 - c.y) * ROW_STEP).toFixed(3),
+}))
+---
+
+<footer class="overflow-hidden">
+  <div class="mx-auto max-w-6xl border-x border-border">
+    <nav aria-label="Footer" class="grid border-b border-border md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+      <div class="flex flex-col justify-between gap-12 border-b border-border px-5 py-14 sm:px-10 md:border-b-0 md:border-r">
+        <div>
+          <a href="/" class="flex items-center gap-3 text-lg font-semibold tracking-tight">
+            <img src="/logo.svg" alt="" width="24" height="26" class="h-[26px] w-6" />
+            FerrisKey
+          </a>
+          <p class="mt-6 max-w-xs text-pretty text-xl font-medium leading-snug tracking-[-0.02em]" data-t="footer.tagline">
+            Open-source identity and access management, written in Rust.
+          </p>
+        </div>
+        <a href="mailto:contact@ferriskey.io" class="inline-flex w-fit items-center gap-2 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+          <span data-t="footer.contact">Contact us</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      {columns.map((c) => (
+        <div class="border-b border-border px-5 py-12 last:border-b-0 sm:px-10 md:border-b-0 md:border-r md:last:border-r-0">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t={c.key}>{c.title}</p>
+          <ul class="mt-6 space-y-1">
+            {c.links.map((l) => (
+              <li>
+                <a
+                  href={l.href}
+                  class="inline-block py-2 text-base text-foreground transition-colors hover:text-primary"
+                  {...(l.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+
+    <p class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-6 text-xs text-muted-foreground sm:px-10">
+      <span data-t="footer.text">© 2025 Ferriskey · Apache 2.0</span>
+      <span class="font-pixel uppercase">Fait en Rust</span>
+    </p>
+
+    <!-- Le mot géant : assemblé caisse par caisse par un pont roulant, rogné par le bas de la page. -->
+    <div class="fw relative px-5 pt-16 sm:px-10" data-footer-wordmark style={`--sweep:${SWEEP.toFixed(2)}s; --wake:${(SWEEP + 1.1).toFixed(2)}s`}>
+      <div class="relative mx-auto w-full" style={`aspect-ratio: ${COLS} / ${ROWS - RAIL}`}>
+        <svg viewBox={`0 ${RAIL} ${COLS} ${ROWS - RAIL}`} class="absolute inset-0 size-full" role="img" aria-label="FerrisKey" shape-rendering="crispEdges">
+          <defs>
+            <g id="fw-crate">
+              <rect x="0.05" y="0.05" width="0.9" height="0.9" fill="#f2670f" stroke="#a83e08" stroke-width="0.1" />
+              <rect x="0.1" y="0.1" width="0.8" height="0.16" fill="#ff8c42" />
+              <path d="M0.22 0.78 L0.78 0.3" stroke="#a83e08" stroke-width="0.09" fill="none" />
+              <rect x="0.22" y="0.36" width="0.14" height="0.14" fill="#a83e08" opacity="0.55" />
+            </g>
+          </defs>
+
+          <g aria-hidden="true">
+            {cells.map((c) => (
+              <rect x={c.x + 0.08} y={c.y + 0.08} width="0.84" height="0.84" fill="none" stroke="var(--color-foreground)" stroke-opacity="0.12" stroke-width="0.05" />
+            ))}
+          </g>
+
+          <line x1="0" y1={RAIL + 0.35} x2={COLS} y2={RAIL + 0.35} stroke="var(--color-foreground)" stroke-opacity="0.3" stroke-width="0.14" />
+
+          <g class="fw-trolley">
+            <rect x="-1.1" y={RAIL} width="2.2" height="0.7" fill="var(--color-foreground)" fill-opacity="0.85" />
+            <rect x="-0.9" y={RAIL + 0.7} width="0.2" height="0.25" fill="var(--color-primary)" />
+            <rect x="0.7" y={RAIL + 0.7} width="0.2" height="0.25" fill="var(--color-primary)" />
+            <line x1="0" y1={RAIL + 0.7} x2="0" y2={DROP_FROM} stroke="var(--color-foreground)" stroke-opacity="0.6" stroke-width="0.07" />
+            <rect x="-0.3" y={DROP_FROM - 0.05} width="0.6" height="0.25" fill="var(--color-foreground)" fill-opacity="0.85" />
+          </g>
+
+          {cells.map((c) => (
+            <g transform={`translate(${c.x} ${c.y})`}>
+              <g class="fw-c" style={`--dy:${c.dy.toFixed(2)}px; --d:${c.delay}s`}>
+                <use href="#fw-crate" />
+              </g>
+            </g>
+          ))}
+        </svg>
+
+        <span class="fw-crab absolute" aria-hidden="true" style={`left:${(0.6 / COLS) * 100}%; top:${((RAIL * -1 - 4) / (ROWS - RAIL)) * 100}%; width:${(4 / COLS) * 100}%; aspect-ratio:1`}>
+          <span class="fw-crab-asleep absolute inset-0"><PixelSprite sprite={crabAsleep} className="block w-full" /></span>
+          <span class="fw-crab-awake absolute inset-0"><PixelSprite sprite={crab} className="block w-full" /></span>
+          <span class="fw-zzz absolute font-pixel text-primary"><span>z</span><span>z</span><span>Z</span></span>
+        </span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .fw-c { opacity: 0; }
+  .fw-trolley { opacity: 0; transform: translateX(0.5px); }
+  .fw-crab-awake { opacity: 0; }
+  .fw-zzz {
+    left: 90%;
+    top: -22%;
+    font-size: clamp(8px, 1.1vw, 14px);
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+  }
+
+  .fw.is-in .fw-c {
+    animation: fw-drop 0.4s cubic-bezier(0.5, 0, 1, 0.65) var(--d) both;
+  }
+  .fw.is-in .fw-trolley {
+    animation: fw-sweep var(--sweep) linear 0s both;
+  }
+  .fw.is-in .fw-crab-asleep { animation: fw-hide 0.01s linear var(--wake) forwards; }
+  .fw.is-in .fw-crab-awake { animation: fw-show 0.2s ease-out var(--wake) forwards; }
+  .fw.is-in .fw-zzz { animation: fw-zzz var(--wake) ease-in-out 0s 1 forwards; }
+
+  @keyframes fw-drop {
+    0% { opacity: 0; transform: translateY(var(--dy)); }
+    1% { opacity: 1; transform: translateY(var(--dy)); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fw-sweep {
+    0% { opacity: 1; transform: translateX(0.5px); }
+    92% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(48.5px); }
+  }
+  @keyframes fw-hide { to { opacity: 0; } }
+  @keyframes fw-show { to { opacity: 1; } }
+  @keyframes fw-zzz {
+    0%, 100% { opacity: 0; transform: translateY(2px); }
+    20%, 80% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fw-c { opacity: 1; animation: none !important; }
+    .fw-trolley, .fw-zzz { display: none; }
+    .fw-crab-asleep { opacity: 0; }
+    .fw-crab-awake { opacity: 1; }
+  }
+</style>
+
+<script is:inline>
+  function initFooterWordmark() {
+    var el = document.querySelector('[data-footer-wordmark]')
+    if (!el || el.dataset.ready) return
+    el.dataset.ready = '1'
+    var observer = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) {
+        el.classList.add('is-in')
+        observer.disconnect()
+      }
+    }, { threshold: 0.4 })
+    observer.observe(el)
+  }
+  initFooterWordmark()
+  document.addEventListener('astro:page-load', initFooterWordmark)
+</script>

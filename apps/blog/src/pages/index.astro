@@ -43,56 +43,54 @@ function cardProps(post: (typeof posts)[number]) {
 ---
 
 <Base title={t('index.title')} locale={locale} locales={locales}>
-  <!-- Page header -->
-  <section class="mb-10">
-    <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-4">
-      <span class="inline-block size-1.5 rounded-full bg-primary"></span>
-      {t('index.label')}
-    </p>
-    <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-balance">
-      {t('index.heading.prefix')} <span class="text-primary">{t('index.heading.highlight')}</span>
-    </h1>
+  <section class="border-b border-border">
+    <div class="mx-auto max-w-6xl border-x border-border px-5 py-20 sm:px-8 sm:py-32">
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">{t('index.label')}</p>
+      <h1 class="mt-6 max-w-3xl text-balance text-[clamp(2.25rem,5.5vw,4.5rem)] font-medium leading-[1.03] tracking-[-0.04em]">
+        {t('index.heading.prefix')} <span class="text-primary">{t('index.heading.highlight')}</span>
+      </h1>
+    </div>
   </section>
 
-  <!-- Tag filter -->
-  <TagFilter tags={tags} totalCount={posts.length} locale={locale} client:load />
+  <div class="border-b border-border">
+    <div class="mx-auto max-w-6xl overflow-hidden border-x border-border">
+      <TagFilter tags={tags} totalCount={posts.length} locale={locale} client:load />
 
-  <!-- Articles grid -->
-  {posts.length > 0 && (
-    <div class="space-y-8">
-      {postsByLocale.map(({ loc, featured, rest }) => (
-        <div data-locale={loc} class="space-y-8">
-          {featured.length > 0 && (
-            <div class:list={['grid grid-cols-1 gap-6', featured.length > 1 && 'lg:grid-cols-2']}>
-              {featured.map((post) => (
-                <div data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
-                  <PostCard {...cardProps(post)} featured />
+      {posts.length > 0 && (
+        <div>
+          {postsByLocale.map(({ loc, featured, rest }) => (
+            <div data-locale={loc}>
+              {featured.length > 0 && (
+                <div class:list={['-mr-px grid grid-cols-1', featured.length > 1 && 'lg:grid-cols-2']}>
+                  {featured.map((post) => (
+                    <div class="border-b border-r border-border" data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
+                      <PostCard {...cardProps(post)} featured />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {rest.length > 0 && (
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rest.map((post) => (
-                <div data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
-                  <PostCard {...cardProps(post)} />
+              {rest.length > 0 && (
+                <div class="-mr-px grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {rest.map((post) => (
+                    <div class="border-b border-r border-border" data-tags={JSON.stringify(post.data.tags)} data-title={post.data.title} data-description={post.data.description ?? ''} data-locale={getPostLocale(post)}>
+                      <PostCard {...cardProps(post)} />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
-    </div>
-  )}
+      )}
 
-  <!-- Empty state (no posts at all) -->
-  {posts.length === 0 && (
-    <div class="text-center py-20">
-      <p class="text-muted-foreground text-lg">{t('index.empty')}</p>
+      {posts.length === 0 && (
+        <div class="px-5 py-24 text-center sm:px-8">
+          <p class="text-lg text-muted-foreground">{t('index.empty')}</p>
+        </div>
+      )}
     </div>
-  )}
-
+  </div>
 </Base>
 
 <script define:vars={{ supportedLocales: locales, fallbackLocale: locale }}>

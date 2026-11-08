@@ -54,7 +54,7 @@ export function TableOfContents({ headings, locale = 'en', author }: TableOfCont
 
   return (
     <nav className="sticky top-24 h-fit">
-      <p className="text-sm font-medium mb-3">{t('toc.title')}</p>
+      <p className="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary mb-4">{t('toc.title')}</p>
       <ul className="border-l border-border space-y-0.5">
         {filtered.map((heading) => (
           <li key={heading.slug}>
