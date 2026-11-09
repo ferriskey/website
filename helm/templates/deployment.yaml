@@ -21,6 +21,12 @@ spec:
         app.kubernetes.io/instance: {{ $.Release.Name }}
         app.kubernetes.io/name: {{ $name }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{ $name }}
           image: {{ include "ferriskey-website.image" (dict "root" $ "app" $app) }}
@@ -29,6 +35,18 @@ spec:
             - name: http
               containerPort: {{ $app.containerPort }}
               protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /run
           resources:
             {{- toYaml $app.resources | nindent 12 }}
           livenessProbe:
@@ -43,5 +61,10 @@ spec:
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
 {{- end }}
 {{- end }}
