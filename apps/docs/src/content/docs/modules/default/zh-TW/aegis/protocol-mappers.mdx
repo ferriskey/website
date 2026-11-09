@@ -1,0 +1,294 @@
+---
+title: "協議對映器"
+description: "FerrisKey 中的十一種協議對映器型別，以及每種型別讀取的配置鍵。"
+icon: arrow-right-left
+order: 51
+---
+
+<span id="protocol-mappers" />
+
+# 協議對映器
+
+協議對映器是將使用者、組、組織和客戶端資料轉換為 JWT 宣告的規則。每個對映器屬於一個客戶端作用域，並在權杖生成期間執行。
+
+對映器由 `mapper_type` 字串標識，並攜帶 JSON `config`。FerrisKey 保留了 Keycloak 的名稱，因此為 Keycloak 編寫的配置在此仍然可識別：鍵使用點分隔，值為字串，包括布林值。FerrisKey 執行以下十一種對映器型別。
+
+<Callout variant="warning" title="鍵使用點分隔，而非 snake_case">
+
+配置鍵是 `claim.name`、`access.token.claim` 和 `user.attribute`，而不是 `claim_name`、`add_to_access_token` 或 `attribute`。`config` 欄位是自由格式的 JSON，因此 API 接受未知鍵而不會報錯，對映器隨後會忽略它。一個默默無聞不做任何操作，或者寫入你沒有命名的宣告的對映器，幾乎總是因為鍵拼寫錯誤。
+
+`mapper_type` 也是同樣的情況。API 儲存任何非空字串，在權杖處理時，FerrisKey 跳過它不執行的型別並記錄警告。控制檯的對映器目錄列出了 `oidc-address-mapper`、`oidc-hardcoded-role-mapper` 和 `oidc-role-name-mapper`，其表單提供了 Keycloak 欄位，如 `userinfo.token.claim`、`introspection.token.claim`、`multivalued`、`claim.value.type` 和 `included.custom.audience`。FerrisKey 不執行這些型別，也不讀取這些鍵。
+
+</Callout>
+
+<span id="keys-every-mapper-reads" />
+
+## 每個對映器讀取的鍵
+
+| 配置鍵 | 預設 | 說明 |
+|---|---|---|
+| `claim.name` | 每個對映器 | 目標宣告。點路徑可以巢狀，因此 `realm_access.roles` 會生成 `{"realm_access": {"roles": [...]}}`，而不是包含點的平面鍵 |
+| `access.token.claim` | `true` | 將宣告包含在存取權杖中。可以是布林值，或者字串 `true`。任何其他字串都視為 `false` |
+| `id.token.claim` | `true` | 將宣告包含在 ID 權杖中。值相同 |
+
+當鍵缺失時，這兩個權杖標誌預設 **true**，因此沒有標誌的對映器會寫入兩個權杖。客戶端角色對映器、全名對映器和受眾對映器會讀取這兩個標誌，但不讀取 `claim.name`。
+
+`token.claim.name` 被屬性、屬性、身分域角色和硬編碼宣告對映器接受為 `claim.name` 的遺留別名，因為早期控制檯以這種方式儲存對映器。組和組織對映器只讀取 `claim.name`。在任何新內容中，優先使用 `claim.name`。
+
+宣告名稱是一個最多包含8個非空段、總長度不超過255個字元的點分路徑。API 會拒絕更長的 `claim.name` 或 `token.claim.name`，並返回 422 `invalid_claim_name`。在權杖建立時，超出此格式的名稱會被靜默丟棄，僅在伺服器日誌中給出警告。
+
+<span id="mapper-types" />
+
+## 對映器型別
+
+### `oidc-usermodel-property-mapper`
+
+將內建使用者欄位對映到宣告。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `user.attribute` | 要讀取的欄位：`username`、`email`、`firstName`、`lastName` 或 `emailVerified`。拼寫 `firstname`、`lastname` 和 `email_verified` 也被接受。 |
+| `claim.name` | 目標宣告。預設值為 `user.attribute` 的值。 |
+| `jsonType.label` | 轉換值：`String`（預設）、`Boolean` 或 `Integer`。`Long`、`int`、`long` 和 `boolean` 同樣被接受。無法轉換的值保持原樣。 |
+
+```json title="Username into preferred_username"
+{
+  "user.attribute": "username",
+  "claim.name": "preferred_username",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+### `oidc-full-name-mapper`
+
+將使用者的名字和姓氏修剪後以空格連線，寫入 `name` 宣告中。
+
+宣告名稱是固定的：該對映器不讀取 `claim.name`。當兩個名稱都為空時，它不會輸出任何內容。它的唯一鍵是兩個權杖標誌。
+
+```json title="Full name in the ID token only"
+{
+  "access.token.claim": "false",
+  "id.token.claim": "true"
+}
+```
+
+種子 `profile` 作用域包含 `given_name` 和 `family_name`，但不包含 `name`，因此如果客戶端期望它，請將此對映器新增到作用域中。
+
+### `oidc-usermodel-attribute-mapper`
+
+將自定義使用者屬性對映到宣告。用於業務資料：部門、計劃層級、功能標誌。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `user.attribute` | 使用者的屬性鍵。當使用者沒有該屬性時，對映器不會輸出任何內容。 |
+| `claim.name` | 目標宣告。預設值為 `user.attribute` 的值。 |
+
+值始終為字串。該對映器不讀取 `jsonType.label`，因此數值屬性會以文字形式傳遞到權杖。
+
+```json title="A department attribute into a department claim"
+{
+  "user.attribute": "department",
+  "claim.name": "department",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+### `oidc-usermodel-realm-role-mapper`
+
+將使用者的身分域角色名稱寫入權杖。包含使用者從組繼承的角色。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `claim.name` | 目標宣告。預設值為 `realm_access.roles` |
+
+```json title="Realm roles, default placement"
+{
+  "claim.name": "realm_access.roles",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+```json title="Resulting claim"
+{
+  "realm_access": {
+    "roles": ["admin", "user-manager", "viewer"]
+  }
+}
+```
+
+### `oidc-usermodel-client-role-mapper`
+
+在`resource_access.<client_id>.roles`下寫入客戶端範圍的角色。位置固定：該對映器不取`claim.name`。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `client.id` | 包含該客戶端角色的`client_id`字串。空置或缺失的，包含**所有**客戶端的角色 |
+
+```json title="Resulting claim"
+{
+  "resource_access": {
+    "backend": { "roles": ["read", "write"] }
+  }
+}
+```
+
+### `oidc-group-membership-mapper`
+
+寫入使用者所屬的組。
+
+| 配置鍵 | 預設 | 說明 |
+|---|---|---|
+| `claim.name` | `groups` | 目標宣告 |
+| `membership` | `effective` | `effective`包含所有組**加上其所有祖先**，因此`/novotel/EN/leaf`的成員會獲得三條路徑。`direct`只包含使用者直接成員的組，這與Keycloak相匹配，權杖更小，且透露的組織結構更少 |
+| `full.path` | `true` | 傳送完整路徑（`/parent/child`）。為裸組名設為`false` |
+| `prefix.org` | `false` | 在組織別名（`/acme/finance`）前加上 |
+
+`prefix.org`存在是因為FerrisKey權杖可以同時承載多個組織的組，路徑是相對於其組織的，所以兩個組織的`/finance`會衝突。它只適用於完整路徑。
+
+### `oidc-organization-membership-mapper`
+
+以別名鍵索引的 JSON 物件寫入使用者所屬的組織。透過別名鍵表示消費者可以在不掃描陣列的情況下查詢某個組織。
+
+| 配置鍵 | 預設 | 說明 |
+|---|---|---|
+| `claim.name` | `organizations` | 目標宣告 |
+| `include.domain` | `false` | 新增每個組織的域名，`null`沒有域名時 |
+| `include.attributes` | `false` | 新增每個組織的屬性 |
+
+`id`、`name`和`alias`始終存在。域和屬性是自願加入的，因此權杖預設保持緊湊。沒有組織的使用者會獲得一個空物件。
+
+### `oidc-organization-detail-mapper`
+
+詳細介紹一個**單一**組織。
+
+| 配置鍵 | 預設 | 說明 |
+|---|---|---|
+| `claim.name` | `organization` | 目標宣告 |
+| `organization.alias` | 未設定 | 只有當使用者屬於該組織時才發出宣告。省略後，使用使用者成員列表中的第一個組織 |
+| `include.attributes` | `false` | 新增組織屬性 |
+
+`id`、`name`、`alias`和`domain`始終存在`domain`，當組織沒有組織時，這些都`null`。如果使用者不屬於任何匹配的組織，對映器則不輸出任何資訊。
+
+### `oidc-organization-role-mapper`
+
+編寫使用者在每個組織作用域內持有的角色，按組織別名進行鍵化。身分域角色歸屬於`roles`，客戶端角色歸屬`clients.<client_id>.roles`。如果使用者沒有持有有作用域的角色，則被排除在外。
+
+| 配置鍵 | 預設 | 說明 |
+|---|---|---|
+| `claim.name` | `organizations` | 目標宣告 |
+
+組織範圍的角色來自兩個來源，在權杖組裝時合併：直接分配給成員的角色，以及繼承自該組織使用者組的角色。
+
+<Callout variant="info" title="此對映器與成員對映器共享一個宣告">
+
+兩者預設使用 `organizations` 宣告，並且當兩者都啟用時，它們的物件會深度合併：成員對映器提供 `id`、`name` 和 `alias`，而此對映器提供 `roles` 和 `clients`。請匹配成員對映器的 `id` 欄位，而不是可以重新命名的別名。
+
+</Callout>
+
+### `oidc-audience-mapper`
+
+向存取權杖的受眾 (`aud`) 宣告中新增一個條目。在權杖必須被多個資源伺服器接受時使用。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `included.client.audience` | 要新增的受眾值。任何字串都可以，不僅限於 `client_id`。如果為空或缺失，對映器將不產生任何內容 |
+
+```json title="Accept this token at another client"
+{
+  "included.client.audience": "another-client",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+存取權杖的 `aud` 開始為 `["<realm_name>-realm", "account"]`，對映器會在其後追加。帶有 `resource` 引數的權杖請求會用該資源替換整個列表。ID 權杖的 `aud` 是客戶端的 `client_id`，且沒有對映器會更改它。
+
+### `oidc-hardcoded-claim-mapper`
+
+注入靜態值。對於不來自使用者資料的環境指示器或租戶識別符號非常有用。
+
+| 配置鍵 | 說明 |
+|---|---|
+| `claim.name` | 目標宣告。沒有目標宣告，對映器不會輸出任何內容。 |
+| `claim.value` | 要注入的靜態值 |
+| `jsonType.label` | 轉換值型別：`String`（預設）、`Boolean`、`Integer`、`Long` 或 `JSON`。小寫的 `boolean`、`int` 和 `long` 也可使用。`JSON` 會將值解析為 JSON。無法解析的數字或 JSON 保持為字串，布林值只有當為精確字串 `true` 時才為 `true` |
+
+```json title="An environment indicator, access token only"
+{
+  "claim.name": "environment",
+  "claim.value": "production",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+<span id="reserved-claim-names" />
+
+## 保留的宣告名稱
+
+每個對映器執行後會移除十個宣告名稱，因此對映器無法覆蓋它們：
+
+```text
+sub  iat  jti  iss  typ  azp  aud  scope  exp  client_id
+```
+
+將目標指向其中一個，對映器似乎配置正確，但什麼也沒改變。`aud` 在列表中，這正是為什麼新增受眾需要 `oidc-audience-mapper`，它透過獨立渠道貢獻受眾，而不是指向 `aud` 的硬編碼對映器。
+
+<span id="execution-order" />
+
+## 執行順序
+
+作用域內的對映器按建立順序執行。預設作用域在請求命名的可選作用域之前執行。
+
+<Callout variant="warning" title="宣告衝突">
+
+如果兩個對映器寫入相同的宣告名稱，後寫入的會覆蓋先寫入的，除非兩個值都是 JSON 物件：物件會按鍵逐一合併。這就是 `features.new_dashboard` 和 `features.beta_export` 如何最終合併到一個 `features` 物件中，以及兩個組織對映器如何共享 `organizations` 宣告的方式。請在各個作用域中有意地管理宣告名稱。
+
+</Callout>
+
+<span id="token-generation-pipeline" />
+
+## 權杖生成流程
+
+1. **解析作用域。**客戶端的預設作用域，以及請求的 `scope` 引數中指定的任何可選作用域。
+2. **收集對映器。**所有處於活動作用域上的協議對映器。
+3. **執行對映器。**每個對映器針對已認證的使用者和客戶端上下文執行一次：一次用於存取權杖，一次用於 ID 權杖。僅當 `scope` 包含 `openid` 時，才會執行 ID 權杖流程。
+4. **按權杖型別篩選。** `access.token.claim` 和 `id.token.claim` 決定每個宣告屬於哪個權杖。
+5. **去除保留宣告。** 上述十個名稱將被移除。
+6. **構建並簽名。** 將 Mapper 輸出與標準宣告合併，然後使用身分域的簽名金鑰對 JWT 進行簽名。
+
+<span id="adding-a-mapper" />
+
+## 新增一個對映器
+
+::::step-group
+:::step{title="建立或選擇一個作用域"}
+在管理控制檯中開啟 **客戶端作用域**。建立一個作用域，或者選擇應該承載該宣告的作用域。
+:::
+
+:::step{title="新增協議對映器"}
+在作用域的 **協議對映器** 選項卡上，選擇 **新增對映器**。可以從快速開始模板開始，或者選擇一個 `mapper_type` 並填入上述文件中的配置鍵。
+:::
+
+:::step{title="將作用域分配給客戶端"}
+在客戶端的 **Client Scopes** 標籤頁中，將作用域新增為預設或可選。預設作用域適用於每個請求；可選作用域僅在請求按名稱要求時適用。
+:::
+
+:::step{title="檢查結果"}
+在客戶端的 Client Scopes 標籤頁上使用 **Evaluate**，或呼叫 `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` 並傳入 `user_id` 和可選的 `scope`。它返回使用者在無需完整登入情況下會收到的宣告。如果缺少某個宣告，請首先檢查 `mapper_type` 和配置鍵。
+:::
+::::
+
+::::card-group{cols=2}
+:::card{label="自定義宣告" icon="lucide:plus" href="/zh-TW/modules/aegis/custom-claims"}
+有效模式：閘道器角色、租戶識別符號、功能標記。
+:::
+:::card{label="客戶端作用域" icon="lucide:list" href="/zh-TW/discover/core-concepts/client-scopes"}
+作用域如何解析，以及內建作用域攜帶的宣告。
+:::
+::::

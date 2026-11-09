@@ -1,0 +1,78 @@
+---
+title: "来源"
+description: "存储可重用的导入源，这样你就不必在每次身份域导入时重复输入凭据和 URL。"
+icon: database
+order: 5
+---
+
+# `source`
+
+源是存储在配置文件中的可重用导入连接。保存后，可使用 `realm import --source-ref <name>` 来引用它，而无需重复其 URL 和凭据。请参见 [导入](/zh-CN/cli/import/overview) 了解它们如何被使用。
+
+```bash
+ferris-ctl source <subcommand>
+```
+
+这些子命令仅读取和写入配置文件。它们不会进行网络调用。它们遵循 `-o`。
+
+## `source list`
+
+列出已配置的源。
+
+```bash
+ferris-ctl source list
+```
+
+表格列：NAME（名称）、KIND（类型）、URL（网址）、SECRET（当存储密钥或令牌时为 `yes`）。JSON 和 YAML 格式使用 `has_secret` 代替实际的密钥；密钥从不被打印。
+
+## `source add`
+
+添加一个源。添加已存在的名称会在不询问的情况下覆盖它。
+
+```bash
+ferris-ctl source add <name> --kind <kind> --url <url> [auth flags]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 源名称 |
+| `--kind` | 是 | `keycloak`、`zitadel` 或 `supabase`。配置文件不是可存储的来源：它是一个路径，在导入时通过 `--file` 传递。 |
+| `--url` | 是 | 源实例的基础 URL |
+| `--realm` | 否 | Keycloak：要读取的身份域。Supabase 以及带有固定组织的 Zitadel：在 FerrisKey 中创建的身份域名称，当导入没有提供 `--target-realm` 或 `--source-realm` 时使用。 |
+| `--client-id` | 否 | 源身份认证（Keycloak）的客户端 ID |
+| `--client-secret` | 否 | 源身份认证（Keycloak）的客户端密钥 |
+| `--token` | 否 | Bearer令牌（Zitadel 个人访问令牌、Supabase `service_role` 密钥或现成的 Keycloak 令牌） |
+| `--org-id` | 否 | 组织 ID（Zitadel）；省略以导入所有组织 |
+
+```bash title="Store a Keycloak source"
+ferris-ctl source add keycloak-prod \
+  --kind keycloak \
+  --url https://keycloak.example.com \
+  --realm acme \
+  --client-id ferriskey-import \
+  --client-secret "$KC_SECRET"
+```
+
+```bash title="Use it later"
+ferris-ctl realm import --source-ref keycloak-prod --target-realm acme
+```
+
+存储的源仅保存连接。Supabase 选项（`--source-passwords`、`--source-preserve-ids` 和 `--source-include-*` 标志）不会被存储；每次导入时都需传递它们。`supabase` 类型仅存在于 0.3.0 之后的版本中，详见 [从 Supabase](/zh-CN/cli/import/supabase)。
+
+<Callout variant="warning" title="密钥以明文形式存储">
+
+源的密钥和令牌会写入 `config.toml` 文件且不进行编辑，而且该文件会以你的默认 umask 创建，通常机器上的其他用户可以读取。请使用 `chmod 700 ~/.config/ferriskey` 限制目录（仅对文件使用 `chmod` 在 CLI 下次保存时会丢失），并尽量使用短期令牌。
+
+</Callout>
+
+## `source remove`
+
+删除已存储的源。
+
+```bash
+ferris-ctl source remove <name>
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 源名称 |

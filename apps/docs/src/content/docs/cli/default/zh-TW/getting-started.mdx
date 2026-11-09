@@ -1,0 +1,125 @@
+---
+title: "入門"
+description: "將 ferris-ctl 連線到 FerrisKey 例項，登入並執行你的第一個命令。"
+icon: rocket
+order: 2
+---
+
+<span id="getting-started" />
+
+# 入門
+
+本指南將引導你從全新 `ferris-ctl` 安裝到列出身分域並建立你的第一個使用者。假設你已有執行中的 FerrisKey 例項。如果沒有，請先按 [部署入門](/zh-TW/discover/getting-started) 進行。
+
+<span id="prerequisites" />
+
+## 先決條件
+
+- `ferris-ctl` 已安裝並執行在你的 `PATH` 上（參見 [安裝](/zh-TW/cli/overview#install)）
+- 一個可存取的 FerrisKey 伺服器 URL，例如 `http://localhost:3333`
+- 一個可以管理你將要操作的身分域的使用者，例如 `master` 身分域的管理員使用者
+- 存取管理控制檯，以建立 CLI 登入所用的客戶端
+
+<span id="create-a-client-for-the-cli" />
+
+## 為 CLI 建立客戶端
+
+`ferris-ctl login` 使用 OAuth 2.0 裝置授權授予進行登入，因此它需要一個允許該授權的客戶端。FerrisKey 不自帶這樣的客戶端，並且 `ferris-ctl client create` 不能建立一個：它總是建立禁用該授權的客戶端，並且沒有更改的標誌。在你將要登入的身分域（本指南中的 `master`）中，在管理員控制檯建立該客戶端：
+
+1. 開啟 **Clients（客戶端）** 並選擇 **New client（新建客戶端）**。
+2. 將 **Client ID（客戶端 ID）** 設定為 `ferris-ctl`，將 **Client authentication（客戶端認證）** 設定為 **Public（公開）**。
+3. 開啟 **客戶端啟用**。已禁用的客戶端無法驗證任何人。
+4. 在 **功能配置** 下，開啟 **OAuth 2.0 裝置授權許可**。
+5. 選擇 **建立客戶端**。
+
+要重複使用已有的客戶端，開啟它，轉到 **設定** 標籤，然後在 **功能配置** 下開啟相同的開關。
+
+<span id="add-a-context" />
+
+## 新增上下文
+
+**上下文** 儲存如何存取 FerrisKey 例項，這樣你就不必在每個命令中重複輸入 URL 和客戶端。你新增的第一個上下文會成為活動上下文。
+
+::::step-group
+:::step{title="建立上下文"}
+```bash
+ferris-ctl context add local \
+  --url http://localhost:3333 \
+  --client-id ferris-ctl \
+  --realm master
+```
+
+這會將名為 `local` 的配置檔案寫入到你的配置檔案中，並將其標記為活動狀態。保留 `--realm`：它是 CLI 登入的域，而沒有 `realm`、`client` 和 `user` 命令將無法執行。
+:::
+
+:::step{title="確認它是活動的"}
+```bash
+ferris-ctl context current
+```
+:::
+::::
+
+<Callout variant="info" title="配置儲存在哪裡？">
+
+上下文存在於 `$XDG_CONFIG_HOME/ferriskey/config.toml` 中，通常是 `~/.config/ferriskey/config.toml`。執行 `ferris-ctl context path` 來列印確切位置。該檔案為純文字；在儲存金鑰之前，請參閱 [認證](/zh-TW/cli/authentication#contexts)。
+
+</Callout>
+
+<span id="sign-in" />
+
+## 登入
+
+使用 OAuth 2.0 裝置授權進行身分認證。CLI 列印一個 URL 和一個程式碼，開啟你的瀏覽器，並在你批准登入時等待。
+
+```bash
+ferris-ctl login
+```
+
+在瀏覽器中確認使用者程式碼。然後 CLI 將把生成的權杖儲存在 `credentials.toml` 中（在 Unix 上為 `0600` 模式），後續命令將重用該會話。如果伺服器返回 `unauthorized_client`，客戶端暫不允許裝置授權：請返回上一節。
+
+<Callout variant="info" title="服務賬戶">
+
+要在沒有瀏覽器的情況下進行身分認證，請新增帶有 `--client-secret` 的上下文並跳過 `login`。CLI 然後使用 OAuth2 客戶端憑據授權。在此模式下與 FerrisKey 0.10.0 存在已知的不相容性，詳見 [Authentication](/zh-TW/cli/authentication#client-credentials)。
+
+</Callout>
+
+<span id="run-your-first-commands" />
+
+## 執行你的第一個命令
+
+```bash title="List realms"
+ferris-ctl realm list
+```
+
+```bash title="Create a user in the master realm"
+ferris-ctl user create alice \
+  --email alice@example.com \
+  --firstname Alice \
+  --lastname Doe
+```
+
+```bash title="Inspect it as JSON"
+ferris-ctl user get alice -o json
+```
+
+`-o` 標誌可選擇 `table`（預設）、`json` 或 `yaml`，這對指令碼編寫和 `jq` 管道很方便。它適用於除 `login`、`logout` 和 `client secret` 以外的所有命令，這些命令始終列印純文字。
+
+新使用者沒有密碼。可透過 [`user set-password`](/zh-TW/cli/commands/user#user-set-password) 設定密碼。
+
+<span id="related-pages" />
+
+## 設定一個。
+
+::::card-group{cols=2}
+:::card{label="身分認證" icon="lucide:key-round" href="/zh-TW/cli/authentication"}
+相關頁面
+
+上下文、登入會話以及憑據的解析方式。
+:::
+:::card{label="命令參考" icon="lucide:square-terminal" href="/zh-TW/cli/commands"}
+每個命令、子命令和標誌。
+:::
+:::card{label="匯入身分域" icon="lucide:import" href="/zh-TW/cli/import/overview"}
+從檔案、Keycloak、Zitadel 或 Supabase 匯入一個身分域。
+:::
+::::

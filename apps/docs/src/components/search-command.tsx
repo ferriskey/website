@@ -2,7 +2,7 @@ import { Icon } from '@iconify/react'
 import * as React from 'react'
 import { SearchDialog } from './search-dialog'
 
-export function SearchCommand() {
+export function SearchCommand({ locale }: { locale: string }) {
   const [open, setOpen] = React.useState(false)
 
   React.useEffect(() => {
@@ -26,7 +26,7 @@ export function SearchCommand() {
         <span className="flex-1 text-left">Search docs...</span>
         <kbd className="flex items-center gap-0.5 border border-border bg-background px-1.5 py-0.5 text-xs"><span className="text-[14px]">⌘</span><span className="text-[12px]">K</span></kbd>
       </button>
-      <SearchDialog open={open} onClose={() => setOpen(false)} />
+      <SearchDialog locale={locale} open={open} onClose={() => setOpen(false)} />
     </>
   )
 }

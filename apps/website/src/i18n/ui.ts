@@ -1,7 +1,15 @@
+import zhCN from './zh-CN'
+import zhTW from './zh-TW'
+
 export const defaultLang = 'en' as const
 
 export const ui = {
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
   en: {
+    'articles.label': 'Blog',
+    'articles.title': 'Latest articles',
+    'articles.viewAll': 'View all articles',
     // Footer
     'footer.text': '© 2025 Ferriskey · Apache 2.0',
 
@@ -123,10 +131,10 @@ export const ui = {
     'whyNow.without.label': 'Built in-house',
     'whyNow.without.metric': 'Code paths your app owns',
     'whyNow.without.subtitle': 'handles every identity concern itself:',
-    'whyNow.without.bullet1': 'Auth code lives in every app',
-    'whyNow.without.bullet2': 'Audit and policy stay scattered',
-    'whyNow.without.bullet3': 'Full control, full ownership',
-    'whyNow.without.bullet4': 'Long-term maintenance load',
+    'whyNow.without.bullet1': 'Auth code in every app',
+    'whyNow.without.bullet2': 'No unified audit',
+    'whyNow.without.bullet3': 'Inconsistent policy',
+    'whyNow.without.bullet4': 'Endless maintenance',
     'whyNow.keycloak.label': 'Keycloak + extensions',
     'whyNow.keycloak.metric': 'Integrations to wire',
     'whyNow.keycloak.subtitle': 'common needs handled by extensions:',
@@ -158,10 +166,6 @@ export const ui = {
     'whyNow.without.svc.audit': 'Audit logging',
     'whyNow.without.svc.social': 'Social login',
     'whyNow.without.svc.rbac': 'Permission rules',
-    'whyNow.without.bullet1': 'Auth code in every app',
-    'whyNow.without.bullet2': 'No unified audit',
-    'whyNow.without.bullet3': 'Inconsistent policy',
-    'whyNow.without.bullet4': 'Endless maintenance',
     'whyNow.with.label': 'With FerrisKey',
     'whyNow.with.tag.auth': 'Auth',
     'whyNow.with.tag.mfa': 'MFA',
@@ -302,6 +306,9 @@ export const ui = {
     'cta.github': 'View on GitHub',
   },
   fr: {
+    'articles.label': 'Blog',
+    'articles.title': 'Derniers articles',
+    'articles.viewAll': 'Voir tous les articles',
     // Footer
     'footer.text': '© 2025 Ferriskey · Apache 2.0',
 
@@ -423,10 +430,10 @@ export const ui = {
     'whyNow.without.label': 'Codé en interne',
     'whyNow.without.metric': "Chemins de code à votre charge",
     'whyNow.without.subtitle': "gère chaque besoin d'identité lui-même :",
-    'whyNow.without.bullet1': "Code d'auth présent dans chaque app",
-    'whyNow.without.bullet2': 'Audit et policy restent éparpillés',
-    'whyNow.without.bullet3': 'Contrôle total, propriété totale',
-    'whyNow.without.bullet4': 'Charge de maintenance dans la durée',
+    'whyNow.without.bullet1': "Code d'auth dans chaque app",
+    'whyNow.without.bullet2': "Pas d'audit unifié",
+    'whyNow.without.bullet3': 'Policy incohérente',
+    'whyNow.without.bullet4': 'Maintenance permanente',
     'whyNow.keycloak.label': 'Keycloak + extensions',
     'whyNow.keycloak.metric': 'Intégrations à câbler',
     'whyNow.keycloak.subtitle': 'besoins courants couverts par extensions :',
@@ -458,10 +465,6 @@ export const ui = {
     'whyNow.without.svc.audit': "Journalisation d'audit",
     'whyNow.without.svc.social': 'Connexion sociale',
     'whyNow.without.svc.rbac': 'Règles de permission',
-    'whyNow.without.bullet1': "Code d'auth dans chaque app",
-    'whyNow.without.bullet2': "Pas d'audit unifié",
-    'whyNow.without.bullet3': 'Policy incohérente',
-    'whyNow.without.bullet4': 'Maintenance permanente',
     'whyNow.with.label': 'Avec FerrisKey',
     'whyNow.with.tag.auth': 'Auth',
     'whyNow.with.tag.mfa': 'MFA',

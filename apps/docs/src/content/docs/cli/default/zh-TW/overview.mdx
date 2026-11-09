@@ -1,0 +1,133 @@
+---
+title: "概述"
+description: "ferris-ctl 是 FerrisKey 的官方命令列介面。從終端管理身分域、客戶端、使用者和匯入。"
+icon: terminal
+order: 1
+---
+
+# FerrisKey CLI
+
+`ferris-ctl` 是 FerrisKey 的官方命令列介面。它與 FerrisKey REST API 通訊，因此您可以透過終端管理身分域、OAuth2 客戶端和使用者，從描述檔案、Keycloak、Zitadel 或 Supabase 匯入身分域，並編寫管理任務指令碼。
+
+<span id="what-you-can-do" />
+
+## 您可以執行的操作
+
+::::card-group{cols=2}
+:::card{label="管理上下文" icon="lucide:server" href="/zh-TW/cli/commands/context"}
+儲存連線配置（URL、客戶端、身分域）並在環境之間切換。
+:::
+:::card{label="登入" icon="lucide:log-in" href="/zh-TW/cli/commands/login"}
+使用 OAuth 2.0 裝置授權授予進行身分認證。不需要客戶端金鑰。
+:::
+:::card{label="管理資源" icon="lucide:box" href="/zh-TW/cli/commands/realm"}
+建立和檢查身分域、客戶端和使用者。
+:::
+:::card{label="匯入身分域" icon="lucide:import" href="/zh-TW/cli/import/overview"}
+從檔案、實時 Keycloak、實時 Zitadel 或 Supabase 專案遷移身分域。
+:::
+::::
+
+<span id="install" />
+
+## 安裝
+
+:::codegroup
+```bash [Cargo]
+cargo install ferris-ctl
+```
+
+```bash [From source]
+git clone https://github.com/ferriskey/ferriskey-cli.git
+cd ferriskey-cli
+cargo build --release
+# binary at target/release/ferris-ctl
+```
+
+```bash [Docker]
+docker run --rm ghcr.io/ferriskey/ferris-ctl --help
+```
+:::
+
+從原始碼構建需要 Rust 1.88 或更高版本。工作區沒有設定 `rust-version`，但程式碼使用了 let 鏈，該特性在 1.88 中已穩定。
+
+<span id="pre-built-binaries" />
+
+### 預構建的二進位制檔案
+
+每個 [GitHub 釋出](https://github.com/ferriskey/ferriskey-cli/releases) 都包含三個歸檔。解壓 `ferris-ctl` 並將其放在您的 `PATH` 上。
+
+| 平臺 | 歸檔 |
+|----------|---------|
+| Linux x86_64 | `ferris-ctl-v0.3.0-x86_64-unknown-linux-gnu.tar.gz` |
+| macOS，Apple Silicon | `ferris-ctl-v0.3.0-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `ferris-ctl-v0.3.0-x86_64-pc-windows-msvc.zip` |
+
+這些名稱遵循 `ferris-ctl-<tag>-<target>`；上面的是 0.3.0 版本。在同一版本中，一個 `SHA256SUMS.txt` 檔案列出了每個歸檔的校驗和，因此您可以在執行之前檢查下載內容。Intel Mac 或 ARM 上的 Linux 沒有預構建的二進位制檔案：請使用 Cargo 或相應的容器映象。
+
+<span id="container-image" />
+
+### 容器映象
+
+映象 `ghcr.io/ferriskey/ferris-ctl` 是為 `linux/amd64` 和 `linux/arm64` 構建的，其入口點是 `ferris-ctl`。一個版本會發布標籤 `X.Y.Z`、`X.Y` 和 `X`。標籤 `latest` 會在每次推送到 `main` 後重建，因此它可能比上一個版本更新：當您需要釋出的構建時，請固定 `X.Y.Z`。
+
+該映象以沒有主目錄的非特權使用者身分執行。透過 `FERRISKEY_URL`、`FERRISKEY_CLIENT_ID`、`FERRISKEY_CLIENT_SECRET` 和 `FERRISKEY_REALM` 傳遞連線，而不要依賴上下文檔案（參見 [認證](/zh-TW/cli/authentication#overriding-the-context)）。
+
+候選釋出版本（帶有 `-rc` 的標籤）作為 GitHub 預發行版和映象釋出，但不會發布到 crates.io。
+
+驗證安裝：
+
+```bash
+ferris-ctl --help
+```
+
+<span id="how-it-works" />
+
+## 工作原理
+
+```text
+CLI args → ferris-ctl → resolve context + credentials → FerrisKey REST API
+                              ↑
+                  config.toml / credentials.toml
+```
+
+每個呼叫 API 的命令按順序解析三件事：
+
+1. 連線位置：從活動 [上下文](/zh-TW/cli/commands/context) 獲取伺服器 URL，或者在提供 `--client-id` 時從 `--url` 獲取。
+2. 你的身分：已儲存的 [登入](/zh-TW/cli/commands/login) 會話，或儲存在上下文中的客戶端憑據。
+3. 要操作的域：您登入的域是上下文的 `realm`，除非您傳遞 `--realm`，否則命令會在同一個域上執行。
+
+<span id="global-flags" />
+
+## 全域性標誌
+
+這些標誌適用於每個命令，無論是在子命令名稱之前還是之後。
+
+| 標誌 | 短格式 | 預設 | 環境變數 | 說明 |
+|------|-------|---------|---------|-------------|
+| `--context` | | 活動上下文 | | 使用這個儲存的上下文代替活動上下文 |
+| `--output` | `-o` | `table` | | 輸出格式：`table`、`json` 或 `yaml` |
+| `--url` | | | `FERRISKEY_URL` | FerrisKey 伺服器 URL |
+| `--client-id` | | | `FERRISKEY_CLIENT_ID` | 用於登入的 OAuth2 客戶端 |
+| `--client-secret` | | | `FERRISKEY_CLIENT_SECRET` | 該客戶端的金鑰 |
+| `--realm` | | | `FERRISKEY_REALM` | 命令作用的域 |
+
+連線標誌不是按欄位覆蓋的。`--url` 和 `--client-id` 只有在一起設定時才生效：當兩者都設定時，CLI 會根據標誌建立連線，並忽略配置檔案和 `--context`。[身分認證](/zh-TW/cli/authentication#overriding-the-context) 詳細說明了確切規則，包括 `login` 不同之處。
+
+`-o` 適用於除 `login`、`logout` 和 `client secret` 之外的每個命令，這些命令總是列印純文字。
+
+<span id="related-pages" />
+
+## 設定一個。
+
+::::card-group{cols=3}
+:::card{label="入門" icon="lucide:rocket" href="/zh-TW/cli/getting-started"}
+連線到 FerrisKey 例項並執行你的第一個命令。
+:::
+:::card{label="身分認證" icon="lucide:key-round" href="/zh-TW/cli/authentication"}
+理解上下文、登入會話和憑據解析。
+:::
+:::card{label="命令" icon="lucide:square-terminal" href="/zh-TW/cli/commands"}
+每個命令的用途，以及其參考頁面所在的位置。
+:::
+::::

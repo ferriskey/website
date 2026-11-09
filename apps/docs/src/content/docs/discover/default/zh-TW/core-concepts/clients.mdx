@@ -1,0 +1,156 @@
+---
+title: "客戶端"
+description: "FerrisKey 中的 OAuth2/OIDC 客戶端：客戶端型別、認證方法、重定向 URI、功能開關和權杖設定。"
+icon: app-window
+order: 11
+---
+
+<span id="clients" />
+
+# 客戶端
+
+客戶端代表透過 FerrisKey 進行身分認證的應用程式。每個 OAuth2 和 OIDC 流程都從一個客戶端開始：它說明哪個應用程式正在請求存取，並確定適用的認證方法和權杖設定。
+
+<span id="client-types" />
+
+## 客戶端型別
+
+有三種：
+
+| 型別 | 金鑰 | 使用場景 |
+|---|---|---|
+| 機密 | 是 | 能夠保密的伺服器端應用程式 |
+| 公用 | 不 | 單頁應用、移動應用、命令列工具 |
+| 系統 | 無 | 內部 FerrisKey 客戶端，自動建立且不由使用者管理 |
+
+:::callout{variant="info" title="選擇客戶端型別"}
+當您的應用程式有後端可以安全儲存金鑰時，選擇“金鑰”。當執行在瀏覽器或裝置上的任何應用中，金鑰最終會落在使用者手中時，選擇“公開”。
+:::
+
+客戶端還會記錄其來源：`registration_source`：`admin` 表示透過控制檯或管理 API 建立的客戶端，`dynamic` 表示匿名註冊的客戶端，以及 `metadata_document` 表示透過客戶端 ID 後設資料文件解析的客戶端。後兩種始終需要使用者同意，並且永遠無法存取管理 API。參見 [MCP](/zh-TW/discover/core-concepts/mcp)。
+
+<span id="capability-config" />
+
+## 功能配置下開啟它
+
+客戶端可能採取的流程在其設定介面上進行設定，其中兩個選項是永久性的。
+
+<img class="only-light" src="/dashboard/client_settings-light.jpg" alt="FerrisKey 客戶端設定顯示一般欄位以及具有公開/保密和授權開關的功能配置" />
+<img class="only-dark" src="/dashboard/client_settings-dark.jpg" alt="FerrisKey 客戶端設定顯示一般欄位以及具有公開/保密和授權開關的功能配置" />
+
+**客戶端認證在建立時設定且不可更改。** 客戶端之後不能在金鑰和公開之間切換。當後端可以在伺服器端儲存金鑰時選擇金鑰；對於 SPA、移動應用和 CLI，因為金鑰最終會落入使用者手中，所以選擇公開。協議（OpenID Connect 或 SAML 2.0）是另一個永久選擇。
+
+授權切換不是永久的，每一個都會增加攻擊面：
+
+| 切換 | 開啟時間 |
+|---|---|
+| 直接存取授權 | 對任何新的內容都不要開啟。這是[已棄用的密碼授權](/zh-TW/discover/core-concepts/authentication#password-resource-owner) |
+| 啟用 OAuth 2.0 裝置授權 | 客戶端無瀏覽器：CLI、物聯網裝置、電視應用 |
+| OAuth 2.0 權杖交換 | 客戶端是一個後端服務，它將使用者的存取權杖換取針對另一個服務的權杖。參見[token exchange](/zh-TW/discover/core-concepts/token-exchange) |
+
+**需要 PKCE** 是相反方向：保持開啟。透過控制檯或 API 建立的客戶端需要 PKCE，除非請求另有說明，否則沒有 S256 程式碼挑戰的授權請求會被拒絕。S256 是發現唯一宣傳的方法。
+
+禁用的客戶端保留其全部配置並拒絕所有請求，這也是它與[維護模式](/zh-TW/modules/maintenance/overview)的不同之處，後者仍然允許白名單透過。
+
+<span id="client-properties" />
+
+## 客戶端屬性
+
+| 屬性 | 說明 |
+|---|---|
+| `client_id` | OAuth2 流程中使用的公共識別符號 |
+| `secret` | 客戶端金鑰（僅限機密客戶端） |
+| `protocol` | 協議型別，`openid-connect` 或 `saml`。建立時固定 |
+| `enabled` | 客戶端是否可以啟動身分認證 |
+| `redirect_uris` | 身分認證後允許的重定向 URI |
+| `direct_access_grants_enabled` | 允許已棄用的密碼授權型別 |
+| `oauth_device_code_grant_enabled` | 允許裝置碼授權，用於 CLI 和其他無瀏覽器客戶端 |
+| `require_pkce` | 授權碼流程中要求 S256 程式碼挑戰。在新客戶端上，`true` 為預設值 |
+| `public_client` | 公共客戶端：沒有金鑰，因此 PKCE 提供保護 |
+| `service_account_enabled` | 啟用客戶端憑據授權 |
+| `token_exchange_enabled` | 允許 RFC 8693 權杖交換授權。預設 `false` |
+| `backchannel_logout_uri` | 當該客戶端參與的會話結束時，FerrisKey 會 POST 一個登出權杖。預設未設定，表示選擇退出。參見 [後端登出](/zh-TW/discover/core-concepts/backchannel-logout) |
+| `backchannel_logout_session_required` | 記錄客戶端在其登出權杖中需要 `sid` 宣告。預設 `true`，並且 FerrisKey 總是傳送 `sid` |
+| `consent_required` | 當客戶端請求可選作用域時，徵求使用者同意。預設 `false` |
+| `registration_source` | `admin`, `dynamic` 或 `metadata_document` |
+
+`consent_required` 不在控制檯中：透過 API、`POST /realms/{realm_name}/clients` 或 `PATCH /realms/{realm_name}/clients/{client_id}` 的正文設定它。自行註冊的客戶端無論此標誌如何都需要同意。參見 [同意](/zh-TW/discover/core-concepts/consent)。
+
+<span id="authenticating-at-the-token-endpoint" />
+
+## 在權杖端點進行身分認證
+
+機密客戶端透過 `client_secret_basic`（HTTP Basic 頭）或 `client_secret_post`（以表單主體的 `client_id` 和 `client_secret`）來證明其身分。公共客戶端僅傳送其 `client_id`，該項在發現中列為 `none`。這三項組成了完整列表：`private_key_jwt` 和其他基於斷言的方法不被支援。
+
+Basic 頭的使用者名稱和密碼會進行表單解碼，正如 RFC 6749 §2.3.1 所要求的。如果一個金鑰包含 `+` 或 `%`，則在進行 base64 編碼前必須進行百分號編碼，否則 FerrisKey 讀取的金鑰將與您想傳送的金鑰不同。
+
+`client_credentials` 授權需要一個具有 `service_account_enabled` 的機密客戶端，並且它返回一個沒有重新整理權杖的存取權杖。[權杖端點](/zh-TW/discover/core-concepts/authentication#the-token-endpoint) 一節列出了適用的錯誤和速率限制。
+
+<span id="redirect-uris" />
+
+## 重定向 URI
+
+FerrisKey 將授權請求的 `redirect_uri` 與客戶端啟用的重定向 URI 進行比較。條目是一個字面地址，必須逐字元匹配。寫為 `^...$` 並在兩端加錨點的條目，被視為正規表示式，必須匹配整個值。一個也匹配空字串的表示式永遠不會匹配任何內容。
+
+優先使用字面地址。鬆散的模式可能會讓授權碼傳送到您不打算的地址。登出後的重定向 URI 會進行精確比較，模式形式不適用於它們。
+
+`PUT .../redirects/{uri_id}` 僅切換 `enabled`。要更改地址，請建立新條目並刪除舊條目。
+
+<span id="token-lifetime-overrides" />
+
+## 權杖有效期覆蓋
+
+客戶端從其所屬身分域繼承權杖有效期。當一個應用程式需要不同的視窗時，可以針對每個客戶端進行覆蓋：
+
+| 覆蓋 | 說明 |
+|---|---|
+| `access_token_lifetime` | 存取權杖的 TTL（秒） |
+| `refresh_token_lifetime` | 重新整理權杖的 TTL（秒） |
+| `id_token_lifetime` | ID 權杖的 TTL（秒） |
+| `temporary_token_lifetime` | 臨時權杖的 TTL（秒） |
+
+客戶端上設定的值優先於身分域預設值。保持為 `null`，則應用身分域預設值。重新整理權杖的有效期還決定了使用者透過此客戶端登入時 SSO 會話的持續時間。
+
+<span id="direct-access-grants" />
+
+## 直接存取授權
+
+啟用此功能後，客戶端可以使用資源所有者密碼憑據授權，直接向權杖端點傳送使用者名稱和密碼。這對於可信的第一方應用程式和測試非常方便。不要為第三方客戶端啟用它。該授權拒絕任何仍欠多因素身分認證（MFA）或必需操作的賬戶，因此不能替代瀏覽器登入。
+
+<span id="sub-resources" />
+
+## 子資源
+
+客戶端不是單個物件：它的幾個屬性是具有自己端點的集合。
+
+| 集合 | 端點 | 它控制的內容 |
+|---|---|---|
+| 重定向 URI | `GET POST` `…/{client_id}/redirects`, `PUT DELETE` `…/redirects/{uri_id}` | FerrisKey 登入後可能將瀏覽器傳送回的地方 |
+| 登出後的重定向 | `GET POST` `…/{client_id}/post-logout-redirects`, `PUT DELETE` `…/post-logout-redirects/{uri_id}` | 登出後可能傳送瀏覽器的地方 |
+| Web 來源 | `GET POST` `…/{client_id}/web-origins`, `DELETE` `…/web-origins/{web_origin_id}` | 允許呼叫身分域範圍路由的瀏覽器來源 |
+| 客戶端角色 | `GET POST` `…/{client_id}/roles` | 此客戶端範圍的角色 |
+| 客戶端金鑰 | `GET` `…/{client_id}/client-secret` | 讀取它會在審計日誌中引發 `client_secret_viewed` |
+| 作用域分配 | `PUT DELETE` `…/default-client-scopes/{scope_id}` 和 `…/optional-client-scopes/{scope_id}` | 參見 [客戶端作用域](/zh-TW/discover/core-concepts/client-scopes) |
+| 權杖交換策略 | `GET POST` `…/{client_id}/token-exchange-policies`, `DELETE` `…/token-exchange-policies/{policy_id}` | 該客戶端可為哪些其他客戶端獲取權杖。參見[token exchange](/zh-TW/discover/core-concepts/token-exchange) |
+
+:::callout{variant="info" title="Web 來源僅限於每個身分域範圍的路由"}
+客戶端的 Web 來源覆蓋身分域範圍的路由。它們不包括 `/config`、健康探測或 API 文件，這些不帶身分域，因此需要伺服器範圍的 `ALLOWED_ORIGINS`。從與 API 不同的源提供的控制檯需要兩者。
+:::
+
+<span id="previewing-the-token-a-client-would-get" />
+
+### 預覽客戶端將獲得的權杖
+
+```
+POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes
+```
+
+接受一個 `user_id` 和一個可選的 `scope`，並返回該客戶端的作用域為該使用者生成的宣告，而無需登入或簽署的權杖。這是檢查 [protocol mapper](/zh-TW/modules/aegis/protocol-mappers) 在將應用程式連線到它之前的最快方式。
+
+<span id="service-accounts" />
+
+## 服務賬戶
+
+具有 `service_account_enabled` 的客戶端可以透過客戶端憑據授權進行身分認證，無需涉及使用者。FerrisKey 為其建立一個關聯的服務賬戶使用者，該使用者像任何其他使用者一樣獲取角色和權限。
+
+這是機器對機器呼叫的常用模式。

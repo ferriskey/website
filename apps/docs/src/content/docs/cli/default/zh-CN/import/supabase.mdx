@@ -1,0 +1,209 @@
+---
+title: "来自 Supabase"
+description: "从 Supabase 项目导入用户，保留他们的密码哈希，并保持他们的 ID，以便令牌仍然有效。"
+icon: database
+order: 5
+---
+
+<span id="from-supabase" />
+
+# 来自 Supabase
+
+Supabase 是唯一只包含用户的来源。它没有客户端目录，也没有角色目录可以读取，所以导入只会将账户带过来，其他都不会带：你需要在之后自己创建客户端和身份域设置。
+
+<Callout variant="warning" title="尚未发布">
+
+Supabase 源代码及其标志 (`--source-passwords`、`--source-preserve-ids` 和 `--source-include-*` 过滤器) 已在 [ferriskey-cli](https://github.com/ferriskey/ferriskey-cli) 的 `main` 分支上合并，但尚无发布包含它们。发布版本 0.3.0 仅在 `--from` 之后接受 `config`、`keycloak` 和 `zitadel`。在发布赶上之前，请使用 `cargo install --git https://github.com/ferriskey/ferriskey-cli` 从仓库构建。
+
+</Callout>
+
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --target-realm acme
+```
+
+账户通过项目的 Auth (GoTrue) 管理 API 读取，这就是为什么 `--source-token` 需要项目的 `service_role` 密钥而不是匿名密钥。CLI 每次读取 100 个账户，直到某一页没有新用户为止。在 `--source-url` 上接受并移除尾随的 `/` 或 `/auth/v1`。
+
+域名由 `--target-realm` 命名，否则为 `--source-realm`，否则为 `supabase`。
+
+<span id="what-gets-carried-over" />
+
+## 命名。继承的内容
+
+| FerrisKey 字段 | 来自 |
+|---|---|
+| `username` | 电子邮件，然后是电话号码，然后是 Supabase ID。 |
+| `email` | 电子邮件（如果有的话） |
+| `email_verified` | 是否设置了 `email_confirmed_at`。仅针对有电子邮件的用户计算。 |
+| `firstname` / `lastname` | `user_metadata`，尝试 `first_name`、`firstName`、`given_name` 和 `last_name`、`lastName`、`family_name`。当都不存在时，`full_name` 或 `name` 在第一个空格处分割。 |
+| 角色 | `app_metadata.roles`（数组）和 `app_metadata.role`（单个字符串），修剪后合并并去重。 |
+| 密码 | 仅来自 `--source-passwords`，如下。 |
+
+角色在目标身份域中遇到时创建，没有权限，因此 `app_metadata` 中的 `roles` 数组足以重建 Supabase 从未拥有的角色目录。之后设置它们的权限。
+
+<Callout variant="warning" title="角色名称不能包含冒号">
+
+FerrisKey 保留 `:` 用于将客户端与其角色分开，因此像 `billing:admin` 这样的 Supabase 角色会被拒绝，而不是静默地重新解释。导入会停止，并显示角色和持有该角色的用户。在重新运行之前，将其在 `app_metadata` 中重命名。
+
+</Callout>
+
+<span id="three-kinds-of-row-are-dropped-by-default" />
+
+## 默认情况下，有三种类型的行被取消
+
+Supabase 的 `auth.users` 保存了一些其实并非你想要的账号行。所有三个过滤器默认都是关闭的，打开其中一个是一个刻意的操作：
+
+| 标志 | 它能进入什么 | 为什么默认会关闭 |
+|---|---|---|
+| `--source-include-deleted` | 用户作员软删除 | 他们的 `deleted_at` 已设置，但行依然存在。普通的导入会复活某些人故意删除的账户。 |
+| `--source-include-anonymous` | 匿名登录会话（标记为 `is_anonymous` 的行） | 它们是真实的行，通常既没有电子邮件也没有电话号码 |
+| `--source-include-unconfirmed` | 从未确认电子邮件或电话号码的用户 | 没有任何证据证明该地址或号码属于他们 |
+
+当设置了 `email_confirmed_at`、`phone_confirmed_at` 或 `confirmed_at` 时，用户即被视为已确认。匿名用户是否保留或删除完全取决于 `--source-include-anonymous`，无论其是否已确认；而软删除用户无论其他条件如何，都需要 `--source-include-deleted`。
+
+<Callout variant="info" title="在提交前请计数">
+
+先使用 `--dry-run` 执行导入，然后再添加过滤器执行一次，并比较用户数量。这个差异就是你的项目中实际存在的软删除、匿名或未确认行的数量，通常比任何人预期的都要多。
+
+</Callout>
+
+<span id="carrying-the-passwords-over" />
+
+## 携带密码
+
+身份认证管理员 API 从不提供密码哈希。导出表是获取密码哈希的唯一方式，因此 `--source-passwords` 接受的是 CSV 文件，而不是通过 API 读取：
+
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-passwords auth_users.csv \
+  --target-realm acme
+```
+
+<span id="producing-the-export" />
+
+### 生成导出
+
+连接字符串在项目的 **Connect** 按钮后面：
+
+```bash
+psql "<connection string>" -c \
+  "\copy (select id, encrypted_password from auth.users) to 'auth_users.csv' with (format csv, header)"
+```
+
+<Callout variant="warning" title="\\copy 上的反斜杠很重要">
+
+`\copy` 在客户端运行并将文件写入你的机器。一个普通的 `COPY TO` 会尝试写入数据库服务器，而你无法访问服务器上的文件系统。
+
+</Callout>
+
+或者在仪表板的 SQL 编辑器中运行 `select id, encrypted_password from auth.users;`，并使用结果上方的下载按钮。
+
+只有 `id` 和 `encrypted_password` 会被读取，额外的列会被忽略，所以普通的 `select *` 导出也有效。标题行开头的字节顺序标记是被允许的。行通过 `auth.users.id` 与用户连接，而不是通过电子邮件，这也保证了当一方地址更改时连接是安全的。
+
+<Callout variant="danger" title="该文件保存了目录中每个密码的哈希值">
+
+自己保管，不要记录，一旦导入完成就删除。这是迁移过程中产生的最敏感的文件。
+
+</Callout>
+
+<span id="what-survives-and-what-does-not" />
+
+### 什么会保留，什么不会
+
+只有 FerrisKey 接受的 bcrypt 哈希会被导入。所有其他账户都会到达时没有凭据，需要重置密码，因此请为该子集而不是所有人计划重置邮件。CLI 会跳过一个哈希，并在标准错误上打印一行 `note:` 来命名账户，在以下情况下会发生：
+
+| 已跳过 | 原因 |
+|---|---|
+| 前缀不是 `$2a$`、`$2b$` 或 `$2y$` | FerrisKey 不接受其他 bcrypt 变体，并且 `$2x$` 是已知损坏的一个。Argon2 哈希也不会被携带过来 |
+| 成本在 4 到 14 之外 | 超出 FerrisKey 在导入时接受的范围 |
+| 哈希体不是 53 个字符 | 在导出时被截断 |
+| 空的 `encrypted_password` | 不是错误：该账户通过联合提供程序登录且没有密码。CLI 会统计这些并打印一条摘要行 |
+
+导入的哈希在用户首次成功登录时会重新编码为 argon2id。有关这在 FerrisKey 端意味着什么，请参见 [导出与导入](/zh-CN/discover/guides/portability#password-hashes)，其中包括 `password_imported` 审计事件，让您可以衡量迁移进度。
+
+已经在 FerrisKey 中有密码的用户将保留其密码。导入会将冲突报告为警告，并在 `already_present` 中进行计数，而不会覆盖某人故意设置的凭据。
+
+<span id="keeping-the-user-ids" />
+
+## 保留用户 ID
+
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-preserve-ids
+```
+
+为每个用户创建其在 Supabase 中已有的 ID，因此每个令牌的 `sub` 声明都能在迁移中保留。仅限 Supabase；任何其他来源都会拒绝该标志。
+
+当下游系统将 Supabase 用户 ID 作为外键存储时需要使用它：你自己的表、分析仓库、计费系统。如没有此功能，这些引用都会断裂，你需要编写一个映射表。
+
+有两件事情会导致导入出错。一种是服务器在一个不同于请求的 ID 下创建用户，因为那样每个主体都会改变。另一种是 ID 已经属于 FerrisKey 实例中的另一个用户，可能在您的令牌无法访问的域中。在这两种情况下，消息都会指明用户。
+
+<span id="a-realistic-migration" />
+
+## 一个现实的迁移
+
+::::step-group
+:::step{title="预览，并查看计数"}
+```bash
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --target-realm acme --dry-run -o yaml
+```
+
+没有进行 FerrisKey 调用。检查用户数量以及从 `app_metadata` 得出的角色。
+:::
+
+:::step{title="决定筛选后的行"}
+使用每个 `--source-include-*` 标志重新运行预览，以查看你会留下什么，并基于此做出决策，而不是默认处理。
+:::
+
+:::step{title="导出密码"}
+仅在您即将进行真实导入时：文件应存在的时间尽可能短。
+:::
+
+:::step{title="导入"}
+添加 `--source-passwords`，如果有任何东西引用 Supabase id，则添加 `--source-preserve-ids`。之后删除 CSV。
+:::
+
+:::step{title="构建 Supabase 没有的内容"}
+客户端、重定向 URI、作用域和身份域设置。[使用 SSO 连接应用程序](/zh-CN/discover/guides/application-sso) 是每个应用程序的路径。
+:::
+::::
+
+<Callout variant="info" title="重新运行是安全的">
+
+像所有来源一样，Supabase 导入是收敛的：已存在的账户会被重用并提示警告，因此您可以修复源并再次运行。现有账户不会被更新。
+
+</Callout>
+
+<span id="storing-the-connection" />
+
+## 存储连接
+
+每次运行时输入 `service_role` 密钥会导致它出现在 shell 历史中。请将源存储一次：
+
+```bash
+ferris-ctl source add supabase-prod --kind supabase \
+  --url https://abcdefgh.supabase.co \
+  --token "$SUPABASE_SERVICE_ROLE_KEY"
+
+ferris-ctl realm import --source-ref supabase-prod --target-realm acme
+```
+
+内联 `--source-*` 标志仍然会覆盖存储源的单个字段，因此存储的条目可以保留连接，而运行时决定过滤器。过滤器、密码导出和 `--source-preserve-ids` 永远不会被存储。令牌本身以明文形式存储在 `config.toml` 中，如 [`source`](/zh-CN/cli/commands/source) 所述。
+
+::::card-group{cols=2}
+:::card{label="导入概述" icon="lucide:download" href="/zh-CN/cli/import/overview"}
+导入如何解析、模拟运行和幂等性。
+:::
+:::card{label="身份域导入" icon="lucide:layers" href="/zh-CN/cli/commands/realm"}
+每个标志适用于所有四个来源。
+:::
+::::

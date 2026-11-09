@@ -1,0 +1,134 @@
+---
+title: "JWT 宣告"
+description: "標準宣告、OIDC 宣告，以及如何安全地新增自定義宣告。"
+icon: list-checks
+order: 3
+---
+
+<span id="jwt-claims" />
+
+# JWT 宣告
+
+宣告是 JWT 有效載荷中的鍵值對。有些宣告在各處都有約定的含義。其他的則是你的應用自定義的。知道哪些是哪些能夠保持權杖的可移植性。
+
+<span id="registered-claims-rfc-7519" />
+
+## 註冊宣告（RFC 7519）
+
+核心 JWT 規範中定義了七個宣告。它們故意簡短；JWT 本身很小。
+
+| 宣告 | 含義 |
+| --- | --- |
+| `iss` | 簽發者。生成該權杖的實體的 URL。 |
+| `sub` | 主題。權杖所涉及的主體。對於使用者來說，這是他們的穩定 ID。 |
+| `aud` | 受眾。預期接收者。可以是字串或字串陣列。 |
+| `exp` | 過期時間。Unix 時間戳。過期後拒絕。 |
+| `nbf` | 生效時間。Unix 時間戳。如果當前時間早於此時間則拒絕。 |
+| `iat` | 簽發時間。Unix 時間戳。 |
+| `jti` | JWT ID。唯一識別符號，有助於撤銷列表管理。 |
+
+在接收到的權杖上始終檢查 `exp`、`nbf`、`iss` 和 `aud`。跳過其中任何一個都是已知的錯誤型別，但人們仍然不斷髮布。
+
+<span id="oidc-standard-claims" />
+
+## OIDC 標準宣告
+
+OIDC 為使用者身分增加了一個詞彙表：
+
+<span id="identity" />
+
+### 身分
+- `name`, `given_name`, `family_name`, `middle_name`, `nickname`
+- `preferred_username`
+- `profile`, `picture`, `website`
+- `gender`, `birthdate`
+- `zoneinfo`, `locale`
+- `updated_at`
+
+<span id="contact" />
+
+### 聯絡方式
+- `email`, `email_verified`
+- `phone_number`, `phone_number_verified`
+- `address`（結構化宣告）
+
+<span id="authentication-context" />
+
+### 認證上下文
+- `auth_time`：使用者實際登入的時間
+- `nonce`：重放保護（僅限 ID 權杖）
+- `acr`，`amr`：使用的認證上下文類別和方法
+
+這些資訊會在 ID 權杖中返回，並在 `/userinfo` 中根據客戶端請求進行範圍限定（`profile`、`email` 等）。
+
+<span id="oauth2-access-token-claims" />
+
+## OAuth2 存取權杖宣告
+
+碰巧是 JWT 的存取權杖（常見情況）通常會包含：
+
+- `scope`：以空格分隔的已授予作用域列表
+- `client_id`：請求權杖的客戶端
+- `sub`：使用者，或對於 `client_credentials` 是客戶端自身
+- `roles` / `realm_access` / `resource_access`：特定於提供者的角色宣告
+
+這些在所有提供者之間並不統一，但它們非常常見。
+
+<span id="custom-claims" />
+
+## 自定義宣告
+
+你可以新增你自己的。兩個經驗法則：
+
+**為其名稱空間。** 一個名為 `tenant_id` 的平面宣告在你的應用中今天可以正常工作。但明天你匯入的庫新增了自己的 `tenant_id`，含義就會衝突。為自定義宣告加上 URL 或反轉域字串字首：
+
+```json
+{
+  "https://example.com/tenant_id": "acme",
+  "https://example.com/feature_flags": ["beta-search"]
+}
+```
+
+這是非標準宣告的 [OIDC 約定](https://openid.net/specs/openid-connect-core-1_0.html#AdditionalClaims)，可以避免與註冊名稱衝突。
+
+**保持它們小巧。** 每個宣告都會隨帶有權杖的每個 HTTP 請求傳送。一個 4 KB 的 Cookie 頭是真正的開銷。如果某個值很大或很少需要，請透過 `/userinfo` 來存取。
+
+<span id="audience-aud-deserves-a-section" />
+
+## 主題（`aud`）值得單獨說明
+
+`aud` 是最容易被誤解的標準宣告。它說明了這個權杖是給誰的。
+
+- ID 權杖的 `aud` 是客戶端 ID。客戶端檢查 `aud == my_client_id`。
+- 存取權杖的 `aud` 是資源伺服器。API 檢查 `aud` 是否與其識別符號匹配。
+
+如果你有多個 API，每個 API 都應驗證傳入權杖是否是**為其**生成的。否則，為 `api-A` 發出的權杖可以在 `api-B` 上重放。這是 ID 權杖作為承載權杖攻擊所利用的失敗模式。
+
+<span id="a-practical-validation-checklist" />
+
+## 一個實用的驗證檢查清單
+
+對於任何傳入的 JWT：
+
+1. ✅ 簽名與預期金鑰核驗透過。
+2. ✅ `alg` 在你的允許列表中（絕不使用 `none`）。
+3. ✅ `iss` 與預期的簽發者匹配。
+4. ✅ `aud` 包含你的識別符號。
+5. ✅ `exp` 時間在將來。
+6. ✅ `nbf`（如果存在）時間在過去。
+7. ✅ 型別特定檢查：`nonce`（ID 權杖）、`scope`（存取權杖）等。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 允許您透過客戶端和作用域上的 **協議對映器** 控制權杖中顯示的宣告。您可以附加標準 OIDC 宣告，新增自定義宣告，並配置它們的生命週期。
+
+::::card-group{cols=2}
+:::card{label="保護模組" icon="lucide:lock" href="/zh-TW/modules/aegis/overview"}
+FerrisKey 中的協議對映器和作用域配置。
+:::
+:::card{label="ID 權杖" icon="lucide:id-card" href="/zh-TW/learn/oidc/id-token"}
+哪些 OIDC 宣告位於 ID 權杖中。
+:::
+::::

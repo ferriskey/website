@@ -1,0 +1,157 @@
+---
+title: "成员"
+description: "在 FerrisKey 中管理组织成员资格：添加、删除和列出成员，在组织内分配角色，以及查询用户的组织。"
+icon: users
+order: 81
+---
+
+<span id="members" />
+
+# 成员
+
+会员资格将用户与组织连接起来。用户可以属于同一身份域中的多个组织，而一个组织可以拥有任意数量的成员。然后可以在该组织内为成员分配角色，或从一个[组](/zh-CN/modules/organization/groups)继承角色。
+
+<span id="membership-endpoints" />
+
+## 会员资格端点
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members` | 列出组织的成员，支持分页 |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/members` | 将用户添加到组织 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}` | 从组织中移除用户 |
+| `GET` | `/realms/{realm_name}/users/{user_id}/organizations` | 列出用户所属的组织 |
+
+<span id="adding-a-member" />
+
+## 添加成员
+
+在请求正文中发送目标 `user_id`：
+
+```json title="POST /realms/acme/organizations/01936b2e-1234-7000-abcd-000000000001/members"
+{
+  "user_id": "01936b2e-5678-7000-abcd-000000000002"
+}
+```
+
+成功添加会返回 `201` 和新的会员记录：
+
+```json
+{
+  "id": "01936b2e-9999-7000-abcd-000000000003",
+  "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+  "user_id": "01936b2e-5678-7000-abcd-000000000002",
+  "created_at": "2026-06-16T10:00:00Z"
+}
+```
+
+<span id="adding-a-member-step-by-step" />
+
+## 逐步添加成员
+
+::::step-group
+:::step{title="确认组织已启用"}
+一个已禁用的组织 (`enabled: false`) 拒绝添加新成员。在尝试添加成员之前，请检查该组织的 `enabled` 字段。如有需要，可通过向组织端点发送 `PUT` 来重新启用它。
+:::
+
+:::step{title="确认用户属于同一个域"}
+用户必须属于与组织相同的域。跨域成员身份会被拒绝。请验证组织的 `realm_id` 是否与用户创建时的域匹配。
+:::
+
+:::step{title="向成员端点发送 POST 请求"}
+将 `{ "user_id": "<uuid>" }` 发送到 `POST /realms/{realm_name}/organizations/{organization_id}/members`。用户会立即被添加。
+:::
+
+:::step{title="通过列表调用进行验证"}
+确认用户出现在 `GET /realms/{realm_name}/organizations/{organization_id}/members` 或 `GET /realms/{realm_name}/users/{user_id}/organizations` 中。
+:::
+::::
+
+<span id="behavior-rules" />
+
+## 行为规则
+
+| 情况 | 结果 |
+|---|---|
+| 用户已经是该组织的成员 | 返回 400，原因是 `already_exists`。重复成员身份会被拒绝 |
+| 用户所在的身份域与组织不同 | 400，原因 `invalid` |
+| 组织已被禁用 (`enabled: false`) | 400，原因 `invalid` |
+| 不存在的用户 ID | 404 |
+| 尝试移除非成员用户 | 404 |
+
+<span id="listing-members" />
+
+## 列出成员
+
+```text
+GET /realms/{realm_name}/organizations/{organization_id}/members
+```
+
+列表是分页的，如 [API 列表](/zh-CN/discover/guides/api-listings) 所述，并回答 `{ data, metadata }`。`data` 中的每一条目都是一个成员记录，形状与添加成员时返回的相同：`id`、`organization_id`、`user_id` 和 `created_at`，包含用户加入日期。不包含用户名或电子邮件。在需要显示名称时，请根据用户 API 解析 `user_id`。
+
+过滤器适用于成员的用户：
+
+| 参数 | 匹配 |
+|---|---|
+| `search` | 用户名或电子邮件的不区分大小写子字符串 |
+| `username`, `email` | 该字段的大小写不敏感子字符串 |
+| `enabled` | 用户账户是否启用，`true` 或 `false` |
+| `created_from`, `created_to` | 会员日期，按 RFC 3339 日期时间格式，包括和排除 |
+
+`order_by` 接受 `username`、`email` 和 `created_at`（默认值，即会员日期）。
+
+<span id="listing-a-users-organizations" />
+
+## 列出用户的组织
+
+要查找用户属于该身份域的每个组织：
+
+```text
+GET /realms/{realm_name}/users/{user_id}/organizations
+```
+
+响应是一个会员记录的普通数组，每个记录包含 `id`、`organization_id`、`user_id` 和 `created_at`。它没有分页，也不是完整的组织对象，因此在需要详细信息时，请针对 `organization_id` 解析 `GET /realms/{realm_name}/organizations/{organization_id}`。这是工作区切换器的基础构建。
+
+<span id="removing-a-member" />
+
+## 移除成员
+
+```text
+DELETE /realms/{realm_name}/organizations/{organization_id}/members/{user_id}
+```
+
+移除操作立即生效，并返回 `204`。如果用户不是成员，调用将返回 404。不会对用户账户产生连锁影响：用户记录保持不变。
+
+<span id="member-roles" />
+
+## 成员角色
+
+会员记录本身没有角色字段。角色是通过一组单独的端点附加到成员上的，这些端点是以组织为范围的。
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles` | 列出成员在此组织中拥有的角色 |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles` | 为成员分配角色 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/members/{user_id}/roles/{role_id}` | 撤销成员的角色 |
+
+分配操作在请求体中使用角色 ID，并返回 `204 No Content`：
+
+```json title="POST .../members/{user_id}/roles"
+{
+  "role_id": "01936b2e-7777-7000-abcd-000000000004"
+}
+```
+
+`GET` 返回完整的角色对象，因此客户端可以在不需二次查询的情况下读取其名称和权限。
+
+<span id="permissions" />
+
+## 权限
+
+列出成员、成员角色和用户的组织需要 `view_organizations`、`manage_organizations` 或 `manage_realm`。添加和移除成员，以及分配或撤销角色，需要 `manage_organizations` 或 `manage_realm`。`manage_users` 并不足够。
+
+<Callout variant="info" title="角色也可以来自于组">
+
+组织内的群组拥有自己的角色映射，且群组的成员资格是递归的：一个群组的成员实际上属于其所有祖先群组，并继承它们的角色。请参见 [群组](/zh-CN/modules/organization/groups)。
+
+</Callout>

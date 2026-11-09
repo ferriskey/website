@@ -1,0 +1,114 @@
+---
+title: "什麼是 OpenID Connect？"
+description: "OIDC 是 OAuth2 之上的身分層。它回答“使用者是誰？”"
+icon: id-card
+order: 1
+---
+
+<span id="what-is-openid-connect" />
+
+# 什麼是 OpenID Connect？
+
+OpenID Connect (OIDC) 是 OAuth2 之上的一個薄身分層。當 OAuth2 回答 _“這個權杖允許做什麼？”_ 時，OIDC 會附加上 _“順便說一下，使用者是誰？”_
+
+如果你曾點選“使用 Google 登入”，你就使用過 OIDC。
+
+<span id="the-one-paragraph-version" />
+
+## 一段文字版
+
+OIDC重用了OAuth2的所有內容：流程、端點、權杖管道。它在上面增加了一個新東西：一個簽名的ID權杖，用來證明使用者身分。客戶端在本地驗證ID權杖，現在知道使用者身分，沒有密碼碰過它。
+
+<span id="oidc-vs-oauth2" />
+
+## OIDC 與 OAuth2 比較
+
+一個並排對比，解開了大部分疑惑：
+
+| | OAuth2 | OIDC |
+| --- | --- | --- |
+| **問題已解答** | 這個權杖能做_What事？_ | _Who是使用者（token能做什麼）？_ |
+| **主權杖** | 存取權杖 | 身分權杖 + 存取權杖 |
+| **為**而生** | API 存取委派 | 使用者認證 / 單點登入 |
+| **觸發** | 任何瞄準鏡 | `openid`作用域是強制的 |
+| **定義`/userinfo`端點？** | 不 | 是 |
+
+OIDC = OAuth2 + ID 權杖 + 幾個額外的端點。你學到的所有關於 OAuth2 流程的內容依然適用。
+
+<span id="when-oidc-is-in-play" />
+
+## 當OIDC介入時
+
+決定性訊號是授權請求中的`openid`作用域：
+
+```
+scope=openid profile email
+```
+
+- 沒有`openid`：普通的OAuth2，沒有ID權杖。
+- 使用`openid`：OIDC，你會獲得一個ID權杖和存取權杖。
+
+如果客戶端要求`profile`和`email`但忘記`openid`，伺服器會默默將其視為僅 OAuth2。這是最常見的“為什麼沒有 ID 權杖？”的錯誤。
+
+<span id="what-oidc-standardizes" />
+
+## OIDC標準化的內容
+
+在OAuth2之上，OIDC還新增了：
+
+1. **身分權杖**：攜帶關於認證使用者宣告的JWT。
+2. **`/userinfo`端點**：用存取權杖呼叫以獲取最新的使用者宣告。
+3. **發現**：每個 OIDC 提供者都會發布 `/.well-known/openid-configuration`，這是一個 JSON 文件，列出其所有端點、支援的作用域、簽名金鑰和功能。客戶端可以自動配置自己。
+4. **會話管理**：用於跟蹤使用者在提供者處登出時間的可選標準。
+5. **標準宣告**：`sub`、`name`、`email`、`email_verified` 以及一個文件化詞彙表。
+
+<span id="discovery-in-one-example" />
+
+## 一個發現示例
+
+指向 `https://auth.example.com/realms/my-app` 的客戶端可以找到所需的一切：
+
+```bash
+curl https://auth.example.com/realms/my-app/.well-known/openid-configuration
+```
+
+```json
+{
+  "issuer": "https://auth.example.com/realms/my-app",
+  "authorization_endpoint": ".../authorize",
+  "token_endpoint": ".../token",
+  "userinfo_endpoint": ".../userinfo",
+  "jwks_uri": ".../certs",
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "response_types_supported": ["code", "id_token", "token id_token"],
+  ...
+}
+```
+
+大多數現代 OIDC 庫只需要簽發者 URL 即可搞定其餘部分。
+
+<span id="a-mental-model" />
+
+## 一個思維模型
+
+把 OIDC 想象成帶有護照的 OAuth2。
+
+- 存取權杖是你的簽證：_你可以做什麼_
+- ID 權杖是你的護照：_你是誰_
+
+護照是供客戶端檢查的（這樣它可以按名字向你打招呼）。簽證是供 API 檢查的（這樣它知道允許你做什麼）。它們是面向不同受眾的不同檔案。將它們混用，比如使用 ID 權杖去呼叫 API，是 #1 OIDC 常見錯誤。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 支援 OIDC。你註冊的任何客戶端都會自動獲得 OIDC 發現 URL。
+
+::::card-group{cols=2}
+:::card{label="ID 權杖" icon="lucide:id-card" href="/zh-TW/learn/oidc/id-token"}
+ID 權杖內部的內容，以及客戶端如何驗證它。
+:::
+:::card{label="入門指南" icon="lucide:rocket" href="/zh-TW/discover/getting-started"}
+透過 OIDC 登入並檢查你的第一個 ID 權杖。
+:::
+::::

@@ -1,6 +1,7 @@
 ---
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { supportedLocales } from '../i18n/locale'
 
 interface BlogPost {
   title: string
@@ -68,7 +69,7 @@ function loadBlogPosts(locale: string): BlogPost[] {
 
 const blogUrl = import.meta.env.PUBLIC_BLOG_URL || ''
 const enPosts = loadBlogPosts('en')
-const frPosts = loadBlogPosts('fr')
+const postsByLocale = supportedLocales.map((locale) => ({ locale, posts: loadBlogPosts(locale) }))
 
 function formatDate(date: Date, locale: string) {
   return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -88,19 +89,20 @@ function formatDate(date: Date, locale: string) {
         </a>
       </div>
 
-    <ul data-locale-articles="en" class="-mr-px grid md:grid-cols-3">
-      {enPosts.map((post) => (
+    {postsByLocale.map(({ locale, posts }) => (
+    <ul data-locale-articles={locale} class="-mr-px grid md:grid-cols-3" style={locale === 'en' ? undefined : 'display: none;'}>
+      {posts.map((post) => (
         <li class="border-b border-r border-border">
-          <a href={`${blogUrl}/en/${post.slug}`} class="group flex h-full flex-col transition-colors hover:bg-foreground/[0.03]">
+          <a href={`${blogUrl}/${locale}/${post.slug}`} class="group flex h-full flex-col transition-colors hover:bg-foreground/[0.03]">
             <div class="aspect-[16/10] overflow-hidden border-b border-border bg-muted">
-              <img src={post.cover ?? `${blogUrl}/en/${post.slug}/thumbnail.png`} alt={post.title} class="size-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+              <img src={post.cover ?? `${blogUrl}/${locale}/${post.slug}/thumbnail.png`} alt={post.title} class="size-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
             </div>
             <div class="flex flex-1 flex-col px-5 py-8 sm:px-7">
               <div class="flex flex-wrap items-center gap-2">
                 {post.tags.slice(0, 2).map((tag) => (
                   <span class="border border-border px-2 py-0.5 font-pixel text-[9px] uppercase tracking-[0.06em] text-primary">{tag}</span>
                 ))}
-                <time class="font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{formatDate(post.date, 'en')}</time>
+                <time class="font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{formatDate(post.date, locale)}</time>
               </div>
               <h3 class="mt-5 line-clamp-2 text-lg font-medium leading-snug tracking-[-0.01em] transition-colors group-hover:text-primary">{post.title}</h3>
               <p class="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{post.description}</p>
@@ -109,38 +111,16 @@ function formatDate(date: Date, locale: string) {
         </li>
       ))}
     </ul>
-    <ul data-locale-articles="fr" class="-mr-px grid md:grid-cols-3" style="display: none;">
-      {frPosts.map((post) => (
-        <li class="border-b border-r border-border">
-          <a href={`${blogUrl}/fr/${post.slug}`} class="group flex h-full flex-col transition-colors hover:bg-foreground/[0.03]">
-            <div class="aspect-[16/10] overflow-hidden border-b border-border bg-muted">
-              <img src={post.cover ?? `${blogUrl}/fr/${post.slug}/thumbnail.png`} alt={post.title} class="size-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
-            </div>
-            <div class="flex flex-1 flex-col px-5 py-8 sm:px-7">
-              <div class="flex flex-wrap items-center gap-2">
-                {post.tags.slice(0, 2).map((tag) => (
-                  <span class="border border-border px-2 py-0.5 font-pixel text-[9px] uppercase tracking-[0.06em] text-primary">{tag}</span>
-                ))}
-                <time class="font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{formatDate(post.date, 'fr')}</time>
-              </div>
-              <h3 class="mt-5 line-clamp-2 text-lg font-medium leading-snug tracking-[-0.01em] transition-colors group-hover:text-primary">{post.title}</h3>
-              <p class="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{post.description}</p>
-            </div>
-          </a>
-        </li>
-      ))}
-    </ul>
+    ))}
     </div>
   </section>
 )}
 
 <script>
+  import { getClientLocale } from '../i18n/locale'
+
   function showLocaleArticles() {
-    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
-    const cookie = match ? match[1] : null
-    const browser = (navigator.language || '').split('-')[0]
-    const locale = (cookie === 'en' || cookie === 'fr') ? cookie
-      : (browser === 'en' || browser === 'fr') ? browser : 'en'
+    const locale = getClientLocale()
 
     document.querySelectorAll('[data-locale-articles]').forEach(function (el) {
       ;(el as HTMLElement).style.display = el.getAttribute('data-locale-articles') === locale ? '' : 'none'

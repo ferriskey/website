@@ -1,0 +1,277 @@
+---
+title: "资源"
+description: "FerrisKey Terraform 提供者的每个资源：它管理的内容、重要属性、未操作的内容以及它的导入 ID。"
+icon: box
+order: 4
+---
+
+<span id="resources" />
+
+# 资源
+
+每个部分显示一个示例、值得了解的属性以及导入命令。[提供者仓库](https://github.com/ferriskey/terraform-provider-ferriskey/tree/main/docs) 包含每个资源的完整架构。
+
+标记为 **replaces** 的属性不能原地更改：更改它会销毁对象并创建一个新对象，带有新的 UUID。对于用户或客户端，这也会丢失附着在旧对象上的内容，如凭据、会话和角色分配。
+
+## ferriskey_realm
+
+```hcl
+resource "ferriskey_realm" "acme" {
+  name = "acme"
+}
+```
+
+| 属性 | 说明 |
+|---|---|
+| `name` | 身份域名称。可以原地重命名，但每个与该身份域相关的 URL 和签发者都会随之更改 |
+| `realm_id` | UUID，只读 |
+| `settings` | 身份域设置的只读副本。请使用 `ferriskey_realm_settings` 管理它们 |
+
+销毁该资源会删除该身份域及其所有内容。`master` 身份域无法被删除，因此不要通过此资源管理它：请使用 [`ferriskey_realm` 数据源](/zh-CN/terraform/data-sources#ferriskey_realm) 读取它。
+
+```bash
+terraform import ferriskey_realm.acme acme
+```
+
+## ferriskey_realm_settings
+
+```hcl
+resource "ferriskey_realm_settings" "acme" {
+  realm                     = ferriskey_realm.acme.name
+  access_token_lifetime     = 600
+  refresh_token_lifetime    = 43200
+  user_registration_enabled = true
+  forgot_password_enabled   = true
+  passkey_enabled           = true
+}
+```
+
+管理[身份域设置](/zh-CN/discover/core-concepts/realms#realm-settings)：令牌寿命、`default_signing_algorithm`、注册、忘记密码、记住我、魔法链接、通行密钥、电子邮件验证和 `compass_enabled`。寿命以秒计，`email_verification_ttl_hours`小时，`magic_link_ttl`分钟。
+
+更新是部分合并，就像 API 一样：你省略的设置保持当前值，不会重置为默认值。销毁资源会停止管理设置，服务器上不会有任何变化。
+
+`require_mfa`、`login_aliases`、锁定、同意、地点和品牌设置还没在资源里。在控制台或`PUT /realms/{realm_name}/settings`里设置。
+
+```bash
+terraform import ferriskey_realm_settings.acme acme
+```
+
+## ferriskey_client
+
+```hcl
+resource "ferriskey_client" "web" {
+  realm         = ferriskey_realm.acme.name
+  client_id     = "acme-web"
+  name          = "Acme Web App"
+  client_type   = "confidential"
+  redirect_uris = [
+    "https://app.acme.example/callback",
+    "https://app.acme.example/silent-renew",
+  ]
+  access_token_lifetime = 300
+}
+
+resource "ferriskey_client" "spa" {
+  realm                        = ferriskey_realm.acme.name
+  client_id                    = "acme-spa"
+  name                         = "Acme SPA"
+  client_type                  = "public"
+  public_client                = true
+  direct_access_grants_enabled = false
+  redirect_uris                = ["https://spa.acme.example/callback"]
+}
+```
+
+| 属性 | 说明 |
+|---|---|
+| `client_id` | `client_id`申请发送 |
+| `client_type` | `confidential`，不`public`，不`system`。**替换** |
+| `public_client` | 不是什么密钥，PKCE承担了保护。**替代** |
+| `service_account_enabled` | 允许 `client_credentials` 授权。**替换** |
+| `direct_access_grants_enabled` | 允许已弃用的密码授权 |
+| `redirect_uris` | 一个集合，因此顺序无关。忽略它以保留客户端的重定向 URI，设置 `[]` 来移除它们全部。参见 [重定向 URI](/zh-CN/discover/core-concepts/clients#redirect-uris) |
+| `access_token_lifetime`, `refresh_token_lifetime`, `id_token_lifetime`, `temporary_token_lifetime` | 按客户端覆盖，以秒为单位。未设置时适用身份域值 |
+| `secret` | 由服务器生成，只读且敏感。存储在状态中 |
+| `service_account_user_id` | 当 `service_account_enabled` 开启时的服务账户用户。使用 `ferriskey_user_role` 给它分配角色 |
+
+其他 [客户端属性](/zh-CN/discover/core-concepts/clients#client-properties)，例如 `require_pkce`、`token_exchange_enabled`、`consent_required`、后台注销、注销后重定向和网页来源，尚未在资源中。由提供者创建的客户端将获取服务器为它们设置的默认值。
+
+```bash
+terraform import ferriskey_client.web acme/3a8c6128-1111-2222-3333-444455556666
+```
+
+## ferriskey_user
+
+```hcl
+resource "ferriskey_user" "alice" {
+  realm            = ferriskey_realm.acme.name
+  username         = "alice"
+  email            = "alice@acme.example"
+  email_verified   = true
+  firstname        = "Alice"
+  lastname         = "Liddell"
+  required_actions = ["update_password"]
+}
+```
+
+| 属性 | 说明 |
+|---|---|
+| `username` | **替换** |
+| `email` | 设置后可以更改但不能清除：从配置中移除它不会影响服务器端的值 |
+| `email_verified` | 默认 `false` |
+| `enabled` | 默认 `true` |
+| `required_actions` | `verify_email`、`update_password`、`configure_passkey`。参见 [必要操作](/zh-CN/discover/core-concepts/users#required-actions) |
+| `user_uuid` | UUID，只读。在 `ferriskey_user_role` 和 `ferriskey_organization_member` 中使用它 |
+
+该资源不设置密码和凭据。在控制台或通过 API 设置它们，或者让用户通过其他方式登录，例如魔术链接或身份提供者。
+
+在 `required_actions` 中省略 `configure_otp`。FerrisKey 会在每次登录时根据身份域和用户角色计算出来，并且从不存储它，因此 Terraform 每次运行都会计划添加它。
+
+用户通过完成 `verify_email` 和 `update_password` 将它们从账户中移除。然后 Terraform 会计划将它们重新添加。在创建时设置操作后添加 `lifecycle { ignore_changes = [required_actions] }`。
+
+```bash
+terraform import ferriskey_user.alice acme/9f1c0e2a-aaaa-bbbb-cccc-ddddeeeeffff
+```
+
+## ferriskey_role
+
+```hcl
+resource "ferriskey_role" "support" {
+  realm       = ferriskey_realm.acme.name
+  name        = "support"
+  description = "Read-only support staff"
+  permissions = ["view_users", "query_users", "view_clients"]
+}
+```
+
+`permissions` 获取 [权限参考](/zh-CN/discover/core-concepts/roles#permissions-reference) 的 snake_case 名称，并在更新时替换整个集合。`realm` **替换**。该资源仅管理身份域角色：`client_id` 是只读的。
+
+当提供程序的账户拥有 `manage_realm` 时，不匹配任何权限的名称会被静默删除，否则会返回 403 拒绝。在第一种情况下，服务器不会存储它，因此每个 `plan` 再次显示它。当角色持续显示更改时，请检查名称。
+
+```bash
+terraform import ferriskey_role.support acme/4b2d7f90-1111-2222-3333-444455556666
+```
+
+## ferriskey_user_role
+
+```hcl
+resource "ferriskey_user_role" "alice_support" {
+  realm   = ferriskey_realm.acme.name
+  user_id = ferriskey_user.alice.user_uuid
+  role_id = ferriskey_role.support.role_uuid
+}
+```
+
+将身份域角色分配给用户，或通过 `service_account_user_id` 分配给客户端的服务账户。这是一个没有自身属性的链接：每次更改都会替换它。销毁它会移除分配，而不是用户或角色。
+
+```bash
+terraform import ferriskey_user_role.alice_support acme/USER_UUID/ROLE_UUID
+```
+
+## ferriskey_organization
+
+```hcl
+resource "ferriskey_organization" "globex" {
+  realm       = ferriskey_realm.acme.name
+  name        = "Globex"
+  alias       = "globex"
+  description = "Globex Corporation tenant"
+  domain      = "globex.example"
+}
+```
+
+`alias` 是身份域内组织的稳定、URL 安全标识符。默认情况下，`enabled` 是 `true`，`redirect_url` 是可选的，`realm` **替换**。
+
+```bash
+terraform import ferriskey_organization.globex acme/7c3e9a14-1111-2222-3333-444455556666
+```
+
+## ferriskey_organization_member
+
+```hcl
+resource "ferriskey_organization_member" "alice_globex" {
+  realm           = ferriskey_realm.acme.name
+  organization_id = ferriskey_organization.globex.organization_uuid
+  user_id         = ferriskey_user.alice.user_uuid
+}
+```
+
+将用户添加到组织中。像 `ferriskey_user_role` 一样，它是一个链接，并且每次更改都会替换它。
+
+```bash
+terraform import ferriskey_organization_member.alice_globex acme/ORG_UUID/USER_UUID
+```
+
+## ferriskey_password_policy
+
+```hcl
+resource "ferriskey_password_policy" "acme" {
+  realm             = ferriskey_realm.acme.name
+  min_length        = 14
+  require_uppercase = true
+  require_lowercase = true
+  require_number    = true
+  require_special   = true
+  max_age_days      = 365
+}
+```
+
+管理身份域的[密码策略](/zh-CN/discover/core-concepts/password-policy)。对于永不过期的密码，请保持 `max_age_days` 未设置。一个身份域总是有策略的，因此销毁资源只会停止管理它，并保持策略原样。
+
+```bash
+terraform import ferriskey_password_policy.acme acme
+```
+
+## ferriskey_smtp_config
+
+```hcl
+resource "ferriskey_smtp_config" "acme" {
+  realm      = ferriskey_realm.acme.name
+  host       = "smtp.example.com"
+  port       = 587
+  username   = "mailer"
+  password   = var.smtp_password
+  from_email = "no-reply@acme.example"
+  from_name  = "Acme"
+  encryption = "tls"
+}
+```
+
+管理身份域的 SMTP 设置，如[电子邮件指南](/zh-CN/discover/guides/email) 所述。所有属性都是必需的。`encryption` 是 `tls`、`ssl` 或 `none`。
+
+API 从不返回 `password`。Terraform 会保持配置中的值，因此在控制台中更改的密码不会被视为漂移，并且在导入之后必须在下次 `apply` 之前在配置中设置密码。销毁资源会删除域的 SMTP 配置。
+
+```bash
+terraform import ferriskey_smtp_config.acme acme
+```
+
+## ferriskey_identity_provider
+
+```hcl
+resource "ferriskey_identity_provider" "google" {
+  realm        = ferriskey_realm.acme.name
+  alias        = "google"
+  provider_id  = "oidc"
+  display_name = "Google"
+
+  config = {
+    clientId     = var.google_client_id
+    clientSecret = var.google_client_secret
+  }
+}
+```
+
+| 属性 | 说明 |
+|---|---|
+| `alias` | 在域内唯一。**替代** |
+| `provider_id` | `oidc` 或 `saml`。**替代** |
+| `config` | 特定于提供程序的密钥，例如 `clientId`、`clientSecret` 或 `authorizationUrl`。只管理您设置的密钥：服务器添加的密钥会被忽略 |
+| `enabled` | 默认 `true` |
+| `trust_email`, `link_only`, `store_token`, `add_read_token_role_on_create` | 布尔值，未设置时为服务器默认值 |
+| `first_broker_login_flow_alias`, `post_broker_login_flow_alias` | 流程别名 |
+
+导入 ID 使用别名，而不是 UUID：
+
+```bash
+terraform import ferriskey_identity_provider.google acme/google
+```

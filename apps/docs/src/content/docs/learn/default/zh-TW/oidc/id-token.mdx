@@ -1,0 +1,122 @@
+---
+title: "ID權杖"
+description: "ID 權杖的構成：宣告、驗證及其用途（以及非用途）。"
+icon: id-card
+order: 2
+---
+
+<span id="the-id-token" />
+
+# ID權杖
+
+ID 權杖是 OIDC 對 OAuth2 的擴充套件。它是與存取權杖一起簽發的 JWT，它只有一個任務：告訴客戶端使用者是誰。
+
+不是用於呼叫 API。僅供客戶端讀取。
+
+<span id="what-it-looks-like" />
+
+## 外觀形式
+
+ID 權杖是 JWT，因此它有三部分，用點分隔：
+
+```
+eyJhbGciOiJSUzI1Ni...eyJzdWIiOiI0Mj...siglmFsdfqkn...
+└── header ────┘└── payload ─────┘└── signature ─┘
+```
+
+解碼後的有效載荷，典型示例：
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "auth_time": 1736376400,
+  "nonce": "n-0S6_WzA2Mj",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true
+}
+```
+
+每個欄位都是一個宣告。一些宣告是標準化的；其他由提供者或客戶端新增。
+
+<span id="mandatory-claims" />
+
+## 必填宣告
+
+OIDC 要求這些宣告，客戶端必須驗證它們：
+
+| 宣告 | 含義 |
+| --- | --- |
+| `iss` | _簽發者._ 誰簽發了此權杖。必須與預期的提供者匹配。 |
+| `sub` | _主體._ 使用者的穩定識別符號。視為主鍵。 |
+| `aud` | _Audience._ 這個權杖是給哪個客戶端的？一定是你的`client_id`。 |
+| `exp` | _Expiration._ Unix 時間戳。之後，拒絕。 |
+| `iat` | _Issued at._ 鑄造時。 |
+| `auth_time` | 使用者實際登入的時間（與該權杖發放時）相比。 |
+| `nonce` | 你客戶端在授權請求中傳送的價值。重放保護。 |
+
+<span id="optional-standard-claims" />
+
+## 可選標準要求
+
+被`profile`、`email`、`address`和`phone`的望遠鏡吸引：
+
+- `name`, `given_name`, `family_name`, `nickname`, `preferred_username`
+- `email`, `email_verified`
+- `picture`, `locale`, `zoneinfo`
+- `address`, `phone_number`
+
+<span id="how-a-client-validates-an-id-token" />
+
+## 客戶端如何驗證ID權杖
+
+這是每個半稱職的OIDC圖書館每次都會做的事：
+
+1. **解析**JWT。確認三個片段。
+2. **驗證簽名**與`jwks_uri`的提供商公鑰。
+3. **檢查`iss`**與預期發行機構匹配。
+4. **檢查 `aud`** 是否包含客戶端自己的 `client_id`。
+5. **檢查 `exp`** 是否在未來（允許小的時鐘偏移）。
+6. **檢查 `nonce`** 是否與客戶端在授權請求中傳送的一致。
+7. 如果存在，**檢查 `c_hash` / `at_hash`** 是否與程式碼和存取權杖匹配。
+
+跳過其中任何一項，你就釋出了一個安全漏洞。使用經過驗證的庫。不要自己實現。
+
+<span id="id-token-vs-access-token-the-rule" />
+
+## ID Token 與存取權杖：規則
+
+這是 OIDC 中最容易出錯的規則，因此值得強調：
+
+:::callout{variant="warning" title="ID Token 不是用於 API 的承載權杖"}
+ID 權杖是供客戶端檢查的。存取權杖是供 API 使用的。將 ID 權杖傳送到你的 API 的 `Authorization: Bearer` 頭是錯誤的。如果你的 API 接受 ID 權杖，攻擊者可以重放任何發給任意客戶端、面向任意受眾的 ID 權杖。
+:::
+
+如果你的 API“只是想知道使用者是誰”，那麼應頒發一個真正的攜帶 `sub` 的存取權杖並進行驗證。
+
+<span id="where-the-user-identity-actually-lives" />
+
+## 使用者身分的實際存放位置
+
+`sub` 是穩定的識別符號。在你自己的資料庫中將其視為使用者的主鍵。不要使用 `email` 或 `preferred_username` 作為主鍵。那些可能會變化。
+
+如果使用者在身分提供者（IdP）處更改了電子郵件，明天的 ID 權杖中的 `email` 會變化。`sub` 則不會。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 使用使用身分域的簽名金鑰簽名的 JWT 頒發 OIDC ID 權杖。你可以在 [jwt.io](https://jwt.io) 解碼任何 FerrisKey ID 權杖以快速檢視。
+
+::::card-group{cols=2}
+:::card{label="JWT 構成" icon="lucide:file-code-2" href="/zh-TW/learn/jwt/anatomy"}
+ID 權杖使用的結構。
+:::
+:::card{label="UserInfo 端點" icon="lucide:user-search" href="/zh-TW/learn/oidc/userinfo"}
+使用存取權杖獲取最新的使用者宣告。
+:::
+::::

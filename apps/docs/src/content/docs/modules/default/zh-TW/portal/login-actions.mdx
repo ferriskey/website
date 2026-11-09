@@ -1,0 +1,168 @@
+---
+title: "登入操作"
+description: "門戶自身呼叫的端點：如果你用自己的 UI 替換它，這是你需要的。"
+icon: terminal
+order: 91
+---
+
+<span id="login-actions" />
+
+# 登入操作
+
+本文件中的其他所有內容都是應用程式整合的表面：OIDC 端點、管理員 API。本頁面屬於另一類。`login-actions` 是 **門戶本身** 呼叫的系列：登入頁面背後的 20 個端點、多因素認證挑戰、密碼重置和金鑰提示。
+
+當你連線應用程式時，不會觸碰它們。你會在 **用自己的 UI 替換門戶** 並需要驅動相同流程時觸碰它們。
+
+<Callout variant="warning" title="這是內部契約，而不是穩定的公共 API。">
+
+這些端點存在是為了服務 FerrisKey 自己的門戶，並隨門戶一起變化。如果主題化門戶能滿足你的需求，請使用 [主題和佈局](/zh-TW/modules/portal/overview)。你可以免費獲得這些流程，並且它們在升級後仍能正常工作。僅當主題化無法真正表達你的需求時，才使用這個系列。
+
+</Callout>
+
+以下路徑相對於 `/realms/{realm_name}`。
+
+<span id="cookies-and-credentials" />
+
+## Cookies 和憑據
+
+登入由一個認證會話跟蹤，瀏覽器在 `FERRISKEY_SESSION` Cookie 中攜帶該會話，該 Cookie 由授權請求建立。下面的大多數呼叫都會讀取它，如果沒有該 Cookie，`authenticate` 會返回 401 `Missing session cookie`。
+
+`authenticate` 還會在一個 HttpOnly Cookie 中設定 **步驟權杖**，`FERRISKEY_LOGIN_ACTION`，其作用域為 `/realms/{realm_name}/login-actions`。它是一個短期有效的 JWT，繫結到認證會話，並且在域的 `temporary_token_lifetime` 生命週期內有效（預設 300 秒）。如果步驟權杖的會話與 `FERRISKEY_SESSION` Cookie 不一致，將被拒絕並返回 401。
+
+| 憑據 | 端點 |
+|---|---|
+| 無權杖 | `authenticate`, `verify-email`, `send-magic-link`, `verify-magic-link`, `forgot-password`, `verify-reset-token`, `reset-password`, `passkey-request-options`, `passkey-authenticate` |
+| 步驟權杖 Cookie | `setup-otp`, `verify-otp`, `challenge-otp`, `update-password`, `burn-recovery-code`, `webauthn-public-key-create-options`, `webauthn-public-key-create` |
+| Bearer 存取權杖 | `generate-recovery-codes`, `webauthn-public-key-request-options`, `webauthn-public-key-authenticate`, `resend-verification-email` |
+
+當擁有身分認證器的使用者尚未回答挑戰時，步驟權杖僅開啟 `challenge-otp` 和 `burn-recovery-code`。每個其他步驟權杖呼叫都會返回 403。
+
+<span id="password-sign-in" />
+
+## 密碼登入
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/authenticate` | 在身分域中驗證使用者 |
+| `POST` | `/login-actions/update-password` | 為 `update_password` 所需的操作設定新密碼 |
+
+`authenticate` 是入口點。其主體接受 `username`、`password` 和 `remember_me`，並且查詢接受 `client_id`。響應 `status` 為以下之一：
+
+| 狀態 | 含義 |
+|---|---|
+| `Success` | 登入完成。`url` 帶有授權碼 |
+| `RequiresActions` | `required_actions` 列出待處理項。步驟權杖已設定 |
+| `RequiresOtpChallenge` | 使用者擁有身分認證器。`email` 是使用者的地址。步驟權杖已設定 |
+
+當需要第二個因素或執行必要操作時，`authenticate` 不會返回授權程式碼。它設定的步驟權杖只授權下一步操作，別無其他。
+
+<span id="mfa-challenge" />
+
+## 多因素認證挑戰
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `GET` | `/login-actions/setup-otp` | 開始身分認證器註冊：返回 `secret`、`otpauth_url` 和 `issuer`，用於生成二維碼 |
+| `POST` | `/login-actions/verify-otp` | 使用 `code` 和 `label` 確認註冊 |
+| `POST` | `/login-actions/challenge-otp` | 使用 `code` 回答一次性密碼挑戰，正好六個字元 |
+| `POST` | `/login-actions/burn-recovery-code` | 改為使用恢復程式碼回答一次性密碼挑戰 |
+| `POST` | `/login-actions/generate-recovery-codes` | 用新的一組恢復程式碼替換使用者的恢復程式碼 |
+
+`generate-recovery-codes` 不是登入流程的一部分。它需要使用者的 Bearer 存取權杖以及透過密碼從 `POST /users/me/reauthenticate` 獲取的 `elevation_id`，並且該呼叫僅在使用者已登入時才有意義。沒有任何方式會自動生成恢復程式碼，並且入口網站從未呼叫它。有關正文和格式，請參閱 [恢復程式碼](/zh-TW/modules/trident/recovery-codes)。
+
+<span id="passkeys-and-webauthn" />
+
+## 密碼金鑰和 WebAuthn
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/passkey-request-options` | 開始密碼金鑰登入。使用使用者名稱時，挑戰僅限於該使用者的密碼金鑰；不使用使用者名稱時，挑戰是可發現的，瀏覽器會提出它所擁有的密碼金鑰。 |
+| `POST` | `/login-actions/passkey-authenticate` | 提交瀏覽器的斷言。成功時返回 `login_url`，其中攜帶授權程式碼。 |
+| `POST` | `/login-actions/webauthn-public-key-create-options` | 完整 `PublicKeyCredentialCreationOptions`，挑戰以 base64url 編碼 |
+| `POST` | `/login-actions/webauthn-public-key-create` | 儲存新的 WebAuthn 公鑰。除非 `configure_passkey` 已針對此次登入到期，否則會返回 403。 |
+| `POST` | `/login-actions/webauthn-public-key-request-options` | 完整 `PublicKeyCredentialRequestOptions`，適用於持有 Bearer 權杖的使用者 |
+| `POST` | `/login-actions/webauthn-public-key-authenticate` | 使用 `WebAuthnAssertionResponse` 進行身分認證，針對持有 Bearer 權杖的使用者 |
+
+`passkey-request-options` 的可發現變體使無使用者名稱登入成為可能：沒有提交識別符號，因此該頁面無法用於探測哪些賬戶存在。
+
+經使用者驗證的通行金鑰可回答 OTP 挑戰，但所需操作仍會以 403 阻止它。入口網站使用 `passkey-*` 對進行登入，使用 `webauthn-public-key-create*` 對進行 `configure_passkey` 操作。它不呼叫最後兩行。
+
+<span id="password-reset" />
+
+## 密碼重置
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/forgot-password` | 如果地址存在，則傳送重置電子郵件 |
+| `POST` | `/login-actions/verify-reset-token` | 檢查權杖是否有效且未過期，**不消耗它** |
+| `POST` | `/login-actions/reset-password` | 從 `token_id`、`token` 和 `new_password` 設定新密碼，並返回權杖 |
+
+<Callout variant="info" title="三個特意的細節">
+
+`forgot-password` 無論地址是否存在都會返回 **200**，而對於未知地址則不傳送任何內容。這就是阻止端點成為賬戶列舉工具的原因。不要透過報告未知地址來“改進”你的使用者介面。未啟用 `forgot_password_enabled` 的身分域無論地址如何都會返回 403。
+
+`verify-reset-token` 的存在是為了讓重置頁面在瞭解權杖有效的情況下呈現其表單，而無需消耗它。載入時檢查，提交時消耗。
+
+重置權杖的有效期為 30 分鐘，使用者最多可以同時持有三個有效權杖。第四次請求將在其中一個權杖過期之前被靜默忽略。
+
+</Callout>
+
+只有當身分域配置了 SMTP 且存在 `reset_password_template_id` 時，重置郵件才會傳送。
+
+`reset-password` 應用身分域的密碼策略，更改密碼，撤銷使用者之前的權杖並返回新的權杖響應。當重置是在授權流程中啟動時，它還會返回 `login_url`，該權杖攜帶授權碼並完成該流程。只有在瀏覽器仍持有請求重置的登入的 `FERRISKEY_SESSION` cookie 時，才會存在 `login_url`。在另一個瀏覽器中完成重置會設定密碼，但不會返回 `login_url`，因此原始客戶端永遠不會收到程式碼。當使用者仍需執行步驟（例如驗證器程式碼）時，該欄位也不會出現。
+
+<span id="email-verification" />
+
+## 電子郵件驗證
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/verify-email` | 使用郵件中的權杖驗證地址 |
+| `POST` | `/login-actions/resend-verification-email` | 重新傳送連結。需要 Bearer 權杖 |
+
+<span id="magic-links" />
+
+## 免密登入連結
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/send-magic-link` | 傳送一次性登入連結郵件。呼叫攜帶 `FERRISKEY_SESSION` cookie |
+| `GET` | `/login-actions/verify-magic-link` | 消耗權杖後返回重定向URL，並返回授權碼，`url` |
+
+連結繫結到請求該連結的瀏覽器。`verify-magic-link`回答401 `invalid_magic_link`當`FERRISKEY_SESSION` cookie與傳送時儲存的會話不同時。有關失敗模式，請參見[Magic Links](/zh-TW/modules/trident/magic-links)。
+
+<span id="device-flow" />
+
+## 裝置流程
+
+[裝置碼授予](/zh-TW/discover/core-concepts/authentication#device-code)需要在權杖端點之外還有三個端點，它們是*使用者*存取的頁面，而非裝置：
+
+| 方法 | 路徑 | 它的功能 |
+|---|---|---|
+| `GET` | `/device` | `verification_uri`本身。重定向到網頁應用，傳遞程式碼時預填`?user_code=` |
+| `GET` | `/device/preview` | 客戶端和待處理裝置會話的作用域，這樣頁面才能顯示正在批准的內容（RFC 8628 §5.3） |
+| `POST` | `/device/verify` | 使用者認證後，可以批准或拒絕 |
+
+`preview`和`verify`都需要`FERRISKEY_SSO` cookie，即瀏覽器的單點登入會話所依賴的。當缺少該cookie時，`verify`回答`401`帶有指向驗證頁面的`redirect_uri`提示，這樣自定義頁面可以引導使用者登入並返回，而不是死衚衕。
+
+`preview`還拒絕屬於另一個身分域的程式碼，這阻止了一個身分域的使用者批准在另一個身分域釋出的裝置碼。
+
+<span id="what-you-still-get-for-free" />
+
+## 你仍然免費獲得的
+
+替換門戶並不意味著要重新實現整個IAM。這些內容無論介面如何命名，都會繼續執行：
+
+- [認證鏈](/zh-TW/discover/core-concepts/authentication#authentication-chain)：鎖定、所需操作、身分域策略。
+- [指南針](/zh-TW/modules/compass/overview)流程錄製，一步步，包括你的UI推動的步驟。
+- [SeaWatch](/zh-TW/modules/seawatch/overview) 審計事件和 [webhooks](/zh-TW/modules/webhooks/overview)。
+- [密碼策略](/zh-TW/discover/core-concepts/password-policy)，包括其公共端點，以便您的表單在使用者輸入時可以評估規則。
+
+::::card-group{cols=2}
+:::card{label="門戶主題" icon="lucide:palette" href="/zh-TW/modules/portal/overview"}
+更改登入頁面外觀的支援方式。
+:::
+:::card{label="Trident" icon="lucide:shield-check" href="/zh-TW/modules/trident/overview"}
+在您自己操作之前，每個 MFA 挑戰的含義。
+:::
+::::

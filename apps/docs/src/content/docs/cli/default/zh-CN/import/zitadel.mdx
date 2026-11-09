@@ -1,0 +1,84 @@
+---
+title: "来自 Zitadel"
+description: "通过 Zitadel 实例的管理 API 实时导入组织和项目。"
+icon: server
+order: 4
+---
+
+<span id="import-from-zitadel" />
+
+# 从 Zitadel 导入
+
+`--from zitadel` 通过其管理 API（v1）从正在运行的 Zitadel 实例读取，并在 FerrisKey 中重新创建它。单个 Zitadel 组织映射到一个 FerrisKey 域。
+
+```bash
+ferris-ctl realm import --from zitadel \
+  --source-url https://zitadel.example.com \
+  --source-token "$ZITADEL_PAT" \
+  --source-org 123456789 \
+  --target-realm acme
+```
+
+<span id="required-flags" />
+
+## 必需的标志
+
+| 标志 | 说明 |
+|------|-------------|
+| `--source-url` | Zitadel 实例的基本 URL |
+| `--source-token` | 用作承载令牌的个人访问令牌 (PAT) |
+
+<span id="selecting-organizations" />
+
+## 选择组织
+
+| 标志 | 行为 |
+|------|----------|
+| `--source-org <id>` | 导入单个组织。作为 `x-zitadel-orgid` 头部发送。 |
+| _(省略)_ | 导入所有组织，每个作为一个独立的身份域。需要实例级（IAM）权限来列出组织。 |
+
+```bash title="Using a stored source"
+ferris-ctl source add zitadel-prod --kind zitadel \
+  --url https://zitadel.example.com --token "$ZITADEL_PAT"
+
+ferris-ctl realm import --source-ref zitadel-prod --source-org 123456789
+```
+
+如果令牌无法列出组织，则导入会停止，并提示你使用 `--source-org` 固定一个组织，或为令牌授予 IAM 管理员角色。
+
+<span id="realm-names" />
+
+## 身份域名称
+
+使用 `--source-org` 时，身份域由 `--target-realm` 命名，否则用 `--source-realm`，否则用 `zitadel`。
+
+没有它时，每个组织都会成为一个以其命名的身份域：名称会被转换为小写，所有非字母和数字的字符序列会变成单个 `-`，并且会去掉开头和结尾的连字符。名称处理后为空则变为 `org`。在这种模式下不使用 `--source-realm`，`--target-realm` 仅在恰好返回一个组织时适用。对于多个组织，CLI 会保留组织名称并在标准错误输出上打印说明。
+
+<span id="how-resources-map" />
+
+## 资源映射方式
+
+| Zitadel | Ferriskey |
+|---------|-----------|
+| 组织 | 身份域 |
+| 项目角色 | 身份域角色，以角色键命名，显示名称作为描述且无权限 |
+| 项目的应用 | 机密客户端。其客户端 ID 为 OIDC 客户端 ID，或在没有时为应用程序 ID。重定向 URI 来自 OIDC 配置 |
+| 人类用户 | 身份域用户，具有用户名、电子邮件、名、姓及邮件验证标志 |
+| 机器（服务）用户 | 具有服务账户的机密客户端，以用户名命名 |
+
+项目本身不会被映射。导入器访问每个项目仅为了读取其角色和应用程序。无论在 Zitadel 中应用程序类型如何，每个应用程序都会成为机密客户端。
+
+:::callout{variant="warning"}
+密码和密钥不会从 Zitadel 中读取，因此用户到达时没有凭据，机器用户到达时没有密钥。机密客户端从 FerrisKey 获取一个新的密钥，如 [导入报告](/zh-CN/cli/import/overview#the-import-report) 中所列。
+:::
+
+<span id="what-is-not-imported" />
+
+## 未导入的内容
+
+- 身份域设置。导入器不设置任何内容，因此新身份域保持 FerrisKey 默认值。
+- 角色分配。Zitadel 的用户授权未被读取，因此导入后没有用户持有角色。
+- 角色权限。角色创建时没有权限。
+- 每个客户端的详细信息，例如注销后重定向的 URI、Web 来源、PKCE 和令牌有效期。
+
+每种资源类型都是通过一次搜索请求读取的，并且没有分页参数，所以非常大的实例只会返回 Zitadel 对默认请求返回的内容。请在应用之前使用 `--dry-run -o yaml` 进行预览，并将计数与您的实例进行比较。

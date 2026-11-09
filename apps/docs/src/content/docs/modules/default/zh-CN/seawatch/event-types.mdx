@@ -1,0 +1,225 @@
+---
+title: "事件类型"
+description: "29种SeaWatch事件类型的参考：每种事件在何时被写入，执行者和目标是谁，以及其细节内容。"
+icon: list
+order: 21
+---
+
+<span id="event-types" />
+
+# 事件类型
+
+SeaWatch有29种事件类型，按主题分组如下。FerrisKey编写其中27种。`client_secret_rotated`和`realm_config_changed`是可用于过滤的有效值，但没有事件会发出它们。每个事件都有一个`status`，其值为`success`或`failure`。
+
+每个表格提供事件的`actor_id`和目标。执行者是发出请求的账户，“none”表示该字段为空。目标是`target_type`和`target_id`的组合。[概览](/zh-CN/modules/seawatch/overview)解释了二者以及为什么`actor_type`大多为空。
+
+<span id="authentication-and-sessions" />
+
+## 身份认证和会话
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `login_success` | 用户已通过身份认证，并且会话已打开、从单点登录会话恢复或重新验证 | 用户 | `session` |
+| `login_failure` | 登录被拒绝 | 如果用户名匹配账户，则为该用户 | 无 |
+| `session_created` | 新会话已打开。在与 `login_success` 相同的语句中记录，具有相同的 `timestamp` | 用户 | `session` |
+| `session_revoked` | 会话结束：用户已登出，或会话通过 API 被撤销 | 注销时的会话用户，否则由撤销会话的人（用户或管理员） | `session` |
+
+对于新会话，`login_success` 不携带 `details`。当重用现有会话时，`details.method` 表示方式：`sso_session` 表示从 SSO cookie 恢复的会话，`reauthentication` 表示重新验证的会话。
+
+`login_failure` 在 `details` 中携带原因：
+
+```json title="login_failure details"
+{
+  "reason": "invalid_credentials"
+}
+```
+
+| `reason` | 含义 |
+|---|---|
+| `user_not_found` | 没有账户与该用户名匹配。该事件没有执行者 |
+| `user_disabled` | 账户被禁用 |
+| `account_locked` | 账户在多次失败后被锁定 |
+| `invalid_credentials` | 密码错误 |
+| `ldap_authentication_failed` | 账户的LDAP提供者拒绝了密码 |
+| `provider_disabled` | 账户的LDAP提供者已被禁用 |
+
+用户名未被存储。错误的一次性代码不会写入`login_failure`：它会在[Compass](/zh-CN/modules/compass/overview)流程中显示为`mfa_challenge`失败步骤，并计入账户锁定。
+
+:::callout{variant="info"}
+失败登录的执行者是尝试使用的账户，而不是证明了身份的人：没有人通过身份认证。只有与任何账户都不匹配的用户名会使`actor_id`为null。
+:::
+
+<span id="token-exchange" />
+
+## 令牌交换
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `token_exchanged` | 客户端尝试将主体令牌交换为新的访问令牌（RFC 8693） | 主体令牌的用户（当可以读取时） | `client`，与`resource`中的客户端ID |
+
+目标是进行了交换的客户端，当交换被拒绝时状态为 `failure`。未通过身份认证的客户端请求不会被记录。
+
+```json title="token_exchanged details"
+{
+  "client_id": "orders-api",
+  "audience": "billing-api",
+  "policy_id": "01914b3c-9a10-7f5a-b456-00000000a001",
+  "actor": null
+}
+```
+
+`policy_id` 是适用于该交换的委托策略，当请求携带代理令牌时，`actor` 是代理方的身份。否则，两者均为 null。在失败的情况下，`details.error_code` 保存返回的 OAuth 错误，例如 `unauthorized_client` 或 `invalid_scope`。
+
+<span id="passwords" />
+
+## 密码
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `password_reset` | 管理员重置了用户的密码 | 管理员 | `user` |
+| `password_reset_requested` | 用户请求了重置密码邮件 | 用户 | `user` |
+| `password_reset_completed` | 用户完成了重置 | 用户 | `user` |
+| `password_imported` | 管理员为用户导入了预哈希密码 | 管理员 | `user` |
+
+`password_reset_requested` 和 `password_reset_completed` 包围自助流程。没有匹配完成的请求表示用户放弃，或者是别人代其请求重置。
+
+`password_imported` 只写一次，由 `POST /realms/{realm_name}/users/{user_id}/credentials/import` 在存储哈希时写入。用户首次登录时对哈希进行 argon2id 重新编码不会写入任何内容。
+
+<span id="users" />
+
+## 用户
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `user_created` | 账户由管理员创建，或者自我注册。 | 管理员，或自行注册的新用户。 | `user` |
+| `user_email_verified` | 用户确认了他们的电子邮件地址。 | 用户 | `user` |
+| `user_deleted` | 一个或多个账户被删除。 | 管理员 | `user`，在批量删除时没有。 |
+
+当 `actor_id` 和 `target_id` 在 `user_created` 事件中相同时，账户是自我注册的。批量删除会写入一个没有目标的单一事件，`details.user_ids` 列出这些账户：
+
+```json title="user_deleted details after a bulk delete"
+{
+  "user_ids": [
+    "01914b3c-5678-7f5a-b456-000000000002",
+    "01914b3c-5678-7f5a-b456-000000000003"
+  ]
+}
+```
+
+<span id="roles" />
+
+## 角色
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `role_assigned` | 一个角色被分配给用户。 | 管理员 | `user`，角色名称在 `resource` |
+| `role_unassigned` | 一个角色从用户中被移除 | 管理员 | `user`，角色名称在 `resource` |
+| `role_created` | 创建了一个身份域角色或客户端角色 | 管理员 | 无 |
+| `role_removed` | 一个角色被删除 | 管理员 | 无 |
+| `role_updated` | 一个角色被编辑 | 管理员 | 无 |
+| `role_permission_updated` | 一个角色的权限集已更改 | 管理员 | 无 |
+
+没有目标的四个事件表示角色发生了变化以及谁更改了它，而不是哪个角色。对于访问审查，`role_assigned` 和 `role_unassigned` 是回答“谁何时给这个用户管理员权限”的信息来源。
+
+<span id="clients" />
+
+## 客户端
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `client_created` | 注册了一个客户端 | 管理员 | 无 |
+| `client_deleted` | 移除了一个客户端 | 管理员 | `client` |
+| `client_secret_viewed` | 读取了一个客户端的密钥 | 管理员 | `client` |
+| `client_secret_rotated` | 从未写入 | | |
+
+`client_secret_viewed` 是安静的：没有任何变化，但凭据离开了系统，这是你在事件中所需要的痕迹。
+
+<span id="maintenance" />
+
+### 维护
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `client_maintenance_enabled` | 客户端进入维护模式 | 管理员 | `client` |
+| `client_maintenance_disabled` | 维护模式已关闭 | 管理员 | `client` |
+
+两者都携带了已应用的请求。当请求未包含时，`reason` 和 `session_strategy` 为 null：
+
+```json title="client_maintenance_enabled details"
+{
+  "enabled": true,
+  "reason": "Migration under way, back at 2pm.",
+  "session_strategy": "expire"
+}
+```
+
+两次转换都已记录，因此之后可以看到比预期打开时间更长的窗口。
+
+<span id="email" />
+
+## 电子邮件
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `email_sent` | SMTP 服务器接受了魔法链接或密码重置邮件 | 收件人 | 无 |
+| `email_not_sent` | 该邮件无法发送。状态为 `failure` | 收件人 | 无 |
+
+仅记录魔法链接和密码重置邮件。`details` 用于识别邮件：
+
+```json title="email_not_sent details"
+{
+  "email_type": "reset_password",
+  "user_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "error_code": "SMTP_NOT_CONFIGURED",
+  "reason": "SMTP not configured for realm my-app"
+}
+```
+
+`email_type` 是 `magic_link` 或 `reset_password`。`email_sent` 携带 `email_type`、`user_id` 和 `template_id`。`email_not_sent` 添加了 `reason` 和一个 `error_code`：`SMTP_SEND_FAILED`（带 `template_id`）、`TEMPLATE_NOT_CONFIGURED` 或 `SMTP_NOT_CONFIGURED`。
+
+`email_not_sent` 是需要警报的对象。一个从未离开过内部系统的密码重置看起来与用户忽略它完全相同，除非你观察这个事件。
+
+<span id="federation" />
+
+## 身份联合
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `identity_provider_link_removed` | 一个联合身份已与用户解除关联 | 管理员 | `identity_provider_link`，提供者别名为 `resource` |
+
+`details` 拥有 `user_id`（丢失链接的账户）和 `identity_provider_id`。
+
+<span id="webhooks" />
+
+## Webhook
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `webhook_delivery_exhausted` | Webhook 传递尝试次数用尽，或由于不会重试的错误而失败。状态为 `failure` | 无 | `webhook` |
+
+```json title="webhook_delivery_exhausted details"
+{
+  "delivery_id": "01914b3c-9a10-7f5a-b456-00000000d001",
+  "event": "user.created",
+  "error_code": "transport_error",
+  "attempts": 5
+}
+```
+
+`event` 是触发该传递的 webhook，`error_code` 是最后一次尝试的错误，`attempts` 统计了所有尝试次数。传递本身及其历史记录位于 [deliveries](/zh-CN/modules/webhooks/deliveries) 页面。
+
+<span id="configuration" />
+
+## 配置
+
+| 事件 | 编写时间 | `actor_id` | 目标 |
+|---|---|---|---|
+| `realm_config_changed` | 从未写入 | | |
+
+更改身份域设置不会生成 SeaWatch 事件。
+
+<span id="unrecognised-types" />
+
+## 无法识别的类型
+
+存储的行，如果其类型在此版本中未知，则返回为 `unknown`，绝不会作为猜测返回。因此，由较新版本写入的行或损坏的行，不能被误读为成功登录。`unknown` 从未被写入，也无法对其进行过滤：`event_types=unknown` 返回 400。

@@ -13,7 +13,6 @@ import SponsorsSection from '../components/sponsors-section.astro'
 import FranceNuageSection from '../components/france-nuage-section.astro'
 import CtaSection from '../components/cta-section.astro'
 import LatestArticlesSection from '../components/latest-articles-section.astro'
-import { ui } from '../i18n/ui'
 
 const appUrlOverrides = {
   website: import.meta.env.PUBLIC_WEBSITE_URL,
@@ -23,8 +22,6 @@ const appUrlOverrides = {
 
 const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
 const blogHref = appUrlOverrides.blog ?? '/'
-const translations = ui.fr
-const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
 ---
 
 <Base title="FerrisKey" description="FerrisKey is an open-source, cloud-native Identity & Access Management platform designed for Kubernetes, multi-tenancy, and modern security architectures." thumbnail="/thumbnail.png">
@@ -43,42 +40,3 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
   <CtaSection docsHref={docsHref} />
   <SiteFooter docsHref={docsHref} blogHref={blogHref} />
 </Base>
-
-<script is:inline define:vars={{ translations, thumbnails }}>
-  function detectLocale() {
-    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
-    const cookie = match ? match[1] : null
-    if (cookie === 'en' || cookie === 'fr') return cookie
-
-    const browser = (navigator.language || '').split('-')[0]
-    if (browser === 'en' || browser === 'fr') return browser
-    return 'en'
-  }
-
-  function applyTranslations() {
-    const locale = detectLocale()
-    document.documentElement.lang = locale
-
-    if (locale === 'en') {
-      document.querySelectorAll('[data-t]').forEach(function (el) {
-        if (el.dataset.tDefault) el.textContent = el.dataset.tDefault
-      })
-      return
-    }
-
-    document.querySelectorAll('[data-t]').forEach(function (el) {
-      const key = el.getAttribute('data-t')
-      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
-      if (translations[key]) el.textContent = translations[key]
-    })
-
-    const thumb = thumbnails[locale] || thumbnails['en']
-    document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(function (el) {
-      el.setAttribute('content', thumb)
-    })
-  }
-
-  applyTranslations()
-  document.addEventListener('astro:after-swap', applyTranslations)
-  window.addEventListener('ferriskey:locale-change', applyTranslations)
-</script>

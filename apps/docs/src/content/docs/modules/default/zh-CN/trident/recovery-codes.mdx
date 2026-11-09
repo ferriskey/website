@@ -1,0 +1,110 @@
+---
+title: "恢复码"
+description: "FerrisKey 中的备份恢复代码：客户端如何生成一组代码，一条代码如何响应 TOTP 挑战，以及它不能做什么。"
+icon: file-key
+order: 14
+---
+
+<span id="recovery-codes" />
+
+# 恢复码
+
+恢复代码是一次性备份代码。由于手机丢失或应用被清除而丢失认证器的用户，可以在 TOTP 验证时输入一条恢复代码，而不是六位数代码。
+
+FerrisKey 本身不会创建恢复代码。注册认证器或密码密钥不会生成任何代码，而且控制台或默认门户也没有用于恢复代码的界面。您的应用程序向 FerrisKey 请求一组代码，将其显示给用户一次，并告诉他们妥善保存。如果您只使用默认门户，则没人有恢复代码。
+
+<span id="generating-a-set" />
+
+## 生成一组代码
+
+```
+POST /realms/{realm_name}/login-actions/generate-recovery-codes
+```
+
+调用使用用户自己的访问令牌作为 Bearer 令牌，并且需要通过用户的 **密码** 来证明提升权限。从 [`POST /users/me/reauthenticate`](/zh-CN/modules/account/overview#sensitive-operations-need-an-elevation) 获取一个，该令牌与同一会话铸造。使用 OTP 代码证明的提升会被拒绝，并返回 403。
+
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "amount": 8,
+  "code_format": "b32-split-4"
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `elevation_id` | 来自 `reauthenticate` 的提升 |
+| `amount` | 要创建多少代码 |
+| `code_format` | `b32-split-4` 是唯一被接受的值。任何其他值都会返回 400 |
+
+```json title="Response"
+{
+  "codes": ["ybnd-rfg8-ejkm-cpqx", "..."]
+}
+```
+
+每个代码是 10 个随机字节，以 z-base32 编写为 16 个字符，分为四组四个字符。响应是代码以明文形式存在的唯一时刻。FerrisKey 将每个代码的哈希存储为 `recovery-code` 类型的凭据。
+
+生成一组 **会替换** 之前的那一组：新代码先存储，然后删除之前的所有代码。用户一次只能有一组代码。
+
+<span id="using-a-code" />
+
+## 使用代码
+
+在 TOTP 验证中，客户端调用 `burn-recovery-code` 代替 `challenge-otp`。像每个登录操作一样，它携带步骤令牌 cookie 和 `FERRISKEY_SESSION` cookie。
+
+```
+POST /realms/{realm_name}/login-actions/burn-recovery-code
+```
+
+```json title="Request body"
+{
+  "recovery_code": "ybnd-rfg8-ejkm-cpqx",
+  "recovery_code_format": "b32-split-4"
+}
+```
+
+FerrisKey 对代码进行哈希处理，并与用户存储的代码进行比较。匹配成功会删除该代码，因此它只能使用一次，登录过程继续：响应中包含 `login_url`，或仍需 `required_actions`。错误或已使用的代码将返回 400。
+
+恢复代码只用于回答待处理的 **TOTP** 验证。如果用户没有验证器，调用将被拒绝并返回 403（`a recovery code only answers a pending OTP challenge`）。如果用户的唯一第二设备是密码密钥，则没有验证可回答，因此恢复代码对他们没有用。
+
+恢复代码不会解除账户锁定，并且客户端的维护和同意规则在使用后仍然适用。
+
+<span id="security-model" />
+
+## 安全模型
+
+| 属性 | 行为 |
+|---|---|
+| 存储 | 只存储哈希值。数据库的副本无法让任何人获得可用的代码 |
+| 一次性使用 | 代码在匹配的那一刻会被删除 |
+| 有效期 | 代码永不过期。它保持有效，直到被使用或用户生成新的一组代码 |
+| 作用域 | 它在挑战时替代 TOTP 代码。它不会替代密码 |
+
+<Callout variant="danger" title="将代码视为密码">
+
+恢复代码可让持有者通过第二因素验证。用户应像保护根密码一样保存代码：绝不以明文存储在设备上，绝不共享，绝不截图。
+
+</Callout>
+
+<span id="building-the-experience" />
+
+## 构建体验
+
+<span id="show-the-codes-once" />
+
+### 只显示一次代码
+
+`generate-recovery-codes` 的响应是代码唯一一次以明文存在的情况。显示时提供复制按钮和下载选项，并避免在浏览器可能缓存或屏幕录制可能捕捉的地方呈现它们。
+
+<span id="count-what-is-left" />
+
+### 计算剩余数量
+
+`GET /realms/{realm_name}/users/me/credentials` 为每个未使用的代码返回一个 `recovery-code` 类型的条目。显示数量，并在数量不足时提示获取新的一组。每使用一个代码，安全网就会缩小，而一组新代码会替换剩下的内容。
+
+<span id="admin-recovery" />
+
+### 管理员恢复
+
+如果用户丢失了认证器且没有恢复代码，管理员可以在控制台用户页面的 **身份认证方法** 下删除一次性密码凭据。然后用户可以使用密码登录并重新注册。

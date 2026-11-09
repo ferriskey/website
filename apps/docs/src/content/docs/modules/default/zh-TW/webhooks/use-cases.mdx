@@ -1,0 +1,350 @@
+---
+title: "用例"
+description: "與 FerrisKey 傳送內容匹配的 Webhook 模式：Slack 通知、CRM 同步、安全警報、配置和審計。"
+icon: lightbulb
+order: 63
+---
+
+<span id="use-cases" />
+
+# 用例
+
+這些是您今天可以根據 FerrisKey 觸發的事件構建的模式。從 [Payload format](/zh-TW/modules/webhooks/payload) 中有兩個事實影響下面的每個處理程式。事件對應的物件在 `data` 中，並且幾乎每個觸發器的身分域都是 `resource_id`。每個處理程式在執行操作前都應檢查簽名，示例程式碼為了簡潔未包含此步驟。
+
+<span id="slack-notification-on-user-registration" />
+
+## 使用者註冊的 Slack 通知
+
+當新使用者註冊時，在 Slack 通知您的團隊。建立一個訂閱 `user.created` 的 webhook，並將其端點指向您的後端，後端將格式化訊息並轉發到 Slack。
+
+:::codegroup
+```ts [AdonisJS]
+// app/controllers/webhooks_controller.ts
+import { inject } from '@adonisjs/core'
+import type { HttpContext } from '@adonisjs/core/http'
+
+import { Slack } from '#services/slack'
+
+@inject()
+export default class WebhooksController {
+  constructor(protected slack: Slack) {}
+
+  async handle({ request, response }: HttpContext) {
+    const { event, data, timestamp } = request.body()
+
+    if (event === 'user.created') {
+      await this.slack.postMessage('#new-users', {
+        text: `New user registered: ${data.username} (${data.email}) at ${timestamp}`,
+      })
+    }
+
+    return response.ok({ received: true })
+  }
+}
+```
+
+```rust [Axum]
+use axum::{Json, http::StatusCode};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct WebhookPayload {
+    event: String,
+    timestamp: String,
+    resource_id: String,
+    data: Option<serde_json::Value>,
+}
+
+async fn handle_webhook(
+    Json(payload): Json<WebhookPayload>,
+) -> StatusCode {
+    if payload.event == "user.created" {
+        if let Some(data) = &payload.data {
+            let username = data["username"].as_str().unwrap_or("unknown");
+            let email = data["email"].as_str().unwrap_or("unknown");
+
+            tracing::info!(
+                "New user registered: {} ({}) at {}",
+                username, email, payload.timestamp
+            );
+
+            // Send to Slack via reqwest
+        }
+    }
+
+    StatusCode::OK
+}
+```
+:::
+
+<span id="crm-sync" />
+
+## CRM 同步
+
+保持您的 CRM（HubSpot、Salesforce、Pipedrive）與 FerrisKey 使用者同步。訂閱 `user.created`、`user.updated` 和 `user.deleted`。對於所有三個，`data` 是使用者，因此 `data.id` 是儲存在 CRM 中的穩定金鑰。
+
+| 事件 | 處理器邏輯 |
+|---|---|
+| `user.created` | 使用電子郵件、姓名和註冊日期建立聯絡人 |
+| `user.updated` | 更新聯絡人的欄位 |
+| `user.deleted` | 將聯絡人標記為流失或存檔。`data` 仍然儲存刪除前的使用者資訊 |
+
+```ts title="app/controllers/crm_sync_controller.ts"
+import { inject } from '@adonisjs/core'
+import type { HttpContext } from '@adonisjs/core/http'
+
+import { CrmService } from '#services/crm'
+
+@inject()
+export default class CrmSyncController {
+  constructor(protected crmService: CrmService) {}
+
+  async handle({ request, response }: HttpContext) {
+    const { event, data } = request.body()
+
+    switch (event) {
+      case 'user.created':
+        await this.crmService.createContact({
+          externalId: data.id,
+          email: data.email,
+          name: `${data.firstname} ${data.lastname}`,
+          signupDate: new Date(data.created_at),
+        })
+        break
+
+      case 'user.updated':
+        await this.crmService.updateContact(data.id, {
+          email: data.email,
+          name: `${data.firstname} ${data.lastname}`,
+        })
+        break
+
+      case 'user.deleted':
+        await this.crmService.archiveContact(data.id)
+        break
+    }
+
+    return response.ok({ received: true })
+  }
+}
+```
+
+<Callout variant="info" title="批次更新">
+
+如果您的 CRM 有速率限制，請將 webhook 有效負載排隊並批次處理，而不是每個事件傳送一次 API 呼叫。AdonisJS 任務或 Tokio 任務非常適合此用途。
+
+</Callout>
+
+請記住，當角色從使用者中移除時，`user.updated`也會被提出。在這種情況下，`data`是角色本身，而不是使用者，所以在把它當作個人資料更改之前，請確認`data.username`是否存在。
+
+<span id="alert-on-client-and-realm-changes" />
+
+## 客戶端和伺服器變更警報
+
+當客戶端或身分域設定在計劃維護之外發生變化時，通知你的安全團隊。訂閱`client.updated`和`realm.settings.updated`。對於`client.updated`來說，`data`是客戶端，`data.client_id`是可讀的名稱。
+
+:::codegroup
+```ts [AdonisJS]
+// app/controllers/security_alert_controller.ts
+import { inject } from '@adonisjs/core'
+import type { HttpContext } from '@adonisjs/core/http'
+
+import { PagerDuty } from '#services/pagerduty'
+import { isMaintenanceWindow } from '#utils/maintenance'
+
+@inject()
+export default class SecurityAlertController {
+  constructor(protected pagerDuty: PagerDuty) {}
+
+  async handle({ request, response }: HttpContext) {
+    const { event, data } = request.body()
+
+    if (event === 'client.updated' && !isMaintenanceWindow()) {
+      await this.pagerDuty.triggerIncident({
+        summary: `Client modified outside maintenance: ${data.client_id}`,
+        severity: 'warning',
+        source: 'ferriskey-webhooks',
+      })
+    }
+
+    return response.ok({ received: true })
+  }
+}
+```
+
+```rust [Axum]
+use axum::{Json, http::StatusCode};
+
+async fn security_alert(
+    Json(payload): Json<WebhookPayload>,
+) -> StatusCode {
+    if payload.event == "client.updated" && !is_maintenance_window() {
+        let client_id = payload
+            .data
+            .as_ref()
+            .and_then(|data| data["client_id"].as_str())
+            .unwrap_or("unknown");
+
+        tracing::warn!("Client modified outside maintenance: {}", client_id);
+        // Trigger PagerDuty incident via reqwest
+        pagerduty::trigger_incident(
+            &format!("Client modified outside maintenance: {}", client_id),
+            "warning",
+        ).await.ok();
+    }
+
+    StatusCode::OK
+}
+```
+:::
+
+<span id="user-provisioning-in-external-systems" />
+
+## 外部系統中的使用者配置
+
+使用者在FerrisKey建立後，請在其他系統中配置。訂閱`user.created`。
+
+::::step-group
+:::step{title="接收活動"}
+FerrisKey 傳送一個 `user.created` 負載，其`data`包含新使用者：使用者名稱、郵箱、姓名和 ID。
+:::
+
+:::step{title="在下游系統中建立賬戶"}
+您的管理員建立賬戶：
+
+- 在電子郵件系統中，一個郵箱或別名。
+- 在專案管理中，預設工作區中的一個席位。
+- 在雲平臺中，一個 IAM 身分。
+:::
+
+:::step{title="通知使用者"}
+傳送帶有已配置所有內容連結的歡迎郵件。
+:::
+::::
+
+```ts title="app/controllers/provisioning_controller.ts"
+import { inject } from '@adonisjs/core'
+import type { HttpContext } from '@adonisjs/core/http'
+
+import { MailService } from '#services/mail'
+import { WorkspaceService } from '#services/workspace'
+
+@inject()
+export default class ProvisioningController {
+  constructor(
+    protected workspaceService: WorkspaceService,
+    protected mailService: MailService
+  ) {}
+
+  async handle({ request, response }: HttpContext) {
+    const { event, data } = request.body()
+
+    if (event === 'user.created') {
+      await Promise.all([
+        this.workspaceService.addMember({
+          email: data.email,
+          name: `${data.firstname} ${data.lastname}`,
+        }),
+        this.mailService.createAlias(data.email),
+      ])
+
+      await this.mailService.sendWelcome(data.email, {
+        username: data.username,
+        firstname: data.firstname,
+      })
+    }
+
+    return response.ok({ received: true })
+  }
+}
+```
+
+<span id="role-assignment-audit" />
+
+## 角色分配審計
+
+記錄授予了哪些角色。訂閱 `user.role.assigned`。其 `data` 是角色（`id`、`name`、`permissions`），但不顯示哪個使用者獲得了它。要了解是誰獲得的，請檢視 [SeaWatch](/zh-TW/modules/seawatch/event-types) 中匹配的 `role_assigned` 事件，該事件將使用者名稱列為目標。
+
+```ts title="app/controllers/role_audit_controller.ts"
+import type { HttpContext } from '@adonisjs/core/http'
+
+import { auditLog } from '#services/audit_log'
+
+export default class RoleAuditController {
+  async handle({ request, response }: HttpContext) {
+    const { event, data, resource_id: realmId } = request.body()
+
+    if (event === 'user.role.assigned') {
+      await auditLog.record({
+        realmId,
+        roleId: data.id,
+        roleName: data.name,
+        permissions: data.permissions,
+        receivedAt: new Date(),
+      })
+    }
+
+    return response.ok({ received: true })
+  }
+}
+```
+
+移除不是對稱的。`user.role.unassigned` 從不觸發：從使用者處移除角色會觸發 `user.updated`，角色作為 `data`。
+
+<span id="realm-configuration-audit" />
+
+## 身分域配置審計
+
+跟蹤身分域設定的每一次更改以確保合規性。訂閱 `realm.settings.updated` 和 `realm.updated`。這裡 `resource_id` 很有用：它是發生更改的身分域。
+
+```rust title="src/handlers/audit.rs"
+use axum::{Json, http::StatusCode};
+use chrono::Utc;
+
+async fn audit_handler(
+    Json(payload): Json<WebhookPayload>,
+) -> StatusCode {
+    let events = ["realm.settings.updated", "realm.updated"];
+
+    if events.contains(&payload.event.as_str()) {
+        let audit_entry = serde_json::json!({
+            "event": payload.event,
+            "realm_id": payload.resource_id,
+            "timestamp": payload.timestamp,
+            "received_at": Utc::now().to_rfc3339(),
+            "data": payload.data,
+        });
+
+        // Persist to audit storage (S3, database, etc.)
+        audit_store.append(audit_entry).await.ok();
+    }
+
+    StatusCode::OK
+}
+```
+
+<span id="several-webhooks-in-one-realm" />
+
+## 一個身分域中的多個 webhook
+
+對於複雜的整合，在該身分域中註冊多個 webhook，每個 webhook 都有自己的端點和觸發器：
+
+| Webhook | 觸發器 | 端點 |
+|---|---|---|
+| `slack-notifications` | `user.created`, `user.deleted` | Slack 代理 |
+| `crm-sync` | `user.created`, `user.updated`, `user.deleted` | CRM 同步服務 |
+| `security-alerts` | `client.updated`, `realm.settings.updated`, `auth.reset_password` | PagerDuty 代理 |
+| `audit-log` | 你希望保留的每個觸發器 | S3 或 GCS 審計儲存桶 |
+
+每個 webhook 都是獨立的：Slack webhook 的失敗不會影響 CRM 同步或安全警報。每個 webhook 都有自己的簽名金鑰和重試策略。
+
+在 AdonisJS 中，將每個處理程式註冊為單獨的路由：
+
+```ts title="start/routes.ts"
+import router from '@adonisjs/core/services/router'
+
+router.post('/webhooks/slack', '#controllers/webhooks/slack_controller.handle')
+router.post('/webhooks/crm', '#controllers/webhooks/crm_sync_controller.handle')
+router.post('/webhooks/security', '#controllers/webhooks/security_alert_controller.handle')
+router.post('/webhooks/audit', '#controllers/webhooks/audit_controller.handle')
+```

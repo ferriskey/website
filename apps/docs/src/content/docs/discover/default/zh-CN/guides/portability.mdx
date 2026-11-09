@@ -1,0 +1,173 @@
+---
+title: "导出与导入"
+description: "在不同身份域和部署之间移动主题、布局、邮件模板和密码哈希。"
+icon: arrow-left-right
+order: 22
+---
+
+<span id="export--import" />
+
+# 导出与导入
+
+FerrisKey 中有四个可移植的东西：门户主题、门户布局、邮件模板和来自其他身份提供商的密码哈希。其他所有内容都是按身份域配置并保持在那里。
+
+这四者解决了不同的问题，它们之间的不对称是刻意为之。
+
+| 资源 | 出口 | 导入 | 原因 |
+|---|---|---|---|
+| 传送门主题 | 是 | 是 | 建立一个品牌一次，发到每个身份域 |
+| 门户布局 | 是 | 是 | 页面结构也是一样 |
+| 电子邮件模板 | 是 | 是 | 一样，把 MJML 交给设计师 |
+| 密码哈希 | 不 | 是 | 将用户从另一个 IAM 迁移出来。没有导出，这是故意的 |
+
+<span id="portal-themes" />
+
+## 门户主题
+
+```
+GET  /realms/{realm_name}/portal/themes/{theme_id}/export
+POST /realms/{realm_name}/portal/themes/import
+```
+
+导出是一个 JSON 包，包含主题的设计令牌、它的 13 个页面树以及框定它的布局。布局以值的形式随文件传输。这使文件成为自包含的：将其导入到另一个环境或另一个部署中也会重建布局，并将其绑定到新主题，而不是悬挂一个在那里不存在的布局 ID 引用。
+
+<img class="only-light" src="/dashboard/portal_themes-light.jpg" alt="FerrisKey 门户主题选项卡及导入操作" />
+<img class="only-dark" src="/dashboard/portal_themes-dark.jpg" alt="FerrisKey 门户主题选项卡及导入操作" />
+
+<Callout variant="info" title="导入的主题未激活">
+
+导入会创建主题；它不会激活主题。激活是一个单独的调用，并且需要每个页面都有效。请参见 [Portal](/zh-CN/modules/portal/overview#activation-is-gated-on-validity)。这个顺序允许你在生产环境中导入并在任何人看到之前进行预览。
+
+</Callout>
+
+<span id="portal-layouts" />
+
+## 门户布局
+
+```
+GET  /realms/{realm_name}/portal-layouts/{layout_id}/export
+POST /realms/{realm_name}/portal-layouts/import
+```
+
+<img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="FerrisKey 门户布局选项卡，带有导入操作和布局计数器" />
+<img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="FerrisKey 门户布局选项卡，带有导入操作和布局计数器" />
+
+布局以其树结构导出。导入时，树在存储之前会被验证，这是有趣的区别：普通的创建端点由控制台自带的生成器提供输入，该生成器总是生成有效的树，因此它会信任输入。导入端点无法做出这个假设，因此需要进行检查。
+
+如果你从脚本生成布局，导入端点会告诉你树结构是否错误，并附带 `422`。创建端点会接受它，而你会在门户渲染时才发现问题。
+
+<span id="email-templates" />
+
+## 电子邮件模板
+
+```
+GET  /realms/{realm_name}/email-templates/{template_id}/export?format=json
+GET  /realms/{realm_name}/email-templates/{template_id}/export?format=mjml
+POST /realms/{realm_name}/email-templates/import
+```
+
+<img class="only-light" src="/dashboard/email_templates-light.jpg" alt="FerrisKey 邮件模板页面显示类型赋值和导入操作" />
+<img class="only-dark" src="/dashboard/email_templates-dark.jpg" alt="FerrisKey 邮件模板页面显示类型赋值和导入操作" />
+
+出口需要一个`format`：
+
+| 格式 | 回归 | 当 |
+|---|---|---|
+| `json`（默认） | 建筑信封 | 你是在不同身份域之间移动模板，并且希望它在控制台中保持可编辑性 |
+| `mjml` | 渲染后的MJML标记 | 你是在把它交给设计师，或者保持版本控制 |
+
+导入可以接受任一形状。MJML 会被解析回构建结构，这样导入的模板就能保持可编辑性，而不是变成不透明的模糊块。主体只携带`structure`、`tree`或`mjml`中的一个。
+
+<Callout variant="warning" title="MJML往返者失去了MJ正体以外的一切">
+
+构建器只能表示 `<mj-body>` 内的内容。导入时，任何外部内容都会被丢弃：`<mj-head>`，以及其中的自定义字体、`<mj-style>`、断点声明和以这种方式设置的预览文本。
+
+因此，从 `json` 到 `json` 的往返是无损的，而 `mjml` 往返则不是。如果设计师编辑 MJML 并在 head 中添加任何内容，导入时会静默丢弃该部分。导出为 `json` 可用于移动模板，而 `mjml` 则视为单向出口。
+
+</Callout>
+
+模板的类型在创建时固定，并决定它可以使用哪些变量。导入时会从请求体中的 `email_type` 获取，这是必需的，包括原始 MJML。导入的内容会经过与其他模板相同的服务器端清理，因此不安全的标记会在导入时被移除。有关每种类型包含的变量以及清理过程移除的内容，请参见 [电子邮件和模板](/zh-CN/discover/guides/email)。
+
+<span id="password-hashes" />
+
+## 密码哈希
+
+```
+POST /realms/{realm_name}/users/{user_id}/credentials/import
+```
+
+这是迁移端点：它将另一个身份提供者生成的哈希存储为用户的密码凭据，因此在迁移到 FerrisKey 时，用户可以保留现有密码。
+
+```json title="Request body"
+{
+  "algorithm": "bcrypt",
+  "secret_data": "$2b$12$...",
+  "hash_iterations": 12,
+  "salt": null,
+  "temporary": false
+}
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `algorithm` | 是 | `bcrypt`, `argon2id`, `argon2i` 或 `argon2d` |
+| `secret_data` | 是 | 哈希本身 |
+| `hash_iterations` | 是 | 源系统的计算成本因子。它必须与哈希中记载的成本匹配 |
+| `salt` | 否 | 当源系统将其与哈希分开存储时 |
+| `temporary` | 否 | `true` 会要求用户在下次登录时设置新密码。默认值为 `false` |
+
+bcrypt 哈希以 `$2a$`、`$2b$` 或 `$2y$` 开头，成本在 4 到 14 之间。argon2 哈希是一个 PHC 字符串，其算法与 `algorithm` 字段匹配，且参数限制为内存 262144 KiB 内、16 次迭代和并行度 8。对于这两种哈希，`hash_iterations` 必须等于哈希中的成本。
+
+违反以下规则的哈希将被 `422` 拒绝：条目以字段 `secret_data` 命名并携带代码 `invalid_password_hash`。已拥有密码凭据的用户将得到 `409`；如果要替换凭据，请先删除现有凭据。
+
+<span id="the-upgrade-happens-at-first-sign-in" />
+
+### 升级将在首次登录时进行
+
+导入的哈希会在用户首次成功登录时重新编码为argon2id，这是明文唯一可再次进行哈希的时候。在此之前，账户会使用原来的哈希进行身份认证。相同的升级适用于成本与服务器配置成本不同的argon2哈希。如果失败，登录仍然会成功，FerrisKey会在下次尝试时再次尝试。
+
+这有两个值得提前计划的后果：
+
+- 只要一些已迁移的用户尚未登录，您的身份域就会同时存在多种算法。这是预期的，而不是缺陷。
+- 升级并不是一个事件。[SeaWatch](/zh-CN/modules/seawatch/event-types)中的`password_imported`事件只会被导入调用本身写一次，执行该调用的管理员是参与者。它标记了导入，因此统计这些事件可以告诉你加载了多少哈希，而不是迁移进展到哪一步。
+
+要查看迁移进度，请阅读每个用户的凭据：密码条目显示存储哈希的 `algorithm`、第一次登录前的 `bcrypt`，以及登录后的 `argon2id`。
+
+<Callout variant="danger" title="没有导出对应，这是重点。">
+
+FerrisKey 不会向你提供其密码哈希。导出凭据材料的端点就是在外泄这些信息，而没有任何合法迁移需要以这种方式进行。如果你要从 FerrisKey 迁移，建议两个系统同时运行，并让用户重新认证。
+
+</Callout>
+
+<span id="the-local-policy-still-applies-afterwards" />
+
+### 之后本地策略仍然适用。
+
+导入的密码不会根据域的[密码策略](/zh-CN/discover/core-concepts/password-policy)进行检查，因为明文从未被查看过。该策略将在用户下次更改密码时生效。要让整个迁移的人群选择新密码，请在导入后将每个密码重置为临时密码，或者在导入时将 `temporary` 设置为 `true`。
+
+<span id="what-is-not-portable" />
+
+## 不可迁移的内容
+
+域、客户端、用户、角色、权限作用域和组织没有导出/导入端点。移动这些对象需要使用 [ferris-ctl importer](/zh-CN/cli/import/overview)，它会读取描述文件、现有的 Keycloak 或现有的 Zitadel，并通过普通 API 创建对象。
+
+<span id="permissions" />
+
+## 权限
+
+| 资源 | 出口 | 导入 |
+|---|---|---|
+| 门户主题，门户布局 | `manage_realm` | `manage_realm` |
+| 电子邮件模板 | `view_email_templates`或`manage_email_templates` | `manage_email_templates` |
+| 密码哈希 | 无 | `manage_users` |
+
+`manage_realm` 授予它们全部权限。
+
+::::card-group{cols=2}
+:::card{label="门户" icon="lucide:palette" href="/zh-CN/modules/portal/overview"}
+在移动之前，主题和布局包含的内容。
+:::
+:::card{label="CLI 导入" icon="lucide:download" href="/zh-CN/cli/import/overview"}
+从 Keycloak 或 Zitadel 导入整个身份域。
+:::
+::::

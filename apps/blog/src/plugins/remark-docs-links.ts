@@ -1,6 +1,6 @@
 import type { Root } from 'mdast'
 
-const docsPathPattern = /^\/(en|fr)\/explainer\//
+const docsPathPattern = /^\/(en|fr|zh-CN|zh-TW)\/(?:explainer|discover|modules|cli|kubernetes|learn|terraform)\//
 
 function visitNodes(node: any, visitor: (n: any) => void) {
   visitor(node)

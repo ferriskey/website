@@ -1,0 +1,267 @@
+---
+title: "有效载荷格式"
+description: "FerrisKey 发送给 webhook 端点的内容：头部、JSON 信封、每个触发器的数据，以及如何验证签名。"
+icon: braces
+order: 62
+---
+
+<span id="payload-format" />
+
+# 有效载荷格式
+
+当 webhook 触发时，FerrisKey 会向端点发送带有 JSON 正文的 HTTP POST。每个触发器的信封是相同的。变化`data`，几个头部可以让你检查是谁发送的。
+
+<span id="what-the-request-carries" />
+
+## 请求内容
+
+| 头部 | 值 |
+|---|---|
+| `content-type` | `application/json` |
+| `x-ferriskey-timestamp` | Unix 时间（以秒计）表示该尝试签署 |
+| `x-ferriskey-signature` | 时间戳与请求体的 HMAC-SHA256，采用小写十六进制表示，详见[下文](#verifying-the-signature) |
+| `x-ferriskey-delivery-id` | 投递的ID。无论重试还是重放，ID都保持不变 |
+| 你的自定义头部 | 你在webhook上配置的那些 |
+
+FerrisKey 连接时间最多为 5 秒，整个请求等待 10 秒。任何`2xx`的回答都算作已送达。重定向则不计入：FerrisKey 不执行重定向，因此从`http`到`https`的`301`会被记录为送达失败，错误代码`http_301`。
+
+<span id="envelope" />
+
+## 包络
+
+```json title="Webhook payload"
+{
+  "event": "user.created",
+  "timestamp": "2026-03-17T14:30:00.123456+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": {
+    "id": "01914b3c-5678-7f5a-b456-000000000002",
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+    "username": "alice",
+    "firstname": "Alice",
+    "lastname": "Smith",
+    "email": "alice@example.com",
+    "email_verified": false,
+    "enabled": true,
+    "required_actions": [],
+    "created_at": "2026-03-17T14:30:00.101234Z",
+    "updated_at": "2026-03-17T14:30:00.101234Z",
+    "failed_login_attempts": 0,
+    "locked_until": null,
+    "locale": null,
+    "federation_provider_id": null
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `event` | `string` | 比如触发器名称`user.created` |
+| `timestamp` | `string` | RFC 3339 赛事建成时间 |
+| `resource_id` | `UUID` | 除了`auth.reset_password`触发器外，所有触发器的身份域ID都是用户ID。 |
+| `data` | 任何JSON | 事件所涉及的对象，或其id。请参见下一节 |
+
+<Callout variant="warning" title="resource_id无法识别发生变化的对象">
+
+对于几乎每个触发器，`resource_id` 是事件发生的身份域的ID。它告诉你是哪一个身份域，而不是哪个用户、客户端或角色。当事件只携带一个ID时，从 `data.id` 或 `data` 本身读取对象的ID。相同的值会填充投递记录的 `resource_id`。
+
+</Callout>
+
+<span id="what-data-holds" />
+
+## 数据包含内容
+
+| 触发器 | `data` |
+|---|---|
+| `user.created`, `user.updated`, `user.deleted`, `user.email_verified` | 用户对象，包括 `id`、`username`、`email`、`enabled` 和 `email_verified`。对于 `user.deleted`，它是用户删除前的状态 |
+| `user.bulk_deleted` | 已删除用户的ID数组 |
+| `user.role.assigned` | 角色对象（`id`、`name`、`permissions` 及其他）。它不会说明哪个用户获得了该角色 |
+| `auth.reset_password` | `null`。`resource_id` 是用户ID |
+| `auth.device_flow.initiated`, `.denied`, `.expired` | `session_id`、`realm_id`、`client_id`、`status`、`user_id` 和 `device_code`。`initiated` 的代码为明文，其他两个为 SHA-256 十六进制摘要 |
+| `client.created`, `client.updated`, `client.maintenance.enabled`, `client.maintenance.disabled` | 客户端对象。客户端密钥显示为 `***` |
+| `client.deleted`, `redirect_uri.deleted`, `web_origin.deleted`, `client.saml_attribute_mapper.deleted` | 被移除对象的 id，字符串形式 |
+| `redirect_uri.created`, `redirect_uri.updated`, `web_origin.created`, `client.saml_config.updated`, `client.saml_attribute_mapper.created` | 对象本身 |
+| `role.created`, `role.updated`, `role.deleted`, `role.permission.updated` | 角色对象。`permissions` 是权限名称的数组 |
+| `realm.updated`, `realm.deleted` | 身份域对象 |
+| `realm.settings.updated` | 身份域设置对象 |
+| `webhook.created`, `webhook.updated`, `webhook.deleted` | Webhook，不含其 `headers` 和 `secret` |
+
+`data` 中的时间戳以 `Z` 结尾，而信封的 `timestamp` 以 `+00:00` 结尾。两者都是 RFC 3339 格式，因此任何解析器都可以接受。
+
+<span id="examples" />
+
+### 示例
+
+```json title="role.permission.updated"
+{
+  "event": "role.permission.updated",
+  "timestamp": "2026-03-17T15:00:00.482913+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": {
+    "id": "01914b3c-9abc-7f5a-b456-000000000010",
+    "name": "editor",
+    "description": null,
+    "permissions": ["view_users", "manage_users"],
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+    "client_id": null,
+    "client": null,
+    "require_mfa": false,
+    "created_at": "2026-03-01T09:00:00.000000Z",
+    "updated_at": "2026-03-17T15:00:00.470112Z"
+  }
+}
+```
+
+```json title="client.deleted"
+{
+  "event": "client.deleted",
+  "timestamp": "2026-03-17T15:30:00.912004+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": "01914b3c-def0-7f5a-b456-000000000020"
+}
+```
+
+```json title="auth.reset_password"
+{
+  "event": "auth.reset_password",
+  "timestamp": "2026-03-17T16:10:00.250117+00:00",
+  "resource_id": "01914b3c-5678-7f5a-b456-000000000002",
+  "data": null
+}
+```
+
+<span id="custom-headers" />
+
+## 自定义头
+
+Webhook 可以携带自定义 HTTP 头，每次传送时发送。将其用于你的端点预期的承载令牌或路由标签：
+
+```json title="Webhook with custom headers"
+{
+  "endpoint": "https://api.yourapp.com/webhooks/ferriskey",
+  "headers": {
+    "Authorization": "Bearer your-secret-token",
+    "X-Webhook-Source": "ferriskey"
+  }
+}
+```
+
+FerrisKey 拒绝保存包含 `host`、`content-type`、`content-length`、`transfer-encoding`、`x-ferriskey-signature`、`x-ferriskey-timestamp` 或 `x-ferriskey-delivery-id` 的头的 webhook，因为它们是由 FerrisKey 自己设置的。API 从未返回这些值。将 `headers` 留在 `PUT` 中以保留已存储的集合；发送它以替换整个集合。
+
+静态头证明调用者知道一个令牌。它不能证明主体没有被篡改，并且可以被重放。签名涵盖了两者。
+
+<span id="verifying-the-signature" />
+
+## 验证签名
+
+每个传递都使用 webhook 的密钥签名。签名是这个字符串的小写十六进制 HMAC-SHA256:
+
+```text
+{x-ferriskey-timestamp}.{raw request body}
+```
+
+这是时间戳头的十进制值，一个字面上的点，以及正文的确切字节。密钥是你收到的那个密钥，作为文本处理：就是这64个十六进制字符本身，而不是它们解码后的字节。将时间戳绑定到签名字符串中，可以防止捕获请求的人在后来使用新的时间戳头再次发送请求。
+
+::::step-group
+:::step{title="获取密钥"}
+密钥只会显示一次，当你调用 `POST /realms/{realm_name}/webhooks/{webhook_id}/secret/rotate` 或在控制台中使用“生成新密钥”时出现。创建或读取 webhook 都不会返回它。将它存储在你的端点可以读取的地方。
+:::
+
+:::step{title="保留原始正文"}
+在任何 JSON 解析之前，对你收到的字节计算 HMAC。再次解析和序列化会改变空白字符和键的顺序，签名将不再匹配。
+:::
+
+:::step{title="检查时间戳"}
+当 `x-ferriskey-timestamp` 与您的时钟相差过大时拒绝请求。五分钟是一个合理的容差。FerrisKey 会用尝试的时间对每次尝试进行签名，因此即使原始事件较旧，重试和手动重放也能通过此检查。检查头部，而不是主体的 `timestamp` 字段。
+:::
+
+:::step{title="以恒定时间进行比较"}
+计算预期签名，并使用恒定时间比较将其与 `x-ferriskey-signature` 进行比对。
+:::
+::::
+
+```js title="verify.mjs"
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+const TOLERANCE_SECONDS = 300
+
+export function verifyFerrisKeySignature(secret, headers, rawBody) {
+  const timestamp = headers['x-ferriskey-timestamp']
+  const received = headers['x-ferriskey-signature']
+  if (!timestamp || !received) return false
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp))
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) return false
+
+  const expected = createHmac('sha256', secret)
+    .update(`${timestamp}.`)
+    .update(rawBody)
+    .digest('hex')
+
+  const a = Buffer.from(expected, 'hex')
+  const b = Buffer.from(received, 'hex')
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+```
+
+在普通 Node 服务器中接入时，该函数在任何解析之前会将主体作为 `Buffer` 接收：
+
+```js title="server.mjs"
+import { createServer } from 'node:http'
+import { verifyFerrisKeySignature } from './verify.mjs'
+
+const secret = process.env.FERRISKEY_WEBHOOK_SECRET
+
+createServer((req, res) => {
+  const chunks = []
+  req.on('data', (chunk) => chunks.push(chunk))
+  req.on('end', () => {
+    const rawBody = Buffer.concat(chunks)
+
+    if (!verifyFerrisKeySignature(secret, req.headers, rawBody)) {
+      res.writeHead(401).end()
+      return
+    }
+
+    const payload = JSON.parse(rawBody.toString('utf8'))
+    console.log(req.headers['x-ferriskey-delivery-id'], payload.event)
+    res.writeHead(204).end()
+  })
+}).listen(8080)
+```
+
+FerrisKey 使用当时生效的密钥对每次尝试进行签名。一旦你进行轮换，任何仍然持有旧密钥的尝试到达端点时都会验证失败。如果你用除 408 或 429 以外的 4xx 响应，FerrisKey 不会重试，你需要手动重新发送，所以在生成新密钥之前，请确保端点准备好新的密钥。
+
+<span id="handling-a-delivery-well" />
+
+## 妥善处理投递
+
+<span id="respond-quickly" />
+
+### 快速响应
+
+一旦存储了负载，立即返回 `2xx`，并在后台进行繁重工作。FerrisKey 会在 10 秒后停止等待，记录 `transport_error`，并稍后重试。
+
+<span id="be-idempotent" />
+
+### 保持幂等
+
+同一个投球可以多次到达你手中：暂停后自动重试，或者手动重播。用`x-ferriskey-delivery-id`作为去重密钥。每次尝试一次投球都是一样的。`resource_id`和`timestamp`无法完成这项工作，因为`resource_id`通常是身份域。
+
+<span id="verify-before-you-parse" />
+
+### 解析前先核实
+
+先检查签名。不要对无法产生签名的调用者进行操作。
+
+<span id="read-data-by-event" />
+
+### 按事件阅读`data`
+
+`data`可以是对象、字符串、数组或`null`，具体取决于触发器。在读取字段之前，先在`event`分支，正如上表所示。
+
+<span id="log-the-delivery-id" />
+
+### 记录送达ID
+
+为每个有效载荷记录`x-ferriskey-delivery-id`。当处理器静默失败时，这个ID就是你在[Deliveries and retries](/zh-CN/modules/webhooks/deliveries)下找到匹配行的方式。

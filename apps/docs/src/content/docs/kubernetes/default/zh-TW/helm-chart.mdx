@@ -1,0 +1,369 @@
+---
+title: "Helm Chart"
+description: "使用官方 Helm Chart在 Kubernetes 上安裝 FerrisKey。"
+icon: package
+order: 2
+---
+
+# Helm Chart
+
+FerrisKey Chart作為 OCI 工件釋出在 `oci://ghcr.io/ferriskey/charts/ferriskey`。它部署 API、Web 控制檯、資料庫遷移作業，並且除非你關閉它，否則還會部署嵌入式 PostgreSQL。映象標籤預設為Chart的 `appVersion`，因此 0.10.0 版本的Chart執行 FerrisKey 0.10.0。
+
+<span id="install" />
+
+## 安裝
+
+首次安裝是本地試用。資源名稱以釋出名稱開頭，下面的命令假設它是 `ferriskey`。
+
+::::step-group
+:::step{title="安裝Chart"}
+Chart是 OCI 工件，因此沒有 `helm repo add` 步驟：
+
+```bash
+helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey \
+  --create-namespace \
+  --set webapp.api.url=http://localhost:3333/api \
+  --set api.webapp.url=http://localhost:5555 \
+  --set 'api.server.allowedOrigins={http://localhost:5555}'
+```
+
+這將啟動嵌入式 PostgreSQL，並將資料庫和管理員密碼生成到 Secrets 中。三個 `--set` 標誌將控制檯和 API 指向上一步中你開啟的埠轉發。控制檯在你的瀏覽器中執行，並從瀏覽器呼叫 API，因此它需要瀏覽器能夠存取的 API 地址。[控制檯和 API URL](#the-console-and-the-api-url) 解釋了原因。
+:::
+
+:::step{title="檢查釋出情況"}
+```bash
+kubectl get pods -n ferriskey
+```
+
+等待 API pod、控制檯 pod 和 `ferriskey-postgresql-0` 到達 `Running`。遷移 Job 作為 Helm hook 執行，成功後 Helm 會立即刪除它，所以它的 pod 只在執行時顯示。
+:::
+
+:::step{title="存取控制檯"}
+為每個服務開啟一個埠轉發，每個在自己的終端中。API 服務監聽 3333，控制檯服務監聽 80：
+
+```bash
+kubectl port-forward -n ferriskey svc/ferriskey-api 3333:3333
+kubectl port-forward -n ferriskey svc/ferriskey-webapp 5555:80
+```
+
+開啟 `http://localhost:5555` 並以 `admin` 登入。生成的密碼在 `ferriskey-api-admin` Secret 中：
+
+```bash
+kubectl get secret -n ferriskey ferriskey-api-admin \
+  -o jsonpath='{.data.password}' | base64 -d
+```
+:::
+::::
+
+:::callout{variant="warning"}
+內建的 PostgreSQL 僅用於嘗試。`postgresql.enabled` 預設為 `true`，因此全新安裝無需依賴即可使用，但它是單個 StatefulSet，沒有副本和備份。對於生產環境，請設定 `postgresql.enabled: false` 並將 `database.host` 指向託管例項。
+:::
+
+<span id="install-against-an-external-postgresql" />
+
+## 針對外部 PostgreSQL 安裝
+
+```bash
+helm install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey --create-namespace \
+  --set postgresql.enabled=false \
+  --set database.host=postgres.database.svc.cluster.local \
+  --set database.passwordSecret.create=false \
+  --set database.passwordSecret.name=ferriskey-db-credentials
+```
+
+使用 `database.passwordSecret.create=false`，Chart會從您命名的 Secret 中讀取密碼，在 `database.passwordSecret.key`（預設 `password`）提供的金鑰下。該Chart不會在此連線上設定任何 TLS 選項。 [加密資料庫連線](/zh-TW/kubernetes/production-guide#encrypt-the-database-connection) 顯示了方法。
+
+<span id="exposing-the-deployment" />
+
+## 暴露部署
+
+該Chart可以渲染 Ingress 或 Gateway API HTTPRoute。兩者都需要 `publicHost`，這是存取控制檯和 API 的主機名。如果缺失，會以明確的提示訊息渲染失敗。
+
+```yaml title="values.yaml, Ingress"
+publicHost: iam.yourorg.com
+
+ingress:
+  enabled: true
+  class: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+```
+
+```yaml title="values.yaml, Gateway API"
+publicHost: iam.yourorg.com
+
+gatewayAPI:
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - name: my-gateway
+        namespace: gateway-system
+```
+
+兩個路由都將 `/` 指向控制檯，將 `api.server.rootPath`（預設 `/api`）指向 API，在單個主機名上。因為整個 `rootPath` 都指向 API，`/api/metrics` 和 API 文件除非被阻止，否則可以從外部存取。[生產指南](/zh-TW/kubernetes/production-guide#restrict-what-the-ingress-exposes) 對此有詳細說明。
+
+`api.webapp.url` 和 `webapp.api.url` 來源於 `publicHost`，即協議和根路徑，因此只有在將兩者部署在不同主機上時才需要設定它們。派生的 URL 以 `https://` 開頭。如果您使用純 HTTP 服務，請將 `api.webapp.protocol` 和 `webapp.api.protocol` 設定為 `http`。
+
+<span id="the-console-and-the-api-url" />
+
+### 控制檯和 API URL
+
+控制檯是一個靜態網站。載入時，瀏覽器會讀取 `/config.json`，該值由 Chart 從一個 ConfigMap (`<release>-webapp-config`) 中掛載，ConfigMap 的值為 `webapp.api.url`，並將每個 API 呼叫都傳送到該地址。容器同樣將該值作為 `API_URL` 接收。在啟動時，其入口點會獲取該 URL 的源（方案、主機和埠）並將其新增到控制檯服務的內容安全策略的 `connect-src` 指令中。該指令允許控制檯自身的源和該源，其它任何來源均不允許。
+
+一個 `webapp.api.url`，其與瀏覽器實際用於 API 的地址在方案、主機或埠上不同，因此會導致瀏覽器阻止呼叫，並且控制檯無法從 API 載入任何內容。這也是為什麼純 HTTP 部署需要 `webapp.api.protocol: http`：派生的 URL 將以 `https://` 開頭。如果完全沒有值，控制檯會回退到它自己的源，這只有在有東西在該源下路由 API 時才有效。
+
+控制檯的 nginx 配置在啟動時會被重寫，並且容器的根檔案系統是隻讀的。因此，一個名為 `seed-nginx` 的初始化容器會將 `/etc/nginx/conf.d` 從映象中複製到控制檯容器在該路徑掛載的 `emptyDir` 卷中。它以 `webapp.securityContext` 和 `webapp.resources` 方式執行控制檯映象。你新增的帶有 `webapp.initContainers` 的初始化容器會在它之後執行。
+
+<span id="environment-variables-the-chart-has-no-value-for" />
+
+## Chart中沒有值的環境變數
+
+API 部署從Chart值設定了一組固定的變數：資料庫連線（`DATABASE_HOST`、`DATABASE_NAME`、`DATABASE_PASSWORD`、`DATABASE_PORT`、`DATABASE_USER`）、`ADMIN_PASSWORD`、`ADMIN_EMAIL`、`ADMIN_USERNAME`、`ALLOWED_ORIGINS`、`ENV`、`LOG_FILTER`、`LOG_JSON`、`SERVER_PORT`、`SERVER_ROOT_PATH`、`WEBAPP_URL`，以及在 `opentelemetry.enabled` 開啟時的 OpenTelemetry 配對。
+
+API 從其環境中讀取的其他所有內容沒有Chart值。這包括 `SECRETS_ENCRYPTION_KEYS`、`SERVER_PUBLIC_URL`（SAML 所需）、`AUTHZ_ENABLED`、`SERVER_TRUST_FORWARDED_FOR`、連線池變數和 Argon2 變數。將它們新增到 `api.env`，該變數在固定列表之後追加，或者使用 `api.envFrom` 載入整個 ConfigMap 或 Secret。[配置指南](/zh-TW/discover/guides/configuration) 記錄了每個變數。
+
+```yaml title="values.yaml"
+api:
+  env:
+    - name: SECRETS_ENCRYPTION_KEYS
+      valueFrom:
+        secretKeyRef:
+          name: ferriskey-secrets-encryption
+          key: SECRETS_ENCRYPTION_KEYS
+    - name: SERVER_PUBLIC_URL
+      value: https://iam.yourorg.com
+    - name: SERVER_TRUST_FORWARDED_FOR
+      value: "true"
+```
+
+在釋出名稱空間中建立 Secret，這樣金鑰就不會出現在你的 values 檔案中。API pod 在 Secret 存在之前不會啟動，因此如果釋出尚未安裝，請先建立名稱空間：
+
+```bash
+kubectl create secret generic ferriskey-secrets-encryption \
+  --namespace ferriskey \
+  --from-literal=SECRETS_ENCRYPTION_KEYS="2026-10:$(openssl rand -base64 32)"
+```
+
+[靜態 Secret](/zh-TW/discover/guides/secrets-at-rest) 涵蓋了金鑰格式和輪換。請在叢集外備份金鑰：Secret 是唯一可以解開其封裝內容的副本。
+
+`api.env` 和 `common.env` 支援完整的 Kubernetes `EnvVar` 條目。`common.env` 和 `common.envFrom` 涉及Chart部署的所有工作負載，包括遷移 Job 和嵌入的 PostgreSQL，因此請保留它們用於每個容器都可能存取的設定。Kubernetes 會賦予 `env` 優先權高於 `envFrom`，因此Chart已設定的變數，例如 `LOG_JSON`，不能透過 `envFrom` 覆蓋。請改為更改其Chart值。
+
+<span id="values-reference" />
+
+## Values 引用
+
+該Chart展示了每個工作負載的完整 Kubernetes 表面：探針、安全上下文、親和性、容忍度、拓撲分佈、額外卷等等。下面的表格涵蓋了 FerrisKey 特有的值。[Chart自述檔案](https://github.com/ferriskey/ferriskey/blob/main/charts/ferriskey/README.md) 包含了完整列表。
+
+<span id="top-level" />
+
+### 頂層
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `nameOverride` | `nil` | 當Chart生成資源名稱時（截斷為 43 個字元）替代釋出名稱 |
+| `publicHost` | `nil` | 公共主機名。啟用 Ingress 或 HTTPRoute 時必填。還用於派生 `api.webapp.url` 和 `webapp.api.url` |
+| `common.env`, `common.envFrom` | `[]` | 應用於每個工作負載的環境 |
+
+<span id="database" />
+
+### 資料庫
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `database.host` | `nil` | PostgreSQL 主機。若未指定，則回退到嵌入例項的 Service 名稱 |
+| `database.port` | `5432` | PostgreSQL 埠 |
+| `database.name` | `ferriskey` | 資料庫名稱 |
+| `database.user` | `ferriskey` | 資料庫使用者 |
+| `database.passwordSecret.create` | `true` | 生成密碼 Secret |
+| `database.passwordSecret.name` | `nil` | 讀取密碼的現有 Secret |
+| `database.passwordSecret.key` | `password` | 該 Secret 內的鍵。Chart生成的 Secret 始終使用 `password` |
+
+### API
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `api.replicas` | `1` | API 副本數量 |
+| `api.image.repository` | `ghcr.io/ferriskey/ferriskey-api` | API 映象 |
+| `api.image.tag` | chart 版本 | API 映象標籤 |
+| `api.admin.username` | `admin` | 初始管理員使用者名稱 |
+| `api.admin.email` | `admin@cluster.local` | 初始管理員郵箱 |
+| `api.admin.passwordSecret.create` | `true` | 生成管理員密碼 Secret |
+| `api.admin.passwordSecret.name` | `nil` | 已有 Secret 儲存管理員密碼 |
+| `api.admin.passwordSecret.key` | `password` | 該 Secret 內的金鑰 |
+| `api.server.port` | `3333` | API 監聽的埠 |
+| `api.server.rootPath` | `/api` | 每個路由的路徑字首，包括 `/metrics` 和 API 文件。更改它時，探測路徑也需要更新 |
+| `api.server.allowedOrigins` | `[]` | 允許在每個路由存取的瀏覽器來源 |
+| `api.webapp.url` | `nil` | 控制檯 URL，作為 `WEBAPP_URL` 傳入。未設定時根據 `publicHost` 計算 |
+| `api.webapp.protocol` | `https` | 用於計算控制檯 URL 的協議。設定 `api.webapp.url` 時忽略 |
+| `api.log.filter` | `info` | 日誌過濾指令 |
+| `api.log.json` | `false` | JSON 日誌輸出 |
+| `api.env`, `api.envFrom` | `[]` | API 容器的額外環境變數 |
+| `api.serviceMonitor.enabled` | `false` | 建立一個 Prometheus Operator ServiceMonitor 來抓取 `<rootPath>/metrics` |
+| `api.resources` | 12800萬記憶體請求，512百萬記憶體限制 | API 容器資源。沒有設定 CPU 請求或限制 |
+
+<span id="web-console" />
+
+### 網頁控制檯
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `webapp.replicas` | `1` | 控制檯複製數量 |
+| `webapp.image.repository` | `ghcr.io/ferriskey/ferriskey-webapp` | 控制檯形象 |
+| `webapp.api.url` | `nil` | 瀏覽器呼叫的API URL。寫入`config.json`和`API_URL`。從未設定時的`publicHost`計算。 |
+| `webapp.api.protocol` | `https` | 用於計算出的 API URL 的方案。設定 `webapp.api.url` 時忽略 |
+| `webapp.resources` | 32Mi 記憶體請求，64Mi 記憶體限制 | 控制檯容器資源 |
+
+<span id="database-migrations" />
+
+### 資料庫遷移
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `databaseMigrations.image.repository` | API 映象 | 圖片執行`sqlx migrate run` |
+| `databaseMigrations.backoffLimit` | `nil` | 在作業被標記為失敗之前重試。只有在`1`或更多時才渲染，`0`保持Kubernetes預設狀態 |
+| `databaseMigrations.ttlSecondsAfterFinished` | `nil` | Kubernetes 在刪除之前會保留完成的作業。只有在`1`或更多時才渲染，所以`0`什麼都不渲染 |
+
+在 Helm 下，遷移作業作為 `post-install` 和 `pre-upgrade` 鉤子執行，Helm 一旦成功就會刪除它。每次升級都會重新建立，而不是現場打補丁，這也是為什麼你很少需要`ttlSecondsAfterFinished`。作業會和 `restartPolicy: OnFailure` 一起執行。
+
+<span id="embedded-postgresql" />
+
+### 嵌入式PostgreSQL
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `postgresql.enabled` | `true` | 部署捆綁的PostgreSQL |
+| `postgresql.image.repository` | `postgres` | PostgreSQL 映像 |
+| `postgresql.image.tag` | `17` | PostgreSQL image tag |
+| `postgresql.persistence.enabled` | `true` | 用PVC做回那個例項 |
+| `postgresql.persistence.resources.requests.storage` | `5Gi` | PVC尺寸 |
+| `postgresql.persistence.storageClass` | `nil` | 儲存類 |
+
+<span id="observability" />
+
+### 可觀測性
+
+| 關鍵 | 預設 | 說明 |
+|---|---|---|
+| `opentelemetry.enabled` | `false` | 在 API 上設定 `ACTIVE_OBSERVABILITY` 和 `OTLP_ENDPOINT` |
+| `opentelemetry.otlpEndpoint` | `http://tempo:4317` | OTLP端點用於追蹤和日誌 |
+
+API在可觀測性開啟後也需要`METRICS_ENDPOINT`，而Chart對它沒有任何價值。沒有它，API拒絕啟動，所以可以加到`api.env`：
+
+```yaml title="values.yaml"
+opentelemetry:
+  enabled: true
+  otlpEndpoint: http://tempo.observability.svc.cluster.local:4317
+
+api:
+  env:
+    - name: METRICS_ENDPOINT
+      value: http://otel-collector.observability.svc.cluster.local:4317
+```
+
+<span id="a-production-values-file" />
+
+## 製作值檔案
+
+```yaml title="values.yaml"
+publicHost: iam.yourorg.com
+
+postgresql:
+  enabled: false
+
+database:
+  host: postgres.database.svc.cluster.local
+  name: ferriskey
+  user: ferriskey
+  passwordSecret:
+    create: false
+    name: ferriskey-db-credentials
+    key: password
+
+api:
+  replicas: 3
+  admin:
+    username: admin
+    email: admin@yourorg.com
+    passwordSecret:
+      create: false
+      name: ferriskey-admin
+      key: password
+  log:
+    json: true
+  serviceMonitor:
+    enabled: true
+  env:
+    - name: SECRETS_ENCRYPTION_KEYS
+      valueFrom:
+        secretKeyRef:
+          name: ferriskey-secrets-encryption
+          key: SECRETS_ENCRYPTION_KEYS
+    - name: SERVER_PUBLIC_URL
+      value: https://iam.yourorg.com
+
+webapp:
+  replicas: 2
+
+ingress:
+  enabled: true
+  class: nginx
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+```
+
+```bash
+helm upgrade --install ferriskey oci://ghcr.io/ferriskey/charts/ferriskey \
+  --namespace ferriskey --create-namespace \
+  -f values.yaml
+```
+
+[生產指南](/zh-TW/kubernetes/production-guide) 介紹了此檔案未涉及的內容：資料庫 TLS、連線預算、健康檢查以及在 Ingress 上需要阻止的內容。
+
+<span id="installing-with-argocd" />
+
+## 使用 ArgoCD 安裝
+
+在 ArgoCD 下，使用 ArgoCD 自身的 hook 和 sync-wave 註解來排序資源：首先是資料庫密碼 Secret 和內建 PostgreSQL，然後是之後的遷移 Job。
+
+```yaml title="values.yaml, ArgoCD"
+database:
+  passwordSecret:
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/sync-wave: "0"
+
+databaseMigrations:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "1"
+
+postgresql:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "0"
+  serviceAccount:
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/sync-wave: "0"
+```
+
+對於外部資料庫，僅適用 `databaseMigrations` 註解。
+
+該Chart透過使用 Helm 的 `lookup` 查詢現有 Secret 來保持生成的密碼穩定。ArgoCD 在沒有存取叢集的情況下渲染Chart，因此查詢什麼也找不到，並且在每次同步時都會生成一個新密碼。然後，管理員密碼 Secret 顯示為永久漂移。最乾淨的解決辦法是自己建立兩個密碼 Secret 並設定 `create: false`。如果你保留生成的管理員 Secret，請告訴 ArgoCD 忽略該欄位：
+
+```yaml
+ignoreDifferences:
+  - group: ""
+    kind: Secret
+    name: ferriskey-api-admin
+    jsonPointers:
+      - /data/password
+```

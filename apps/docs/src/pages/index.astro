@@ -26,17 +26,18 @@ const defaultRedirect = localeRedirects['en'] ?? Object.values(localeRedirects)[
 ---
 
 <!doctype html>
-<html>
+<html data-locale-redirects={JSON.stringify(localeRedirects)} data-default-redirect={defaultRedirect}>
   <head>
     <meta charset="UTF-8" />
     <title>Redirecting...</title>
-    <meta http-equiv="refresh" content={`0;url=${defaultRedirect}`} />
+    <noscript><meta http-equiv="refresh" content={`0;url=${defaultRedirect}`} /></noscript>
   </head>
   <body>
-    <script is:inline define:vars={{ localeRedirects, defaultRedirect }}>
-      const lang = navigator.language?.split('-')[0]?.toLowerCase()
-      const target = localeRedirects[lang] || defaultRedirect
-      window.location.replace(target)
+    <script>
+      import { getClientLocale } from '@explainer/ui/lib/locale'
+      const redirects = JSON.parse(document.documentElement.dataset.localeRedirects ?? '{}')
+      const fallback = document.documentElement.dataset.defaultRedirect ?? '/'
+      window.location.replace(redirects[getClientLocale()] ?? fallback)
     </script>
     <p>Redirecting to <a href={defaultRedirect}>documentation</a>...</p>
   </body>

@@ -102,7 +102,7 @@ export function Header({
             </div>
           )}
           <div className="hidden items-center border-l border-border px-2 md:flex">
-            <SearchCommand />
+            <SearchCommand locale={currentLocale} />
           </div>
           <div className="hidden items-center border-l border-border px-2 lg:flex">
             <LocaleSwitcher locales={locales} currentLocale={currentLocale} switchUrls={localeSwitchUrls} />

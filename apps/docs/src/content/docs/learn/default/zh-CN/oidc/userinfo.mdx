@@ -1,0 +1,100 @@
+---
+title: "UserInfo 端点"
+description: "一个标准的 OIDC 端点，根据访问令牌返回用户的当前声明。"
+icon: user-search
+order: 3
+---
+
+<span id="the-userinfo-endpoint" />
+
+# UserInfo 端点
+
+`/userinfo` 是 OIDC 按名称标准化的少数端点之一。它的功能很单一：给定一个访问令牌，它会返回关于已认证用户的当前声明。
+
+```http
+GET /realms/my-app/protocol/openid-connect/userinfo
+Authorization: Bearer eyJhbGciOi...
+```
+
+```json
+{
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "picture": "https://example.com/avatar/alice.png"
+}
+```
+
+<span id="why-call-it-if-the-id-token-already-has-claims" />
+
+## 如果 ID 令牌已经包含声明，为什么还要调用它？
+
+有两个原因。
+
+首先是新鲜度。ID 令牌是登录时的快照。如果用户一小时后更改了姓名，旧的 ID 令牌仍然会显示旧姓名。`/userinfo` 会从实时存储中读取。
+
+其次是足迹。令牌会到处传递。将每个声明都塞进 ID 令牌会使每个请求膨胀。清晰的模式是使用精简的 ID 令牌，以及在实际需要其他信息时调用 `/userinfo`。
+
+<span id="how-clients-typically-use-it" />
+
+## 客户端的典型使用方式
+
+- 在登录时，在用代码交换令牌之后，填充应用中的用户资料。
+- 在用户重新刷新个人资料时，当用户重新打开设置页面时，
+- 很少会在每个请求中出现。这违背了无状态令牌的初衷。
+
+<span id="authentication" />
+
+## 身份认证
+
+端点接收访问令牌，而非ID令牌。（是的，这是唯一一个访问令牌属于OIDC提供者本身的OIDC端点。）作为承载令牌发送：
+
+```bash
+curl https://auth.example.com/realms/my-app/protocol/openid-connect/userinfo \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+<span id="what-claims-appear" />
+
+## 出现了哪些声明？
+
+与瞄准镜承诺的声明相同：
+
+- `openid` → `sub`
+- `profile` → `name`, `given_name`, `family_name`, `picture`, `locale`, ...
+- `email` → `email`, `email_verified`
+- `address`，`phone` →各自的声明
+
+如果客户端登录时未请求作用域，相应的声明不会出现在`/userinfo`。端点尊重访问令牌所携带的作用域。
+
+<span id="response-formats" />
+
+## 响应格式
+
+默认情况下，`/userinfo` 返回一个普通的 JSON 对象。OIDC 也允许响应以签名的 JWT 形式返回（在客户端的 `userinfo_signed_response_alg` 中设置）。当响应需要端到端可验证时，例如在通过不受信任的中介时，签名形式非常有用。
+
+<span id="a-common-pitfall" />
+
+## 一个常见的陷阱
+
+有些客户端在每次请求时调用 `/userinfo` 来获取用户身份。不要这样做。这会导致对你的应用的每个请求都需要往返认证服务器。正确的模式是：
+
+- 在本地验证访问令牌（如果它是 JWT）。
+- 从 JWT 中读取 `sub`。
+- 仅在需要尚未拥有的声明时才调用 `/userinfo`。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 在标准 OIDC 路径上按身份域公开 `/userinfo`。它支持 JSON 和签名 JWT 响应。
+
+::::card-group{cols=2}
+:::card{label="ID 令牌" icon="lucide:id-card" href="/zh-CN/learn/oidc/id-token"}
+登录时用户声明的快照。
+:::
+:::card{label="作用域与同意" icon="lucide:badge-check" href="/zh-CN/learn/oauth2/scopes"}
+什么控制哪些声明会出现在 /userinfo 。
+:::
+::::

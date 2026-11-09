@@ -1,0 +1,238 @@
+---
+title: "身分域"
+description: "建立、檢查、刪除和匯入身分域，並管理身分域和客戶端角色。"
+icon: layers
+order: 2
+---
+
+# `realm`
+
+管理身分域，即包含客戶端、使用者、角色和憑據的隔離租戶。
+
+```bash
+ferris-ctl realm <subcommand>
+```
+
+`get`、`create` 和 `delete` 以身分域名稱作為引數。`role` 子命令作用於 `--realm`，預設使用上下文的身分域。每個子命令都會登入到上下文的身分域，因此上下文必須有身分域。參見 [Authentication](/zh-TW/cli/authentication#contexts)。
+
+<Callout variant="warning" title="已知限制：只能讀取第一頁">
+
+伺服器預設以每頁20條（最多100條）返回列表，而`ferris-ctl`僅讀取第一頁。這會影響`realm list`，它最多顯示20個身分域，以及身分域角色：`realm role list`顯示前20個，而`realm role get`和`realm role delete`在該頁中按名稱查詢角色，因此當角色在該頁之外時，它們會返回`role '<name>' not found`。`--client <client_id>`透過`client_id`解析客戶端，只在身分域的前20個客戶端中。客戶端的角色不分頁。API 使用`page`和`limit`引數存取剩餘部分，管理控制檯也是如此。
+
+</Callout>
+
+## `realm list`
+
+列出已登入身分可能存取的身分域。
+
+```bash
+ferris-ctl realm list
+```
+
+表格列：名稱，ID。
+
+## `realm get`
+
+顯示單個身分域的 id 和名稱。
+
+```bash
+ferris-ctl realm get <name>
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 身分域名稱 |
+
+## `realm create`
+
+建立一個新身分域並列印其 id 和名稱。
+
+```bash
+ferris-ctl realm create <name>
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 要建立的身分域名稱 |
+
+## `realm delete`
+
+刪除一個身分域。此操作會提示確認，因為它還會移除該身分域的客戶端、使用者和角色。
+
+```bash
+ferris-ctl realm delete <name> [--force]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 要刪除的身分域名稱 |
+| `--force` / `-f` | 否 | 跳過確認提示 |
+
+<Callout variant="warning" title="指令碼中的確認">
+
+沒有`--force`時，該命令會在非互動式 shell 中拒絕執行，而不是靜默刪除。在 CI 和自動化中傳遞`--force`（或`-f`）。
+
+</Callout>
+
+## `realm role`
+
+管理一個身分域的角色，或管理屬於其某個客戶端的角色。每個子命令都使用 `--realm` 來針對上下文預設值以外的身分域，使用 `--client <client_id>` 來操作該客戶端的角色而不是身分域的角色。
+
+### `realm role create`
+
+```bash
+ferris-ctl realm role create <name> [--description <text>] [--permission <name>]... [--realm <realm>] [--client <client_id>]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 角色名稱 |
+| `--description` | 否 | 自由文字描述 |
+| `--permission` | 否 | 由角色授予的權限。多次重複該標誌 |
+| `--realm` | 否 | 身分域（預設為上下文身分域） |
+| `--client` | 否 | 建立一個針對該客戶端ID的客戶端角色，而不是身分域角色 |
+
+權限透過其 snake_case 名稱傳遞，例如 `manage_users`。完整列表請參見[權限參考](/zh-TW/discover/core-concepts/roles#permissions-reference)。
+
+```bash title="A realm role that can manage users"
+ferris-ctl realm role create user-admin \
+  --description "Create and update users" \
+  --permission manage_users \
+  --permission query_users \
+  --permission view_users
+```
+
+```bash title="A role scoped to one client"
+ferris-ctl realm role create service-reader --client backend
+```
+
+<Callout variant="warning" title="您只能授予您擁有的權限">
+
+伺服器只允許一個身分賦予一個角色它自身擁有的權限。如果沒有 `manage_realm`，一個你未持有的權限，或者一個 FerrisKey 不知道的名稱，會被 403 `cannot grant a permission you do not hold` 拒絕。有了 `manage_realm`，任何名稱都會被接受，但 FerrisKey 未識別的名稱會被丟棄且不會報錯，因此拼寫錯誤會導致獲得的角色權限比你請求的少。`realm role get` 只列印 id 和名稱，因此請在管理控制檯中檢查新角色的權限。
+
+</Callout>
+
+### `realm role list`
+
+```bash
+ferris-ctl realm role list [--realm <realm>] [--client <client_id>]
+```
+
+列出身分域角色，或在提供 `--client` 時列出其角色。表格列：NAME、ID。
+
+### `realm role get`
+
+```bash
+ferris-ctl realm role get <name> [--realm <realm>] [--client <client_id>]
+```
+
+列印角色的 ID 和名稱。
+
+### `realm role delete`
+
+```bash
+ferris-ctl realm role delete <name> [--realm <realm>] [--client <client_id>] [--force]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 角色名稱 |
+| `--realm` | 否 | 身分域（預設為上下文身分域） |
+| `--client` | 否 | 刪除客戶端角色而不是身分域角色 |
+| `--force` / `-f` | 否 | 跳過確認提示（在非互動式 shell 中必需） |
+
+## `realm import`
+
+從描述檔案、實時 Keycloak、實時 Zitadel 或 Supabase 專案匯入身分域（其設定、角色、客戶端和使用者）。
+
+```bash
+ferris-ctl realm import --from <kind> [source flags] [--target-realm <name>] [--dry-run]
+```
+
+| 標誌 | 說明 |
+|------|-------------|
+| `--from` | 來源型別：`config`、`keycloak`、`zitadel` 或 `supabase`。可選使用 `--source-ref`，並在使用時被忽略：儲存來源的型別優先 |
+| `--source-ref` | 儲存的[source](/zh-TW/cli/commands/source)名稱；下面的內聯標誌覆蓋其值 |
+| `--file` | 身分域描述檔案的路徑（`--from config`必需）；也可以是`.yaml`、`.yml`或`.toml` |
+| `--source-url` | 源例項的基礎 URL（Keycloak、Zitadel、Supabase 專案） |
+| `--source-realm` | Keycloak：要讀取的身分域（必需）。Supabase 和 Zitadel 帶固定組織：要建立的身分域名稱 |
+| `--source-org` | 源組織ID（Zitadel）；作為`x-zitadel-orgid`頭髮送 |
+| `--source-client-id` | 源認證的客戶端 ID（Keycloak 客戶端憑據） |
+| `--source-client-secret` | 源認證的客戶端金鑰（Keycloak） |
+| `--source-token` | 承載權杖 / 個人存取權杖（Zitadel PAT、Supabase `service_role`金鑰或已準備好的Keycloak權杖） |
+| `--target-realm` | 在 FerrisKey 中建立的身分域名稱。請參見下表瞭解其預設值 |
+| `--dry-run` | 解析並列印計劃的身分域，而不呼叫 FerrisKey API |
+
+<span id="name-of-the-created-realm" />
+
+### 已建立身分域的名稱
+
+| 來源 | FerrisKey 中的身分域名稱 |
+|--------|--------------------------------|
+| `config` | 檔案中的`name`，或`--target-realm` |
+| `keycloak` | 源身分域的名稱，或`--target-realm` |
+| 帶有`--source-org`的`zitadel` | `--target-realm`，否則`--source-realm`，否則`zitadel` |
+| 不帶`--source-org`的`zitadel` | 每個組織一個身分域，以組織命名 |
+| `supabase` | `--target-realm`，否則`--source-realm`，否則`supabase` |
+
+當多個 Zitadel 組織被解析時，`--target-realm` 會被忽略，並且 CLI 會在標準錯誤上列印 `note: --target-realm ignored (N realms resolved; keeping source names)`。對於恰好一個組織，它會像往常一樣重新命名身分域。
+
+<span id="supabase-only-flags" />
+
+### 僅限 Supabase 的標誌
+
+`--source-passwords` 和 `--source-preserve-ids` 在任何其他來源上都被拒絕：命令會以錯誤停止。三個位於 `--source-include-*` 的標誌不會被檢查，因此在 Supabase 以外的來源上，它們會被忽略且不會顯示訊息。
+
+| 標誌 | 說明 |
+|------|-------------|
+| `--source-include-deleted` | 匯入操作員軟刪除的使用者。預設情況下會被丟棄：他們的 `deleted_at` 已設定，但行仍然存在。 |
+| `--source-include-anonymous` | 匯入匿名登入會話。預設情況下會刪除：既沒有電子郵件也沒有電話的行 |
+| `--source-include-unconfirmed` | 匯入從未確認電子郵件或電話的使用者。預設情況下會刪除 |
+| `--source-passwords <FILE>` | 攜帶密碼，從 `auth.users` 的 CSV 匯出中讀取。Auth API 從不提供雜湊值 |
+| `--source-preserve-ids` | 使用現有的 Supabase ID 建立每個使用者，這樣每個權杖的 `sub` 就能保留 |
+
+每一個都涵蓋在 [From Supabase](/zh-TW/cli/import/supabase) 中。
+
+<Callout variant="warning" title="Supabase 還未釋出">
+
+最新發布的 0.3.0 僅從 `config`、`keycloak` 和 `zitadel` 匯入。Supabase 源 `--source-passwords`、`--source-include-*` 標記和 `--source-preserve-ids` 在 [ferriskey-cli](https://github.com/ferriskey/ferriskey-cli) 的 `main` 分支上合併，但還沒有版本包含它們。在有版本包含之前，請從帶有 `cargo install --git https://github.com/ferriskey/ferriskey-cli` 的倉庫進行構建。
+
+</Callout>
+
+```bash title="Preview a realm from a file (no FerrisKey calls)"
+ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
+```
+
+```bash title="Import a live Keycloak realm"
+ferris-ctl realm import --from keycloak \
+  --source-url https://keycloak.example.com \
+  --source-realm acme \
+  --source-client-id ferriskey-import \
+  --source-client-secret "$KC_SECRET" \
+  --target-realm acme
+```
+
+```bash title="Import a Supabase project, passwords and ids included"
+ferris-ctl realm import --from supabase \
+  --source-url https://abcdefgh.supabase.co \
+  --source-token "$SUPABASE_SERVICE_ROLE_KEY" \
+  --source-passwords auth_users.csv \
+  --source-preserve-ids \
+  --target-realm acme
+```
+
+<span id="dry-run-and-report" />
+
+### 幹執行並報告
+
+`--dry-run` 解析源並列印它找到的內容，而不呼叫 FerrisKey，因此不需要上下文和登入。它仍然會讀取源，因此源憑據必須有效，同時也會讀取 `--source-passwords` 檔案。表格形式顯示計數：是否有設定，以及有多少角色、客戶端、使用者和密碼。使用 `-o json` 或 `-o yaml`，你可以以陣列形式獲得完整描述，每個密碼雜湊都被 `<redacted>` 替換。
+
+真實的匯入會列印它建立的內容報告、任何警告以及機密客戶端的金鑰。[匯入](/zh-TW/cli/import/overview#the-import-report) 描述了它。
+
+<Callout variant="info" title="重新執行匯入">
+
+已經存在的實體會被重用並計為已存在；它們不會被更新。源中的 Realm 設定和每個客戶端的設定會在每次執行時再次應用。[冪等性](/zh-TW/cli/import/overview#idempotency) 列出了這在實踐中的具體含義。
+
+</Callout>
+
+[匯入](/zh-TW/cli/import/overview) 部分完整涵蓋了每個源，包括哪些會遷移以及哪些不會遷移。

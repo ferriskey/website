@@ -1,0 +1,165 @@
+---
+title: "概述"
+description: "關閉客戶端，除了白名單外，不動其配置。"
+icon: wrench
+order: 100
+---
+
+<span id="maintenance-mode" />
+
+# 維護模式
+
+維護模式會暫時限制誰可以透過客戶端進行認證，而不修改客戶端的配置。它存在的目的是在應用程式遷移過程中，不應該允許使用者登入時使用，但你又不想禁用客戶端然後再去記住它的具體設定。
+
+與禁用客戶端不同的地方有兩點：
+
+- 它可以透過一個開關恢復，並且不改變其他任何設定。重定向 URI、權限作用域和金鑰都保持不變。
+- 它故意設計了一個漏洞。白名單中的使用者和角色仍然可以進行認證，因此你的團隊可以在重新開放客戶端之前，在真實客戶端上驗證遷移情況。
+
+<span id="closing-a-client" />
+
+## 關閉客戶端
+
+<img class="only-light" src="/dashboard/client_maintenance-light.jpg" alt="FerrisKey 客戶端維護標籤頁顯示維護開關、原因、會話策略和允許的使用者" />
+<img class="only-dark" src="/dashboard/client_maintenance-dark.jpg" alt="FerrisKey 客戶端維護標籤頁顯示維護開關、原因、會話策略和允許的使用者" />
+
+```
+PUT /realms/{realm_name}/clients/{client_id}/maintenance
+```
+
+```json title="Request body"
+{
+  "enabled": true,
+  "reason": "Migration under way, back at 2pm.",
+  "session_strategy": "expire"
+}
+```
+
+| 欄位 | 預設 | 說明 |
+|---|---|---|
+| `enabled` | 必填 | `true`會關閉客戶端，除了白名單之外的所有人 |
+| `reason` | 無 | 顯示給被封禁的使用者。沒有訊息，他們會看到“此服務目前正在維護中”。 |
+| `session_strategy` | `expire` | `expire`或`terminate`。見下文 |
+
+開關一切換就生效。沒有排空期。
+
+<Callout variant="info" title="在使用者閱讀時寫下原因">
+
+`reason`是被封的使用者被告知的，他們當時正試圖繼續他們的一天。“遷移正在進行中，下午2點返回”回答了他們的真實問題。“MAINT-4417”則沒有。
+
+</Callout>
+
+<span id="what-maintenance-blocks" />
+
+## 哪些維護區塊
+
+維護門禁在使用者進入的那一刻就被關閉。不在白名單上的使用者會被拒絕使用`reason`，無論登入方式如何。登入頁面的`authenticate`呼叫回答了503：
+
+| 進入 | 被封鎖 |
+|---|---|
+| 登入頁面的密碼登入 | 是 |
+| 密碼授權 (`grant_type=password`) | 是 |
+| 透過已有的 SSO 會話返回 | 是 |
+| 回答第二因素挑戰：TOTP 程式碼或恢復程式碼 | 是 |
+| 完成登入時的必需操作：OTP 或通行金鑰註冊、強制密碼更新 | 是 |
+| 通行金鑰登入 | 是 |
+| 免密登入連結 | 是 |
+| 繼續原始登入的密碼重置 (`login_url`) | 是 |
+| 透過身分提供者（中介）登入 | 是 |
+| 裝置流程，當裝置收集其權杖時 | 是 |
+
+每次登入完成都要經過相同的檢查，因此跳過密碼的方式並不會跳過維護。裝置流程是唯一的例外：當裝置在使用者批准程式碼後收集其權杖時，檢查才會執行，而拒絕會以引用原因的 500 `token_issuance_failed` 返回。到那時，程式碼已經使用過，所以裝置必須重新開始。
+
+`reset-password` 在其主體中返回的權杖響應是在沒有客戶端的情況下發出的，因此維護不適用於它。
+
+維護不會影響已經存在的會話。重新整理權杖會持續重新整理，存取權杖會一直有效直到過期，因為檢查是在登入時執行，而不是在每次請求時執行。`client_credentials` 權杖沒有使用者在背後，因此不受影響。
+
+<span id="session-strategy" />
+
+### 會話策略
+
+`session_strategy` 接受 `expire`（預設）或 `terminate`，控制檯顯示為“自然過期”和“立即終止”。在 FerrisKey 0.10.0 中，伺服器將該值儲存在客戶端並寫入審計事件，但登入檢查從未讀取它。在這兩個值下，在維護開始前開啟的會話會一直有效，直到它們耗盡為止。
+
+<Callout variant="warning" title="terminate 還不會切斷會話">
+
+如果因為權杖洩露而關閉客戶端，請不要依賴 `terminate`。使用 `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}` 撤銷重要會話，這需要 `manage_users`，並會立即使該會話的權杖失效。
+
+</Callout>
+
+<span id="the-whitelist" />
+
+## 白名單
+
+白名單條目命名使用者或角色。所有被命名的人以及所有持有被命名角色的人，在客戶端維護期間都可以正常認證。
+
+條目存在於兩個層級，並且它們是**累加的**：客戶端的有效白名單是其自身條目加上身分域的條目。
+
+<span id="per-client" />
+
+### 按客戶端
+
+```
+GET    /realms/{realm_name}/clients/{client_id}/maintenance/whitelist
+POST   /realms/{realm_name}/clients/{client_id}/maintenance/whitelist
+DELETE /realms/{realm_name}/clients/{client_id}/maintenance/whitelist/{entry_id}
+```
+
+<span id="per-realm" />
+
+### 按身分域
+
+身分域級條目會被該身分域下的每個置於維護狀態的客戶端繼承。它們是那些永遠不應被鎖定的人的固定列表。
+
+<img class="only-light" src="/dashboard/realm_maintenance-light.jpg" alt="FerrisKey身分域設定維護選項卡顯示使用者和角色的預設維護成員" />
+<img class="only-dark" src="/dashboard/realm_maintenance-dark.jpg" alt="FerrisKey身分域設定維護選項卡顯示使用者和角色的預設維護成員" />
+
+```
+GET    /realms/{realm_name}/settings/maintenance/whitelist
+POST   /realms/{realm_name}/settings/maintenance/whitelist
+DELETE /realms/{realm_name}/settings/maintenance/whitelist/{entry_id}
+```
+
+```json title="Adding an entry: supply one or the other"
+{
+  "role_id": "01a0d3dd-a750-7817-aa2b-7e8b98f68e66"
+}
+```
+
+`user_id` 和 `role_id` 在負載中都是可選的；提供描述你想要的條目的那個。
+
+<Callout variant="warning" title="在需要角色之前，將其新增到身分域白名單中">
+
+基於角色的身分域存取，例如你們平臺團隊的角色，是計劃性維護視窗和事故之間的區別。新增白名單條目需要在管理員控制檯進行身分認證，如果你剛關閉的就是控制檯自身的客戶端，你就將自己鎖在了需要用來解鎖它的工具之外。
+
+</Callout>
+
+<span id="permissions" />
+
+## 權限
+
+| 操作 | 權限 |
+|---|---|
+| 讀取白名單 | `view_clients`，或者 `manage_clients` |
+| 切換維護模式，新增或移除條目 | `manage_clients` |
+
+`manage_realm` 同樣授予全部權限。
+
+<span id="what-gets-recorded" />
+
+## 什麼被記錄
+
+這兩種轉換都是可觀察的，這很重要，因為維護模式可能會被意外保持開啟：
+
+- [SeaWatch](/zh-TW/modules/seawatch/event-types) 記錄 `client_maintenance_enabled` 和 `client_maintenance_disabled`。
+- [Webhooks](/zh-TW/modules/webhooks/triggers) 觸發 `client.maintenance.enabled` 和 `client.maintenance.disabled`。
+
+在啟用的觸發器上設定一個開啟提醒的 webhook，在禁用的觸發器上設定一個關閉提醒的 webhook，是防止週五下午視窗持續到週一的最便宜方法。
+
+::::card-group{cols=2}
+:::card{label="客戶端" icon="lucide:app-window" href="/zh-TW/discover/core-concepts/clients"}
+配置維護模式會被故意忽略。
+:::
+:::card{label="Webhook 觸發器" icon="lucide:webhook" href="/zh-TW/modules/webhooks/triggers"}
+將兩種維護轉換連線到能夠察覺的東西。
+:::
+::::

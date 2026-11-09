@@ -1,0 +1,95 @@
+---
+title: "上下文"
+description: "管理连接上下文：命名的配置文件，用于存储服务器 URL、客户端和默认身份域。"
+icon: server
+order: 1
+---
+
+# `context`
+
+上下文是存储在 `$XDG_CONFIG_HOME/ferriskey/config.toml` 中的命名连接配置文件。每个上下文包含服务器 URL、客户端 ID、可选客户端密钥和身份域。你添加的第一个上下文将成为活动上下文。
+
+```bash
+ferris-ctl context <subcommand>
+```
+
+这些子命令仅读取和写入配置文件。它们不会进行网络调用，也不需要登录。它们会遵循 `-o`。
+
+## `context add`
+
+添加一个新的上下文。添加的第一个上下文会被标记为活动。如果添加一个已存在的名称，会报错：请先删除旧的上下文。
+
+```bash
+ferris-ctl context add <name> --url <url> --client-id <id> [--client-secret <secret>] [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 唯一的上下文名称 |
+| `--url` | 是 | FerrisKey 服务器 URL |
+| `--client-id` | 是 | OAuth2 客户端标识 |
+| `--client-secret` | 否 | 客户端密钥（公共客户端可省略）。空值视为无 |
+| `--realm` | 实际上，是的 | CLI 登录的身份域，以及命令的默认身份域 |
+
+`--realm` 对 `context add` 是可选的，但 `realm`、`client` 和 `user` 命令在没有上下文时会因 `auth realm is required` 而失败。只有 `login` 会回退到 `master`。参见 [Authentication](/zh-CN/cli/authentication#contexts)。
+
+```bash title="Example"
+ferris-ctl context add staging \
+  --url https://auth.staging.example.com \
+  --client-id ferris-ctl \
+  --realm master
+```
+
+密钥以明文形式输入到 `config.toml`，并且命令行上传递的值会保存在你的 shell 历史中。对于 CI 作业，建议使用 `FERRISKEY_CLIENT_SECRET`（参见 [Authentication](/zh-CN/cli/authentication#overriding-the-context)）。
+
+## `context list`
+
+列出所有配置的上下文。当前活动的上下文标记为 `*`。
+
+```bash
+ferris-ctl context list
+```
+
+表格列：ACTIVE、NAME、URL、CLIENT_ID、REALM。JSON 和 YAML 形式包含 `name`、`url`、`client_id`、`realm` 和 `is_current`。客户端密钥从不打印。
+
+## `context current`
+
+显示活动上下文：其名称、URL、客户端ID、身份域以及是否为当前上下文。密钥不会显示。
+
+```bash
+ferris-ctl context current
+```
+
+## `context use`
+
+切换活动上下文。名称必须存在。
+
+```bash
+ferris-ctl context use <name>
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 要激活的上下文 |
+
+## `context remove`
+
+移除已存储的上下文。如果它处于活动状态，活动标记将被清除。`credentials.toml` 中保存的登录会话将保持不变；运行 [`logout`](/zh-CN/cli/commands/logout) 可以删除它。
+
+```bash
+ferris-ctl context remove <name>
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<name>` | 是 | 要删除的上下文 |
+
+## `context path`
+
+打印配置文件的路径。
+
+```bash
+ferris-ctl context path
+```
+
+使用 `-o json` 或 `-o yaml`，路径会重新出现在 `path` 键下。

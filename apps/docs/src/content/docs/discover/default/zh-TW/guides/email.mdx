@@ -1,0 +1,321 @@
+---
+title: "電子郵件及模板"
+description: "在 FerrisKey 中配置 SMTP 並自定義事務性電子郵件模板：密碼重置、魔法連結和電子郵件驗證。"
+icon: mail
+order: 21
+---
+
+<span id="email--templates" />
+
+# 電子郵件及模板
+
+FerrisKey 會傳送用於密碼重置、魔法連結登入和電子郵件驗證的事務性電子郵件。傳送配置按身分域進行，每種電子郵件型別在傳送之前都需要分配模板。
+
+<span id="configure-smtp" />
+
+## 配置 SMTP
+
+SMTP 設定儲存在資料庫中的身分域，而不是全域性環境變數。同一部署中的兩個身分域可以使用完全不同的郵件提供商。
+
+<Callout variant="info" title="沒有全域性 SMTP">
+
+SMTP 是按身分域配置的，而不是全域性配置。請參見 [配置指南](/zh-TW/discover/guides/configuration) 獲取簡要概述。本頁涵蓋完整的欄位參考和 API。
+
+</Callout>
+
+<span id="smtp-fields" />
+
+### SMTP 欄位
+
+| 欄位 | 型別 | 注意事項 |
+|---|---|---|
+| `host` | 字串 | SMTP 伺服器主機名 |
+| `port` | u16 | 埠號，1 到 65535 |
+| `username` | 字串 | SMTP 驗證使用者名稱。必填 |
+| `password` | 字串 | SMTP 驗證密碼。必填，僅可寫：API 永不返回它 |
+| `from_email` | 字串 | 發件人地址，必須是有效的電子郵件 |
+| `from_name` | 字串 | 發件人顯示名稱 |
+| `encryption` | 列舉 | `tls` \| `starttls` \| `none` |
+
+即使是無需認證的中繼，API 也要求提供 `username` 和 `password`，因此為此類中繼提供佔位符值。
+
+設定 `SECRETS_ENCRYPTION_KEYS` 時，儲存的密碼將被封存。見 [靜態金鑰](/zh-TW/discover/guides/secrets-at-rest)。
+
+加密模式：
+
+| 模式 | 埠 | 使用時機 |
+|---|---|---|
+| `tls` | 465 | 從第一個位元組起隱式 TLS。大多數現代服務提供商需要 |
+| `starttls` | 587 | 普通連線升級為 TLS。企業中繼常見 |
+| `none` | 25 / 任意 | 沒有加密。只在可信的區域網或測試中 |
+
+<span id="smtp-api-endpoints" />
+
+### SMTP API 端點
+
+所有端點都被限制在一個身分域，並需要認證。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/smtp-config` | 閱讀當前配置（密碼省略） |
+| `PUT` | `/realms/{realm_name}/smtp-config` | 建立或替換配置 |
+| `DELETE` | `/realms/{realm_name}/smtp-config` | 移除配置 |
+
+所需權限：讀取 SMTP 配置需要存取該身分域的檢視。建立、更新或刪除配置需要`ManageRealm`。除了身分域門之外，沒有 SMTP 專屬權限。
+
+<span id="configure-smtp-in-the-console" />
+
+### 在控制檯中配置SMTP
+
+::::step-group
+:::step{title="開啟郵件頁面"}
+在管理控制檯左側欄，開啟**Emails**，然後是**SMTP**標籤。在第二個控制檯面板中，同一頁面在品牌標籤下，作為郵件模板。參見[管理控制檯](/zh-TW/discover/guides/admin-console)。
+:::
+
+:::step{title="填寫提供者資訊"}
+輸入主機、埠、加密模式、使用者名稱和密碼，然後輸入發件人地址和名稱。選擇與您的服務提供商匹配的加密模式。
+
+常用服務提供商設定：
+
+| 服務提供商 | 主機 | 埠 | 加密 |
+|---|---|---|---|
+| Gmail（應用密碼） | `smtp.gmail.com` | 465 | `tls` |
+| Mailgun | `smtp.mailgun.org` | 587 | `starttls` |
+| Resend | `smtp.resend.com` | 465 | `tls` |
+| 本地（MailHog / MailPit） | `localhost` | 1025 | `none` |
+:::
+
+:::step{title="儲存並檢查"}
+點選 **儲存配置**，或者在已有配置時點選 **儲存更改**。儲存會替換整個配置，包括密碼，因此請再次輸入密碼。
+
+沒有測試傳送按鈕。請觸發真實流程，例如為測試賬戶重置密碼，然後在 [SeaWatch](/zh-TW/modules/seawatch/overview) 或控制檯的訊息投遞檢視中查詢 `email_sent` 或 `email_not_sent` 事件。
+:::
+::::
+
+<Callout variant="warning" title="密碼為只寫">
+
+API 永遠不會返回 SMTP 密碼。如果您需要更換憑據，請提交完整的 `PUT`，其中包含新密碼。
+
+</Callout>
+
+---
+
+<span id="transactional-emails" />
+
+## 事務性電子郵件
+
+事務性電子郵件有三種型別，每種型別都由身分域開關控制。
+
+| 電子郵件型別 | 識別符號 | 傳送時間 | 所需身分域開關 |
+|---|---|---|---|
+| 密碼重置 | `reset_password` | 使用者請求密碼重置連結 | `forgot_password_enabled` |
+| 免密登入連結 | `magic_link` | 使用者請求無密碼的電子郵件登入 | `magic_link_enabled` |
+| 電子郵件驗證 | `email_verification` | 使用者必須驗證其電子郵件地址 | `email_verification_enabled` |
+
+開關在 Realm 設定的登入標籤頁，認證功能下。開啟一個開關會啟用匹配的流程，但它不會單獨傳送任何郵件：只有當型別分配了模板且 Realm 有 SMTP 配置時，郵件才會發出。
+
+<img class="only-light" src="/dashboard/email_templates-light.jpg" alt="FerrisKey 郵件模板頁面顯示每種型別的賦值和匯入操作" />
+<img class="only-dark" src="/dashboard/email_templates-dark.jpg" alt="FerrisKey 郵件模板頁面顯示每種型別的賦值和匯入操作" />
+
+分配是按郵件型別分配的，沒有分配的型別不會傳送郵件。FerrisKey 沒有內建的預設模板可供備份。你看到的缺失內容取決於型別：
+
+| 失蹤 | 密碼重置與魔法連結 | 電子郵件驗證 |
+|---|---|---|
+| 模板 | 沒有傳送任何資訊。請求仍然成功，SeaWatch記錄`email_not_sent`錯誤程式碼`TEMPLATE_NOT_CONFIGURED` | 傳送失敗`400`原因`email_verification_template_not_configured` |
+| SMTP 配置 | 未傳送任何內容，SeaWatch 使用 `email_not_sent` 記錄 `SMTP_NOT_CONFIGURED` | 傳送失敗，錯誤程式碼為 `503` |
+
+對於電子郵件驗證，失敗不會靜默發生。在啟用電子郵件驗證的身分域中自助註冊時，會出現該錯誤，並且正在建立的賬戶會被回滾，因此在模板和 SMTP 配置到位之前，沒有人可以註冊。重新傳送端點的失敗方式相同。
+
+當郵件伺服器拒絕或未能傳送密碼重置郵件或魔術連結時，SeaWatch 會記錄 `email_not_sent` 與 `SMTP_SEND_FAILED` 及原因。無論郵件是否傳送，或地址是否屬於某個賬戶，請求的人都會得到相同的答覆，因此 `email_not_sent` 事件就是你發現問題的地方。請注意監控它們。
+
+<span id="customizing-templates" />
+
+## 自定義模板
+
+<span id="template-engine" />
+
+### 模板引擎
+
+模板由為此目的編寫的小型插值引擎渲染，而不是 Handlebars 或 Tera。佔位符使用雙大括號：
+
+```text
+{{variable_name}}
+```
+
+每個插入的值在插入前都會進行 HTML 轉義 (`&`, `<`, `>`, `"`, `'`)，因此模板不能被用作注入向量。
+
+<Callout variant="info" title="HTML 轉義">
+
+透過 `{{...}}` 插入的值始終經過 HTML 轉義。如果使用者的名字是 `Alice <script>`，它在最終郵件中渲染為 `Alice &lt;script&gt;`，可以安全地嵌入 HTML。
+
+</Callout>
+
+模板作為 JSON `structure` 儲存，FerrisKey 將其渲染為 MJML，然後再轉換為 HTML 傳送。HTML 部分與訊息的純文字版本一起傳輸，郵件客戶端會回退使用純文字版本。如果在傳送郵件時模板無法渲染，則只傳送純文字版本。
+
+<span id="what-the-server-removes-from-a-template" />
+
+### 伺服器從模板中移除的內容
+
+構建器只是生成 `structure` 的一種方式。另一種方式是匯入，或者直接呼叫 API，因此 FerrisKey 會在伺服器上清理結構，而不是信任編輯器。這在建立、更新或匯入模板時會執行，並且每次渲染電子郵件時也會執行。大部分清理是靜默進行的：模板儲存時，會減去被移除的部分。兩種情況會被拒絕。
+
+| 什麼 | 統治 |
+|---|---|
+| 節點型別 | `mjml`、`root`，或者以 `mj-` 開頭的名稱。任何其他型別都會被 `400` 拒絕。 |
+| 巢狀 | 最多 32 層。結構過深會被 `400` 拒絕。 |
+| 文字內容 | 只有這些標籤保留：`p`、`br`、`hr`、`strong`、`b`、`em`、`i`、`u`、`s`、`a`、`ul`、`ol`、`li`、`h1`到`h6`、`blockquote`、`code`、`pre`、`span`、`table`、`thead`、`tbody`、`tfoot`、`tr`、`td`、`th`。指令碼、評論和其他所有標籤都刪掉了 |
+| 網址 | 只有`http`、`https`、`mailto`和`tel`。帶有其他方案的URL，如`javascript:`，會從`href`、`src`及任何以 `-url` 或 `-src` 結尾的屬性中移除。相對 URL 和 `{{placeholders}}` 沒有方案和傳遞 |
+| 內聯CSS | 只有`color`、`font-size`、`font-weight`、`font-style`、`font-family`、`text-align`、`line-height`和`text-decoration`，且不包含`url(`、`expression(`或`@import`的價值 |
+| 屬性 | 以`on`開頭的名字，以及非字母、數字和連字元的名字都會被省略 |
+| `mj-style` | 如果包含`<`、反斜線、`url(`、`expression(`、`@import`、`javascript:`、`behavior`或`binding`，則稱為清空整 |
+
+文字內容中的連結也會被`rel="noopener noreferrer"`。
+
+<span id="available-variables" />
+
+### 可用變數
+
+這些變數存在於每個模板中，無論其型別如何：
+
+| 變數 | 說明 |
+|---|---|
+| `user.first_name` | 使用者名稱字 |
+| `user.last_name` | 使用者姓氏 |
+| `user.email` | 使用者的電子郵件地址 |
+| `expiration` | 連結有效期（寫下來）：密碼重置時`30 minutes`，伺服器的魔法連結有效期（預設為15分鐘），`24 hours`預設用於郵件驗證 |
+| `requested_at` | 例如，當郵件被請求時，UTC和RFC 3339，`2026-10-17T12:34:56Z` |
+| `user_agent` | 觸發電子郵件請求的 `User-Agent`，或者在沒有請求時的 `unknown` |
+
+`requested_at` 和 `user_agent` 允許安全通知告知收件人請求的時間和來源客戶端，以便他們發現未發出的請求。
+
+每種電子郵件型別還提供一個連結變數：
+
+| 電子郵件型別 | 連結變數 | 說明 |
+|---|---|---|
+| `reset_password` | `reset_link` | 重置密碼的 URL |
+| `magic_link` | `magic_link` | 無密碼登入的 URL |
+| `email_verification` | `verification_link` | 電子郵件驗證的 URL |
+
+您可以在無需認證的情況下查詢任何型別的可用變數：
+
+```
+GET /email-templates/variables/{email_type}
+```
+
+`email_type` 必須是以下之一：`reset_password`, `magic_link`, `email_verification`。
+
+`reset_password` 的示例響應：
+
+```json title="GET /email-templates/variables/reset_password"
+{
+  "data": [
+    { "name": "user.first_name", "description": "User's first name" },
+    { "name": "user.last_name", "description": "User's last name" },
+    { "name": "user.email", "description": "User's email address" },
+    { "name": "expiration", "description": "Expiration time" },
+    { "name": "requested_at", "description": "Date and time the email was requested (UTC, RFC 3339)" },
+    { "name": "user_agent", "description": "User agent of the request that triggered the email" },
+    { "name": "reset_link", "description": "Password reset link" }
+  ]
+}
+```
+
+<span id="language" />
+
+### 語言
+
+FerrisKey 不會根據使用者的區域設定選擇模板或語言。使用者和身分域的區域設定會設定控制檯和預設登入頁面的語言。它在電子郵件中不起作用；請參見 [Localization](/zh-TW/discover/guides/localization)。一個身分域每種電子郵件型別只能有一個模板，因此該型別的每個收件人都會收到相同的模板。主題行是固定的英文字串（`Reset your password`、`Your magic link` 和 `Verify your email address`），純文字版本也是如此。請用您的使用者閱讀的語言編寫模板本身。
+
+<span id="template-api-endpoints" />
+
+### 模板 API 端點
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/email-templates` | 分頁列出身分域的模板 |
+| `POST` | `/realms/{realm_name}/email-templates` | 建立新模板 |
+| `GET` | `/realms/{realm_name}/email-templates/{template_id}` | 透過 ID 獲取模板 |
+| `PUT` | `/realms/{realm_name}/email-templates/{template_id}` | 更新模板 |
+| `DELETE` | `/realms/{realm_name}/email-templates/{template_id}` | 刪除模板 |
+
+該列表接收`search`、`name`、`email_type`、`created_from`和`created_to`，並按`name`、`email_type`、`created_at`（預設）或`updated_at`排序。參見[分頁列表](/zh-TW/discover/guides/api-listings)。
+
+請求身體的`POST`：`name`，`email_type`，`structure`。
+
+請求`PUT`的正體：`name`，`structure`（建立後無法更改`email_type`）。
+
+所需權限：`ViewEmailTemplates`閱讀。`ManageEmailTemplates`建立、更新或刪除。`ManageRealm`同時也授予兩者。
+
+<span id="linking-a-template-to-an-email-type" />
+
+### 將模板連結到郵件型別
+
+建立模板並不會啟用該模板。透過更新伺服器設定、使用`PUT /realms/{realm_name}/settings`，或在郵件頁面的分配部分選擇模板，將伺服器指向該模板：
+
+| 身分域設定欄位 | 適用於 |
+|---|---|
+| `reset_password_template_id` | `reset_password`郵件 |
+| `magic_link_template_id` | `magic_link`郵件 |
+| `email_verification_template_id` | `email_verification`郵件 |
+
+把欄位設定為模板的UUID來啟用它。把它設為`null`，那種郵件型別就停止傳送了。
+
+---
+
+<span id="example" />
+
+## 示例
+
+<span id="template-snippet" />
+
+### 模板摘要
+
+一個最小限度的密碼重置訊息，作為構建器中文字塊的內容，使用佔位符語法：
+
+```html title="Reset password template (text block content)"
+<p>Hi {{user.first_name}},</p>
+
+<p>
+  Someone requested a password reset for your account (<strong>{{user.email}}</strong>)
+  at {{requested_at}}, from {{user_agent}}. This link expires in {{expiration}}.
+</p>
+
+<p>
+  <a href="{{reset_link}}">Reset your password</a>
+</p>
+
+<p>If you did not request this, you can safely ignore this email.</p>
+```
+
+<span id="variables-response" />
+
+### 變數響應
+
+```json title="GET /email-templates/variables/magic_link"
+{
+  "data": [
+    { "name": "user.first_name", "description": "User's first name" },
+    { "name": "user.last_name", "description": "User's last name" },
+    { "name": "user.email", "description": "User's email address" },
+    { "name": "expiration", "description": "Expiration time" },
+    { "name": "requested_at", "description": "Date and time the email was requested (UTC, RFC 3339)" },
+    { "name": "user_agent", "description": "User agent of the request that triggered the email" },
+    { "name": "magic_link", "description": "Magic link URL" }
+  ]
+}
+```
+
+---
+
+::::card-group{cols=2}
+:::card{label="配置" icon="lucide:settings" href="/zh-TW/discover/guides/configuration"}
+環境變數、部署選項以及SMTP設定概覽。
+:::
+
+:::card{label="免密登入連結" icon="lucide:mail" href="/zh-TW/modules/trident/magic-links"}
+FerrisKey中無密碼魔鏈認證的工作原理。
+:::
+
+:::card{label="身分域" icon="lucide:layers" href="/zh-TW/discover/core-concepts/realms"}
+身分域概念、設定與多租戶模型。
+:::
+::::

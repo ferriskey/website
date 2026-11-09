@@ -1,0 +1,284 @@
+---
+title: "入門"
+description: "幾分鐘內用 Docker 部署 FerrisKey，並認證你的第一個使用者。"
+icon: rocket
+order: 2
+---
+
+<span id="getting-started" />
+
+# 入門
+
+本指南將帶你從無到有，建立一個有認證使用者的 FerrisKey 例項。你將啟動 Docker 棧，建立身分域，註冊客戶端，建立使用者，並請求權杖。
+
+<span id="prerequisites" />
+
+## 先決條件
+
+- [Docker](https://docs.docker.com/get-docker/)和[Docker Compose](https://docs.docker.com/compose/install/)已安裝
+- 終端和網頁瀏覽器
+- 可用的埠`3333`（API）、`5555`（UI）和`5432`（PostgreSQL）
+
+<span id="deploy-ferriskey" />
+
+## 部署FerrisKey
+
+::::step-group
+:::step{title="開始堆疊"}
+克隆倉庫並啟動所有服務：
+
+```bash
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey
+docker compose --profile registry up -d
+```
+
+這將啟動 PostgreSQL、FerrisKey API 伺服器、資料庫遷移和管理控制檯。`registry` 配置檔案拉取已釋出的映象。而 `build` 配置檔案則從您的檢出版本構建相同的服務。
+:::
+
+:::step{title="驗證部署"}
+等待幾秒鐘以完成遷移，然後檢查所有服務是否健康：
+
+```bash
+docker compose --profile registry ps
+```
+
+API 可透過 `http://localhost:3333` 存取，UI 可透過 `http://localhost:5555` 存取。
+:::
+
+:::step{title="登入管理控制檯"}
+在瀏覽器中開啟 `http://localhost:5555` 並使用預設憑據登入：
+
+- **使用者名稱：** `admin`
+- **密碼：** `admin`
+
+您將進入 `master` 域，這是管理所有其他域的內建域。
+:::
+::::
+
+:::callout{variant="warning" title="更改預設憑據"}
+預設的管理員憑據僅用於本地開發。在任何其他環境中，請在第一次啟動前設定 `ADMIN_USERNAME`、`ADMIN_PASSWORD` 和 `ADMIN_EMAIL`。FerrisKey 僅在管理員使用者沒有密碼時應用該密碼，因此在已經執行過的部署上，請改為在控制檯中更改密碼。
+:::
+
+<span id="deploy-without-cloning-the-repository" />
+
+## 部署而不克隆倉庫
+
+上面的快速開始會克隆倉庫，但執行 FerrisKey 不需要原始碼。API、Web 應用和資料庫遷移都以已釋出的映象形式提供在 `ghcr.io/ferriskey` 上。要在伺服器上部署，請將以下內容儲存為 `docker-compose.yml` 並直接啟動，無需執行 checkout：
+
+```yaml title="docker-compose.yml"
+services:
+  db:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: ferriskey
+      POSTGRES_USER: ferriskey
+      POSTGRES_PASSWORD: ferriskey
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ferriskey"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  db-migrations:
+    image: ghcr.io/ferriskey/ferriskey-api
+    entrypoint: ["sqlx"]
+    command: ["migrate", "run", "--source", "/usr/local/src/ferriskey/migrations"]
+    environment:
+      DATABASE_URL: postgresql://ferriskey:ferriskey@db/ferriskey
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/ferriskey/ferriskey-api
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5555
+      WEBAPP_URL: http://localhost:5555
+      DATABASE_HOST: db
+      DATABASE_NAME: ferriskey
+      DATABASE_USER: ferriskey
+      DATABASE_PASSWORD: ferriskey
+    ports:
+      - 3333:3333
+    depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+
+  webapp:
+    image: ghcr.io/ferriskey/ferriskey-webapp
+    environment:
+      API_URL: http://localhost:3333
+    ports:
+      - 5555:80
+
+volumes:
+  pgdata:
+    name: ferriskey_pgdata
+```
+
+然後啟動堆疊：
+
+```bash
+docker compose up -d
+```
+
+遷移檔案已經嵌入到 `ferriskey-api` 映象中（位於 `/usr/local/src/ferriskey/migrations` 下），因此 `db-migrations` 服務可以在沒有任何簽出原始碼的情況下應用模式。這些是倉庫的 `registry` 配置檔案使用的相同映象，提取為一個自包含檔案，你可以將其放到任何主機上或轉換為 Docker Swarm 堆疊。
+
+:::callout{variant="info" title="為生產環境固定版本"}
+上述映象跟蹤 `latest` 標籤。為了實現可重複部署，請在 `api`、`db-migrations` 和 `webapp` 服務上固定明確的標籤，例如 `ghcr.io/ferriskey/ferriskey-api:0.10.0`。標籤不帶任何 `v` 字首。像 `0.10` 這樣的標籤對應於該次要版本的補丁釋出。在 `api` 和 `db-migrations` 上使用相同標籤，可以保持二進位制檔案和模式同步。
+:::
+
+<span id="upgrading-ferriskey" />
+
+## 升級 FerrisKey
+
+模式更改隨 API 映象一起釋出，因此升級執行中的堆疊意味著拉取、遷移、重啟。
+
+::::step-group
+:::step{title="拉取新的映象"}
+```bash
+docker compose pull
+```
+:::
+
+:::step{title="應用新的遷移"}
+`db-migrations` 服務執行 `sqlx migrate run`，它只會應用尚未執行的遷移，因此每次升級都是安全的：
+
+```bash
+docker compose up -d db-migrations
+```
+:::
+
+:::step{title="重啟應用程式"}
+遷移完成後，在新映象上重新建立 API 和 Web 應用程式：
+
+```bash
+docker compose up -d api webapp
+```
+:::
+::::
+
+`sqlx migrate run` 處理模式。然後，API 在模式就位後每次啟動時都會執行自己的資料遷移：它按版本順序應用待處理的遷移，記錄每個遷移，並記錄以確保不會重複執行。如果某個遷移失敗，API 會與 `Migration v<N> '<name>' failed: <reason>` 一起停止並不會啟動。修復原因後再次啟動，它會從失敗的遷移處繼續。
+
+:::callout{variant="warning" title="保持 API 與遷移在同一標籤上"}
+始終從相同的映象標籤中拉取 `api` 和 `db-migrations` 服務。將較新的 API 與較舊的模式配合使用，或將較舊的 API 與較新的模式配合使用，可能在啟動時失敗。
+:::
+
+<span id="create-your-first-realm" />
+
+## 建立您的第一個身分域
+
+身分域是一個隔離的租戶。使用者、客戶端、角色和憑據都存在於身分域內。
+
+::::step-group
+:::step{title="建立身分域"}
+點選頂部欄中 FerrisKey 標誌旁的身分域名稱，然後點選 **建立身分域**。在 **名稱** 中輸入 `my-app`，然後點選 **建立身分域**。
+
+名稱會顯示在 URL 和權杖中，之後無法更改。它可以包含字母、數字、連字元和下劃線。
+:::
+
+:::step{title="在新身分域中工作"}
+身分域一旦建立，控制檯會立即開啟新身分域。所有後續操作均在該身分域內進行。要稍後返回該身分域，在相同的選擇器中選擇 `my-app`。
+:::
+::::
+
+<span id="register-a-client" />
+
+## 註冊客戶端
+
+客戶端代表使用 FerrisKey 進行身分認證的應用程式。
+
+::::step-group
+:::step{title="建立客戶端"}
+在側邊欄中，點選 **Clients（客戶端）**，然後 **New client（新建客戶端）**。選擇 **OpenID Connect** 並填寫：
+
+- **Client ID（客戶端 ID）：** `my-frontend`
+- **Name（名稱）：** `my-frontend`
+- **Client authentication（客戶端認證）：** `Public`（適用於單頁應用）
+
+協議以及公有與保密的選擇在建立後無法更改。
+:::
+
+:::step{title="啟用直接存取授權"}
+如果你想透過 API（密碼授權）直接測試身分認證，請在 **Capability config（功能配置）** 部分開啟 **Direct access grants（直接存取授權）**。
+:::
+
+:::step{title="儲存客戶端"}
+點選 **建立客戶端**。重定向 URI 不在此表單中填寫。你可以在客戶端的 **設定** 標籤下的 **存取** 中新增它們，當你連線一個真實應用程式時。下面的密碼授權不使用它們。
+:::
+::::
+
+<span id="create-a-user" />
+
+## 建立使用者
+
+::::step-group
+:::step{title="建立使用者"}
+在側邊欄中，點選 **使用者**，然後點選 **新建使用者**。填寫：
+
+- **使用者名稱：** `alice`
+- **名字和姓氏：** `Alice` 和 `Smith`
+- **電子郵件：** `alice@example.com`
+
+點選 **建立使用者**。賬戶建立後沒有任何憑據。
+:::
+
+:::step{title="設定密碼"}
+開啟使用者的 **憑據** 標籤，選擇 **設定密碼**。在 **有效性** 下選擇 **永久**，除非你希望在首次登入時強制更改密碼，然後輸入 **新密碼**，確認後點選 **設定密碼**。
+:::
+::::
+
+<span id="authenticate" />
+
+## 認證
+
+啟用直接存取權限後，您可以直接從 API 請求權杖：
+
+```bash title="Obtain tokens via password grant"
+curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=my-frontend" \
+  -d "username=alice" \
+  -d "password=your-password"
+```
+
+包含 `access_token`、`refresh_token`，並可選地包含 `id_token` 的響應表示使用者已透過身分認證。
+
+:::callout{variant="info" title="管理 API 的權杖"}
+管理一個身分域的路由（使用者、客戶端、角色及其餘管理員 API）檢查的不僅僅是簽名和呼叫者的權限。權杖必須在其 `aud` 宣告中攜帶 `<realm>-realm`，其中 `<realm>` 是簽發它的身分域，並且其 `azp` 宣告必須指定一個已啟用且由管理員建立的客戶端。
+
+任何未透過任一檢查的權杖都會返回 401。這包括為資源伺服器請求的權杖（`resource` 引數替代受眾）以及透過動態註冊或客戶端後設資料文件註冊的客戶端發放的權杖。
+:::
+
+<span id="connect-a-real-application" />
+
+## 連線真實應用程式
+
+上面的密碼授權適合快速的 API 測試，僅此而已：它已被[棄用](/zh-TW/discover/core-concepts/authentication)。真實應用程式使用基於瀏覽器的 SSO 和授權碼流程，而 CLI 使用裝置碼授權。
+
+要連線儀表板、內部服務或自託管工具，請按照接下來的應用程式 SSO 指南操作。指南會講解哪些控制檯介面需要使用、複製哪些值，以及如何除錯常見的設定錯誤。
+
+<span id="whats-next" />
+
+## 接下來做什麼
+
+::::card-group{cols=2}
+:::card{label="核心概念" icon="lucide:layers" href="/zh-TW/discover/core-concepts/realms"}
+深入瞭解 realms、clients、users、roles 和 tokens。
+:::
+:::card{label="連線應用程式" icon="lucide:plug" href="/zh-TW/discover/guides/application-sso"}
+使用 FerrisKey 儀表板為應用程式設定 OpenID Connect SSO。
+:::
+:::card{label="配置" icon="lucide:settings" href="/zh-TW/discover/guides/configuration"}
+每個環境變數，以及預設值和 API 在啟動時進行的檢查。
+:::
+:::card{label="靜態儲存金鑰" icon="lucide:lock" href="/zh-TW/discover/guides/secrets-at-rest"}
+在資料庫中加密身分域簽名金鑰、TOTP 種子和 SMTP 密碼。
+:::
+::::

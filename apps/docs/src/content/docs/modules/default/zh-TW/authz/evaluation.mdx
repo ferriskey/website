@@ -1,0 +1,365 @@
+---
+title: "評估"
+description: "策略執行點呼叫的 AuthZEN 端點：主體、資源、批處理、失敗行為，以及代理和 MCP 型別。"
+icon: list-checks
+order: 112
+---
+
+<span id="evaluation" />
+
+# 評估
+
+策略執行點（PEP）會透過兩個 AuthZEN 1.0 端點詢問 FerrisKey 某項操作是否被允許，並透過後設資料文件找到它們。這三條路徑構成了 FerrisKey 的整個 AuthZEN 介面。
+
+| 方法和路徑 | 目的 |
+|---|---|
+| `POST /realms/{realm_name}/authzen/access/v1/evaluation` | 一個問題，一次決策 |
+| `POST /realms/{realm_name}/authzen/access/v1/evaluations` | 一次呼叫最多可提出 100 個問題 |
+| `GET /.well-known/authzen-configuration/realms/{realm_name}/authzen` | 後設資料。不需要權杖 |
+
+像模組的其餘部分一樣，它們僅在例項執行 `AUTHZ_ENABLED=true` 時存在，並且身分域必須已開啟授權。參見 [這些門](/zh-TW/modules/authz/overview#the-gates)。
+
+<span id="who-can-call" />
+
+## 誰可以呼叫
+
+呼叫者必須是持有 URL 所在身分域 `evaluate_authorization`（或 `manage_realm`）的服務賬戶。將 PEP 構建為啟用了服務賬戶的機密客戶端，並使用客戶端憑據授權進行身分認證。[概覽](/zh-TW/modules/authz/overview#quick-start) 中有完整說明。
+
+檢查按固定順序執行，順序決定你看到的狀態。權杖首先檢查（401），然後是正文（當無法解析或不完整時為400），然後是身分域和呼叫者。不存在的身分域，或屬於另一個身分域的服務賬戶，為404。無權評估的呼叫者，無論是使用者還是沒有權限的服務賬戶，為403。只有在此之後，FerrisKey 才會檢視身分域是否啟用了授權，如果未啟用，則以原因 `authorization_not_enabled` 返回404。
+
+<span id="one-evaluation" />
+
+## 一次評估
+
+示例針對宣告具有兩個屬性和接受上下文的更新操作的文件的模式執行：
+
+```text
+namespace App {
+  entity Document = { classification: String, owner_team: String };
+
+  action "document:update" appliesTo {
+    principal: [FerrisKey::User],
+    resource: [Document],
+    context: { ip: String, time: String },
+  };
+}
+```
+
+```http
+POST /realms/acme/authzen/access/v1/evaluation
+```
+
+```json title="Request body"
+{
+  "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" },
+  "action": { "name": "document:update" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "internal", "owner_team": "eng" }
+  },
+  "context": { "ip": "10.0.3.4", "time": "2026-09-24T10:00:00Z" }
+}
+```
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `subject` | 是 | `type` 和 `id` 是必需的。參見 [subjects](#subjects) |
+| `action.name` | 是 | 在身分域的模式中宣告的操作。`action.properties` 被接受並忽略 |
+| `resource` | 是 | `type` 和 `id` 是必需的。`properties` 是它的屬性 |
+| `context` | 否 | 一個 JSON 物件。當身分域有模式時，將根據操作中宣告的 `context` 進行檢查 |
+
+```json title="Response"
+{ "decision": true }
+```
+
+拒絕是一種正常回答：200 狀態並帶有 `"decision": false`。其他狀態意味著 FerrisKey 無法決定，並且不包含 `decision` 欄位。
+
+當呼叫者也持有 `view_authorization`（或 `manage_authorization`，或 `manage_realm`）時，響應會說明哪些策略做出了決定：
+
+```json title="Response for a caller that can view authorization"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["editors-can-update"] } }
+}
+```
+
+`reason_admin.policies` 列出 Cedar 報告為決定決策的策略名稱：允許的為允許策略，明確拒絕的為禁止策略，未匹配的為空列表。它是為維護規則的人準備的，而不是終端使用者。
+
+如果請求有 `X-Request-ID` 頭部，響應會回顯它，包括錯誤響應。
+
+<span id="subjects" />
+
+## 主題
+
+主題的 `type` 告訴 FerrisKey 關於它的事實來源。
+
+| `type` | `id` | 事實的來源 |
+|---|---|---|
+| `FerrisKey::User` | 身分域使用者的 UUID | FerrisKey 從資料庫讀取它們。`properties` 被忽略 |
+| `FerrisKey::Client` | 身分域客戶端的 UUID | FerrisKey 讀取其服務賬戶的角色。被禁用的客戶端、沒有服務賬戶的客戶端或其服務賬戶使用者被禁用的客戶端，將被拒絕 |
+| `user` | 任意字串 | PEP 在 `properties` 中斷言它們 |
+| `agent`或`client` | 任意字串，通常是客戶端 ID | PEP 對其進行斷言。變成 `FerrisKey::Agent`，並且只讀取 `properties.roles` |
+| 任何其他型別，如 `App::Device` | 任意字串 | 請求描述它。`properties` 是它的屬性，它沒有父級。該型別必須存在於身分域的模式中 |
+
+不存在的 `FerrisKey::User` 或 `FerrisKey::Client`，或屬於另一個身分域的 `FerrisKey::User` 或 `FerrisKey::Client`，會被拒絕而不是拒收。任何其他 `FerrisKey::` 型別的主體，例如 `FerrisKey::Role`，返回 400。
+
+被宣告的主體基於呼叫者的口頭承諾，因此只有具有 `evaluate_authorization` 的服務賬戶可以呼叫。當你擁有使用者的 UUID 時，請使用 `FerrisKey::User`，併為已經持有角色和組且沒有 UUID 可提供的 PEP 保留 `user`。
+
+<span id="what-ferriskey-reads-for-a-user" />
+
+### FerrisKey 為使用者讀取的資訊
+
+對於 `FerrisKey::User`，FerrisKey 在每次請求時從資料庫構建以下實體。
+
+| 實體 | 屬性 | 屬於以下成員 |
+|---|---|---|
+| `FerrisKey::User` | `username`、`email`（設定時）、`email_verified`、`enabled`，以及每個 [使用者屬性](/zh-TW/discover/core-concepts/users#attributes) 的一個字串標籤 | 分配給使用者的角色、他們所屬的[組織組](/zh-TW/modules/organization/groups)以及他們所隸屬的組織 |
+| `FerrisKey::Role` | `name` | 無 |
+| `FerrisKey::Group` | `name` | 它的父組（如果有）以及它所屬的組織 |
+| `FerrisKey::Organization` | `alias`, `name` | 無 |
+| `FerrisKey::Client` | `client_id` | 它的服務賬戶角色 |
+
+Cedar 的 `in` 會傳遞會員資格，因此 `principal in FerrisKey::Group::"<id>"` 對任何子組的成員都為真，`principal in FerrisKey::Organization::"<id>"` 對該組織的任何組成員都為真。ID 是 UUID。使用者屬性是標籤，透過 `hasTag` 和 `getTag` 讀取：
+
+```text
+permit (principal, action == App::Action::"document:read", resource)
+when { principal.hasTag("department") && principal.getTag("department") == "legal" };
+```
+
+FerrisKey 本身不會拒絕禁用使用者。`enabled` 是類似其他的屬性，因此必須拒絕禁用賬戶的策略需要測試 `principal.enabled`。
+
+<span id="asserting-a-user" />
+
+### 斷言一個使用者
+
+對於 `type: "user"`，FerrisKey 從 `properties` 構建 `FerrisKey::User`：
+
+| `properties` 鍵 | 結果 | 預設 |
+|---|---|---|
+| `username` | 屬性 `username` | `id` |
+| `email` | 屬性 `email` | 缺席 |
+| `email_verified` | 屬性 `email_verified` | `false` |
+| `enabled` | 屬性 `enabled` | `true` |
+| `roles` | 屬性 `roles`，以及每個字串的 `FerrisKey::Role` 父項 | 空 |
+| `groups` | 每個字串的 `FerrisKey::Group` 父項 | 空 |
+| `organisation` | 屬性 `organisation`，以及 `FerrisKey::Organization` 父項 | 缺席 |
+
+鍵拼寫為 `organisation`。`roles`、`groups` 和 `organisation` 中的字串是你的策略匹配的 ID，所以 `principal in FerrisKey::Group::"support"` 適用於 `"groups": ["support"]`。
+
+<span id="resources-and-context" />
+
+## 資源和上下文
+
+`resource.type` 和 `resource.id` 是必需的。`properties` 成為資源的屬性，當身分域有模式時，它們必須符合：未知的資源型別、缺失的屬性或型別錯誤的屬性都會導致 400。宣告為實體的屬性，例如 `owner: FerrisKey::User`，將以 Cedar 的 JSON 形式傳送，即 `{ "__entity": { "type": "FerrisKey::User", "id": "..." } }`。
+
+請求無法描述FerrisKey自身解析的型別。型別為`FerrisKey::User`、`FerrisKey::Role`、`FerrisKey::Group`、`FerrisKey::Organization`或`FerrisKey::Client`的資源是400。代理型別`FerrisKey::Agent`、`FerrisKey::Tool`、`FerrisKey::McpServer`、`FerrisKey::Resource`和`FerrisKey::Prompt`是例外，因為它們僅存在於請求中。參見[agents和MCP](#agents-and-mcp)。
+
+`context`按傳送方式傳遞給Cedar。FerrisKey不新增任何內容，只移除`arguments`，用於下文所述的代理動作（#agents-and-mcp）。
+
+<span id="batches" />
+
+## 批次
+
+`/evaluations`實現了AuthZEN的箱形處理。頂層欄位為預設欄位，每個`evaluations`項可以覆蓋`subject`、`action`、`resource`和`context`。物品上的`context`替換預設，但不會合併到預設狀態。
+
+```json title="Request body"
+{
+  "action": { "name": "document:update" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "internal", "owner_team": "eng" }
+  },
+  "context": { "ip": "10.0.3.4", "time": "2026-09-24T10:00:00Z" },
+  "evaluations": [
+    { "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" } },
+    { "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e71" } }
+  ],
+  "options": { "evaluations_semantic": "execute_all" }
+}
+```
+
+```json title="Response"
+{
+  "evaluations": [
+    { "decision": true },
+    { "decision": false }
+  ]
+}
+```
+
+答案按專案順序返回。這裡第一個使用者扮演策略命名的角色，第二個使用者不承擔。
+
+`evaluations` 必須保持在 1 到 100 個專案之間。如果它不存在，請求是單次評估，響應具有單次評估的形式。既不在專案中也不在頂層的主體、操作或資源將導致整個請求返回 400。
+
+<span id="semantics" />
+
+### 語義
+
+`options.evaluations_semantic` 指示何時停止。
+
+| 值 | 行為 |
+|---|---|
+| `execute_all` | 每個專案都會被評估。預設情況 |
+| `deny_on_first_deny` | 在第一次拒絕後停止 |
+| `permit_on_first_permit` | 在第一次允許後停止 |
+
+提前停止的響應僅包含目前已評估的專案，仍按請求順序排列，因此可以比請求短。任何其他值都會返回 400。
+
+<span id="an-invalid-item-is-a-deny" />
+
+### 無效專案為拒絕
+
+模式拒絕的專案，例如含未知操作的專案，不會導致批處理失敗。它變成一個拒絕並攜帶原因，並且在語義決定是否停止時計入拒絕。
+
+```json title="One item of the response"
+{
+  "decision": false,
+  "context": { "error": { "status": 400, "message": "<why the item was rejected>" } }
+}
+```
+
+涉及整個呼叫的問題不是按專案處理的：缺少權限、沒有授權的身分域以及格式錯誤的主體都會只回答一次，不會有單獨決策。
+
+<span id="when-something-goes-wrong" />
+
+## 當出現問題時
+
+| 狀態 | 含義 |
+|---|---|
+| 200 | 一個決定，允許或拒絕 |
+| 400 | 請求格式錯誤或過大，或不符合模式。這涵蓋了缺少 `type`、`id` 或 `action.name`，未知的動作或資源型別，錯誤的屬性型別，未宣告的上下文鍵，在該位置 FerrisKey 不接受的 `FerrisKey::` 型別，空或超過 100 個專案的 `evaluations` 陣列，以及未知的 `evaluations_semantic` |
+| 401 | 沒有權杖，或權杖無效 |
+| 403 | 呼叫者不是持有 `evaluate_authorization` 或 `manage_realm` 的服務賬戶 |
+| 404 | 模組未掛載、身分域不存在、呼叫者屬於其他身分域，或身分域未開啟授權 |
+| 500 | 內部錯誤 |
+
+有幾種情況會以拒絕結束，而不是錯誤：
+
+- 沒有匹配的策略。Cedar 預設拒絕。
+- 在評估策略時，如果策略失敗，例如讀取主體沒有的屬性，決策將為拒絕，即使其他策略本可能允許，並且 `reason_admin` 指出出錯的策略。
+- 主體是 `FerrisKey::User` 或 `FerrisKey::Client`，但 FerrisKey 無法在身分域中找到。
+- 儲存的規則無法編譯，並且記憶體中沒有早期版本。
+
+<span id="fresh-rules" />
+
+## 新規則
+
+副本會在記憶體中保留身分域的已編譯規則，並且至多每秒檢查一次身分域的 `version`。因此，新的模式、策略或模板大約一秒鐘內會到達每個副本。關閉或開啟身分域也是按相同的時間表進行的。
+
+如果儲存的規則無法編譯，副本會繼續提供之前的規則服務並記錄失敗。呼叫者不會收到任何報告。在儲存之前會對寫入進行驗證，因此這更多是一個安全網，而不是預期路徑。
+
+關於主體的事實不會被快取。角色、組和屬性在每次請求時都會被讀取。
+
+<span id="agents-and-mcp" />
+
+## 代理和 MCP
+
+內建模式描述了呼叫 MCP 伺服器上工具的代理的組成部分，因此身分域可以在不宣告任何內容的情況下為它們編寫策略。一旦身分域擁有模式，這些組成部分就存在（參見 [內建模式](/zh-TW/modules/authz/policies#the-built-in-schema)）。
+
+| 型別 | 屬性 | 屬於以下成員 |
+|---|---|---|
+| `FerrisKey::Agent` | `client_id` | 角色 |
+| `FerrisKey::McpServer` | `name` | 無 |
+| `FerrisKey::Tool` | `server`、`tool`，以及可選的 `annotations` 與可選布林值 `readOnlyHint`、`destructiveHint`、`idempotentHint` 和 `openWorldHint` | 一個 `McpServer` |
+| `FerrisKey::Resource` | `server`, `uri` | 一個 `McpServer` |
+| `FerrisKey::Prompt` | `server`, `name` | 一個 `McpServer` |
+
+三種操作適用於它們。它們位於 `FerrisKey` 名稱空間中，因此策略寫 `FerrisKey::Action::"call_tool"` 而不是 `App::Action::...`。
+
+| 操作 | 資源 | 主體 |
+|---|---|---|
+| `call_tool` | `FerrisKey::Tool` | `FerrisKey::User`, `FerrisKey::Agent`, `FerrisKey::Client` |
+| `read_resource` | `FerrisKey::Resource` | 相同 |
+| `get_prompt` | `FerrisKey::Prompt` | 相同 |
+
+這三種操作都採用一個 `AgentContext`，由 PEP 填充：
+
+| 關鍵 | 型別 | 說明 |
+|---|---|---|
+| `agent` | 字串 | 必填。指定發起呼叫的代理，以便策略進行測試 |
+| `delegated` | 布林值 | 必填。呼叫是否代表使用者發起 |
+| `act` | 記錄 | 可選。`sub` 和 `client_id`，之前的代理巢狀在更深的 `act` 中，最多三層 |
+| `time` | 記錄 | 必填。`weekday` 和 `hour` 為整數，`iso` 為字串。由 PEP 決定一週的日期編號 |
+
+`act` 具有 `act` 宣告的形狀，該宣告存在於由 [token exchange](/zh-TW/discover/core-concepts/token-exchange) 發出的權杖中，並帶有一個 actor 權杖：當前的 actor，以及巢狀在其中的早期 actor。FerrisKey 不會為你讀取權杖。PEP 會將宣告連同時鐘值和代理名稱一起復制到 `context.act` 中。代理最初如何獲得其權杖在 [MCP](/zh-TW/discover/core-concepts/mcp) 中有說明。
+
+對於這三種操作，`context.arguments` 會在請求被檢查和評估之前被移除。它既不被驗證，也不被策略可見。
+
+<span id="shorthand-for-mcp-entities" />
+
+### MCP 實體的簡寫
+
+型別為 `tool`、`resource`、`prompt` 或 `mcp_server`（也寫作 `mcpserver`）的資源會展開為匹配的內建型別。按約定 `id` 寫作 `server/leaf`。FerrisKey 使用它來填補 `properties` 遺留的內容，並且整個 `id` 保持實體 ID。
+
+| `type` | 變為 | 屬性，以及它們的預設值 |
+|---|---|---|
+| `tool` | `FerrisKey::Tool` | `server`（`properties.server`，否則在第一個`/`之前為`id`），`tool`（`properties.tool`，否則在其之後為`id`），提供時`annotations` |
+| `resource` | `FerrisKey::Resource` | `server` 如上，`uri`（`properties.uri`，否則為`id`） |
+| `prompt` | `FerrisKey::Prompt` | `server` 如上，`name`（`properties.name`，否則為在第一個`/`之後的`id`） |
+| `mcp_server` | `FerrisKey::McpServer` | `name`（`properties.name`，否則為`id`） |
+
+工具、資源和提示被設為由`server`命名的`FerrisKey::McpServer`的成員，因此策略可以用`resource in FerrisKey::McpServer::"files"`針對整個伺服器。
+
+<span id="an-example" />
+
+### 一個例子
+
+一個策略允許一個組的成員呼叫只讀工具，只要代理是Claude：
+
+```text
+permit (
+  principal in FerrisKey::Group::"support",
+  action == FerrisKey::Action::"call_tool",
+  resource is FerrisKey::Tool
+) when {
+  context.agent == "claude" &&
+  resource has annotations &&
+  resource.annotations has readOnlyHint &&
+  resource.annotations.readOnlyHint
+};
+```
+
+PEP僅從權杖中認識某個使用者，因此它斷言這些組：
+
+```json title="Request body"
+{
+  "subject": {
+    "type": "user",
+    "id": "9b4c7a52-0000-4000-8000-000000000001",
+    "properties": { "roles": ["dev"], "groups": ["support"] }
+  },
+  "action": { "name": "call_tool" },
+  "resource": {
+    "type": "tool",
+    "id": "files/read",
+    "properties": { "annotations": { "readOnlyHint": true } }
+  },
+  "context": {
+    "agent": "claude",
+    "delegated": true,
+    "time": { "weekday": 3, "hour": 10, "iso": "2026-10-22T10:00:00Z" }
+  }
+}
+```
+
+該決策是 `true`。對於沒有 `readOnlyHint` 的工具、組外使用者或其他代理名稱的相同呼叫是 `false`。
+
+<span id="the-metadata-document" />
+
+## 後設資料文件
+
+```http
+GET /.well-known/authzen-configuration/realms/{realm_name}/authzen
+```
+
+```json title="Response"
+{
+  "policy_decision_point": "https://sso.example.com/realms/acme/authzen",
+  "access_evaluation_endpoint": "https://sso.example.com/realms/acme/authzen/access/v1/evaluation",
+  "access_evaluations_endpoint": "https://sso.example.com/realms/acme/authzen/access/v1/evaluations"
+}
+```
+
+策略決策點識別符號是 `{root}/realms/{realm_name}/authzen`。因為該識別符號有路徑，規格將眾所周知的段放在主機和路徑之間，這就是路線看起來的原因。當 FerrisKey 在 `SERVER_ROOT_PATH` 下執行時，根路徑是識別符號和路由的一部分。主機在設定時來自 `SERVER_PUBLIC_URL`，否則來自請求。該文件適用於任何現有身分域，無論是否開啟授權，而不存在的身分域則返回 404。

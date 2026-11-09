@@ -1,0 +1,110 @@
+---
+title: "恢復碼"
+description: "FerrisKey 中的備份恢復程式碼：客戶端如何生成一組程式碼，一條程式碼如何響應 TOTP 挑戰，以及它不能做什麼。"
+icon: file-key
+order: 14
+---
+
+<span id="recovery-codes" />
+
+# 恢復碼
+
+恢復程式碼是一次性備份程式碼。由於手機丟失或應用被清除而丟失認證器的使用者，可以在 TOTP 驗證時輸入一條恢復程式碼，而不是六位數程式碼。
+
+FerrisKey 本身不會建立恢復程式碼。註冊認證器或密碼金鑰不會生成任何程式碼，而且控制檯或預設門戶也沒有用於恢復程式碼的介面。您的應用程式向 FerrisKey 請求一組程式碼，將其顯示給使用者一次，並告訴他們妥善儲存。如果您只使用預設門戶，則沒人有恢復程式碼。
+
+<span id="generating-a-set" />
+
+## 生成一組程式碼
+
+```
+POST /realms/{realm_name}/login-actions/generate-recovery-codes
+```
+
+呼叫使用使用者自己的存取權杖作為 Bearer 權杖，並且需要透過使用者的 **密碼** 來證明提升權限。從 [`POST /users/me/reauthenticate`](/zh-TW/modules/account/overview#sensitive-operations-need-an-elevation) 獲取一個，該權杖與同一會話鑄造。使用 OTP 程式碼證明的提升會被拒絕，並返回 403。
+
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "amount": 8,
+  "code_format": "b32-split-4"
+}
+```
+
+| 欄位 | 說明 |
+|---|---|
+| `elevation_id` | 來自 `reauthenticate` 的提升 |
+| `amount` | 要建立多少程式碼 |
+| `code_format` | `b32-split-4` 是唯一被接受的值。任何其他值都會返回 400 |
+
+```json title="Response"
+{
+  "codes": ["ybnd-rfg8-ejkm-cpqx", "..."]
+}
+```
+
+每個程式碼是 10 個隨機位元組，以 z-base32 編寫為 16 個字元，分為四組四個字元。響應是程式碼以明文形式存在的唯一時刻。FerrisKey 將每個程式碼的雜湊儲存為 `recovery-code` 型別的憑據。
+
+生成一組 **會替換** 之前的那一組：新程式碼先儲存，然後刪除之前的所有程式碼。使用者一次只能有一組程式碼。
+
+<span id="using-a-code" />
+
+## 使用程式碼
+
+在 TOTP 驗證中，客戶端呼叫 `burn-recovery-code` 代替 `challenge-otp`。像每個登入操作一樣，它攜帶步驟權杖 cookie 和 `FERRISKEY_SESSION` cookie。
+
+```
+POST /realms/{realm_name}/login-actions/burn-recovery-code
+```
+
+```json title="Request body"
+{
+  "recovery_code": "ybnd-rfg8-ejkm-cpqx",
+  "recovery_code_format": "b32-split-4"
+}
+```
+
+FerrisKey 對程式碼進行雜湊處理，並與使用者儲存的程式碼進行比較。匹配成功會刪除該程式碼，因此它只能使用一次，登入過程繼續：響應中包含 `login_url`，或仍需 `required_actions`。錯誤或已使用的程式碼將返回 400。
+
+恢復程式碼只用於回答待處理的 **TOTP** 驗證。如果使用者沒有驗證器，呼叫將被拒絕並返回 403（`a recovery code only answers a pending OTP challenge`）。如果使用者的唯一第二裝置是密碼金鑰，則沒有驗證可回答，因此恢復程式碼對他們沒有用。
+
+恢復程式碼不會解除賬戶鎖定，並且客戶端的維護和同意規則在使用後仍然適用。
+
+<span id="security-model" />
+
+## 安全模型
+
+| 屬性 | 行為 |
+|---|---|
+| 儲存 | 只儲存雜湊值。資料庫的副本無法讓任何人獲得可用的程式碼 |
+| 一次性使用 | 程式碼在匹配的那一刻會被刪除 |
+| 有效期 | 程式碼永不過期。它保持有效，直到被使用或使用者生成新的一組程式碼 |
+| 作用域 | 它在挑戰時替代 TOTP 程式碼。它不會替代密碼 |
+
+<Callout variant="danger" title="將程式碼視為密碼">
+
+恢復程式碼可讓持有者透過第二因素驗證。使用者應像保護根密碼一樣儲存程式碼：絕不以明文儲存在裝置上，絕不共享，絕不截圖。
+
+</Callout>
+
+<span id="building-the-experience" />
+
+## 構建體驗
+
+<span id="show-the-codes-once" />
+
+### 只顯示一次程式碼
+
+`generate-recovery-codes` 的響應是程式碼唯一一次以明文存在的情況。顯示時提供複製按鈕和下載選項，並避免在瀏覽器可能快取或螢幕錄製可能捕捉的地方呈現它們。
+
+<span id="count-what-is-left" />
+
+### 計算剩餘數量
+
+`GET /realms/{realm_name}/users/me/credentials` 為每個未使用的程式碼返回一個 `recovery-code` 型別的條目。顯示數量，並在數量不足時提示獲取新的一組。每使用一個程式碼，安全網就會縮小，而一組新程式碼會替換剩下的內容。
+
+<span id="admin-recovery" />
+
+### 管理員恢復
+
+如果使用者丟失了認證器且沒有恢復程式碼，管理員可以在控制檯使用者頁面的 **身分認證方法** 下刪除一次性密碼憑據。然後使用者可以使用密碼登入並重新註冊。

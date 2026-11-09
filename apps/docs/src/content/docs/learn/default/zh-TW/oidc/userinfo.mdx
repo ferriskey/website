@@ -1,0 +1,100 @@
+---
+title: "UserInfo 端點"
+description: "一個標準的 OIDC 端點，根據存取權杖返回使用者的當前宣告。"
+icon: user-search
+order: 3
+---
+
+<span id="the-userinfo-endpoint" />
+
+# UserInfo 端點
+
+`/userinfo` 是 OIDC 按名稱標準化的少數端點之一。它的功能很單一：給定一個存取權杖，它會返回關於已認證使用者的當前宣告。
+
+```http
+GET /realms/my-app/protocol/openid-connect/userinfo
+Authorization: Bearer eyJhbGciOi...
+```
+
+```json
+{
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "picture": "https://example.com/avatar/alice.png"
+}
+```
+
+<span id="why-call-it-if-the-id-token-already-has-claims" />
+
+## 如果 ID 權杖已經包含宣告，為什麼還要呼叫它？
+
+有兩個原因。
+
+首先是新鮮度。ID 權杖是登入時的快照。如果使用者一小時後更改了姓名，舊的 ID 權杖仍然會顯示舊姓名。`/userinfo` 會從實時儲存中讀取。
+
+其次是足跡。權杖會到處傳遞。將每個宣告都塞進 ID 權杖會使每個請求膨脹。清晰的模式是使用精簡的 ID 權杖，以及在實際需要其他資訊時呼叫 `/userinfo`。
+
+<span id="how-clients-typically-use-it" />
+
+## 客戶端的典型使用方式
+
+- 在登入時，在用程式碼交換權杖之後，填充應用中的使用者資料。
+- 在使用者重新重新整理個人資料時，當使用者重新開啟設定頁面時，
+- 很少會在每個請求中出現。這違背了無狀態權杖的初衷。
+
+<span id="authentication" />
+
+## 身分認證
+
+端點接收存取權杖，而非ID權杖。（是的，這是唯一一個存取權杖屬於OIDC提供者本身的OIDC端點。）作為承載權杖傳送：
+
+```bash
+curl https://auth.example.com/realms/my-app/protocol/openid-connect/userinfo \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+<span id="what-claims-appear" />
+
+## 出現了哪些宣告？
+
+與瞄準鏡承諾的宣告相同：
+
+- `openid` → `sub`
+- `profile` → `name`, `given_name`, `family_name`, `picture`, `locale`, ...
+- `email` → `email`, `email_verified`
+- `address`，`phone` →各自的宣告
+
+如果客戶端登入時未請求作用域，相應的宣告不會出現在`/userinfo`。端點尊重存取權杖所攜帶的作用域。
+
+<span id="response-formats" />
+
+## 響應格式
+
+預設情況下，`/userinfo` 返回一個普通的 JSON 物件。OIDC 也允許響應以簽名的 JWT 形式返回（在客戶端的 `userinfo_signed_response_alg` 中設定）。當響應需要端到端可驗證時，例如在透過不受信任的中介時，簽名形式非常有用。
+
+<span id="a-common-pitfall" />
+
+## 一個常見的陷阱
+
+有些客戶端在每次請求時呼叫 `/userinfo` 來獲取使用者身分。不要這樣做。這會導致對你的應用的每個請求都需要往返認證伺服器。正確的模式是：
+
+- 在本地驗證存取權杖（如果它是 JWT）。
+- 從 JWT 中讀取 `sub`。
+- 僅在需要尚未擁有的宣告時才呼叫 `/userinfo`。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 在標準 OIDC 路徑上按身分域公開 `/userinfo`。它支援 JSON 和簽名 JWT 響應。
+
+::::card-group{cols=2}
+:::card{label="ID 權杖" icon="lucide:id-card" href="/zh-TW/learn/oidc/id-token"}
+登入時使用者宣告的快照。
+:::
+:::card{label="作用域與同意" icon="lucide:badge-check" href="/zh-TW/learn/oauth2/scopes"}
+什麼控制哪些宣告會出現在 /userinfo 。
+:::
+::::

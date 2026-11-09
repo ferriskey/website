@@ -1,0 +1,97 @@
+---
+title: "單點登入 & 會話管理"
+description: "OIDC 如何實現單點登入以及登出實際是如何工作的。"
+icon: log-in
+order: 4
+---
+
+<span id="sso--session-management" />
+
+# 單點登入 & 會話管理
+
+單點登入 (SSO) 是一次登入後，後續每個應用都能識別你的體驗。OIDC 實現這一點，而無需每個應用儲存使用者憑據的副本。
+
+<span id="the-mechanism-in-plain-terms" />
+
+## 用通俗的話解釋機制
+
+三個應用程式（`intranet`、`wiki`、`dashboard`）都信任同一個授權伺服器。使用者第一次存取 `intranet` 時，會被重定向去登入。授權伺服器對其進行身分認證，並在使用者的瀏覽器中設定一個會話 cookie，範圍限定在其自身域名下。
+
+當使用者稍後存取 `wiki` 並被重定向到同一個授權伺服器時，cookie 已經存在。伺服器跳過登入表單，直接悄無聲息地返回一個新的授權碼。從使用者的角度來看，`wiki` "就知道" 他們已經登入了。
+
+```
+First visit:   User → intranet → AuthServer (login form) → cookie set → intranet
+Second visit:  User → wiki     → AuthServer (cookie present) → wiki (no form)
+```
+
+會話存在於授權伺服器中，而不在任何一個應用程式中。
+
+<span id="sessions-not-tokens" />
+
+## 會話，而非權杖
+
+這會讓人措手不及：權杖壽命很短，而會話不是。使用者可以同時擁有一個 30 分鐘的存取權杖和一個 8 小時的會話。正是會話讓在存取權杖過期時可以進行靜默重新認證成為可能。
+
+如果你的重新整理權杖過期，但你請求一個新的權杖而會話仍然有效，則會靜默成功。如果會話已過期，使用者會看到登入表單。
+
+<span id="logout-harder-than-it-looks" />
+
+## 登出：比看起來更難
+
+“登出”在不同的上下文中需要表示不同的含義：
+
+- **本地登出**：清除應用自身的 cookie/儲存。簡單。
+- **SSO 登出（單點登出）**：在授權伺服器上使會話失效，因此未來存取任何應用都需要重新登入。更難。
+- **後端登出**：通知共享會話的_所有其他應用_，以便它們也可以清除本地狀態。最難實現。
+
+OIDC 定義了幾個相關規範：
+
+- **RP 發起的登出**：應用將使用者重定向到授權伺服器上的 `/logout` 端點，該端點會清除 SSO Cookie。
+- **前端登出**：授權伺服器返回一個頁面，頁面中有指向每個應用登出 URL 的隱藏 iframe。每個 iframe 會清除本地狀態。僅在使用者在瀏覽器前時有效。
+- **後端登出**：授權伺服器向每個應用發起伺服器到伺服器的呼叫，傳送登出權杖。更可靠。
+
+大多數團隊首先實現 RP 發起的登出，然後如果有多個應用需要在不依賴瀏覽器的情況下清除狀態，再新增後端登出。
+
+<span id="detecting-is-the-user-still-logged-in" />
+
+## 檢測“使用者是否仍然登入？”
+
+OIDC 還在授權端點上定義了 `prompt=none` 引數。客戶端傳送正常的授權請求，但會新增 `prompt=none`：
+
+- 如果會話仍然有效：靜默成功，獲取新的權杖。
+- 如果無效：返回 `interaction_required` 錯誤。
+
+適用於應用載入時檢查“他們是否仍然登入？”的情況。隱藏的 iframe（或現代 `<iframe>` 替代方案）使這種後臺檢查成為可能。
+
+<span id="max_age-and-auth_time" />
+
+## `max_age` 和 `auth_time`
+
+當你真的不信任舊會話時（例如，在執行敏感操作前），你可以強制重新認證：
+
+```
+GET /authorize?max_age=300&...
+```
+
+這表示：“如果 `auth_time` 超過 300 秒，則再次提示輸入密碼。”ID 權杖中的 `auth_time` 宣告會告訴客戶端上次輸入密碼的時間。
+
+<span id="a-mental-model" />
+
+## 一個思維模型
+
+授權伺服器就像辦公大樓的前臺。你在前臺刷一次卡。然後在大樓內部，你可以進入任何會議室。會議室（應用程式）只會檢查你是否最近經過了前臺。要“退出大樓”，你必須去前臺，而不僅僅是離開一個會議室。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 充當中央會話持有者。同一身分域內的多個客戶端在每個瀏覽器中共享一個 SSO 會話。
+
+::::card-group{cols=2}
+:::card{label="什麼是FerrisKey？" icon="lucide:shield" href="/zh-TW/discover/what-is-ferriskey"}
+身分域如何將共享會話的應用程式分組。
+:::
+:::card{label="Compass 模組" icon="lucide:compass" href="/zh-TW/modules/compass/overview"}
+逐步檢查和除錯身分認證流程。
+:::
+::::

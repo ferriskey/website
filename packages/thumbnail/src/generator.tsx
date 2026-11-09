@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
 import satori from 'satori'
+import { getCjkFonts } from './cjk-font'
 import { resolveColor } from './colors'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -197,6 +198,7 @@ export async function generateThumbnail(options: ThumbnailOptions): Promise<stri
       width: 960,
       height: 540,
       fonts: [
+        ...getCjkFonts([options.headline, options.title, options.description].join(' ')),
         {
           name: 'Inter',
           data: interRegular,

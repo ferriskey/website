@@ -1,0 +1,112 @@
+---
+title: "WebAuthn"
+description: "FerrisKey 中的 FIDO2 密钥：注册、密钥登录，以及密钥如何与 TOTP 挑战和必做操作交互。"
+icon: fingerprint
+order: 12
+---
+
+<span id="webauthn-fido2-passkeys" />
+
+# WebAuthn（FIDO2 密钥）
+
+WebAuthn 允许用户使用硬件安全密钥、平台生物识别（Touch ID、Face ID、Windows Hello）或已同步的密码密钥（iCloud 钥匙串、Google 密码管理器）登录。私钥永远不会离开用户的设备。FerrisKey 仅存储公钥。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+WebAuthn 使用公钥密码学。在注册期间，用户的设备会创建一对密钥并将公钥发送到 FerrisKey。在登录时，设备使用私钥对挑战进行签名，FerrisKey 根据存储的公钥验证签名。没有可供钓鱼或从服务器泄露的共享密钥，并且生物识别或 PIN 验证发生在设备上。
+
+FerrisKey 要求进行该检查。未经认证器标记为用户验证的断言会被拒绝并返回 401，因此仅需触碰、不需要 PIN 或生物识别的安全密钥无法为任何人登录。
+
+<Callout variant="info" title="通行密钥是一种登录方式，而不是第二因素">
+
+通行密钥可以独立登录用户。FerrisKey在密码之后不会要求提供通行密钥：它唯一发出的第二因素挑战是TOTP挑战。拥有通行密钥但没有身份认证器的用户，在密码正确后不会面临进一步挑战。
+
+</Callout>
+
+<span id="where-the-origin-comes-from" />
+
+## 来源来自哪里
+
+WebAuthn 来源是网页应用的 URL（`WEBAPP_URL`，或者当 `WEBAPP_URL_FROM_REQUEST` 启用时为请求的主机），而依赖方 ID 是该 URL 的主机名。在 `login.example.com` 注册的通行密钥在 `auth.example.com` 上不可用。在用户开始注册之前选择主机名。[配置](/zh-CN/discover/guides/configuration) 列出了这两个变量。
+
+<span id="registering-a-passkey" />
+
+## 注册通行密钥
+
+用户可以通过两种方式之一获取通行密钥。在账户页面，他们可以使用[账户安全](/zh-CN/modules/account/security#passkeys)中的自助流程，这需要进行新密码验证。在登录时，`configure_passkey`的必需操作会引导他们完成以下步骤。
+
+当管理员更新用户的必需操作时，对于完全没有凭据的用户，FerrisKey 会拒绝 `configure_passkey`，因此通行密钥会被添加到现有的登录方式之上。
+
+::::step-group
+:::step{title="请求创建选项"}
+门户使用步骤令牌调用 `POST /login-actions/webauthn-public-key-create-options`。FerrisKey 构建注册挑战，排除用户已持有的通行密钥，并将挑战存储在认证会话中。
+:::
+
+:::step{title="浏览器提示用户"}
+浏览器的 `navigator.credentials.create()` 请求进行 Touch ID 扫描、Face ID 或者按下硬件按键。认证器返回公钥、凭据 ID 和认证数据。
+:::
+
+:::step{title="将凭据发送回去"}
+门户调用 `POST /login-actions/webauthn-public-key-create`。除非 `configure_passkey` 尚未用于此登录，否则 FerrisKey 会以 403 拒绝请求。它会将响应与存储的挑战进行检查，该挑战有效期为 5 分钟，然后将公钥保存为 `webauthn-public-key-credential` 类型的凭据，并移除所需操作。
+:::
+::::
+
+<span id="signing-in-with-a-passkey" />
+
+## 使用密码键登录
+
+在身份域中开启 `passkey_enabled`（控制台中的 **身份认证** > **登录方法**），登录页面会显示一个密码键按钮。此设置仅控制该按钮：密码键端点不会检查该设置。
+
+::::step-group
+:::step{title="请求请求选项"}
+该门户调用 `POST /login-actions/passkey-request-options`。体内有 `username` 时，挑战限定在该用户的通行密钥上，没有通行密钥的用户会收到 401。没有通行密钥时，挑战是可发现的，浏览器会提议它所持有的通行密钥，因此页面不能被用来探测哪些账户存在。
+:::
+
+:::step{title="用户进行身份认证"}
+浏览器调用 `navigator.credentials.get()`。认证器会提示进行生物识别或 PIN 验证并签署挑战。
+:::
+
+:::step{title="签名已验证"}
+门户使用断言调用 `POST /login-actions/passkey-authenticate`。FerrisKey 验证签名，检查凭据属于断言用户句柄指定的用户，并要求用户验证。成功后，响应携带 `login_url`，其中包含授权代码，同时设置 SSO 会话 Cookie。
+:::
+::::
+
+<span id="required-actions-still-apply" />
+
+### 仍需执行必要的操作
+
+用户验证的通行密钥会响应 TOTP 挑战，因此同时拥有通行密钥和身份认证器的用户不会被要求输入代码。它不会跳过必需的操作：如果 `update_password`、`verify_email` 或 `configure_otp` 到期，`passkey-authenticate` 会返回 403，登录无法完成。客户端的维护和同意规则同样适用。
+
+<span id="supported-authenticators" />
+
+## 支持的身份认证器
+
+| 类型 | 示例 | 跨设备 |
+|---|---|---|
+| 平台 | Touch ID、Face ID、Windows Hello、Android 生物识别 | 不 |
+| 漫游 | YubiKey、SoloKeys、Titan 安全密钥 | 是 |
+| 同步通行密钥 | iCloud 钥匙串、谷歌密码管理器 | 是 |
+
+<span id="patterns" />
+
+## 模式
+
+<span id="passkey-first-sign-in" />
+
+### 以密钥为优先的登录
+
+将通行密钥与授权码流程结合。用户点击通行密钥按钮，通过他们的设备进行身份认证，并带着代码被重定向回来，无需输入密码。密码仍然可以与通行密钥一起使用，因此这只是移除了输入步骤，而不是密码本身。
+
+<span id="passkeys-next-to-totp" />
+
+### 通行密钥与 TOTP 并存
+
+向设备支持通行密钥的用户提供这种选项。不支持的用户继续使用他们的密码，并在需要时使用身份认证器。两条路径最终都指向相同的令牌端点。
+
+<Callout variant="info" title="多个通行密钥">
+
+用户可以注册多个通行密钥，例如笔记本上的 Touch ID 和作为备用的 YubiKey。每个通行密钥单独存储，任意一个都可以用于用户登录。如果移除某个通行密钥会导致账户无法登录，则会被拒绝。
+
+</Callout>

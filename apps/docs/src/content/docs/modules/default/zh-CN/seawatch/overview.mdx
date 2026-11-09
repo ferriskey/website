@@ -1,0 +1,120 @@
+---
+title: "概述"
+description: "SeaWatch 是 FerrisKey 的审计模块：它是一个篡改可见的记录，显示谁在一个身份域中做了什么，可以通过一个分页端点和控制台读取。"
+icon: eye
+order: 20
+---
+
+<span id="seawatch-audit-and-security-events" />
+
+# SeaWatch：审计和安全事件
+
+SeaWatch 记录身份域中的安全相关操作。一次登录、一次失败登录、密码重置、角色分配、客户端删除：每一项都成为一个结构化事件，说明是谁做的、涉及了什么、发生时间以及是否成功。[事件类型](/zh-CN/modules/seawatch/event-types) 页面列出了所有 29 种类型。
+
+当一个账户看起来被入侵时，追踪可以回答最初的问题：它何时登录、开启了哪些会话、被授予了哪些角色以及由谁授予。它还显示谁读取了客户端密钥以及谁删除了客户端。登录尝试的网络地址不属于这些事件的一部分。它会记录在同一次尝试的 [Compass](/zh-CN/modules/compass/overview) 流中。
+
+<img class="only-light" src="/dashboard/seawatch-light.jpg" alt="FerrisKey SeaWatch 仪表板显示事件计数器、认证流量Chart以及事件流" />
+<img class="only-dark" src="/dashboard/seawatch-dark.jpg" alt="FerrisKey SeaWatch 仪表板显示事件计数器、认证流量Chart以及事件流" />
+
+控制台的 Sea Watch 页面在过去七天内显示四个计数器（事件、失败、成功率、不同操作人员）以及基于 Compass 绘制的认证流量曲线。当某些操作失败时，会有一个横幅报告失败事件，另一个横幅报告每个相关账户。下面的事件流就是在 [查询事件](/zh-CN/modules/seawatch/querying) 中描述的列表。
+
+<span id="event-structure" />
+
+## 事件结构
+
+每个事件都有相同的格式。这个是一个身份域的第一个事件，在管理员登录时记录：
+
+```json title="A login_success event"
+{
+  "id": "01a18e8b-8e28-7591-bfbe-a32e4b4ef27e",
+  "realm_id": "01a18e87-67a8-7801-8d2e-ab97acf9fc35",
+  "actor_id": "01a18e87-67a8-76d4-8ab8-07d5830d8a99",
+  "actor_type": "user",
+  "event_type": "login_success",
+  "status": "success",
+  "target_type": "session",
+  "target_id": "ad9654e4-8c48-43fa-890c-c63e5f693c68",
+  "resource": null,
+  "timestamp": "2026-10-30T20:41:13.554970Z",
+  "trace_id": null,
+  "ip_address": null,
+  "user_agent": null,
+  "details": null,
+  "event_hash": [84, 221, 63, 112, 62, 114, 217, 99, 133, 197, 0, 41, 226, 93, 27, 138, 176, 31, 204, 103, 112, 198, 19, 47, 221, 194, 118, 210, 28, 196, 200, 153],
+  "prev_hash": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 事件标识符，一个 UUIDv7，因此标识符按创建时间排序 |
+| `realm_id` | 事件发生的身份域 |
+| `event_type` | 发生了什么，参见 [事件类型](/zh-CN/modules/seawatch/event-types) |
+| `status` | `success`或`failure` |
+| `actor_id`, `actor_type` | 发起请求的账户及其分类 |
+| `target_type`, `target_id` | 事件涉及的对象（如果有） |
+| `resource` | 目标的可读名称，在包含该信息的事件上 |
+| `ip_address`, `user_agent`, `trace_id` | 请求上下文。FerrisKey 在它写入的事件中将三者都置为 null |
+| `details` | 事件特定的 JSON，或 null |
+| `timestamp` | 事件创建时间，UTC 时间 |
+| `event_hash`, `prev_hash` | 哈希链，表示为 32 个整数的数组。在哈希链存在之前写入的行为 null |
+
+<span id="actor-and-target" />
+
+## 行为者和目标
+
+`actor_id` 是发出请求的账户：用于控制台操作的管理员，用于登录和自助服务操作的用户。没有调用者的事件则没有，例如用户名不匹配任何账户的登录失败，或者尝试次数用尽的 webhook 投递。
+
+`actor_type` 是已知账户在 `login_success` 和 `login_failure` 上的 `user`，而在其他所有事件中为 null。该模式还定义了 `service_account`、`admin` 和 `system`，但没有任何操作会写入它们，因此不要构建等待它们之一的规则。
+
+`target_type` 是 `user`、`client`、`session`、`webhook` 或 `identity_provider_link` 之一，`target_id` 是该对象的 UUID。`resource` 在存在可读名称时添加该名称：`role_assigned` 上的角色名称、`identity_provider_link_removed` 上的提供者别名、`token_exchanged` 上的客户端 ID。`client_created` 和除 `role_assigned` 与 `role_unassigned` 之外的角色事件根本没有目标。
+
+<span id="what-you-can-do-with-it" />
+
+## 你可以用它做什么
+
+对于一次事故，通过 `actor_id` 和一个时间窗口进行筛选，以按顺序重放一个账户的操作，然后跟随 `target_id` 查看它触及的对象。
+
+对于合规性问题，例如上个季度的每个角色分配，将 `event_types` 与 `from_timestamp` 和 `to_timestamp` 结合使用。[查询事件](/zh-CN/modules/seawatch/querying) 中有一个问题表，其中包含每个问题的查询。
+
+对于警报，请轮询列表。SeaWatch 不会将事件推送到任何地方。[Webhooks](/zh-CN/modules/webhooks/triggers) 有自己的一组触发器，涵盖账户、客户端和角色更改，但不包括登录、会话或密钥读取。
+
+<span id="tamper-evidence" />
+
+## 防篡改证据
+
+每个事件都包含两个哈希。`event_hash` 是事件字段和前一个哈希的 SHA-256 哈希，而 `prev_hash` 是同一身份域中前一个事件的 `event_hash`。某个身份域的第一个哈希事件的 `prev_hash` 是 32 个零字节，如上例所示。
+
+该哈希覆盖事件的每个字段（不包括两个哈希，含 `details`），时间戳精确到微秒。每个事件都在推进该身份域链头的同一语句中插入，并使用行锁，因此两个同时记录的请求将依次排列，链条永不分叉。
+
+编辑一个存储的事件，如果其哈希与内容不再匹配。删除一个事件，下一个事件的`prev_hash`将不再与其前驱匹配。FerrisKey包含一个例程，它会遍历一个身份域的链，并报告第一个被修改的事件或断裂链接的位置，但没有端点、命令或控制台屏幕会运行它。要自行检查链接，请按时间从旧到新列出身份域的事件：
+
+```bash title="Walk the chain in insertion order"
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "order_by=created_at" \
+  --data-urlencode "order=asc" \
+  --data-urlencode "limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+每个事件的`prev_hash`必须等于前一个事件的`event_hash`，即使跨页也要如此。这样可以捕捉已删除或重新排列的事件。它无法捕捉其邻居未被修改的编辑事件，因为重新计算哈希需要使用FerrisKey对事件的规范编码，而API不会为你执行这一操作。
+
+:::callout{variant="info"}
+该链可以检测任何能够写入数据库的人进行的篡改，包括直接编辑行的人。它不能防止篡改，而且它不是公证人：能够从编辑点向前重新计算整个链的攻击者可以生成一致的日志。将最新的 `event_hash` 复制到数据库管理员无法写入的地方，例如您的 SIEM 或 WORM 存储桶，可以弥补这一漏洞，并在日志作为证据时值得这样做。
+:::
+
+<span id="privacy" />
+
+## 隐私
+
+事件可能包含 IP 地址和用户代理，这在某些司法管辖区属于个人数据。身份域设置 `seawatch_pii_mode` 决定这两个字段存储的内容：
+
+| 模式 | 行为 |
+|---|---|
+| `off` | 按原样存储。默认设置 |
+| `mask` | 保留 IPv4 地址的前两组（`192.168.1.42` 变为 `192.168.0.0`）或 IPv6 地址的前三组，并仅保留用户代理的产品名称（`Mozilla/5.0 ...` 变为 `Mozilla`） |
+| `pseudonymise` | 将每个值替换为由 `seawatch_pseudo_key` 键控的 HMAC-SHA-256 的前 8 个字节（十六进制） |
+
+伪名化保持事件可关联，因为相同的源会生成相同的值，而无需保留原始地址。在使用该模式时设置 `seawatch_pseudo_key`：如果没有设置，HMAC 密钥为空。
+
+这些模式只重写 `ip_address` 和 `user_agent`，而 `details` 被原样存储。FerrisKey 写入的事件会将两个字段留空，因此这些模式不会对其进行重写。服务器每 30 秒最多读取一次设置，因此更改会在该时间内作用于新事件。

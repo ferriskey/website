@@ -1,0 +1,166 @@
+---
+title: "概述"
+description: "Abyss 是 FerrisKey 的身分提供者聯合模組：透過外部 OAuth2 和 OIDC 提供者登入使用者，或從 LDAP 匯入使用者。"
+icon: link
+order: 40
+---
+
+<span id="abyss-identity-provider-federation" />
+
+# Abyss：身分提供者聯合
+
+Abyss 將 FerrisKey 連線到你沒有在其中執行的身分系統。使用者可以使用 Google、GitHub、Discord 或任何 OAuth2 或 OIDC 提供者登入：FerrisKey 對提供者執行授權碼流程，找到或建立匹配的賬號，並向你的應用提供一個普通的 FerrisKey 授權碼。LDAP 或 Active Directory 這樣的目錄也可以成為賬號的來源。
+
+<span id="why-federation" />
+
+## 為什麼要進行聯合？
+
+使用者已經在某個地方擁有身分。要求他們再設定一個密碼會讓他們填寫一份表格，同時也會讓你多儲存一個憑據。透過聯合，您的應用程式只與 FerrisKey 通訊，供應商之間的差異會被隱藏在其後。
+
+Abyss 涉及兩種形式，它們的工作方式不同。
+
+經紀式身分認證會將使用者傳送到另一個提供商進行認證，因此 FerrisKey 從未看到該憑據。本頁、[配置提供商](/zh-TW/modules/abyss/providers) 和 [聯合流程](/zh-TW/modules/abyss/federation-flow) 對其進行了描述。
+
+使用者聯合將賬戶儲存在您已經執行的目錄中。使用者在 FerrisKey 的登入頁面輸入密碼，FerrisKey 會根據該目錄進行檢查。[使用者聯合](/zh-TW/modules/abyss/user-federation) 對其進行了描述。
+
+<span id="supported-provider-types" />
+
+## 支援的提供商型別
+
+| 型別 | 狀態 | 示例 |
+|---|---|---|
+| OAuth2 | 支援 | Google、GitHub、Discord，任何 OAuth2 提供商 |
+| OIDC | 支援 | 任何 OpenID Connect 提供商 |
+| SAML | 不可用 | 僅使用 SAML 的身分提供商。控制檯在提供商選擇器中列出了 SAML，但禁用了它 |
+| LDAP、Active Directory | 支援作為使用者聯合 | 參見 [使用者聯合](/zh-TW/modules/abyss/user-federation) |
+
+<Callout variant="info" title="反向 SAML 已經可用">
+
+透過外部 SAML 提供商登入的部分不可用。FerrisKey 作為 SAML 身分提供商，使其他應用可以信任它，已釋出：參見 [SAML 2.0](/zh-TW/discover/core-concepts/saml)。
+
+</Callout>
+
+<span id="provider-configuration" />
+
+## 提供商配置
+
+提供者在每個身分域中透過 `POST /realms/{realm_name}/identity-providers` 註冊。從此之後，提供者透過其 `alias` 進行存取，並且別名也是出現在代理 URL 中的段，因此建立後不能更改。
+
+| 欄位 | 說明 |
+|---|---|
+| `alias` | 必填。在身分域中的提供者標識。每個身分域唯一 |
+| `provider_id` | 必填。提供者型別的標籤，例如 `google`、`github` 或 `oidc`。登入頁面將其作為提供者的 `kind` 和 `icon` 來接收 |
+| `display_name` | 登入頁面上按鈕的標籤 |
+| `enabled` | 登入頁面是否提供該提供者。當省略時，預設為 `false` |
+| `store_token` | 在使用者連結上保留提供者的存取權杖。預設為 `false` |
+| `trust_email` | 將提供者返回的電子郵件視為已驗證。參見 [賬戶解析](/zh-TW/modules/abyss/federation-flow#account-resolution)。預設為 `false` |
+| `link_only` | 永遠不要建立賬戶：只有已經存在的使用者可以透過提供者登入。預設值為 `false` |
+| `config` | 如下所述的 OAuth2 或 OIDC 設定 |
+
+控制檯會建立啟用 `enabled`、`trust_email` 和 PKCE 的提供者，以及禁用 `store_token` 和 `link_only` 的提供者。欄位 `first_broker_login_flow_alias`、`post_broker_login_flow_alias` 和 `add_read_token_role_on_create` 會被儲存和返回，但在 0.10.0 版本中經紀人不會對它們採取任何操作。
+
+`config` 是一個 JSON 物件。經紀人讀取以下鍵：
+
+| 關鍵 | 說明 |
+|---|---|
+| `client_id` | 提供者簽發的 OAuth2 客戶端 ID |
+| `client_secret` | OAuth2 客戶端秘鑰 |
+| `authorization_url` | 提供者的授權端點 |
+| `token_url` | 提供者的權杖端點 |
+| `userinfo_url` | 提供者的使用者資訊端點。在驗證 ID 權杖時為可選 |
+| `scopes` | 以空格分隔的字串，例如 `openid email profile`，或字串陣列。鍵必須存在：空字串不會傳送 `scope` 引數 |
+| `use_pkce` | 當 `true` 時，FerrisKey 會向提供者傳送 S256 `code_challenge`。透過 API 預設為 `false` |
+| `jwks_url` | 提供者的 JWKS 端點，用於驗證 ID 權杖 |
+| `issuer` | 提供者在其 ID 權杖中放入的 `iss` 值 |
+
+```json title="POST /realms/acme/identity-providers"
+{
+  "alias": "google",
+  "provider_id": "google",
+  "display_name": "Google",
+  "enabled": true,
+  "trust_email": true,
+  "config": {
+    "client_id": "1234567890-abc.apps.googleusercontent.com",
+    "client_secret": "<client secret from the Google console>",
+    "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+    "scopes": "openid email profile",
+    "use_pkce": true
+  }
+}
+```
+
+`config` 中的任何其他鍵都會被保留並返回，但沒有效果。
+
+<span id="id-token-or-userinfo" />
+
+### ID 權杖或使用者資訊
+
+FerrisKey 僅在權杖響應中包含 ID 權杖且同時設定了 `jwks_url` 和 `issuer` 時驗證 ID 權杖。然後它會檢查簽名（RS256、RS384、RS512、PS256、PS384、PS512、ES256 或 ES384）、簽發者、受眾（您配置的 `client_id`）、到期時間、存在時的 `azp` 宣告，以及傳送了 nonce 時的 nonce。如果權杖未透過任何檢查，則登入結束；FerrisKey 不會回退到 userinfo。
+
+在所有其他情況下，FerrisKey 會使用提供者的存取權杖呼叫 `userinfo_url`。如果兩個來源都未配置，登入將失敗並顯示“未配置 ID 權杖和使用者資訊端點”。控制檯表單不會暴露 `jwks_url` 和 `issuer`，因此在控制檯建立的提供者會從 userinfo 中讀取配置檔案。
+
+<span id="where-the-client-secret-lives" />
+
+### 客戶端金鑰的位置
+
+<Callout variant="warning" title="提供者金鑰在資料庫中未加密">
+
+`client_secret` 按原樣儲存在提供者的 `config` 列中。API 在每次讀取時會將其替換為 `***`，這會對 API 呼叫者隱藏它，但不能隱藏給任何可以讀取該表的人。`SECRETS_ENCRYPTION_KEYS` 僅封存身分域簽名金鑰、TOTP 金鑰和 SMTP 密碼。[靜態儲存的金鑰](/zh-TW/discover/guides/secrets-at-rest) 列出了哪些被涵蓋，哪些不被涵蓋。
+
+</Callout>
+
+<span id="profile-mapping" />
+
+## 配置檔案對映
+
+提供者宣告到 FerrisKey 使用者的對映是固定的。每個提供者不可配置。
+
+| 提供者宣告 | FerrisKey 欄位 | 注意事項 |
+|---|---|---|
+| `sub` | 連結金鑰 | 必填。標識提供者中的使用者 |
+| `email` | `email` | 可選 |
+| `email_verified` | `email_verified` | 僅在 `trust_email` 開啟時計數 |
+| `preferred_username` | `username` | 回退到電子郵件，然後回退到 `{alias}_{sub}` |
+| `given_name` | `firstname` | |
+| `family_name` | `lastname` | |
+
+當配置檔案來自 userinfo 端點時，FerrisKey 也接受 `id` 作為主體，`username` 或 `login` 作為使用者名稱，以及 `first_name`、`last_name` 和 `avatar_url`。這就是 GitHub 的數字 `id` 和 `login` 能正常工作的原因。`name` 和 `picture` 宣告會被讀取，但不會儲存。
+
+FerrisKey 會在建立賬戶時複製這些值一次。返回使用者的配置檔案不會從提供者處重新整理。
+
+<span id="common-setups" />
+
+## 常見設定
+
+<span id="sign-in-with-google-for-a-saas-product" />
+
+### 為 SaaS 產品使用 Google 登入
+
+使用作用域 `openid email profile` 配置 Google 提供者。使用者點選“使用 Google 登入”，在 Google 身分認證，然後帶著 FerrisKey 授權程式碼返回您的應用程式。新使用者在首次登入時將獲取賬戶。
+
+<span id="corporate-sso-with-entra-id" />
+
+### 使用 Entra ID 的企業 SSO
+
+配置一個指向您租戶端點的 OIDC 提供程式，如果希望驗證 ID 權杖，請透過 API 設定 `jwks_url` 和 `issuer`。員工使用他們的公司身分進行身分認證並登入到身分域。
+
+<span id="several-providers-at-once" />
+
+### 同時使用多個提供程式
+
+在同一身分域上配置 Google、GitHub 和 Discord。使用者在登入頁面選擇一個。第二個提供程式只能透過 [電子郵件規則](/zh-TW/modules/abyss/federation-flow#account-resolution) 存取現有賬戶。當規則不適用且電子郵件已被使用時，登入將失敗，而不會建立重複賬戶。
+
+::::card-group{cols=3}
+:::card{label="配置提供程式" icon="lucide:settings" href="/zh-TW/modules/abyss/providers"}
+逐步配置 Google、GitHub、Discord 和自定義 OIDC。
+:::
+:::card{label="聯合流程" icon="lucide:git-branch" href="/zh-TW/modules/abyss/federation-flow"}
+從點選到授權碼之間發生的事情。
+:::
+:::card{label="使用者聯合" icon="lucide:folder-tree" href="/zh-TW/modules/abyss/user-federation"}
+連線 LDAP 或 Active Directory 樹。
+:::
+::::

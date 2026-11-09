@@ -3,8 +3,7 @@ import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
 import SiteFooter from '../components/site-footer.astro'
 import ReleaseSideScenes from '../components/release-side-scenes.astro'
-import { latestRelease, releaseNotes, releaseNoteTranslations } from '../lib/release-notes'
-import { ui } from '../i18n/ui'
+import { latestRelease, releaseNotes } from '../lib/release-notes'
 
 const appUrlOverrides = {
   website: import.meta.env.PUBLIC_WEBSITE_URL,
@@ -14,7 +13,6 @@ const appUrlOverrides = {
 
 const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
 const blogHref = appUrlOverrides.blog ?? '/'
-const translations = ui.fr
 
 const firstRelease = releaseNotes[releaseNotes.length - 1]
 
@@ -85,7 +83,7 @@ function formatDate(date: string, locale = 'en-US') {
             <div class="flex items-start justify-between gap-4">
               <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t="releaseNotes.latest">Latest stable</p>
               <span class="whitespace-nowrap border border-border px-2 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-                {formatDate(latestRelease.publishedAt)}
+                <time data-release-date={latestRelease.publishedAt}>{formatDate(latestRelease.publishedAt)}</time>
               </span>
             </div>
             <h2 class="mt-6 text-5xl font-medium tracking-[-0.03em]">{latestRelease.version}</h2>
@@ -99,7 +97,7 @@ function formatDate(date: string, locale = 'en-US') {
             <div class="px-5 py-7 sm:px-8">
               <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground" data-t="releaseNotes.timelineStart">Timeline start</p>
               <p class="mt-3 text-xl font-medium">{firstRelease.version}</p>
-              <p class="mt-1 text-xs text-muted-foreground">{formatDate(firstRelease.publishedAt)}</p>
+              <p class="mt-1 text-xs text-muted-foreground"><time data-release-date={firstRelease.publishedAt}>{formatDate(firstRelease.publishedAt)}</time></p>
             </div>
           </div>
         </aside>
@@ -127,7 +125,7 @@ function formatDate(date: string, locale = 'en-US') {
 
                 <div class="px-5 pt-10 sm:px-8 md:border-r md:border-border md:py-12">
                   <p class="text-2xl font-medium tracking-[-0.02em]">{release.version}</p>
-                  <p class="mt-2 text-xs text-muted-foreground">{formatDate(release.publishedAt)}</p>
+                  <p class="mt-2 text-xs text-muted-foreground"><time data-release-date={release.publishedAt}>{formatDate(release.publishedAt)}</time></p>
                   <div class="mt-5 flex flex-wrap gap-2">
                     <span class={`border px-2 py-1 font-pixel text-[10px] uppercase tracking-[0.06em] ${kindBadge[release.kind]}`} data-t={kindKey[release.kind]}>
                       {kindLabel[release.kind]}
@@ -189,52 +187,27 @@ function formatDate(date: string, locale = 'en-US') {
   <SiteFooter docsHref={docsHref} blogHref={blogHref} />
 </Base>
 
-<script is:inline define:vars={{ translations, releaseNoteTranslations }}>
-  function detectLocale() {
-    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
-    const cookie = match ? match[1] : null
-    if (cookie === 'en' || cookie === 'fr') return cookie
+<script>
+  import { getClientLocale } from '../i18n/locale'
+  import { releaseNoteTranslations } from '../lib/release-notes'
 
-    const browser = (navigator.language || '').split('-')[0]
-    if (browser === 'en' || browser === 'fr') return browser
-    return 'en'
-  }
-
-  function applyTranslations() {
-    const locale = detectLocale()
-    document.documentElement.lang = locale
-
-    if (locale === 'en') {
-      document.querySelectorAll('[data-t]').forEach(function (el) {
-        if (el.dataset.tDefault) el.textContent = el.dataset.tDefault
-      })
-      return
-    }
-
-    document.querySelectorAll('[data-t]').forEach(function (el) {
-      const key = el.getAttribute('data-t')
-      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
-      if (translations[key]) el.textContent = translations[key]
+  function applyReleaseTranslations() {
+    const locale = getClientLocale()
+    document.querySelectorAll<HTMLElement>('[data-release-version][data-release-field], [data-release-version][data-release-highlight-index]').forEach((el) => {
+      const target = el.hasAttribute('data-release-highlight-index') ? el.querySelector('span:last-child')! : el
+      if (target.getAttribute('data-original') === null) target.setAttribute('data-original', target.textContent ?? '')
+      const release = releaseNoteTranslations[locale]?.[el.dataset.releaseVersion!]
+      const text = el.dataset.releaseField
+        ? release?.[el.dataset.releaseField as 'title' | 'summary' | 'transition']
+        : release?.highlights?.[Number(el.dataset.releaseHighlightIndex)]
+      target.textContent = text ?? target.getAttribute('data-original') ?? ''
     })
-
-    document.querySelectorAll('[data-release-version][data-release-field]').forEach(function (el) {
-      const version = el.getAttribute('data-release-version')
-      const field = el.getAttribute('data-release-field')
-      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
-      const localized = releaseNoteTranslations[locale]?.[version]?.[field]
-      el.textContent = localized ?? el.dataset.tDefault ?? ''
-    })
-
-    document.querySelectorAll('[data-release-version][data-release-highlight-index]').forEach(function (el) {
-      const version = el.getAttribute('data-release-version')
-      const index = Number(el.getAttribute('data-release-highlight-index'))
-      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
-      const localized = releaseNoteTranslations[locale]?.[version]?.highlights?.[index]
-      el.textContent = localized ?? el.dataset.tDefault ?? ''
+    document.querySelectorAll<HTMLElement>('[data-release-date]').forEach((el) => {
+      el.textContent = new Date(el.dataset.releaseDate!).toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })
     })
   }
 
-  applyTranslations()
-  document.addEventListener('astro:after-swap', applyTranslations)
-  window.addEventListener('ferriskey:locale-change', applyTranslations)
+  applyReleaseTranslations()
+  document.addEventListener('astro:after-swap', applyReleaseTranslations)
+  window.addEventListener('ferriskey:locale-change', applyReleaseTranslations)
 </script>

@@ -1,0 +1,105 @@
+---
+title: "概述"
+description: "FerrisKey Terraform 提供程式透過 FerrisKey REST API 將身分域、客戶端、使用者、角色和組織作為程式碼進行管理。"
+icon: layers
+order: 1
+---
+
+<span id="terraform-provider" />
+
+# Terraform 提供程式
+
+`ferriskey/ferriskey` 提供程式管理 FerrisKey 例項的配置：身分域及其設定、客戶端、使用者、角色、組織、身分提供者、密碼策略和 SMTP。它是 REST API 的客戶端，如 `ferris-ctl`，並在其之上提供 Terraform 的計劃、狀態和漂移檢測功能。
+
+它不部署 FerrisKey。[Helm chart 或操作員](/zh-TW/kubernetes/overview) 負責執行伺服器，提供程式配置其內部內容。
+
+::::card-group{cols=3}
+:::card{label="入門" icon="lucide:rocket" href="/zh-TW/terraform/getting-started"}
+以兩個階段啟動一個全新例項：首先是服務賬戶，然後是其他所有內容。
+:::
+:::card{label="身分認證" icon="lucide:key-round" href="/zh-TW/terraform/authentication"}
+密碼和客戶端憑據授權、環境變數、TLS、重試。
+:::
+:::card{label="資源" icon="lucide:box" href="/zh-TW/terraform/resources"}
+每一個資源，它管理的內容，它不管理的內容，以及如何匯入它。
+:::
+::::
+
+<span id="requirements" />
+
+## 要求
+
+- Terraform 1.0 或更高版本
+- 一個可存取的 FerrisKey 例項，API 0.6 或更高版本
+- 提供者可以認證的客戶端，參見 [authentication](/zh-TW/terraform/authentication)
+
+<span id="minimal-configuration" />
+
+## 最少配置
+
+```hcl title="main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url           = "https://auth.example.com"
+  realm         = "master"
+  client_id     = "terraform-runner"
+  client_secret = var.ferriskey_client_secret
+}
+
+resource "ferriskey_realm" "acme" {
+  name = "acme"
+}
+
+resource "ferriskey_client" "web" {
+  realm         = ferriskey_realm.acme.name
+  client_id     = "acme-web"
+  name          = "Acme Web App"
+  client_type   = "confidential"
+  redirect_uris = ["https://app.acme.example/callback"]
+}
+```
+
+`terraform init` 從 Terraform Registry 下載提供者。將 `client_secret` 留在檔案之外並設定 `FERRISKEY_CLIENT_SECRET`：每個提供者引數都有一個 [`FERRISKEY_*` 等效項](/zh-TW/terraform/authentication#environment-variables)。
+
+<span id="what-it-covers" />
+
+## 涵蓋內容
+
+| 型別 | 名稱 | 管理的內容 |
+|---|---|---|
+| 資源 | [`ferriskey_realm`](/zh-TW/terraform/resources#ferriskey_realm) | 一個身分域 |
+| 資源 | [`ferriskey_realm_settings`](/zh-TW/terraform/resources#ferriskey_realm_settings) | 權杖有效期、註冊、通行金鑰、魔法連結、郵箱驗證 |
+| 資源 | [`ferriskey_client`](/zh-TW/terraform/resources#ferriskey_client) | 一個 OpenID Connect 客戶端、它的重定向 URI 及其服務賬號 |
+| 資源 | [`ferriskey_user`](/zh-TW/terraform/resources#ferriskey_user) | 一個使用者及其必需操作 |
+| 資源 | [`ferriskey_role`](/zh-TW/terraform/resources#ferriskey_role) | 一個身分域角色及其權限 |
+| 資源 | [`ferriskey_user_role`](/zh-TW/terraform/resources#ferriskey_user_role) | 分配給使用者或服務賬戶的角色 |
+| 資源 | [`ferriskey_organization`](/zh-TW/terraform/resources#ferriskey_organization) | 組織 |
+| 資源 | [`ferriskey_organization_member`](/zh-TW/terraform/resources#ferriskey_organization_member) | 使用者在組織中的成員身分 |
+| 資源 | [`ferriskey_password_policy`](/zh-TW/terraform/resources#ferriskey_password_policy) | 身分域的密碼策略 |
+| 資源 | [`ferriskey_smtp_config`](/zh-TW/terraform/resources#ferriskey_smtp_config) | 身分域的 SMTP 設定 |
+| 資源 | [`ferriskey_identity_provider`](/zh-TW/terraform/resources#ferriskey_identity_provider) | OIDC 或 SAML 身分提供者 |
+| 資料來源 | [`ferriskey_realm`](/zh-TW/terraform/data-sources#ferriskey_realm) | 讀取身分域及其設定 |
+| 資料來源 | [`ferriskey_role`](/zh-TW/terraform/data-sources#ferriskey_role) | 按名稱查詢角色 |
+| 資料來源 | [`ferriskey_openid_configuration`](/zh-TW/terraform/data-sources#ferriskey_openid_configuration) | 讀取身分域的發現文件 |
+
+客戶端作用域、協議對映器、權杖交換策略、SAML 服務提供者、Webhooks 以及模組（Compass、SeaWatch、維護）還沒有資源。可以在控制檯、透過 API 或使用 [`ferris-ctl`](/zh-TW/cli/overview) 來管理它們。
+
+<span id="identifiers" />
+
+## 識別符號
+
+身分域範圍的資源使用複合 ID，`{realm}/{uuid}`，這也是 `terraform import` 使用的 ID。一個身分域由其名稱標識。每個身分域僅存在一次的資源（設定、密碼策略、SMTP）使用身分域名稱作為其 ID。
+
+```bash
+terraform import ferriskey_realm.acme acme
+terraform import ferriskey_client.web acme/3a8c6128-1111-2222-3333-444455556666
+```
+
+[資源](/zh-TW/terraform/resources) 頁面列出了每個資源的匯入 ID。

@@ -1,0 +1,137 @@
+---
+title: "分页列表"
+description: "FerrisKey 列表端点的共享契约：分页、限制、排序、过滤器、响应封装和错误。"
+icon: list-filter
+order: 27
+---
+
+<span id="paginated-listings" />
+
+# 分页列表
+
+API 的十九个列表端点一次返回一页，并共享单一契约。相同的查询参数、相同的响应封装和相同的错误适用于所有这些端点，因此为用户列表编写的客户端也适用于角色、客户端、Webhooks 和其他列表。
+
+<span id="the-request" />
+
+## 请求
+
+| 参数 | 默认 | 含义 |
+|---|---|---|
+| `page` | `1` | 要返回的页码，从 1 开始 |
+| `limit` | `20` | 每页项数，从 1 到 100 |
+| `order_by` | `created_at` | 要排序的列。接受值取决于端点，请参见[下表](#the-endpoints) |
+| `order` | `desc` | `asc`或`desc` |
+
+除此之外，每个端点都接受自己的过滤器。超出范围的值将被拒绝，而不是限制：`limit=101` 是 `400`，而不是 100 条的页面。
+
+```
+GET /realms/acme/users?enabled=true&order_by=username&order=asc&page=2&limit=2
+```
+
+<span id="the-response" />
+
+## 响应
+
+正文始终是 `{ data, metadata }`。`data` 最多可容纳 `limit` 个资源条目，而 `metadata` 描述了页面的位置。
+
+```jsonc title="Response"
+{
+  "data": [
+    // up to 2 users
+  ],
+  "metadata": {
+    "page": 2,
+    "limit": 2,
+    "total": 30,
+    "total_pages": 15,
+    "first_page": 1,
+    "last_page": 15,
+    "next_page": 3,
+    "prev_page": 1
+  }
+}
+```
+
+`total` 统计所有符合筛选条件的条目，而不仅仅是当前页面上的条目。`next_page` 是最后一页的 `null`，而 `prev_page` 是第一页的 `null`。当没有匹配项时，`total_pages` 是 `0`，`last_page` 仍然是 `1`，因此 `first_page` 和 `last_page` 始终可以安全链接。
+
+<span id="filters" />
+
+## 筛选器
+
+筛选器因端点而异，但其行为相同：
+
+- 文本筛选器，例如 `name` 或 `email`，可在值的任意位置匹配，并且忽略大小写。
+- `search` 会一次性查看资源的主要文本字段。具体哪些字段取决于端点。
+- 布尔值和枚举，例如 `enabled` 或 `status`，完全匹配。布尔值是 `true` 或 `false`。
+- `ids` 接受最多 100 个 id 的逗号分隔列表。
+- `created_from` 是包含的，`created_to` 是排除的。两者都采用带时间和偏移量的 RFC 3339 日期时间，例如 `2026-10-01T00:00:00Z`。一个结束时间早于开始时间的区间将返回空页面。
+- 筛选器使用 AND 组合。
+- 值为空的筛选器将被忽略。
+
+安全事件和身份认证流程的时间边界有各自的名称，对 [SeaWatch](/zh-CN/modules/seawatch/querying) 分别为 `from_timestamp` 和 `to_timestamp`，对 [Compass](/zh-CN/modules/compass/overview) 分别为 `from` 和 `to`。两个边界都是包含的。
+
+对可以为空的列进行排序，比如会话上的`last_seen_at`或身份联合提供者的`last_sync_at`，则无值的行按升序排在最后，排在第一列从小到低。
+
+<span id="errors" />
+
+## 错误
+
+端点不知道的参数被拒绝，`400`且原因`invalid_query`，消息会命名该参数。这包括`offset`，任何列表都不接受，SeaWatch和Compass也包括：使用`page`和`limit`。
+
+```json title="GET /realms/acme/users?offset=0"
+{
+  "code": "E_BAD_REQUEST",
+  "status": 400,
+  "reason": "invalid_query",
+  "message": "Invalid query parameter `offset`: unknown field `offset`, expected one of `search`, `username`, `email`, `firstname`, `lastname`, `enabled`, `email_verified`, `service_account`, `role_id`, `ids`, `not_in_group`, `not_in_organization`, `created_from`, `created_to`"
+}
+```
+
+同样的`400`涵盖了小于1的`page`、1到100之外的`limit`、非`asc`或`desc`的`order`、端点未提供的`order_by`、错误类型的值（非UUID的UUID滤波器、非`true`或`false`的布尔值）、出现两次的滤波器，以及超过100的`ids`列表。参见[API errors](/zh-CN/discover/guides/api-errors)中的错误形状。
+
+<span id="the-endpoints" />
+
+## 端点
+
+下面的每条路径都以 `/realms/{realm_name}` 开头。它们都使用 `search`、`page`、`limit`、`order_by` 和 `order`，同时还有最后一列中的过滤器。
+
+| 端点 | `order_by` | 其他过滤器 |
+|---|---|---|
+| `GET /users` | `username`, `email`, `firstname`, `lastname`, `enabled`, `created_at`, `updated_at` | `username`, `email`, `firstname`, `lastname`, `enabled`, `email_verified`, `service_account`, `role_id`, `ids`, `not_in_group`, `not_in_organization`, `created_from`, `created_to` |
+| `GET /users/@me/realms` | `name`, `created_at`, `updated_at` | `name`, `display_name` |
+| `GET /users/{user_id}/sessions` | `last_seen_at`, `expires_at`, `created_at` | `ip_address`, `user_agent`, `persistent`, `created_from`, `created_to` |
+| `GET /clients` | `name`, `client_id`, `enabled`, `created_at`, `updated_at` | `name`, `client_id`, `client_id_exact`, `enabled`, `public_client`, `service_account_enabled`, `oauth_device_code_grant_enabled`, `protocol`, `client_type`, `application_type`, `has_redirect_uris`, `maintenance_enabled`, `ids`, `created_from`, `created_to` |
+| `GET /client-scopes` | `name`, `created_at`, `updated_at` | `name`, `description`, `protocol`, `default_scope_type`, `has_protocol_mappers`, `not_assigned_to_client`, `created_from`, `created_to` |
+| `GET /roles` | `name`, `created_at`, `updated_at` | `name`, `qualified_name`, `description`, `require_mfa`, `client_id`, `scope`, `has_permissions`, `ids`, `created_from`, `created_to` |
+| `GET /organizations` | `name`, `alias`, `enabled`, `created_at`, `updated_at` | `name`, `alias`, `domain`, `description`, `enabled`, `has_domain`, `without_member`, `ids`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/members` | `username`, `email`, `created_at` | `username`, `email`, `enabled`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/groups` | `name`, `created_at`, `updated_at` | `name`, `description`, `parent_group_id`, `is_root`, `ids`, `created_from`, `created_to` |
+| `GET /organizations/{organization_id}/groups/{group_id}/members` | `username`, `email`, `created_at` | `username`, `email`, `enabled`, `created_from`, `created_to` |
+| `GET /identity-providers` | `alias`, `display_name`, `provider_id`, `enabled`, `created_at`, `updated_at` | `alias`, `display_name`, `provider_id`, `enabled`, `health`, `created_from`, `created_to` |
+| `GET /federation/providers` | `name`, `priority`, `enabled`, `last_sync_at`, `created_at`, `updated_at` | `name`, `provider_type`, `provider_family`, `enabled`, `sync_enabled`, `synced`, `sync_mode`, `created_from`, `created_to` |
+| `GET /webhooks` | `name`, `endpoint`, `triggered_at`, `created_at`, `updated_at` | `name`, `endpoint`, `triggered`, `has_subscribers`, `secure_endpoint`, `created_from`, `created_to` |
+| `GET /webhooks/{webhook_id}/deliveries` | `status`, `attempt_count`, `last_attempt_at`, `created_at`, `updated_at` | `event`, `status`, `resource_id`, `created_from`, `created_to` |
+| `GET /email-templates` | `name`, `email_type`, `created_at`, `updated_at` | `name`, `email_type`, `created_from`, `created_to` |
+| `GET /portal/themes` | `name`, `created_at`, `updated_at` | `name`, `layout_id`, `activatable`, `created_from`, `created_to` |
+| `GET /portal-layouts` | `name`, `created_at`, `updated_at` | `name`, `is_default`, `in_use`, `ids`, `created_from`, `created_to` |
+| `GET /seawatch/v1/security-events` | `event_type`, `status`, `timestamp`, `created_at` | `actor_id`, `client_id`, `event_types`, `status`, `target_type`, `ip_address`, `from_timestamp`, `to_timestamp` |
+| `GET /compass/v1/flows` | `status`, `started_at`, `duration_ms`, `created_at` | `client_id`, `user_id`, `grant_type`, `status`, `ip_address`, `identified`, `completed`, `from`, `to` |
+
+`created_at` 在所有地方都是创建日期，除了两个成员列表，在那里它是用户加入组织或群组的日期。`GET /users/@me/realms` 列出调用者可以访问的身份域，因此不需要日期范围。一些过滤器在 API 参考的端点描述中有值得阅读的规则，例如客户端上的 `application_type`、身份提供者上的 `health` 以及门户主题上的 `activatable`。
+
+<span id="in-the-console" />
+
+## 在控制台中
+
+显示这些列表的管理控制台表格共享一种布局。每个可筛选的列都有自己在列标题旁的过滤器，与排序箭头在一起，表格上方有一个单独的搜索框。没有单独的过滤栏。
+
+<img class="only-light" src="/dashboard/users_listing-light.jpg" alt="FerrisKey 用户列表，带有列标题中的排序和过滤控件，并且状态过滤器已打开" />
+<img class="only-dark" src="/dashboard/users_listing-dark.jpg" alt="FerrisKey 用户列表，带有列标题中的排序和过滤控件，并且状态过滤器已打开" />
+
+列表的状态保存在地址栏中，与 API 的名称相同：`page`、`limit`、`order_by`、`order` 以及过滤器。经过过滤和排序的视图可以复制为链接，重新加载页面时保持不变。在搜索框中输入内容后会等待 300 毫秒才执行查询，改变过滤器或排序时会回到第 1 页。
+
+<Callout variant="warning" title="ferris-ctl 在第一页停止">
+
+`ferris-ctl` 读取第一页的 `data`，并不会请求下一页，因此其 `list` 子命令最多返回 20 项。参见 [CLI 概览](/zh-CN/cli/overview)。
+
+</Callout>

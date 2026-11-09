@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getClientLocale } from '@explainer/ui/lib/locale';
 import { useTranslations } from '../i18n/utils';
 
 interface TagFilterProps {
@@ -34,7 +35,14 @@ function writeURL(selectedTags: string[], query: string) {
 }
 
 export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }: TagFilterProps) {
-  const t = useTranslations(locale)
+  const [currentLocale, setCurrentLocale] = useState(locale)
+  useEffect(() => {
+    const update = () => setCurrentLocale(getClientLocale())
+    update()
+    window.addEventListener('ferriskey:locale-change', update)
+    return () => window.removeEventListener('ferriskey:locale-change', update)
+  }, [])
+  const t = useTranslations(currentLocale)
   const [selectedTags, setSelectedTags] = useState<string[]>(initialTags)
   const [query, setQuery] = useState<string>('')
 

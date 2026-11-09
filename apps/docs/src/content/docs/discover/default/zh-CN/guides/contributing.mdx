@@ -1,0 +1,197 @@
+---
+title: "贡献"
+description: "如何向 FerrisKey 提交问题、文档、代码、测试和拉取请求。"
+icon: git-pull-request
+order: 24
+---
+
+<span id="contributing" />
+
+# 贡献
+
+FerrisKey 是开源的，接受各种规模的贡献：错误报告、文档修正、示例、测试、设计反馈以及代码更改。
+
+一条规则比其他规则更重要：保持拉取请求（pull requests）小而可审查。一次贡献应该易于理解、测试和合并，而不应迫使维护者在一次审查中检查四个不相关的层次。
+
+<span id="before-you-start" />
+
+## 在开始之前
+
+- 查看[GitHub 仓库](https://github.com/ferriskey/ferriskey)中是否已有与你更改相关的问题或拉取请求。
+- 对于大型功能、架构更改、安全敏感行为或破坏性更改，请先打开问题（issue）。
+- 保持拉取请求集中。一个目标明确的小型 PR 比大范围重写更容易进行审查和合并。
+- 避免将仅格式化的更改与行为更改混合。
+
+:::callout{variant="info" title="安全问题"}
+不要在公共问题中报告漏洞。当仓库提供私密的安全报告流程时，请使用该流程，或者在共享漏洞详情之前联系维护者。
+:::
+
+<span id="contribution-process" />
+
+## 贡献流程
+
+每个拉取请求必须具有较小的作用域。避免提交一次性更改产品所有层的大型PR。
+
+例如，不要打开一个包含以下内容的单一PR：
+
+- SQL迁移
+- 核心领域更改
+- API处理程序
+- 前端界面
+- 文档更新
+
+这种类型的PR很难审查，因为审查者必须一次性验证数据库模型、业务规则、API行为、UI行为和文档。此外，当某一层需要更多讨论时，也会增加合并部分进展的难度。
+
+相反，应将工作拆分为一系列有针对性的拉取请求。一个大型功能通常可以按如下方式进行审查：
+
+1. **数据模型PR**：迁移、实体和存储库更改。
+2. **核心 PR**：领域类型、服务、验证和测试。
+3. **API PR**：路由、处理程序、请求/响应类型，以及 OpenAPI 更新。
+4. **前端 PR**：UI 界面、表单、客户端集成，以及面向用户的状态。
+5. **文档 PR**：使用指南、配置说明或发布文档。
+
+每个 PR 应尽可能独立。如果一个 PR 依赖于之前的 PR，请在描述中明确说明并链接依赖关系。
+
+:::callout{variant="warning" title="大型 PR 可能会被退回"}
+维护者可能会要求你在审查之前拆分一个拉取请求。这不是要阻止贡献；它可以保持高质量审核并减少回归的可能性。
+:::
+
+<span id="how-to-split-a-change" />
+
+## 如何拆分更改
+
+在决定哪些内容属于同一个 PR 时，请使用以下规则：
+
+- 每个 PR 保持一个行为变化。
+- 将数据库迁移与 UI 工作分开。
+- 将重构与功能工作分开。
+- 仅格式化的更改应在自己的 PR 中进行。
+- 在引入被测试行为的 PR 中添加测试。
+- 仅当行为已经可审查且文档对于解释该行为是必要的时，才在同一个 PR 中更新文档。
+
+如果功能在多个 PR 合并之前无法工作，优先选择带有清晰描述的堆叠序列，而不是一个范围广泛的 PR。
+
+良好的 PR 描述包括：
+
+- PR 的确切作用域。
+- 故意留待后续 PR 的内容。
+- 更改是如何测试的。
+- 可见 UI 更改的截图或录屏。
+
+<span id="set-up-the-documentation-website" />
+
+## 建立文档网站
+
+文档、营销网站和博客都存放在它们自己的仓库中，[`ferriskey/website`](https://github.com/ferriskey/website)，作为由 Turborepo 驱动的 pnpm 工作区。Rust 代码则保存在 [`ferriskey/ferriskey`](https://github.com/ferriskey/ferriskey)。
+
+```bash title="Clone and install"
+git clone https://github.com/ferriskey/website.git
+cd website
+pnpm install --frozen-lockfile
+```
+
+在本地运行文档：
+
+```bash title="Start the docs app"
+pnpm --filter @explainer/docs dev
+```
+
+文档应用是一个 Astro 项目。内容存放在：
+
+```text
+apps/docs/src/content/docs/
+```
+
+每个页面都是一个带有 frontmatter 的 MDX 文件：
+
+```mdx title="Example frontmatter"
+---
+title: Page Title
+description: "Short page description."
+icon: book-open
+order: 10
+---
+```
+
+<span id="writing-documentation" />
+
+## 编写文档
+
+好的文档可以帮助读者在不猜测的情况下完成任务或理解概念。
+
+- 从读者想要的结果开始。
+- 使用具体示例、网址、环境变量和命令。
+- 优先使用带有描述性标题的短节。
+- 只有在 UI 状态重要时才添加截图。
+- 保持术语与现有文档一致：realms（身份域）、clients（客户端）、users（用户）、credentials（凭据）、client scopes（客户端作用域）和 modules（模块）。
+- 在下一步明确时链接到相关页面。
+
+添加新页面时，将其放在正确的项目、版本和语言目录中。对于英语 Discover 指南，使用：
+
+```text
+apps/docs/src/content/docs/discover/default/en/guides/
+```
+
+导航顺序由页面前置文档中的 `order` 字段和组的 `_meta.json` 文件控制。
+
+<span id="code-contributions" />
+
+## 代码贡献
+
+在更改代码之前，阅读周围的实现并遵循已有模式。FerrisKey 的设计是模块化的：领域逻辑、基础设施、API 边界和文档保持分离。
+
+对于面向用户的更改，在同一次拉取请求中更新相关文档。对于漏洞修复，在行为可能回退时添加或更新测试。
+
+<span id="validate-your-changes" />
+
+## 验证您的更改
+
+在提交拉取请求之前运行格式化：
+
+```bash title="Format"
+pnpm format
+```
+
+构建工作区：
+
+```bash title="Build"
+pnpm build
+```
+
+对于仅文档的更改，也可以只构建文档应用：
+
+```bash title="Build docs"
+pnpm --filter @explainer/docs build
+```
+
+<span id="pull-request-checklist" />
+
+## 拉取请求检查清单
+
+在请求审查之前，检查以下内容：
+
+- 更改有清晰的标题和描述。
+- PR解释了为什么需要此更改，而不仅仅是是什么被更改了。
+- 对可见的UI更改，包含截图或录屏。
+- 新的文档已链接到相应的部分。
+- 格式化和构建命令在本地通过。
+- PR不包括无关的重写、生成的噪音或本地环境文件。
+
+<span id="review-process" />
+
+## 审查流程
+
+维护者会检查正确性、可维护性、安全性，以及是否符合 FerrisKey 的发展方向。请预计会有问题和请求的更改，特别是在公共 API、认证流程、部署行为以及生产环境中人们会遵循的文档方面。
+
+当反馈到达时：
+
+- 当评论需要讨论时进行回复。
+- 针对请求的更改提交后续提交。
+- 保持讨论集中在技术决策上。
+- 当 PR 准备好时请求另一次审查。
+
+<span id="community-standards" />
+
+## 社区标准
+
+要直接、尊重并具体。假设对方在努力改进项目，并保持讨论基于可复现的行为、代码、文档或用户影响。

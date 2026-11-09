@@ -1,0 +1,137 @@
+---
+title: "管理員控制檯"
+description: "FerrisKey 網路控制檯的兩個面板，每個部分和檢視包含的內容，以及如何在它們之間切換。"
+icon: layout-dashboard
+order: 26
+---
+
+<span id="the-admin-console" />
+
+# 管理員控制檯
+
+FerrisKey 的網路控制檯在同一個身分域上有兩個面板。管理員面板是完整的資源和設定集，使用的是 API 的術語。控制檯面板圍繞身分域中發生的事情以及你提供給客戶的內容進行組織，並且它使用“應用程式”和“身分”，而管理員面板使用“客戶端”和“使用者”。
+
+兩個面板都沒有自己的權限。兩者都使用登入使用者的權杖呼叫相同的 API，因此你在一個面板上無法使用的螢幕，在另一個面板上也會因為同樣的原因被拒絕。
+
+<span id="switching-panels" />
+
+## 切換面板
+
+在右上角開啟頭像選單。在面板模式下，選擇管理員或控制檯。切換時，如果有對應頁面，會保持在相應頁面：
+
+| 在管理員面板 | 在控制檯面板 |
+|---|---|
+| 概述 | 活動，實時 |
+| 使用者 | 使用者管理，身分 |
+| 組織 | 使用者管理，組織 |
+| 角色 | 使用者管理，角色 |
+| 客戶端 | 應用 |
+| 海洋監視與指南針 | 活動，日誌與事件 |
+| 身分提供者 | 認證，身分提供者 |
+| 身分域設定 | 認證，登入方式 |
+| 電子郵件 | 品牌，電子郵件模板 |
+| 門戶 | 品牌，主題 |
+
+沒有對應頁面的頁面會開啟另一個面板的起始頁：管理員面板為Overview Window，控制檯面板為Live。控制檯面板位於`/realms/{realm_name}/console`，管理員面板位於`/realms/{realm_name}/overview`。
+
+兩個面板共用同一個頂部欄：伺服器選擇器、語言選單（參見[本地化](/zh-TW/discover/guides/localization)）、主題切換的光暗和系統，以及帶有賬戶頁面和登出的頭像選單。
+
+<span id="the-admin-panel" />
+
+## 管理小組
+
+側邊欄將一個身分域的資源分為三個部分。底部的箭頭或鍵盤快捷鍵⌘B可以將其摺疊，同時FerrisKey的版本也在那裡展示。
+
+| 章節 | 參賽作品 |
+|---|---|
+| 核心 | 概述，[客戶端](/zh-TW/discover/core-concepts/clients)、[使用者](/zh-TW/discover/core-concepts/users)、[角色](/zh-TW/discover/core-concepts/roles)、[客戶端作用域](/zh-TW/discover/core-concepts/client-scopes)、[組織](/zh-TW/modules/organization/overview) |
+| 配置 | [身分域設定](/zh-TW/discover/core-concepts/realms)、[門戶](/zh-TW/modules/portal/overview)、[電子郵件](/zh-TW/discover/guides/email)、[Webhook](/zh-TW/modules/webhooks/overview)、[身分提供者](/zh-TW/modules/abyss/providers)、[使用者聯合](/zh-TW/modules/abyss/user-federation)、身分認證 |
+| 安全 | [海上觀察](/zh-TW/modules/seawatch/overview)、[指南針](/zh-TW/modules/compass/overview) |
+
+概覽頁面顯示身分域的使用者、客戶端、角色和跟蹤的身分認證流程的統計，提示禁用的客戶端、未驗證的電子郵件和失敗的流程，最近登入的Chart，身分域提供的登入功能以及最後的身分認證流程。
+
+身分域設定將其選項分為六個標籤頁：常規、登入、權杖、MCP、密碼策略和維護。身分認證入口是灰色的。其工具提示顯示尚未實現，控制檯面板是登入設定所在的位置。
+
+<span id="the-console-panel" />
+
+## 控制檯面板
+
+控制檯面板在頂部有五個部分。每個部分都會開啟一個帶有其檢視的側邊欄，每個檢視都有一行描述。
+
+| 章節 | 檢視 |
+|---|---|
+| 活動 | 實時、日誌與事件、會話、訊息傳遞 |
+| 使用者管理 | 身分、組織、角色 |
+| 應用 | 所有應用 |
+| 身分認證 | 登入方法、身分提供者、密碼策略 |
+| 品牌 | 電子郵件模板、主題、佈局 |
+
+<span id="activity" />
+
+### 活動
+
+活動報告顯示了身分域在過去7天記錄的內容，實時活動除外，實時活動有其自己的時間範圍。
+
+<img class="only-light" src="/dashboard/console_activity-light.jpg" alt="FerrisKey控制檯面板的活動（實時）：過去7天的註冊、登入、登入失敗和賬號峰值計數，支援7天、30天和90天的時間範圍切換，日常Chart以及最新的認證嘗試記錄" />
+<img class="only-dark" src="/dashboard/console_activity-dark.jpg" alt="FerrisKey控制檯面板的活動（實時）：過去7天的註冊、登入、登入失敗和賬號峰值計數，支援7天、30天和90天的時間範圍切換，日常Chart以及最新的認證嘗試記錄" />
+
+實時統計[Compass](/zh-TW/modules/compass/overview)跟蹤的身分認證流程中的註冊、登入和失敗登入，並顯示一天內登入的不同賬戶的最高數量。一個開關可以將範圍設定為7天、30天或90天。計數器下方顯示每天登入和失敗的Chart，每天註冊的Chart，以及頁面載入時追蹤的最近十個流程。頁面不會自動重新整理。Compass 追蹤預設開啟（`compass_enabled`）。關閉後將不會記錄任何內容，頁面會提示這一點。
+
+日誌和事件列出了該身分域的 [SeaWatch](/zh-TW/modules/seawatch/overview) 安全事件，按最新到最舊排列，篩選和排序由伺服器完成。在資料來源上方，圖塊顯示過去 7 天的事件數量、失敗次數、成功率和不同賬戶數。需要事件自身的資料（例如不同賬戶數）最多讀取最近 100 個事件，並且當達到該上限時會有提示。
+
+會話是 `session_created` 和 `session_revoked` 事件的日誌，記錄了當時的裝置和來源，並提供已開啟會話、已撤銷會話、不同賬戶數和不同 IP 地址的圖塊。它不是當前已登入裝置的列表。API 以每個賬戶為單位列出和結束會話；請參閱 [Users](/zh-TW/discover/core-concepts/users#sessions)。
+
+訊息傳遞列出了 `email_sent` 和 `email_not_sent` 事件：身分域嘗試傳送的事務性電子郵件，無論是否傳送成功，以及郵件伺服器給出的失敗原因。它還列出了身分域的 webhook 端點及每個最後觸發的時間，並在身分域未配置 SMTP 時發出警告。參見 [電子郵件和模板](/zh-TW/discover/guides/email)。
+
+<span id="user-management" />
+
+### 使用者管理
+
+身分是身分域的客戶賬戶：非服務賬戶的使用者。服務賬戶屬於應用程式。列表包含總數、已驗證郵箱、待處理操作和禁用賬戶的塊，一個警報提示有人在下次登入時有待處理操作，一個搜尋框以及按建立日期、角色、活躍狀態和郵箱驗證狀態篩選。身分開啟時有五個選項卡：概覽、憑據、角色對映、組織和屬性，與管理面板中的使用者相同。參見 [使用者](/zh-TW/discover/core-concepts/users)。
+
+組織包含“設定”、“屬性”和“成員”。角色包含“設定”、“權限”和“身分”，即持有該角色的賬戶。
+
+<span id="applications" />
+
+### 應用
+
+應用程式是客戶端，由其功能展示。建立時需要選擇型別，型別決定登入流程以及是否生成金鑰。之後無法更改。
+
+| 型別 | 登入流程 |
+|---|---|
+| 移動端或桌面端 | 授權碼 + PKCE |
+| 單頁應用 | 授權碼 + PKCE |
+| 伺服器渲染的網頁應用 | 授權碼 |
+| 機器對機器 | 客戶端憑據 |
+| 裝置或命令列介面 | 裝置授權 |
+
+該列表顯示名稱、客戶端ID、型別、狀態和建立日期，並可按建立日期、啟用狀態和型別進行過濾。應用程式在六個選項卡中開啟：快速開始，其中包含您的OIDC庫所需的端點和用於流程的程式碼片段；設定，其中包含回撥URL、Web來源、登入方法和會話時長；憑據；API存取；SAML；以及維護。請參見 [Clients](/zh-TW/discover/core-concepts/clients)。
+
+<span id="authentication" />
+
+### 身分認證
+
+登入方法在一個螢幕上收集身分域的登入設定：
+
+| 組 | 它設定的內容 |
+|---|---|
+| 識別符號 | 使用者用於命名其賬戶的內容：使用者名稱、電子郵件或兩者，以及先嚐試哪個 |
+| 無密碼方法 | 憑據金鑰，以及有效的魔法連結（以分鐘計） |
+| 多因素認證 | 是否要求每個人進行第二因素驗證 |
+| 賬戶存取 | 自助註冊、電子郵件驗證、密碼找回和保持登入核取方塊 |
+| 登入保護 | 鎖定前的失敗嘗試次數及持續時間。參見 [鎖定](/zh-TW/discover/core-concepts/users#lockout) |
+
+這是控制檯中唯一可以編輯二次驗證要求和鎖定設定的介面。管理員面板將這些留給 API 處理。當身分域沒有 SMTP 配置時，會出現警告，因為魔法連結、電子郵件驗證和密碼找回都會傳送訊息。
+
+身分提供者與管理員面板中的頁面相同。密碼策略編輯身分域的 [密碼策略](/zh-TW/discover/core-concepts/password-policy) 並預覽使用者所見：註冊和重置頁面在欄位旁列出五條規則，其餘在表單提交時檢查。
+
+<span id="branding" />
+
+### 品牌
+
+品牌展示客戶所看到的內容：帶有模板和SMTP選項卡的電子郵件頁面，門戶主題和門戶佈局。它們與管理員面板中的電子郵件和門戶頁面相同。
+
+<img class="only-light" src="/dashboard/console_branding-light.jpg" alt="FerrisKey控制檯面板中的品牌展示，電子郵件模板：模板和SMTP選項卡，提示有三種電子郵件型別未分配模板，以及每種電子郵件型別的模板選擇器。" />
+<img class="only-dark" src="/dashboard/console_branding-dark.jpg" alt="FerrisKey控制檯面板中的品牌展示，電子郵件模板：模板和SMTP選項卡，提示有三種電子郵件型別未分配模板，以及每種電子郵件型別的模板選擇器。" />
+
+參見 [電子郵件與模板](/zh-TW/discover/guides/email)，[門戶](/zh-TW/modules/portal/overview) 和 [匯出與匯入](/zh-TW/discover/guides/portability)。

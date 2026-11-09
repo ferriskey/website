@@ -1,3 +1,6 @@
+import zhCN from './release-notes.zh-CN'
+import zhTW from './release-notes.zh-TW'
+
 export interface ReleaseNote {
   version: string
   publishedAt: string
@@ -366,6 +369,8 @@ export const releaseNotes: ReleaseNote[] = [
 export const latestRelease = releaseNotes[0]
 
 export const releaseNoteTranslations: Record<string, Record<string, ReleaseNoteTranslation>> = {
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
   fr: {
     'v0.10.2': {
       title:

@@ -1,0 +1,107 @@
+---
+title: "什麼是 CIAM？"
+description: "客戶身分存取管理：面向產品終端使用者的 IAM 型別，而非員工。"
+icon: users
+order: 1
+---
+
+<span id="what-is-ciam" />
+
+# 什麼是 CIAM？
+
+CIAM 代表客戶身分與存取管理。它是面向你產品終端使用者的 IAM 型別，相對於面向員工的企業員工 IAM (Workforce IAM)。
+
+相同的底層協議（OIDC、OAuth2、JWT）。上層問題截然不同。
+
+<span id="ciam-and-workforce-iam" />
+
+## CIAM 和企業員工身分管理（IAM）
+
+| | 企業員工身分管理（IAM） | 客戶身分與存取管理 (CIAM) |
+| --- | --- | --- |
+| 誰登入 | 員工 | 客戶 / 終端使用者 |
+| 使用者數量 | 數千 | 數百萬 |
+| 賬戶建立 | 由 IT 配置 | 自助註冊 |
+| 外觀和感覺 | 內部、功能性 | 品牌化、符合品牌風格 |
+| 登入方式 | 企業單點登入（SSO）、多因素認證（MFA） | 社交登入、郵件連結、密碼鑰匙、多因素認證（MFA） |
+| 組織結構 | 部門、團隊 | _租戶_、_組織_、B2B 團體 |
+| 審計需求 | 符合內部政策 | 合規性 + 使用者可見審計 |
+| 入職目標 | 開始工作 | 不要丟失註冊 |
+
+技術核心是相同的；體驗和規模則不一樣。
+
+<span id="what-ciam-actually-adds" />
+
+## CIAM 實際增加的功能
+
+在普通 IAM 之上，CIAM 系統必須做好以下幾個方面：
+
+<span id="branded-experiences" />
+
+### 品牌化體驗
+每個租戶（或產品）都應體現其自身特色。`acme.example.com` 的登入頁面應該是 Acme 的，而不是你的。這意味著每個身分域/每個組織都可以自定義主題、徽標、文案和電子郵件模板。
+
+<span id="self-service-everything" />
+
+### 自助服務的所有功能
+客戶不能等待 IT 部門。他們期望能夠註冊、重置密碼、關聯社交賬戶、啟用多因素認證、刪除賬戶以及匯出資料，所有操作都無需人工干預。
+
+<span id="many-login-methods" />
+
+### 多種登入方式
+電子郵件 + 密碼是基礎。在它之上：通行金鑰（WebAuthn）、魔法連結、社交登入（Google、GitHub、Apple）、針對B2B客戶的企業單點登入（SSO）、手機一次性密碼（OTP）。
+
+<span id="organizations--b2b" />
+
+### 組織 / B2B
+單個客戶通常是_公司_而非個人。CIAM需要建模：
+
+- 屬於多個組織的使用者
+- 每個組織的政策（這個組織要求多因素認證，那個組織只允許企業SSO）
+- 管理自己使用者的組織級管理員
+- 邀請流程、域宣告、即時配置（JIT provisioning）
+
+<span id="scale-and-abuse-resistance" />
+
+### 規模和防濫用能力
+一百萬使用者意味著持續不斷的機器人註冊、憑據填充嘗試、欺詐性密碼重置。CIAM系統需要速率限制、機器人檢測、基於風險的多因素認證，以及在事件發生時全域性使會話失效的能力。
+
+<span id="privacy--consent" />
+
+### 隱私與同意
+GDPR、CCPA 及類似法規要求明確同意、資料可攜帶性以及刪除能力。CIAM 擁有同意記錄：使用者同意了什麼、何時同意以及適用於哪個作用域。
+
+<span id="why-not-just-use-workforce-iam-tools" />
+
+## 為什麼不直接使用企業 IAM 工具？
+
+可以。但問題很快顯現：
+
+- 企業工具假設 IT 控制使用者生命週期。而 CIAM 的使用者是自助註冊的。
+- 企業工具按座位許可銷售。CIAM 的規模（數百萬使用者）會打破這種定價模型及供應商關係。
+- 企業登入頁面功能化而非品牌化。客戶會立即注意到。
+
+協議不變。操作模式會變化。
+
+<span id="a-useful-mental-model" />
+
+## 一個有用的思維模型
+
+企業 IAM 是你的辦公安全：門禁讀卡器、受控存取、僅限員工。
+
+CIAM 是你的店面：任何人都可以進來，你需要識別常客，入口是你品牌的一部分，並且門是全天候24/7全球開放的。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 的設計以 CIAM 為先。Realms 隔離租戶。每個 Realm 有自己的品牌、登入方式、多因素認證策略和身分提供者。
+
+::::card-group{cols=2}
+:::card{label="組織級別策略" icon="lucide:building-2" href="/zh-TW/learn/ciam/org-policies"}
+每個組織的策略和登入體驗如何工作。
+:::
+:::card{label="Abyss 模組" icon="lucide:link" href="/zh-TW/modules/abyss/overview"}
+在每個 Realm 聯盟社會和企業身分提供者。
+:::
+::::

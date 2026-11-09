@@ -1,0 +1,131 @@
+---
+title: "JWT 构成"
+description: "JWT 的三部分（头部、载荷、签名）解析。"
+icon: scan-text
+order: 2
+---
+
+<span id="jwt-anatomy" />
+
+# JWT 构成
+
+JWT 有三部分，用点分隔。就是这样。
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9
+.
+eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0
+.
+SfXPyZbR2X4Z6BvRrR4n...
+```
+
+每部分都是 Base64URL 编码的，而不是加密的。你可以用任何 Base64 工具解码它。
+
+<span id="part-1-header" />
+
+## 第1部分：头部
+
+头部描述了令牌本身：签名算法类型，它是什么类型的令牌，以及可选的使用哪个密钥。
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "key-2025-01"
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `alg` | 签名算法。`RS256`、`ES256`、`HS256`、`none`，等等。 |
+| `typ` | 令牌类型。通常为 `JWT`。 |
+| `kid` | 密钥 ID。当签发者轮换密钥时，告诉验证者使用哪个公钥。 |
+
+:::callout{variant="warning" title="注意 alg=none"}
+原始 JWT 规范允许 `alg: "none"`，即未签名的令牌。一些库过去会接受来自传入令牌的这种类型。始终拒绝 `alg: "none"`，并拒绝任何不在允许列表中的算法。
+:::
+
+<span id="part-2-payload" />
+
+## 第2部分：负载
+
+负载是承载声明的 JSON。这部分才是你真正关心的内容。
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "scope": "openid profile email",
+  "name": "Alice Smith"
+}
+```
+
+每个顶级键都是一个声明。标准声明和自定义声明在同一个 JSON 对象中并列。完整词汇表请参见 [Claims](/zh-CN/learn/jwt/claims)。
+
+载荷没有加密。任何持有令牌的人都可以读取它。如果你需要保密性，请使用 JWE（加密的 JWT）。或者干脆不要在里面放密钥。
+
+<span id="part-3-signature" />
+
+## 第 3 部分：签名
+
+签名是对编码后的头部和载荷进行计算的：
+
+```
+signature = sign(base64url(header) + "." + base64url(payload), key)
+```
+
+签名者的算法选择（头部中的 `alg`）决定了 `sign` 和 `key` 的含义：
+
+- **HS256**：HMAC-SHA256。对称加密。相同的密钥用于签名和验证。双方都必须持有它。当一个服务既签名又验证时可以使用。共享风险较高。
+- **RS256**：RSA-SHA256。非对称加密。私钥用于签名，公钥用于验证。OIDC 提供商的标准。
+- **ES256**：ECDSA-SHA256。非对称，加密签名比RSA小。越来越受欢迎。
+- **EdDSA**：现代、快速、固定大小。目前还未被普遍支持。
+
+对于OIDC，你几乎总是会看到RS256或ES256。
+
+<span id="how-verification-works" />
+
+## 验证工作原理
+
+验证者执行以下操作：
+
+1. 将令牌按`.`分成三部分。
+2. 解码头部，查看`alg`和`kid`。
+3. 从`jwks_uri`获取匹配的公钥（已缓存）。
+4. 重新计算`sign(header + "." + payload)`并与第三部分进行比较。
+5. 如果匹配，解码负载并检查声明：`exp`、`iss`、`aud`等。
+
+每一步都很重要。跳过签名验证，JWT就变成了“信任用户发送的任何内容”。这已经是多个生产环境安全漏洞的根本原因。
+
+<span id="a-worked-example" />
+
+## 一个工作示例
+
+对于 `RS256`，验证者可能会：
+
+```
+header_b64 = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+payload_b64 = "eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0"
+signing_input = header_b64 + "." + payload_b64
+verify(public_key, signing_input, signature) → ok
+```
+
+如果是 `ok`，则将 `payload_b64` 中的 JSON 视为权威。如果不是，则丢弃该令牌。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 使用每个身份域的密钥签署令牌（默认使用 RSA）。公钥在 `/.well-known/openid-configuration` 的 `jwks_uri` 中公开。使用 jwt.io 或 `jose` 库进行解码和验证。
+
+::::card-group{cols=2}
+:::card{label="JWT 声明" icon="lucide:list-checks" href="/zh-CN/learn/jwt/claims"}
+出现在有效载荷中的词汇。
+:::
+:::card{label="OAuth2 令牌" icon="lucide:key" href="/zh-CN/learn/oauth2/tokens"}
+JWT 在 OAuth2 令牌生命周期中的位置。
+:::
+::::

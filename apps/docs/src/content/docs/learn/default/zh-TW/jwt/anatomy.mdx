@@ -1,0 +1,131 @@
+---
+title: "JWT 構成"
+description: "JWT 的三部分（頭部、載荷、簽名）解析。"
+icon: scan-text
+order: 2
+---
+
+<span id="jwt-anatomy" />
+
+# JWT 構成
+
+JWT 有三部分，用點分隔。就是這樣。
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9
+.
+eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0
+.
+SfXPyZbR2X4Z6BvRrR4n...
+```
+
+每部分都是 Base64URL 編碼的，而不是加密的。你可以用任何 Base64 工具解碼它。
+
+<span id="part-1-header" />
+
+## 第1部分：頭部
+
+頭部描述了權杖本身：簽名演算法型別，它是什麼型別的權杖，以及可選的使用哪個金鑰。
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "key-2025-01"
+}
+```
+
+| 欄位 | 含義 |
+| --- | --- |
+| `alg` | 簽名演算法。`RS256`、`ES256`、`HS256`、`none`，等等。 |
+| `typ` | 權杖型別。通常為 `JWT`。 |
+| `kid` | 金鑰 ID。當簽發者輪換金鑰時，告訴驗證者使用哪個公鑰。 |
+
+:::callout{variant="warning" title="注意 alg=none"}
+原始 JWT 規範允許 `alg: "none"`，即未簽名的權杖。一些庫過去會接受來自傳入權杖的這種型別。始終拒絕 `alg: "none"`，並拒絕任何不在允許列表中的演算法。
+:::
+
+<span id="part-2-payload" />
+
+## 第2部分：負載
+
+負載是承載宣告的 JSON。這部分才是你真正關心的內容。
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "scope": "openid profile email",
+  "name": "Alice Smith"
+}
+```
+
+每個頂級鍵都是一個宣告。標準宣告和自定義宣告在同一個 JSON 物件中並列。完整詞彙表請參見 [Claims](/zh-TW/learn/jwt/claims)。
+
+載荷沒有加密。任何持有權杖的人都可以讀取它。如果你需要保密性，請使用 JWE（加密的 JWT）。或者乾脆不要在裡面放金鑰。
+
+<span id="part-3-signature" />
+
+## 第 3 部分：簽名
+
+簽名是對編碼後的頭部和載荷進行計算的：
+
+```
+signature = sign(base64url(header) + "." + base64url(payload), key)
+```
+
+簽名者的演算法選擇（頭部中的 `alg`）決定了 `sign` 和 `key` 的含義：
+
+- **HS256**：HMAC-SHA256。對稱加密。相同的金鑰用於簽名和驗證。雙方都必須持有它。當一個服務既簽名又驗證時可以使用。共享風險較高。
+- **RS256**：RSA-SHA256。非對稱加密。私鑰用於簽名，公鑰用於驗證。OIDC 提供商的標準。
+- **ES256**：ECDSA-SHA256。非對稱，加密簽名比RSA小。越來越受歡迎。
+- **EdDSA**：現代、快速、固定大小。目前還未被普遍支援。
+
+對於OIDC，你幾乎總是會看到RS256或ES256。
+
+<span id="how-verification-works" />
+
+## 驗證工作原理
+
+驗證者執行以下操作：
+
+1. 將權杖按`.`分成三部分。
+2. 解碼頭部，檢視`alg`和`kid`。
+3. 從`jwks_uri`獲取匹配的公鑰（已快取）。
+4. 重新計算`sign(header + "." + payload)`並與第三部分進行比較。
+5. 如果匹配，解碼負載並檢查宣告：`exp`、`iss`、`aud`等。
+
+每一步都很重要。跳過簽名驗證，JWT就變成了“信任使用者傳送的任何內容”。這已經是多個生產環境安全漏洞的根本原因。
+
+<span id="a-worked-example" />
+
+## 一個工作示例
+
+對於 `RS256`，驗證者可能會：
+
+```
+header_b64 = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+payload_b64 = "eyJzdWIiOiI0MiIsIm5hbWUiOiJBbGljZSIsImlhdCI6MTczNn0"
+signing_input = header_b64 + "." + payload_b64
+verify(public_key, signing_input, signature) → ok
+```
+
+如果是 `ok`，則將 `payload_b64` 中的 JSON 視為權威。如果不是，則丟棄該權杖。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 使用每個身分域的金鑰簽署權杖（預設使用 RSA）。公鑰在 `/.well-known/openid-configuration` 的 `jwks_uri` 中公開。使用 jwt.io 或 `jose` 庫進行解碼和驗證。
+
+::::card-group{cols=2}
+:::card{label="JWT 宣告" icon="lucide:list-checks" href="/zh-TW/learn/jwt/claims"}
+出現在有效載荷中的詞彙。
+:::
+:::card{label="OAuth2 權杖" icon="lucide:key" href="/zh-TW/learn/oauth2/tokens"}
+JWT 在 OAuth2 權杖生命週期中的位置。
+:::
+::::

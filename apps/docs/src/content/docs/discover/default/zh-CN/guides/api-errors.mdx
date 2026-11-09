@@ -1,0 +1,122 @@
+---
+title: "API错误"
+description: "FerrisKey API的三种错误形态、其中的稳定原因代码，以及在客户端代码中匹配的内容。"
+icon: circle-alert
+order: 28
+---
+
+<span id="api-errors" />
+
+# API错误
+
+API 会以三种形式回答失败请求。你得到哪种形式取决于端点和失败类型，每个都携带机器可读代码，旨在匹配。人类可读文本则不然。
+
+| 形状 | 其中 | 机器可读字段 |
+|---|---|---|
+| 标准 | 大多数端点 | `reason` |
+| 验证 | 请求体或未通过验证的值，状态`422` | `errors[].code` |
+| 奥奥斯 | 令牌端点、设备流以及授权请求的某些失败 | `error` |
+
+<span id="the-standard-shape" />
+
+## 标准形状
+
+```json title="GET /realms/master/users/00000000-0000-0000-0000-000000000000"
+{
+  "code": "E_NOT_FOUND",
+  "status": 404,
+  "reason": "not_found",
+  "message": "Resource not found"
+}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `code` | 每个状态一个数值：`E_BAD_REQUEST`、`E_UNAUTHORIZED`、`E_FORBIDDEN`、`E_NOT_FOUND`、`E_CONFLICT`、`E_INTERNAL_SERVER_ERROR`或`E_SERVICE_UNAVAILABLE` |
+| `status` | HTTP 状态，在正文中重复出现 |
+| `reason` | 针对特定失败的稳定蛇形命名（snake_case）代码。当错误没有更具体的代码时，它会重复类：`bad_request`、`unauthorized`、`forbidden`、`not_found`、`conflict`、`internal_server_error` 或 `service_unavailable` |
+| `message` | 开发者的英文文本 |
+
+你可能遇到的一些原因：
+
+| 状态 | `reason` | 当 |
+|---|---|---|
+| 400 | `invalid_query` | 列表参数未知或超出范围。请参见 [分页列表](/zh-CN/discover/guides/api-listings) |
+| 400 | `unexpected_payload` | 请求体不是有效的 JSON，或与端点期望的结构不匹配 |
+| 400 | `email_already_exists` | 该身份域的另一用户已经使用了该邮箱地址 |
+| 401 | `token_not_found` | 请求没有携带 Bearer 令牌 |
+| 401 | `invalid_credentials` | 用户名或密码错误 |
+| 401 | `account_locked` | 失败尝试次数过多。请参见 [用户](/zh-CN/discover/core-concepts/users#lockout) |
+| 403 | `forbidden` | 调用者缺少操作所需的权限 |
+| 403 | `user_disabled` | 账户被禁用 |
+| 403 | `elevation_required` | 敏感的账户操作需要重新进行身份认证。请参阅 [账户安全](/zh-CN/modules/account/security) |
+| 404 | `not_found` | 资源不存在，或它属于另一个域 |
+| 409 | `user_id_already_exists` | 使用已被占用的 `id` 创建用户 |
+| 409 | `password_credential_already_exists` | 为已设置密码的用户导入密码哈希 |
+| 409 | `last_sign_in_means` | 移除凭据会导致账户无法登录 |
+| 500 | `internal_server_error` | 服务器发生错误。`message` 以 `Internal Server Error:` 开头，可能包含内部细节，因此不要向最终用户显示 |
+| 503 | `client_under_maintenance` | 客户端正在维护状态，拒绝登录 |
+
+列表很长，因为每个域错误都有其自身原因。这些是示例，而不是完整集合。
+
+<span id="validation-errors" />
+
+## 验证错误
+
+一个未通过验证的请求体、一个违反身份域策略的密码、服务器无法接受的哈希以及格式不正确的区域设置都会返回 `422` 和一个列表。该列表为每个问题都有一条记录，因此表单可以一次性显示所有问题。
+
+```json title="POST /realms/{realm_name}/users with an empty username"
+{
+  "errors": [
+    { "field": "username", "code": "length", "message": "username is required" }
+  ]
+}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `field` | 未通过验证的字段名称 |
+| `code` | 失败的规则。对于逐字段检查的请求体，这是规则，如 `length`、`email` 或 `range`。对于密码，它是 `too_short`、`missing_uppercase`、`missing_lowercase`、`missing_number`、`missing_special`、`insufficient_entropy` 和 `common_password` 之一。其他验证使用它们自己的代码，例如 `invalid_password_hash` 或 `malformed_locale`。 |
+| `message` | 开发者的英文文本 |
+
+此形式在请求体中既没有 `reason` 也没有 `status`。从响应中读取状态。
+
+<span id="oauth-errors" />
+
+## OAuth 错误
+
+令牌端点、设备流以及一些授权请求的失败，例如缺少 PKCE 挑战，按照 RFC 6749 定义的格式响应，以便任何 OAuth 库都可以读取它们。
+
+```json title="POST /realms/master/protocol/openid-connect/token"
+{
+  "error": "invalid_client",
+  "error_description": "Client authentication failed."
+}
+```
+
+| `error` | 状态 | 含义 |
+|---|---|---|
+| `invalid_request` | 400 | 缺少必需的参数，或者请求格式错误 |
+| `invalid_grant` | 400 | 代码、刷新令牌、凭据或会话无效。以及当账户仍需完成登录步骤时，`password` 授权的响应 |
+| `unauthorized_client` | 400 | 客户端不能使用此授权类型 |
+| `unsupported_grant_type` | 400 | `grant_type` 不是 FerrisKey 所知的类型 |
+| `invalid_scope` | 400 | 请求的作用域不被允许 |
+| `invalid_client` | 401 | 客户端认证失败。响应中带有 `WWW-Authenticate: Basic` |
+| `temporarily_unavailable` | 429 或 503 | 来自同一地址的客户端认证失败次数过多（429，`Retry-After: 60`），或服务器已满载（503，`Retry-After: 1`） |
+
+设备流程会添加RFC 8628中的代码：`authorization_pending`、`slow_down`、`expired_token`和`access_denied`，均带有状态`400`。
+
+<span id="what-to-match-on" />
+
+## 匹配的对象
+
+在故障类别的状态上分支，然后在具体故障类别的代码上分支。不要分支于`message`：这是英文散文，其措辞不包含合同内容，有些消息的细节会随着请求而变化。
+
+其中一行读取了三种形状中的任意一个代码：
+
+```ts
+const body = await response.json()
+const code = body.reason ?? body.error ?? body.errors?.[0]?.code
+```
+
+控制台也同样如此。它从`reason`、OAuth 响应的 `error` 或每个验证错误条目中的 `code` 中选择文本，且仅在没有代码文本时才回退到`message`。参见 [Localization](/zh-CN/discover/guides/localization)。

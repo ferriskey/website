@@ -1,0 +1,59 @@
+---
+title: "数据来源"
+description: "阅读 Terraform 中的现有 FerrisKey 对象：一个身份域及其设置、一个角色名称，以及一个身份域的 OpenID Connect 发现文档。"
+icon: search
+order: 5
+---
+
+<span id="data-sources" />
+
+# 数据来源
+
+数据源读取 Terraform 不管理的对象，如`master`身份域或 FerrisKey 自行创建的角色。
+
+## ferriskey_realm
+
+```hcl
+data "ferriskey_realm" "master" {
+  name = "master"
+}
+
+output "access_token_lifetime" {
+  value = data.ferriskey_realm.master.settings.access_token_lifetime
+}
+```
+
+取`name`并返回`realm_id`、`created_at`、`updated_at`和`settings`，这些都是`ferriskey_realm_settings`管理的[身份域设置](/zh-CN/discover/core-concepts/realms#realm-settings)。
+
+## ferriskey_role
+
+```hcl
+data "ferriskey_role" "realm_admin" {
+  realm = "master"
+  name  = "master-realm"
+}
+
+resource "ferriskey_user_role" "runner_realm_admin" {
+  realm   = "master"
+  user_id = ferriskey_client.terraform_runner.service_account_user_id
+  role_id = data.ferriskey_role.realm_admin.id
+}
+```
+
+按`realm`和`name`查找角色，返回其UUID，分别为`id`、`description`和`permissions`。用它来分配FerrisKey创建的角色，比如[bootstrap](/zh-CN/terraform/getting-started)中的`master-realm`，或者其他状态管理的角色。
+
+## ferriskey_openid_configuration
+
+```hcl
+data "ferriskey_openid_configuration" "acme" {
+  realm = "acme"
+}
+
+output "token_endpoint" {
+  value = data.ferriskey_openid_configuration.acme.token_endpoint
+}
+```
+
+读取身份域的[发现文档](/zh-CN/discover/core-concepts/authentication#openid-connect-discovery)，无需身份认证。它返回 `issuer`、`authorization_endpoint`、`token_endpoint`、`userinfo_endpoint`、`jwks_uri`、`introspection_endpoint`、`revocation_endpoint`、`end_session_endpoint`、`grant_types_supported` 和 `token_endpoint_auth_methods_supported`。
+
+将这些值传递给您在同一次运行中配置的应用程序，例如作为 Kubernetes 部署的环境变量，而不是手动构建 URL。

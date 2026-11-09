@@ -1,0 +1,252 @@
+---
+title: "投递与重试"
+description: "跟踪每一次 webhook 投递尝试：状态码、错误码、自动回退、手动重放和密钥轮换。"
+icon: repeat
+order: 64
+---
+
+<span id="deliveries-and-retries" />
+
+# 投递与重试
+
+一个触发到虚空的 webhook 比没有 webhook 更糟：你以为另一个系统知道，但实际上并不知道。FerrisKey 会将每次投递记录为一行，你可以查询它，包括返回的 HTTP 状态码、在没有状态码时的错误类别，以及下次重试的时间。
+
+<img class="only-light" src="/dashboard/webhooks_list-light.jpg" alt="FerrisKey webhook 列表，显示端点数量、订阅数量、从未触发和无事件计数器" />
+<img class="only-dark" src="/dashboard/webhooks_list-dark.jpg" alt="FerrisKey webhook 列表，显示端点数量、订阅数量、从未触发和无事件计数器" />
+
+<span id="the-delivery-record" />
+
+## 投递记录
+
+在控制台中，打开一个 webhook 并切换到它的投递（Deliveries）选项卡。它会列出 FerrisKey 调用该端点的每一次尝试，按最新顺序排列：状态、事件、已执行的尝试次数以及上一次的结果。你可以按创建时间（Created）、状态（Status）和事件（Event）进行筛选，通过资源 ID 搜索，打开一个投递并使用“Inspect”查看发送的有效负载，或者使用“Send again”重新发送已完成的投递。
+
+<img class="only-light" src="/dashboard/webhook_deliveries-light.jpg" alt="FerrisKey webhook 的投递选项卡，包含一个搜索框和五条 client.updated 投递的表格，每条投递在 HTTP 500 结果后被排队（Queued），显示尝试次数、上一次尝试时间以及一个 Inspect 按钮。" />
+<img class="only-dark" src="/dashboard/webhook_deliveries-dark.jpg" alt="FerrisKey webhook 的投递选项卡，包含一个搜索框和五条 client.updated 投递的表格，每条投递在 HTTP 500 结果后被排队（Queued），显示尝试次数、上一次尝试时间以及一个 Inspect 按钮。" />
+
+相同的数据也可以通过 API 获取：
+
+```text
+GET /realms/{realm_name}/webhooks/{webhook_id}/deliveries
+GET /realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}
+```
+
+列表采用分页形式，参见 [API 列表](/zh-CN/discover/guides/api-listings)，且不包含载荷内容。可以按 `event`（单个触发器名称）、`status`、`resource_id`、`search`（匹配资源 ID）、`created_from` 和 `created_to` 筛选，并按 `status`、`attempt_count`、`last_attempt_at`、`created_at`（默认）或 `updated_at` 排序。对于尚未尝试投递的记录，按 `last_attempt_at` 升序排列时置于最后，降序排列时置于最前。
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 投递标识符。它也是每次尝试的 `x-ferriskey-delivery-id` 头信息，以及用于重放的 ID。 |
+| `webhook_id` | 此投递所属的 webhook。 |
+| `event` | 生成该交付的 [触发器](/zh-CN/modules/webhooks/triggers)，例如 `user.created`。 |
+| `resource_id` | 有效负载的 `resource_id`。对于几乎所有触发器，这是身份域 ID，而不是已更改对象的 ID。参见 [Payload 格式](/zh-CN/modules/webhooks/payload)。 |
+| `status` | `pending`, `delivering`, `succeeded` 或 `failed` |
+| `attempt_count` | 到目前为止已尝试的次数 |
+| `next_attempt_at` | 当工作人员再次尝试时。配送终结时缺席 |
+| `last_attempt_at` | 上次尝试时 |
+| `last_status_code` | 当您的端点有回应时返回的 HTTP 状态 |
+| `last_error_code` | 尝试失败的原因。失败的 HTTP 答复显示 `http_<status>`；任何其他代码表示没有可用的响应 |
+| `last_error_detail` | 保留用于错误的自由文本详情。FerrisKey 在 0.10.0 中留空 |
+| `created_at`, `updated_at` | 行时间戳 |
+
+读取一个配送会返回相同的字段，平铺显示，并且附有发送的载荷。这就是您与端点记录进行比较的内容：
+
+```json title="GET …/deliveries/{delivery_id}"
+{
+  "data": {
+    "id": "…",
+    "webhook_id": "…",
+    "event": "user.created",
+    "status": "failed",
+    "attempt_count": 5,
+    "last_status_code": 500,
+    "payload": { "…": "the body that was posted" }
+  }
+}
+```
+
+FerrisKey 会删除已完成的配送，无论成功或失败，一旦它们超过 30 天。待处理的会保留。
+
+<span id="status-and-what-it-means-for-you" />
+
+### 状态，以及它对您的意义
+
+| 状态 | 控制台标签 | 含义 |
+|---|---|---|
+| `pending` | 排队 | 等待轮到它或`next_attempt_at`。一次失败并将重试的传递回到这里 |
+| `delivering` | 发送中 | 一个工作节点当前持有它的租约 |
+| `succeeded` | 已送达 | 你的端点返回了成功状态 |
+| `failed` | 失败 | 终端。尝试次数用完，或者错误不值得重试 |
+
+<Callout variant="info" title="两个字段，两种失败类型">
+
+`last_status_code`和`last_error_code`回答不同的问题。`500`出现在`last_status_code`中意味着你的端点被访问并发生故障，所以问题在你的线路一侧。没有状态的错误代码意味着请求根本没有到达那里：DNS、TLS、被拒绝的地址。按这个顺序阅读它们。
+
+</Callout>
+
+<span id="error-codes" />
+
+## 错误代码
+
+当没有 HTTP 响应可报告时，传输会携带十个错误代码之一。它们会区分需要修复的原因，并决定 FerrisKey 是否再次尝试。
+
+| 代码 | 发生了什么 | 已重试 | 该去哪里找 |
+|---|---|---|---|
+| `dns_resolution_failed` | 端点主机未能解决 | 是 | DNS，或者端点的打字错误 |
+| `no_usable_address` | 它解决了，但FerrisKey无法打电话 | 不 | 通常是带有警卫的私人地址，详见下文 |
+| `cleartext_not_allowed` | 端点为`http://`，明文被拒绝 | 不 | 使用`https://` |
+| `malformed_endpoint` | 存储的端点不是可用的 URL | 不 | webhook 的配置 |
+| `missing_host` | 该URL没有主机 | 不 | 我也是 |
+| `reserved_header` | 自定义头部与 FerrisKey 自身设置的某个节点发生碰撞 | 不 | 把它从webhook的头部里移除 |
+| `header_encoding_failed` | 自定义头值无法编码 | 是 | 我也是 |
+| `client_build_failed` | 无法为此端点构建 HTTP 客户端 | 是 | 通常是服务器端 TLS 或代理问题 |
+| `transport_error` | 请求在传输过程中失败：连接重置，超时 | 是 | 网络问题，或您的端点断开连接或响应过慢 |
+| `http_<status>` | 您的端点响应了失败状态。代码是插值的，因此 500 显示为 `http_500` | 仅适用于 5xx、408 和 429 | `last_status_code` 本身包含编号 |
+
+任何其他状态都视为首次投递失败：`400`、`401`、`404`或`301`，因为 FerrisKey 不会遵循重定向。您的端点通过其状态码决定是否值得重试。在部署时出现 `503` 会被重试。因为端点拒绝签名而出现的 `401` 则不会。
+
+<Callout variant="warning" title="默认情况下拒绝私有地址">
+
+解析到回环地址或私有地址段的端点会被拒绝，并返回 `no_usable_address`，因为能够访问部署自身网络的 webhook 是 SSRF 原语。对于本地开发，`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 可以解除该限制，但在生产环境中绝不能开启。链路本地地址无论设置如何都保持拒绝。
+
+</Callout>
+
+<span id="automatic-retries" />
+
+## 自动重试
+
+可重试错误的失败投递会使用指数退避和抖动再次尝试。由四个数字控制它：
+
+| 设置 | 系统默认值 | 界限 |
+|---|---|---|
+| `max_attempts` | 5 | 1 到 20 |
+| `base_delay_ms` | 500 毫秒 | 100 毫秒到 60 秒 |
+| `max_delay_ms` | 30 秒 | 至少 `base_delay_ms` |
+| `max_total_delay_ms` | 120 秒 | 至少 `max_delay_ms` |
+
+第 n 次重试前的等待时间是 0 到 `base_delay_ms * 2^n` 之间的随机值，并且不会超过 `max_delay_ms` 或 `max_total_delay_ms` 中剩余的时间。使用默认值时，四次重试的上限分别是 1 秒、2 秒、4 秒和 8 秒。`max_total_delay_ms` 是从投递创建时计算的，因此当尝试次数或总时间预算之一用尽时，投递会停止重试，以先到者为准。
+
+抖动是防止同时失败的一百次投递在端点恢复的瞬间以锁步方式重复尝试并轰击你的端点的原因。代价是重试可能几乎立即发生。
+
+<span id="where-the-numbers-come-from" />
+
+### 数字来源
+
+策略通过三层解析，每个字段独立：
+
+1. Webhook 自身的 `retry_policy`，当它设置该字段时。
+2. 否则为域的设置： `webhook_retry_max_attempts`、`webhook_retry_base_delay_ms`、`webhook_retry_max_delay_ms` 或 `webhook_retry_max_total_delay_ms`。
+3. 否则使用上面的系统默认值。
+
+因为解析是按字段进行的，一个 webhook 可以只提高 `max_attempts` 并继承三个延迟。Webhook 读取返回 `retry_policy`（此 webhook 覆盖的内容）和 `effective_retry_policy`（实际将应用的内容）。当你想知道 worker 会怎么做时，使用第二个。
+
+<span id="when-the-attempts-run-out" />
+
+### 当尝试次数用尽时
+
+投递为 `failed`，而 SeaWatch 记录为 `webhook_delivery_exhausted`。当错误不可重试时，第一次尝试也会发生相同情况。该事件的目标为 webhook，无操作员，状态为 `failure`，具体详情如下：
+
+| 详情 | 值 |
+|---|---|
+| `delivery_id` | 放弃的投递 |
+| `event` | 触发器，例如 `user.created` |
+| `error_code` | 上述表格中的最后一个错误代码 |
+| `attempts` | 尝试次数 |
+
+该事件是需要警报的事件：它区分了“投递失败后恢复”与“该端点已长时间无法访问，我们放弃”之间的差异。
+
+<span id="manual-replay" />
+
+## 手动重放
+
+```text
+POST /realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}/retry
+```
+
+将已完成的投递放回队列，以便工作者再次尝试。答案是 `202` 与 `{ "delivery_id": "…", "requeued": true }`。仍然是 `pending` 或 `delivering` 的投递会回答 `409`：等待其完成。这是普通情况的工具：接收服务宕机了一小时，投递尝试已用尽，服务恢复后，你希望获取它错过的事件。
+
+重放会重新发送存储的负载，保持不变。这不是资源的最新快照：事件描述了当时的情况，重放它只是再次说明同样的内容。如果该资源此后又发生了两次变更，你的端点也会接收到这些投递，并且看到它们的顺序就是重放的顺序。每次重放都会再次签名，并带有新的时间戳。
+
+<Callout variant="info" title="使你的端点幂等">
+
+在自动重试和手动重播之间，端点最终会收到相同的传递两次。传递 `id`，以 `x-ferriskey-delivery-id` 发送，在多次尝试和重播中保持稳定，这使它成为自然的去重键。
+
+</Callout>
+
+<span id="rotating-the-signing-secret" />
+
+## 轮换签名密钥
+
+```text
+POST /realms/{realm_name}/webhooks/{webhook_id}/secret/rotate
+```
+
+生成一个新的签名密钥并以 `{ "secret": "…" }` 形式返回。这是唯一包含密钥的响应。之后无法再次读取，因此要么从此调用中获取，要么再次轮换。Webhook 在创建时就有一个密钥，但没有任何方式返回第一个密钥，因此首次轮换也是您第一次获知密钥的方式。在控制台中，该按钮在 Webhook 的“设置”选项卡上显示为“生成新密钥”。
+
+<Callout variant="danger" title="轮换立即生效">
+
+从现在起，每次尝试都用新密钥签名，包括已经排队的送达重试。在你的端点知道新密钥之前，它会拒绝这些密钥。如果它回复了`401`或另一个 FerrisKey 不重试的 4xx，这些送达就以 `failed` 结束，端点更新后你会重新播放。当你有地方可以立即放置新密钥时，轮换。
+
+</Callout>
+
+<span id="reading-the-console" />
+
+## 读取控制台
+
+webhooks 列表一目了然地总结了每个端点的状态：
+
+| 计数器 | 读作 |
+|---|---|
+| 总计 | 该身份域配置的端点 |
+| 订阅 | 所有 webhook 订阅了多少触发器 |
+| 从未被触发 | 那些还没有投递的端点，要么是新的，要么是订阅了什么从未发生过的东西 |
+| 无事件 | 未订阅任何事件的端点。它们永远不会触发 |
+
+上面的“无事件”大于零几乎总是错误：创建了一个 webhook，但其触发器从未被触发。
+
+<span id="api-reference" />
+
+## API参考
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/webhooks` | 列出身份域的 webhooks |
+| `POST` | `/realms/{realm_name}/webhooks` | 创建一个 webhook |
+| `GET` | `/realms/{realm_name}/webhooks/{webhook_id}` | 读取一个 webhook 及其有效重试策略 |
+| `PUT` | `/realms/{realm_name}/webhooks/{webhook_id}` | 更新端点、头信息、触发器、重试策略 |
+| `DELETE` | `/realms/{realm_name}/webhooks/{webhook_id}` | 删除一个 webhook |
+| `GET` | `/realms/{realm_name}/webhooks/{webhook_id}/deliveries` | 列出投递记录 |
+| `GET` | `/realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}` | 单个投递及其载荷 |
+| `POST` | `/realms/{realm_name}/webhooks/{webhook_id}/deliveries/{delivery_id}/retry` | 重放一次投递 |
+| `POST` | `/realms/{realm_name}/webhooks/{webhook_id}/secret/rotate` | 轮换签名密钥 |
+
+权限：`view_webhooks` 或 `manage_webhooks` 用于读取，`manage_webhooks` 用于创建、更新、删除、重放或轮换。`manage_realm` 授予所有权限。`query_webhooks` 作为权限存在，但不是读取端点接受的权限。
+
+<span id="debugging-a-webhook-that-is-not-arriving" />
+
+## 调试未到达的 webhook
+
+::::step-group
+:::step{title="检查一下它是否订阅了任何东西"}
+列表中“无事件”或空空`subscribers`意味着无论你下一步做什么，它都不会触发。
+:::
+
+:::step{title="至少要留意有没有送货"}
+没有送达行意味着事件从未匹配订阅。检查[触发名](/zh-CN/modules/webhooks/triggers)：它们是完全相同的字符串，`user.updated`不`user.update`。还要检查FerrisKey是否能触发：38个触发器中有5个从未被触发。
+:::
+
+:::step{title="请阅读最后一个错误"}
+`last_status_code`指向你的终点。`last_error_code`指向通往终点的路径。上面的表格说明了哪个是哪个。
+:::
+
+:::step{title="修正后再重玩"}
+不要等到下一个事件才知道修复是否有效。重放失败的投递：同样的载荷，相同的签名合同，立即回复。
+:::
+::::
+
+::::card-group{cols=2}
+:::card{label="有效载荷" icon="lucide:file-json" href="/zh-CN/modules/webhooks/payload"}
+您的端点接收到的信封，以及如何验证其签名。
+:::
+:::card{label="触发器" icon="lucide:webhook" href="/zh-CN/modules/webhooks/triggers"}
+38 个 Webhook 可以订阅的触发器。
+:::
+::::

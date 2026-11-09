@@ -1,0 +1,310 @@
+---
+title: "模式、策略和模板"
+description: "一個身分域如何在 Cedar 架構中描述其應用、編寫策略和模板、驗證和模擬它們，以及當兩個寫操作衝突時會發生什麼。"
+icon: file-code-2
+order: 111
+---
+
+<span id="schema-policies-and-templates" />
+
+# 模式、策略和模板
+
+一個身分域的規則有三種物件：Cedar 架構、策略，以及策略可以連結的策略模板。它們都位於 `/realms/{realm_name}/authz` 下，該例項僅在執行 `AUTHZ_ENABLED=true` 時存在（參見 [門](/zh-TW/modules/authz/overview#the-gates)）。讀取需要 `view_authorization`，寫入需要 `manage_authorization`，而 `manage_realm` 兩者都可以。
+
+| 方法和路徑 | 目的 | 需求 |
+|---|---|---|
+| `GET /authz/state` | 身分域是否回答評估，以及規則 `version` | 檢視 |
+| `PUT /authz/state` | 開啟或關閉身分域 | 管理 |
+| `GET /authz/schema` | 身分域自己的架構。未儲存時返回 404 | 檢視 |
+| `PUT /authz/schema` | 替換架構 | 管理 |
+| `GET /authz/schema/builtin` | 內建 `FerrisKey` 架構 | 檢視 |
+| `GET /authz/policies` | 列出策略 | 檢視 |
+| `POST /authz/policies` | 建立策略 | 管理 |
+| `GET /authz/policies/{policy_id}` | 讀取策略 | 檢視 |
+| `PUT /authz/policies/{policy_id}` | 替換策略 | 管理 |
+| `DELETE /authz/policies/{policy_id}` | 刪除策略 | 管理 |
+| `POST /authz/policies/validate` | 檢查策略但不儲存它們 | 檢視 |
+| `GET /authz/templates` | 列出模板 | 檢視 |
+| `POST /authz/templates` | 建立模板 | 管理 |
+| `GET /authz/templates/{template_id}` | 讀取模板 | 檢視 |
+| `PUT /authz/templates/{template_id}` | 替換模板 | 管理 |
+| `DELETE /authz/templates/{template_id}` | 刪除模板 | 管理 |
+| `POST /authz/simulate` | 根據規則集決定請求，但不儲存任何內容 | 檢視 |
+
+這些路線都不需要啟用身分域，因此您可以在第一次 PEP 呼叫之前構建和測試規則。
+
+<span id="the-schema" />
+
+## 架構
+
+架構是 Cedar 架構文字。它宣告瞭您的應用程式的實體型別和操作。FerrisKey 會驗證每個策略是否符合架構，並檢查每個評估請求是否符合架構，因此拼寫錯誤的操作或型別錯誤的資源屬性會被報告，而不是悄悄拒絕。
+
+```http
+PUT /realms/{realm_name}/authz/schema
+```
+
+```json title="Request body"
+{
+  "namespace": "App",
+  "source": "namespace App {\n  entity Document = {\n    classification: String,\n  };\n\n  action \"document:read\" appliesTo {\n    principal: [FerrisKey::User],\n    resource: [Document],\n  };\n}"
+}
+```
+
+`source` 是必需的。`namespace` 是可選的，預設值為 `App`。響應包含 `namespace`、`source` 和 `updated_at`。
+
+一個身分域在一個名稱空間中有一個模式，並且其中的每個型別和操作都必須在該名稱空間中宣告。在其他名稱空間中宣告任何內容都會被拒絕，並返回一個 422，指出應使用的名稱空間。名稱空間是一個最多 64 個字元的 Cedar 識別符號，`FerrisKey` 是保留的：該名稱空間包含由 FerrisKey 解析自身的型別，並且宣告它的身分域可能會覆蓋它們。
+
+`namespace App {}` 是一個有效的模式。它自身不宣告任何內容，但足以引入內建型別。
+
+<span id="the-built-in-schema" />
+
+### 內建模式
+
+FerrisKey 將其自己的 `FerrisKey` 名稱空間合併到身分域的模式中。您的型別可以引用它（`principal: [FerrisKey::User]`，為型別 `FerrisKey::User` 的屬性），您的策略也可以使用它。`GET /authz/schema/builtin` 將其作為 `{ "namespace": "FerrisKey", "source": "..." }` 返回，這是編輯器在客戶端驗證策略所需的。`GET /authz/schema` 僅返回身分域自身的部分。內建型別描述見[評估](/zh-TW/modules/authz/evaluation)。
+
+當啟用的策略或模板在新的模式下無法繼續驗證時，替換模式會被拒絕並返回 422，因此模式更改永遠不會讓身分域的規則處於無法編譯的狀態。
+
+:::callout{variant="info" title="一個沒有模式的身分域"}
+一個身分域可以在沒有任何模式的情況下執行。此時 FerrisKey 只解析其策略，不進行型別檢查，不檢查請求，也不合並內建的 `FerrisKey` 型別。在依賴規則之前，請先上傳模式，即使是空的模式。
+:::
+
+<span id="policies" />
+
+## 策略
+
+策略是一個名稱、一個主體和一些標誌。
+
+```http
+POST /realms/{realm_name}/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "editors-can-read",
+  "description": "Holders of the editors role may read documents",
+  "enabled": true,
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+| 欄位 | 預設 | 說明 |
+|---|---|---|
+| `name` | 必填 | 來自 `A-Z`、`a-z`、`0-9`、`_`、`-`、`.` 和 `:` 的 1 到 128 個字元。在身分域的策略中唯一。 |
+| `description` | 無 | 自由文字 |
+| `enabled` | `true` | 已禁用的策略會被儲存，但既不驗證也不評估。 |
+| `body` | 必填 | `static`，使用 Cedar `source`，或 `linked`（參見 [模板](#templates-and-linked-policies)） |
+
+201 響應是儲存的策略：
+
+```json title="Response"
+{
+  "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e80",
+  "name": "editors-can-read",
+  "description": "Holders of the editors role may read documents",
+  "origin": "custom",
+  "enabled": true,
+  "managed_by": null,
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+`origin` 對於靜態策略是 `custom`，對於連結策略是 `generated`。`GET /authz/policies` 以一個陣列返回身分域的每個策略，無分頁。
+
+在一個策略中，一個角色、一個組或一個組織都是由其ID命名的。對於一個主體，FerrisKey從資料庫中解析這些ID，它們是UUID，如`FerrisKey::Role::"01a0d3dd-a750-7817-aa2b-7e8b98f68e66"`；控制檯中顯示的名稱並不是策略匹配的依據。對於描述自己的PEP的主體，它們是PEP傳送的任何字串（參見[Evaluation](/zh-TW/modules/authz/evaluation#subjects)）。
+
+每次寫入都會根據Cedar的嚴格模式，將新的策略與所有其他已啟用的策略和模板一起，針對模式進行驗證。如果驗證失敗，什麼都不會儲存，並返回422錯誤：
+
+```json title="422 body"
+{
+  "errors": [
+    {
+      "field": "editors-can-read",
+      "code": "invalid_authorization_policy",
+      "message": "<line>:<column>: <what Cedar reported>"
+    }
+  ]
+}
+```
+
+`field`是有問題的策略或模板的名稱，或者當問題出在模式時是`schema`。`message`在Cedar提供位置時以`line:column:`開頭。超出允許模式的名稱也會返回422。已經被其他策略使用的名稱會返回400，並給出原因`already_exists`。
+
+:::callout{variant="warning" title="PUT 替換整個策略"}
+`PUT /authz/policies/{policy_id}` 使用與建立相同的主體並覆蓋每個欄位。省略 `enabled`，則策略重新啟用。省略 `description`，則策略被清除。傳送你希望策略成為的內容，而不是差異。
+:::
+
+<span id="templates-and-linked-policies" />
+
+## 模板和關聯策略
+
+模板是一個帶有空位的 Cedar 策略。空位為 `?principal` 和 `?resource`，這是 Cedar 定義的唯一兩個槽。關聯策略用實體填充槽，因此一個模板可以為多個角色或多個資源服務，而無需複製文字。
+
+```http
+POST /realms/{realm_name}/authz/templates
+```
+
+```json title="Request body"
+{
+  "name": "role-reads-documents",
+  "description": "Everyone in a role may read documents",
+  "source": "permit (principal in ?principal, action == App::Action::\"document:read\", resource);"
+}
+```
+
+```http
+POST /realms/{realm_name}/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "viewers-read",
+  "body": {
+    "type": "linked",
+    "template_id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e70",
+    "links": {
+      "?principal": { "type": "FerrisKey::Role", "id": "01a0d3dd-a750-7817-aa2b-7e8b98f68e66" }
+    }
+  }
+}
+```
+
+關聯策略報告 `origin: "generated"`。當主體被解析時，除 `?principal` 或 `?resource` 之外的連結鍵將被拒絕。關聯不存在的模板會返回 422。
+
+模板在每次寫入時都會與其他內容一起驗證。替換模板會再次驗證與其關聯的策略。刪除仍被策略引用的模板會被拒絕，並返回 409 狀態碼及原因 `authorization_template_in_use`。模板名稱遵循與策略名稱相同的模式，並且在模板之間唯一。
+
+<span id="validate-before-you-write" />
+
+## 在寫入前進行驗證
+
+`POST /authz/policies/validate` 檢查候選策略並不儲存任何內容。
+
+```json title="Request body"
+{
+  "policies": [
+    {
+      "name": "editors-can-read",
+      "body": { "type": "static", "source": "permit (principal, action, resource);" }
+    }
+  ]
+}
+```
+
+```json title="Response"
+{ "valid": true, "issues": [] }
+```
+
+候選項中的問題不會導致呼叫失敗。答案是 200，並帶有 `"valid": false`，每個問題在 `issues` 中有一個條目，每個條目包含 `message`，如果問題屬於某個候選項，還會包含 `policy`（候選項名稱），當 Cedar 給出位置時，還會包含 `line` 和 `column`。無效請求體，例如缺少 `policies` 陣列，將返回 400。
+
+候選項會單獨進行檢查，依據身分域的模式和模板進行，而不是與已儲存的策略合併。例如 Cedar 警告（如策略永遠無法應用於其命名的型別）不會被報告：只有錯誤會使 `valid` 為假。
+
+<span id="simulate-a-decision" />
+
+## 模擬決策
+
+`POST /authz/simulate` 針對一個規則集決策一個請求且不儲存任何內容。可用於在策略上線前測試，或用於解釋決策。
+
+```json title="Request body"
+{
+  "policies": [
+    {
+      "name": "support-reads",
+      "body": {
+        "type": "static",
+        "source": "permit (principal in FerrisKey::Group::\"support\", action == App::Action::\"document:read\", resource is App::Document);"
+      }
+    }
+  ],
+  "request": {
+    "subject": {
+      "type": "FerrisKey::User",
+      "id": "u1",
+      "properties": { "username": "u1", "email_verified": true, "enabled": true },
+      "parents": [{ "type": "FerrisKey::Group", "id": "support" }]
+    },
+    "action": { "name": "document:read" },
+    "resource": {
+      "type": "App::Document",
+      "id": "1",
+      "properties": { "classification": "public" }
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["support-reads"] } }
+}
+```
+
+| 欄位 | 說明 |
+|---|---|
+| `policies` | 候選策略，形狀與驗證時相同。存在時，它們會替代身分域的策略用於此呼叫。缺失時，由身分域已啟用的策略決定。 |
+| `entities` | 請求提及的額外實體，每個實體具有 `type`、`id`，可選的 `properties` 和可選的 `parents` |
+| `request` | `subject`、`action`、`resource` 和可選的 `context`。主題和資源採用 `type`、`id`、`properties` 和 `parents` |
+
+FerrisKey 在模擬過程中不會查詢任何內容。`FerrisKey::User` 主題就是你描述的內容，其組和角色如 `parents` 所示。擁有架構後，描述必須符合它，對於 `FerrisKey::User` 來說，這意味著 `username`、`email_verified` 和 `enabled`。響應始終包含 `context.reason_admin`，因為呼叫者已經需要 `view_authorization`。
+
+無效的候選策略會返回 422。不符合架構的請求會返回 400。
+
+<span id="policies-owned-by-a-controller" />
+
+## 由控制器擁有的策略
+
+保持一組策略同步的指令碼或操作員可以給它們貼標籤，以便永遠不觸碰其餘部分。標籤是 `managed_by` 查詢引數。
+
+| 呼叫 | `?managed_by=<label>` 的效果 |
+|---|---|
+| `POST /authz/policies` | 該策略與該標籤一起儲存，在響應中顯示為 `managed_by` |
+| `GET /authz/policies` | 只有帶有該標籤的策略 |
+| `GET`, `PUT`, `DELETE /authz/policies/{policy_id}` | 帶有其他標籤或沒有標籤的策略將被視為未找到 (404) |
+
+沒有引數的 `PUT` 保留策略現有的標籤。標籤長度為 1 到 64 個字元，由小寫字母、數字、`_`、`-` 和 `.` 組成，其他任何字元都會返回 422。只有策略有標籤，模板沒有標籤。
+
+標籤是過濾器，而不是存取控制。省略該引數的呼叫者會看到並更改其權限允許的每個策略。
+
+<span id="concurrent-writes" />
+
+## 併發寫入
+
+每次寫入都會驗證完整的規則集，而不僅僅是你傳送的物件。只有在規則在讀取和寫入之間不移動時，這才是合理的，因此 FerrisKey 使用計數器進行保護。`GET /authz/state` 會將其返回為 `version`:
+
+```json title="Response"
+{ "enabled": true, "version": 7 }
+```
+
+每次對 schema、策略或模板進行寫操作時，`version` 會增加一。寫入操作首先讀取版本，根據載入的規則進行驗證，並且僅當版本仍然相同時才儲存更改，同時在同一事務中將其遞增。如果在此期間有其他寫操作完成，則不會儲存任何內容，返回的狀態碼為 409：
+
+```json title="409 body"
+{
+  "code": "E_CONFLICT",
+  "status": 409,
+  "reason": "authorization_conflict",
+  "message": "The authorization rules of this realm changed since they were read"
+}
+```
+
+你不需要傳送版本號；檢查在單個請求內完成。返回 409 且原因如上意味著你在競爭中失敗：如果你的更改依賴於規則，請重新讀取規則，然後重複呼叫。開啟或關閉身分域不會影響 `version`。
+
+副本每秒最多重新檢查一次版本，因此更改大約在一秒內就能在所有地方被檢測到。
+
+<span id="limits" />
+
+## 限制
+
+| 什麼 | 限制 |
+|---|---|
+| 單次評估體（`/evaluation`） | 64 KiB |
+| 其他任何請求的主體，包括 `/evaluations` 和管理路由 | 1 兆位元組 |
+| `evaluations` 陣列中的專案 | 1 到 100 |
+| 策略或模板名稱 | 128 個字元 |
+| 名稱空間 | 64 個字元 |
+| `managed_by` 標籤 | 64 個字元 |
+
+超過限制的主體會被 400 拒絕。

@@ -1,0 +1,242 @@
+---
+title: "从文件导入"
+description: "用于 ferris-ctl realm import --from config 的 FerrisKey 原生身份域描述格式。"
+icon: file-text
+order: 2
+---
+
+<span id="import-from-a-file" />
+
+# 从文件导入
+
+`--from config` 从 FerrisKey 原生描述文件导入一个身份域。格式来自扩展名：`.yaml`、`.yml` 或 `.toml`。不涉及外部系统。
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml
+```
+
+预览但不写入任何内容：
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
+```
+
+<span id="format" />
+
+## 格式
+
+描述包含一个 `name`，以及可选的 `settings`、`roles`、`clients` 和 `users` 部分。ferriskey-cli 仓库在 [`examples/realm.yaml`](https://github.com/ferriskey/ferriskey-cli/blob/main/examples/realm.yaml) 提供了一个起点。
+
+```yaml title="realm.yaml"
+name: acme
+
+settings:
+  access_token_lifetime: 300
+  refresh_token_lifetime: 1800
+  user_registration_enabled: true
+  forgot_password_enabled: true
+
+roles:
+  - name: admin
+    description: Realm administrators
+    permissions:
+      - manage_realm
+      - manage_users
+  - name: viewer
+    description: Read-only access
+    permissions:
+      - view_users
+      - view_clients
+
+clients:
+  - client_id: web-app
+    name: Web Application
+    client_type: public
+    public_client: true
+    redirect_uris:
+      - https://app.acme.test/callback
+      - https://app.acme.test/*
+  - client_id: backend
+    name: Backend Service
+    client_type: confidential
+    service_account_enabled: true
+    direct_access_grants_enabled: true
+    roles:
+      - name: service-reader
+        description: Service-scoped read role
+
+users:
+  - username: alice
+    email: alice@acme.test
+    firstname: Alice
+    lastname: Doe
+    email_verified: true
+    roles:
+      - admin
+  - username: bob
+    email: bob@acme.test
+    roles:
+      - viewer
+```
+
+相同的键在 TOML 中也适用。包含列表的章节会变成表格数组：
+
+```toml title="realm.toml"
+name = "acme"
+
+[settings]
+access_token_lifetime = 300
+user_registration_enabled = true
+
+[[roles]]
+name = "admin"
+description = "Realm administrators"
+permissions = ["manage_realm"]
+
+[[clients]]
+client_id = "web-app"
+client_type = "public"
+public_client = true
+redirect_uris = ["https://app.acme.test/callback"]
+
+[[clients.roles]]
+name = "reader"
+
+[[users]]
+username = "alice"
+email = "alice@acme.test"
+roles = ["admin", "web-app:reader"]
+```
+
+<Callout variant="warning" title="拼写错误的键不是错误">
+
+导入器会忽略它不认识的键，不会发出警告。拼写错误或来自其他工具的键会保留默认值。通过 `--dry-run -o yaml` 运行该文件并读取结果：它会打印导入器理解的每个字段及其值。
+
+</Callout>
+
+<span id="settings" />
+
+## 设置
+
+每个设置都是可选的。你省略的任何内容都会保持 FerrisKey 的默认值。设置会在每次运行时重新发送，因此每次都会覆盖当前身份域的值。
+
+| 字段 | 说明 |
+|-------|-------------|
+| `default_signing_algorithm` | 令牌签名算法 |
+| `access_token_lifetime` | 访问令牌有效期（秒） |
+| `refresh_token_lifetime` | 刷新令牌有效期（秒） |
+| `id_token_lifetime` | ID 令牌有效期（秒） |
+| `temporary_token_lifetime` | 临时令牌有效期（秒） |
+| `user_registration_enabled` | 允许自助注册 |
+| `forgot_password_enabled` | 启用忘记密码流程 |
+| `remember_me_enabled` | 启用“记住我”功能 |
+| `magic_link_enabled` / `magic_link_ttl` | 魔法链接登录及其有效期 |
+| `passkey_enabled` | 启用通行密钥 |
+| `compass_enabled` | 启用 Compass 模块 |
+| `email_verification_enabled` | 要求电子邮件验证 |
+| `email_verification_ttl_hours` | 电子邮件验证链接有效期（小时） |
+
+<span id="roles" />
+
+## 角色
+
+| 字段 | 默认 | 说明 |
+|-------|---------|-------------|
+| `name` | 必填 | 角色名称 |
+| `description` | 无 | 自由文本描述 |
+| `permissions` | `[]` | 权限名称，使用下划线命名法 |
+
+权限使用[权限参考](/zh-CN/discover/core-concepts/roles#permissions-reference)中的名称，所以是 `manage_realm`，而不是 `ManageRealm`，也不是 `realm:manage`。
+
+运行导入的身份只能授予它持有的权限。没有 `manage_realm`，如果一个角色列出了身份没有的权限，或者名称 FerrisKey 不知道，该请求会以 403 `cannot grant a permission you do not hold` 拒绝，且导入停止。有了 `manage_realm`，FerrisKey 不识别的名称会被接受并丢弃，因此角色创建时的权限比文件列出的少。
+
+<span id="clients" />
+
+## 客户端
+
+| 字段 | 默认 | 说明 |
+|-------|---------|-------------|
+| `client_id` | 必填 | 客户端标识符 |
+| `name` | 无 | 显示名称 |
+| `client_type` | `public` | `public`、`confidential` 或 `system` |
+| `protocol` | `openid-connect` | 客户端使用的协议 |
+| `enabled` | `true` | 客户端是否可以使用 |
+| `public_client` | `false` | 公共客户端，无密码 |
+| `service_account_enabled` | `false` | 创建关联的服务账户用户 |
+| `direct_access_grants_enabled` | `false` | 允许密码授权 |
+| `device_authorization_grant_enabled` | `false` | 允许设备授权授予，这是 `ferris-ctl login` 所需的 |
+| `redirect_uris` | `[]` | 允许的重定向 URI |
+| `post_logout_redirect_uris` | `[]` | 允许的注销后重定向 URI |
+| `web_origins` | `[]` | 允许在此客户端的域范围路由上使用的浏览器来源 |
+| `require_pkce` | 继承 | 在授权码流程中要求使用 PKCE |
+| `access_token_lifetime` | 继承 | 覆盖域访问令牌的 TTL（以秒为单位） |
+| `refresh_token_lifetime` | 继承 | 覆盖域刷新令牌的 TTL |
+| `id_token_lifetime` | 继承 | 覆盖域 ID 令牌的 TTL |
+| `temporary_token_lifetime` | 继承 | 覆盖域临时令牌的 TTL |
+| `roles` | `[]` | 针对该客户端的角色，与域角色形状相同 |
+
+已存在的客户端不会被修改，除了 `require_pkce` 和生命周期，它们在每次运行时都会再次发送。缺失的重定向 URI、网页来源和角色会被添加。报告列出了每个机密客户端的密钥；见 [导入报告](/zh-CN/cli/import/overview#the-import-report)。
+
+<span id="users" />
+
+## 用户
+
+| 字段 | 默认 | 说明 |
+|-------|---------|-------------|
+| `username` | 必填 | 用户名 |
+| `id` | 无 | 使用此 UUID 创建用户，而不是生成的 UUID |
+| `email` | 无 | 电子邮件地址 |
+| `firstname` | 无 | 名字 |
+| `lastname` | 无 | 姓氏 |
+| `email_verified` | 无 | 将电子邮件标记为已验证 |
+| `roles` | `[]` | 要分配的角色 |
+| `credential` | 无 | 作为用户密码存储的密码哈希，见下文 |
+
+`roles` 中的一个普通名称指的是身份域角色。给它加上客户端 ID 前缀以选择限定于该客户端的角色：
+
+```yaml
+users:
+  - username: alice
+    roles:
+      - admin              # realm role
+      - backend:service-reader   # role of the "backend" client
+```
+
+`client_id:role` 如果文件中没有任何客户端定义，且客户端本身也未持有，会停止导入。一个与任何身份域角色都不匹配的普通名称仅会生成警告，该分配会被跳过。
+
+<span id="passwords" />
+
+### 密码
+
+没有 `credential` 的情况下，用户会以无密码状态到达。可以在之后通过 [`ferris-ctl user set-password`](/zh-CN/cli/commands/user#user-set-password)、管理员控制台或恢复流程设置密码。要保留现有密码，请给用户它已经拥有的哈希值：
+
+```yaml
+users:
+  - username: alice
+    credential:
+      algorithm: bcrypt
+      secret_data: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+      hash_iterations: 10
+```
+
+| 字段 | 说明 |
+|-------|-------------|
+| `algorithm` | `bcrypt`、`argon2id`、`argon2i` 或 `argon2d` |
+| `secret_data` | 作为来源存储的哈希值：一个 `$2a$`、`$2b$` 或 `$2y$` 的 bcrypt 字符串，或 Argon2 PHC 字符串 |
+| `hash_iterations` | 哈希内部写入的成本：bcrypt 成本（4 到 14），或 Argon2 的时间成本 `t`。当两者不一致时，服务器会拒绝该哈希 |
+
+导入会按原样存储哈希，且从不标记为临时。FerrisKey 在用户首次登录时将其重新编码为 Argon2id；[导出与导入](/zh-CN/discover/guides/portability#password-hashes) 解释了具体方法。已经有密码的用户将保留原密码。拒绝的哈希会增加警告并计入 `passwords_failed`，导入过程会继续。
+
+保存密码哈希的文件与其来源的密码存储一样敏感。请勿将其纳入版本控制。`--dry-run` 输出会遮蔽哈希，但文件本身不会。
+
+<span id="fixed-ids" />
+
+### 固定的 id
+
+使用 `id`，用户将以该 UUID 创建，这确保指向该用户的所有标识符保持有效。如果服务器以不同的 ID 创建用户，或者该 ID 已属于其他用户，导入将以错误停止。
+
+<Callout variant="info" title="在 0.3.0 版本中不可用">
+
+用户上的 `credential` 和 `id` 字段是在 0.3.0 版本之后出现的。在 0.3.0 版本中，它们会像任何未知键一样被忽略。要使用它们，请从 [ferriskey-cli](https://github.com/ferriskey/ferriskey-cli) 的 `main` 分支构建。
+
+</Callout>

@@ -1,0 +1,148 @@
+---
+title: "访问令牌和刷新令牌"
+description: "访问令牌、刷新令牌，以及不透明格式和 JWT 格式之间的区别。"
+icon: key
+order: 3
+---
+
+<span id="access--refresh-tokens" />
+
+# 访问令牌和刷新令牌
+
+成功的 OAuth2 流程返回的 JSON 数据大致如下所示：
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "refresh_token": "8xLOxBtZp8...",
+  "scope": "openid profile email"
+}
+```
+
+信封里拿出两张纸，一张是访问令牌，一张是刷新令牌。它们的作用非常不同，但人们常常会混淆。
+
+<span id="access-token" />
+
+## 访问令牌
+
+访问令牌就像代客钥匙。客户端向 API 出示它，以证明“我有权代表用户执行此操作”。
+
+你将它附加到 `Authorization` 头的 API 调用中：
+
+```http
+GET /api/orders
+Authorization: Bearer eyJhbGciOi...
+```
+
+<span id="properties" />
+
+### 属性
+
+- 短期有效。几分钟，而不是几小时。五分钟是一个健康的默认值。
+- 有作用域的。携带用户（或管理员）授予的`scope`。API 使用作用域来决定允许什么。
+- 持有人。持有令牌的人可以像用现金一样使用它。把它当成现金对待：如果可以的话，不要记录它，不要放在网址里，也不要把它存到`localStorage`里。
+
+<span id="why-so-short-lived" />
+
+### 为什么会持续这么短暂？
+
+如果访问令牌泄露，攻击者会一直拥有访问权限直到其过期。短暂的生命周期会让“永远”变成“几分钟”。代价是：客户端需要某种方式无声续签令牌。这正是刷新令牌的作用。
+
+<span id="refresh-token" />
+
+## 刷新令牌
+
+刷新令牌是允许客户端请求新的访问令牌而无需再次打扰用户的收据。
+
+```bash
+curl -X POST .../token \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=••••••••" \
+  -d "client_id=my-frontend"
+```
+
+<span id="properties-1" />
+
+### 属性
+
+- 持续时间长。根据政策，时间从数小时到几周不等。
+- 单一用途。仅用于获取新的访问令牌，绝不调用API。
+- 敏感。泄露的刷新令牌比泄露的访问令牌严重得多。它是可以续期的访问来源。请妥善存储，最好每次使用时都进行轮换。
+
+<span id="refresh-token-rotation" />
+
+### 刷新令牌轮换
+
+现代授权服务器会轮换刷新令牌：每次刷新请求都会返回一个新的刷新令牌，并使旧的令牌失效。如果攻击者窃取了令牌并使用它，合法客户端的下一次刷新将会失败，并明确发出警告。这是盗用的明显信号。
+
+<span id="opaque-tokens-vs-jwt" />
+
+## 不透明令牌与 JWT
+
+OAuth2 并未指定访问令牌的格式。存在两种阵营。
+
+<span id="opaque-tokens" />
+
+### 不透明令牌
+
+一个随机字符串。看起来像 `8xLOxBtZp8N3...`。本身不携带任何信息。要知道它授予了什么权限，资源服务器必须调用授权服务器的 introspection 端点：
+
+```http
+POST /protocol/openid-connect/token/introspect
+Authorization: Basic ...
+token=8xLOxBtZp8N3...
+```
+
+服务器响应元数据：作用域、过期时间、它所代表的用户。
+
+**优点：** 可以立即撤销（只需在服务器端删除记录）。不会有声明泄露到日志中。
+
+**缺点：** 每次 API 调用可能都需要与认证服务器往返一次。延迟更高，耦合更多。
+
+<span id="jwt-tokens" />
+
+### JWT 令牌
+
+一个签名的 JSON 文档。资源服务器可以使用认证服务器的公钥在本地验证它。无需网络调用。
+
+```
+header.payload.signature
+```
+
+**优点：** 无状态，快速，可水平扩展。
+
+**缺点：** 在过期前无法撤销。解决方法是使用较短的有效期 + 紧急情况的拒绝列表。
+
+有关格式详情，请参见 [JWT 部分](/zh-CN/learn/jwt/overview)。
+
+<span id="which-to-choose" />
+
+### 该选择哪种？
+
+- 如果你的 API 是分布式的、对延迟敏感，并且可以接受较短的有效期，那么选择 JWT。
+- 如果你需要即时撤销或不希望声明保存在客户端内存中，则不透明。
+
+大多数现代IAM系统，包括FerrisKey，默认情况下为访问令牌颁发JWT。
+
+<span id="id-token-a-related-but-different-thing" />
+
+## ID令牌：相关但不同的东西
+
+OIDC增加了第三个令牌：ID令牌。它_不是_用来调用API的。它存在的目的是告诉客户端谁已登录。完整信息请参见[ID令牌](/zh-CN/learn/oidc/id-token)。混淆访问令牌和ID令牌是OIDC中最常见的新手错误。它们不能互换使用。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey默认颁发JWT访问令牌，并支持刷新令牌轮换。
+
+::::card-group{cols=2}
+:::card{label="JWT 构成" icon="lucide:file-code-2" href="/zh-CN/learn/jwt/anatomy"}
+FerrisKey访问令牌中实际包含的内容。
+:::
+:::card{label="保护模块" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+使用协议映射器控制哪些声明和作用域进入令牌。
+:::
+::::

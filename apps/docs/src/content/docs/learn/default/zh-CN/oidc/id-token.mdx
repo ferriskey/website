@@ -1,0 +1,122 @@
+---
+title: "ID令牌"
+description: "ID 令牌的构成：声明、验证及其用途（以及非用途）。"
+icon: id-card
+order: 2
+---
+
+<span id="the-id-token" />
+
+# ID令牌
+
+ID 令牌是 OIDC 对 OAuth2 的扩展。它是与访问令牌一起签发的 JWT，它只有一个任务：告诉客户端用户是谁。
+
+不是用于调用 API。仅供客户端读取。
+
+<span id="what-it-looks-like" />
+
+## 外观形式
+
+ID 令牌是 JWT，因此它有三部分，用点分隔：
+
+```
+eyJhbGciOiJSUzI1Ni...eyJzdWIiOiI0Mj...siglmFsdfqkn...
+└── header ────┘└── payload ─────┘└── signature ─┘
+```
+
+解码后的有效载荷，典型示例：
+
+```json
+{
+  "iss": "https://auth.example.com/realms/my-app",
+  "sub": "42f1f9c2-04cd-4b56-9c0a-eaaa12345678",
+  "aud": "my-frontend",
+  "exp": 1736380000,
+  "iat": 1736376400,
+  "auth_time": 1736376400,
+  "nonce": "n-0S6_WzA2Mj",
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "email_verified": true
+}
+```
+
+每个字段都是一个声明。一些声明是标准化的；其他由提供者或客户端添加。
+
+<span id="mandatory-claims" />
+
+## 必填声明
+
+OIDC 要求这些声明，客户端必须验证它们：
+
+| 声明 | 含义 |
+| --- | --- |
+| `iss` | _签发者._ 谁签发了此令牌。必须与预期的提供者匹配。 |
+| `sub` | _主体._ 用户的稳定标识符。视为主键。 |
+| `aud` | _Audience._ 这个令牌是给哪个客户端的？一定是你的`client_id`。 |
+| `exp` | _Expiration._ Unix 时间戳。之后，拒绝。 |
+| `iat` | _Issued at._ 铸造时。 |
+| `auth_time` | 用户实际登录的时间（与该令牌发放时）相比。 |
+| `nonce` | 你客户端在授权请求中发送的价值。重放保护。 |
+
+<span id="optional-standard-claims" />
+
+## 可选标准要求
+
+被`profile`、`email`、`address`和`phone`的望远镜吸引：
+
+- `name`, `given_name`, `family_name`, `nickname`, `preferred_username`
+- `email`, `email_verified`
+- `picture`, `locale`, `zoneinfo`
+- `address`, `phone_number`
+
+<span id="how-a-client-validates-an-id-token" />
+
+## 客户端如何验证ID令牌
+
+这是每个半称职的OIDC图书馆每次都会做的事：
+
+1. **解析**JWT。确认三个片段。
+2. **验证签名**与`jwks_uri`的提供商公钥。
+3. **检查`iss`**与预期发行机构匹配。
+4. **检查 `aud`** 是否包含客户端自己的 `client_id`。
+5. **检查 `exp`** 是否在未来（允许小的时钟偏移）。
+6. **检查 `nonce`** 是否与客户端在授权请求中发送的一致。
+7. 如果存在，**检查 `c_hash` / `at_hash`** 是否与代码和访问令牌匹配。
+
+跳过其中任何一项，你就发布了一个安全漏洞。使用经过验证的库。不要自己实现。
+
+<span id="id-token-vs-access-token-the-rule" />
+
+## ID Token 与访问令牌：规则
+
+这是 OIDC 中最容易出错的规则，因此值得强调：
+
+:::callout{variant="warning" title="ID Token 不是用于 API 的承载令牌"}
+ID 令牌是供客户端检查的。访问令牌是供 API 使用的。将 ID 令牌发送到你的 API 的 `Authorization: Bearer` 头是错误的。如果你的 API 接受 ID 令牌，攻击者可以重放任何发给任意客户端、面向任意受众的 ID 令牌。
+:::
+
+如果你的 API“只是想知道用户是谁”，那么应颁发一个真正的携带 `sub` 的访问令牌并进行验证。
+
+<span id="where-the-user-identity-actually-lives" />
+
+## 用户身份的实际存放位置
+
+`sub` 是稳定的标识符。在你自己的数据库中将其视为用户的主键。不要使用 `email` 或 `preferred_username` 作为主键。那些可能会变化。
+
+如果用户在身份提供者（IdP）处更改了电子邮件，明天的 ID 令牌中的 `email` 会变化。`sub` 则不会。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 使用使用身份域的签名密钥签名的 JWT 颁发 OIDC ID 令牌。你可以在 [jwt.io](https://jwt.io) 解码任何 FerrisKey ID 令牌以快速查看。
+
+::::card-group{cols=2}
+:::card{label="JWT 构成" icon="lucide:file-code-2" href="/zh-CN/learn/jwt/anatomy"}
+ID 令牌使用的结构。
+:::
+:::card{label="UserInfo 端点" icon="lucide:user-search" href="/zh-CN/learn/oidc/userinfo"}
+使用访问令牌获取最新的用户声明。
+:::
+::::

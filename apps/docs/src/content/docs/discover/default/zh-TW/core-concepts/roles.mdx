@@ -1,0 +1,189 @@
+---
+title: "角色與權限"
+description: "FerrisKey 中的按位角色系統：權限集合、位掩碼操作和角色對映。"
+icon: shield-check
+order: 15
+---
+
+<span id="roles--permissions" />
+
+# 角色與權限
+
+FerrisKey 中的權限是 64 位整數中的位。一個角色是它們的命名集合，而授權檢查是一次位與操作。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+每個權限對映到一個獨特的二的冪：
+
+```
+CreateClient        = 0b0000...0001  (bit 0)
+ManageAuthorization = 0b0000...0010  (bit 1)
+ManageClients       = 0b0000...0100  (bit 2)
+...
+```
+
+一個角色將其權限儲存為單個 `u64` 位掩碼，即所有包含權限位的按位或。檢查某個權限是一次 AND 操作：
+
+```rust title="Permission check"
+fn has_permission(user_permissions: u64, required: u64) -> bool {
+    user_permissions & required == required
+}
+```
+
+:::callout{variant="info" title="一個操作可以接受多個權限，任何一個都可以授權。"}
+大多數操作受一組權限而非單個權限保護，並且擁有該組中的**任何**成員就足夠了。例如，讀取聯盟提供者可以接受 `manage_realm` 或 `view_realm`。因此，`manage_*` 權限通常意味著匹配的 `view_*`，並且你不需要同時授予兩者。
+:::
+
+<span id="permissions-reference" />
+
+## 權限參考
+
+控制檯將30個權限分為11個分類，這也是理解它們最方便的方式：你很少只授予一個權限，而是授予一個分類的讀取權限或一個分類的寫入權限。
+
+<img class="only-light" src="/dashboard/role_permissions-light.jpg" alt="FerrisKey角色權限編輯器顯示權限分類及其啟用數量" />
+<img class="only-dark" src="/dashboard/role_permissions-dark.jpg" alt="FerrisKey角色權限編輯器顯示權限分類及其啟用數量" />
+
+| 分類 | 權限 |
+|---|---|
+| 使用者管理 | 3 |
+| 客戶端管理 | 4 |
+| 角色與授權 | 5 |
+| 身分域管理 | 3 |
+| 身分提供者 | 2 |
+| 事件與審計 | 2 |
+| 群組 | 1 |
+| 客戶端作用域 | 3 |
+| Webhook | 3 |
+| 郵件模板 | 2 |
+| 組織 | 2 |
+
+編輯角色的權限集只需一次呼叫：
+
+```
+PATCH /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+它會替換整個權限集，而不是合併，因此請傳送你希望角色最終擁有的完整權限列表。
+
+
+API 和 CLI 都使用它們的 snake_case 名稱來接收權限，所以是 `manage_realm`，而不是 `ManageRealm` 也不是 `realm:manage`。未識別的名稱處理方式取決於誰儲存了角色。持有 `manage_realm` 的呼叫者會被靜默移除，這在角色看起來沒有授予任何權限時值得記住。任何其他呼叫者將被拒絕，並返回 403（`cannot grant a permission you do not hold`），因為與任何權限都不匹配的名稱也是呼叫者無法持有的權限。
+
+<span id="manage" />
+
+### 管理
+
+| 權限 | 說明 |
+|---|---|
+| `create_client` | 建立新的 OAuth2 客戶端 |
+| `manage_authorization` | 編寫身分域的授權規則（架構、策略、模板）並切換身分域的授權開關 |
+| `manage_clients` | 更新和刪除客戶端 |
+| `manage_events` | 管理審計事件配置 |
+| `manage_identity_providers` | 配置外部身分提供者 |
+| `manage_realm` | 更新身分域設定 |
+| `manage_users` | 建立、更新和刪除使用者 |
+| `manage_roles` | 建立、更新和刪除角色 |
+| `manage_webhooks` | 配置 webhook 訂閱 |
+| `manage_client_scopes` | 管理客戶端作用域和協議對映器 |
+| `manage_email_templates` | 建立、更新和刪除電子郵件模板 |
+| `manage_organizations` | 建立、更新和刪除組織、其組及其成員 |
+
+<span id="query" />
+
+### 查詢
+
+| 權限 | 說明 |
+|---|---|
+| `query_clients` | 列出和搜尋客戶端 |
+| `query_groups` | 列出和搜尋組 |
+| `query_realms` | 列出和搜尋身分域 |
+| `query_users` | 列出和搜尋使用者 |
+| `query_webhooks` | 列出和搜尋 webhook |
+| `query_client_scopes` | 列出和搜尋客戶端作用域 |
+
+<span id="view" />
+
+### 檢視
+
+| 權限 | 說明 |
+|---|---|
+| `view_authorization` | 讀取那些規則、驗證和模擬策略，並檢視哪些策略決定了評估 |
+| `view_clients` | 檢視客戶端詳細資訊 |
+| `view_events` | 檢視審計事件 |
+| `view_identity_providers` | 檢視身分提供者詳細資訊 |
+| `view_realm` | 檢視身分域詳細資訊 |
+| `view_users` | 檢視使用者詳細資訊 |
+| `view_roles` | 檢視角色詳情 |
+| `view_webhooks` | 檢視 webhook 詳情 |
+| `view_client_scopes` | 檢視客戶端作用域詳情 |
+| `view_email_templates` | 檢視郵件模板 |
+| `view_organizations` | 檢視組織、其組及其成員 |
+
+<span id="evaluate" />
+
+### 評估
+
+| 權限 | 說明 |
+|---|---|
+| `evaluate_authorization` | 像作為應用程式強制執行它們一樣向身分域請求存取決策 |
+
+`evaluate_authorization` 是第30個權限，第29位。它本身不賦予對規則的任何權利，並且只對服務賬戶有效：評估端點會對其他所有呼叫者返回403，包括持有 `manage_realm` 的使用者。將其授予一個角色，然後將該角色賦予執行你策略的客戶端的服務賬戶。[Authz 模組](/zh-TW/modules/authz/overview#permissions) 解釋了其餘部分。
+
+<span id="actions-and-how-a-check-is-resolved" />
+
+## 操作，以及檢查如何解決
+
+權限是角色儲存的內容。它們不是程式碼為操作命名的方式。
+
+每個受授權保護的操作都有一個穩定的操作ID，形式為 `resource_type:verb`，例如 `client:create`、`user_role:assign` 或 `security_event:read`。共有 110 個，其中 15 個屬於 Authz 模組本身（`authorization:evaluate` 以及 `authorization_policy:*`、`authorization_schema:*`、`authorization_state:*` 和 `authorization_template:*` ID）。這些名稱是穩定的：一個授權引擎會將一個操作解析為授予該操作的權限集合，並且對映儲存在一個決策表中，而不是分散在各個呼叫點。
+
+在設計角色時，有兩件重要的事情要注意。你授予的權限和程式碼檢查的權限是不同的層次：你分配了 `manage_users`，程式碼卻詢問 `user:update` 是否允許，而引擎會在兩者之間進行橋接。有些檢查會在身分匹配時短路。一小部分操作允許主體在*自身就是*目標時進行操作，無論其權限如何，這就是使用者可以在不持有 `view_users` 的情況下讀取自己的資料。自助服務透過[其自己的端點](/zh-TW/modules/account/security)而不是管理員端點進行。
+
+:::callout{variant="info" title="不是評判你的應用程式的規則"}
+該目錄為內部目錄。FerrisKey 在程序內解析它，以保護其自身的管理 API，評估端點不使用這些 ID。[Authz 模組](/zh-TW/modules/authz/overview) 回答關於你自己應用程式的 [AuthZEN](/zh-TW/learn/authzen/overview) 請求，使用你的身分域編寫的 Cedar 策略。它的操作來自身分域的模式，例如 `document:read`。
+:::
+
+<span id="role-mappings" />
+
+## 角色對映
+
+角色透過角色對映附加到使用者，包括服務賬號使用者。使用者的實際權限是分配給他們的每個角色位掩碼的按位或結果。
+
+以一個擁有兩個角色的使用者為例：
+
+- 檢視者，持有 `view_users | view_clients` = `0b...10100`
+- 使用者管理員，持有 `manage_users | query_users` = `0b...01010`
+
+實際掩碼為 `0b...11110`：他們可以檢視和管理使用者，檢視客戶端，並查詢使用者。
+
+<span id="managing-roles" />
+
+## 管理角色
+
+```
+GET    /realms/{realm_name}/roles
+POST   /realms/{realm_name}/roles
+GET    /realms/{realm_name}/roles/{role_id}
+PUT    /realms/{realm_name}/roles/{role_id}
+DELETE /realms/{realm_name}/roles/{role_id}
+PATCH  /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+客戶端角色是在其客戶端下建立的：`POST /realms/{realm_name}/clients/{client_id}/roles`。
+
+:::callout{variant="warning" title="角色的作用作用域是固定的，刪除不會具有追溯效果。"}
+角色在建立時附加到身分域或客戶端上，**不支援在作用作用域之間移動**，因此請重新建立。
+
+刪除角色會永久移除所有使用者分配，但**已發放的權杖在過期前仍然有效**。兩者之間的時間視窗是存取權杖的有效期，因此在刪除角色時也應撤銷會話，因為該角色本不應被授予。
+:::
+
+**所需權限：** `view_roles`、`manage_roles` 或 `manage_users` 具有讀取權限（`manage_users` 在列表中，因為分配角色需要檢視它）。`manage_roles` 具有寫入權限。`manage_realm` 授予全部權限。
+
+<span id="realm-and-client-roles" />
+
+## 身分域和客戶端角色
+
+身分域角色是在身分域上定義的，並適用於其所有客戶端。客戶端角色僅限於一個客戶端，並且只在該客戶端的上下文中有意義。兩者分配給使用者的方式相同，並且角色ID在這兩種作用域內都是唯一的。
+
+當使用者進行身分認證時，他們的角色將被解析，並透過協議對映器寫入存取權杖作為宣告，因此資源伺服器可以在不回撥到 FerrisKey 的情況下授權請求。

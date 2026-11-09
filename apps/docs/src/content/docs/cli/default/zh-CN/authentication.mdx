@@ -1,0 +1,175 @@
+---
+title: "身份认证"
+description: "ferris-ctl 在每次 API 调用前如何解析上下文、登录会话和客户端凭据。"
+icon: key-round
+order: 3
+---
+
+<span id="authentication" />
+
+# 身份认证
+
+在命令到达 FerrisKey API 之前，`ferris-ctl` 会解决三个问题：连接到哪里，你是谁，以及要在哪个身份域操作。本页涵盖每个答案及其解决顺序。
+
+<span id="contexts" />
+
+## 上下文
+
+**上下文** 是一个命名的连接配置文件。它包含：
+
+| 字段 | 必填 | 说明 |
+|-------|----------|-------------|
+| `url` | 是 | FerrisKey 服务器 URL |
+| `client-id` | 是 | 用于登录的 OAuth2 客户端 |
+| `client-secret` | 否 | 仅为机密客户端和服务账户设置 |
+| `realm` | 实际上，是的 | 您登录的身份域，以及命令的默认身份域 |
+
+`context add` 接受没有身份域的上下文，但 `realm`、`client` 和 `user` 命令不能在其上运行：它们会因 `auth realm is required` 停止。CLI 总是要求在上下文的身份域中提供令牌，因为客户端就在该身份域中注册。使用已存储的上下文时，`--realm` 标志只会更改命令作用的身份域，因此你可以登录到 `master` 并仍然运行 `client list --realm acme`。`login` 是在上下文没有身份域时退回到 `master` 的唯一命令。
+
+上下文以 TOML 格式存储在 `$XDG_CONFIG_HOME/ferriskey/config.toml` 中，通常是 `~/.config/ferriskey/config.toml`。当 `XDG_CONFIG_HOME` 未设置时，CLI 使用 `$HOME/.config`，当 `HOME` 也未设置时（通常在 Windows 上）使用 `%APPDATA%`。活动上下文由 `current-context` 跟踪。
+
+```toml title="config.toml"
+current-context = "local"
+
+[contexts.local]
+url = "http://localhost:3333"
+client-id = "ferris-ctl"
+realm = "master"
+```
+
+使用 [`context`](/zh-CN/cli/commands/context) 命令管理上下文。
+
+<Callout variant="warning" title="config.toml 是纯文本">
+
+上下文的 `client-secret` 以及每个存储的 [source](/zh-CN/cli/commands/source) 的密钥都会按原样写入 `config.toml`。CLI 使用默认的 umask 创建该文件，通常是 `0644`，因此机器上的其他用户可以读取它。文件本身上的 `chmod` 是不持久的：CLI 会通过临时文件保存然后重命名，这会赋予新文件默认权限。相反，应限制目录，例如 `chmod 700 ~/.config/ferriskey`。更好的方法是，将密钥保存在文件之外，通过 `FERRISKEY_CLIENT_SECRET` 传递。
+
+</Callout>
+
+<span id="two-ways-to-authenticate" />
+
+## 两种方式进行身份认证
+
+`ferris-ctl` 支持两种凭据模式。设置上下文时选择其中一种。
+
+::::card-group{cols=2}
+:::card{label="交互式登录" icon="lucide:log-in" href="/zh-CN/cli/commands/login"}
+运行 `ferris-ctl login` 以通过设备授权（Device Authorization Grant）以用户身份登录。最适合人类和公共客户端使用。
+:::
+:::card{label="客户端凭据" icon="lucide:bot"}
+使用 `--client-secret` 添加上下文。CLI 使用 OAuth2 客户端凭据授权（client-credentials grant）获取令牌。适用于 CI 和服务账户。
+:::
+::::
+
+<span id="interactive-login-device-authorization-grant" />
+
+### 交互式登录（设备授权）
+
+```bash
+ferris-ctl login
+```
+
+这将运行 OAuth 2.0 设备授权（Device Authorization Grant）（[RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)）：CLI 请求设备码，显示验证 URL 和用户代码，打开浏览器，并轮询直到您批准。成功后，它会将令牌写入 `credentials.toml`，旁边是 `config.toml`。客户端必须允许设备授权；[登录](/zh-CN/cli/commands/login#before-you-log-in) 说明了如何启用该功能。
+
+```toml title="credentials.toml (mode 0600 on Unix)"
+server_url = "http://localhost:3333"
+realm = "master"
+client_id = "ferris-ctl"
+access_token = "eyJ..."
+refresh_token = "..."
+token_type = "Bearer"
+expires_in = 300
+obtained_at = 1700000000
+scope = "openid profile email"
+```
+
+当服务器返回它们时，该文件还会获得 `id_token` 和 `refresh_expires_in`。它只保存单个会话：再次登录，无论是针对任何服务器、身份域，还是客户端，都会替换现有会话。
+
+<Callout variant="warning" title="保护凭据文件">
+
+`credentials.toml` 包含承载令牌。在 Unix 系统上，它以 `0600` 的权限写入（仅限所有者读写）。在 Windows 系统上，它会获得默认权限。请像对待 SSH 私钥一样处理它，切勿提交或分享。
+
+</Callout>
+
+<span id="client-credentials" />
+
+### 客户端凭据
+
+对于非交互式使用，请在上下文中存储客户端密钥：
+
+```bash
+ferris-ctl context add ci \
+  --url https://auth.example.com \
+  --client-id automation \
+  --client-secret "$FERRISKEY_CLIENT_SECRET" \
+  --realm master
+```
+
+不需要 `login` 步骤。CLI 在每次运行时都会将密钥交换为令牌，并且不会缓存它。
+
+<Callout variant="warning" title="已知与 FerrisKey 0.10.0 不兼容">
+
+FerrisKey 0.10.0 在没有 `refresh_token` 的情况下响应客户端凭据请求，因为该授权没有可刷新的会话。`ferris-ctl` 0.3.0 期望该字段，因此以这种方式运行的每条命令都会以 `error: http error: error decoding response body` 结束。[ferriskey-cli#48](https://github.com/ferriskey/ferriskey-cli/pull/48) 提出了一个修复方案。在新版发布之前，请使用 `ferris-ctl login` 登录。
+
+</Callout>
+
+<span id="resolution-order" />
+
+## 解决顺序
+
+当命令需要访问令牌时，`ferris-ctl` 按以下顺序解析凭据：
+
+::::step-group
+:::step{title="重用或刷新登录会话"}
+如果 `credentials.toml` 存在，并且其中的 `server_url`、`realm`、`client_id` 分别等于上下文的 `url`、登录身份域和 `client-id`，就会在保存的 `access_token` 有效期内复用它。比较按字面值进行，因此 `http://host` 与 `http://host/` 会被视为不同服务器。CLI 会在令牌实际到期前 30 秒将其视为过期，随后使用存储的 `refresh_token` 刷新令牌并保存新令牌，用户无需再次登录。如果已知刷新令牌的有效期且它已过期，则跳过刷新。
+:::
+
+:::step{title="回退到客户端凭据"}
+否则，如果上下文中有非空的 `client-secret`，CLI 将执行 OAuth2 客户端凭据授权。服务器拒绝刷新时也会落到此步骤。
+:::
+
+:::step{title="失败并提供指导"}
+如果两者都不可用，命令将失败并显示：
+`no credentials available: run 'ferris-ctl login' or add a context with --client-secret`。
+:::
+::::
+
+要丢弃已保存的会话，请运行 [`ferris-ctl logout`](/zh-CN/cli/commands/logout)。它会删除 `credentials.toml`；然后下一个命令将回退到客户端凭据，或者要求您重新登录。
+
+<span id="overriding-the-context" />
+
+## 覆盖上下文
+
+标志和环境变量不能替代已存储上下文中的单个字段。`login` 与调用管理 API 的命令 (`realm`、`client` 和 `user`) 之间的规则不同。
+
+| 命令 | 连接 | 登录身份域 |
+|---------|------------|---------------|
+| `realm`, `client`, `user` | 当 `--url` 和 `--client-id` 都已设置时，这两个以及如果存在的 `--client-secret` 会被使用。`--context` 和配置文件将被忽略。否则，将使用 `--context` 提供的上下文或当前活动的上下文。 | 使用这对，`--realm`。否则，使用上下文的 `realm`。 |
+| `login` | `--url`、`--client-id` 和 `--realm` 分别替换上下文中相应的字段。 | 先是 `--realm`，然后是上下文的 `realm`，接着是 `master`。 |
+
+这对可以来自环境：`FERRISKEY_URL` 和 `FERRISKEY_CLIENT_ID` 与标志的作用相同。由此会产生一些后果：
+
+- 单独的 `--url` 或 `--client-id` 会被忽略。
+- `--client-secret` 只有作为这对的一部分才有效。`login` 从不读取它，而是使用存储在上下文中的密钥（如果有的话）。
+- 设置好这一对后，不需要配置文件，这适合持续集成（CI）。也设置 `FERRISKEY_REALM`，否则命令会停止，因为它没有身份域。
+- 单独使用 `--realm` 会选择命令作用的身份域，而保持登录身份域不变。
+- 如果在你的 shell 配置文件中导出 `FERRISKEY_URL` 和 `FERRISKEY_CLIENT_ID`，它们会在所有上下文中静默接管。
+
+```bash title="A CI job with no config file"
+export FERRISKEY_URL=https://auth.example.com
+export FERRISKEY_CLIENT_ID=automation
+export FERRISKEY_CLIENT_SECRET="$CI_SECRET"
+export FERRISKEY_REALM=master
+ferris-ctl realm list
+```
+
+| 变量 | 匹配标志 |
+|----------|--------------|
+| `FERRISKEY_URL` | `--url` |
+| `FERRISKEY_CLIENT_ID` | `--client-id` |
+| `FERRISKEY_CLIENT_SECRET` | `--client-secret` |
+| `FERRISKEY_REALM` | `--realm` |
+| `XDG_CONFIG_HOME` | 存放 `config.toml` 和 `credentials.toml` 的目录 |
+
+## TLS
+
+`ferris-ctl` 会将服务器证书与二进制文件中捆绑的 Mozilla 根证书进行验证。它不会读取操作系统的信任存储，也没有任何标志可以添加 CA 证书或关闭验证。因此，使用私有 CA 签发的服务器证书的服务器在握手时会失败，无论是对 FerrisKey API 还是导入来源都是如此。请使用来自公共 CA 的证书，或者通过受信任的路径（例如本地端口转发）使用纯 `http://` 访问服务器。

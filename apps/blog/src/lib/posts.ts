@@ -4,6 +4,8 @@ export type Post = CollectionEntry<'posts'>
 
 const localeBcp47: Record<string, string> = {
   en: 'en-US',
+  'zh-CN': 'zh-CN',
+  'zh-TW': 'zh-TW',
   fr: 'fr-FR',
   de: 'de-DE',
   es: 'es-ES',
@@ -89,8 +91,9 @@ export function formatDate(date: Date, locale = 'en'): string {
 
 export function getReadingTime(body: string): number {
   const text = body.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '')
-  const words = text.split(/\s+/).filter(Boolean).length
-  return Math.max(1, Math.ceil(words / 200))
+  const chineseCharacters = text.match(/\p{Script=Han}/gu)?.length ?? 0
+  const words = text.replace(/\p{Script=Han}/gu, ' ').split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200 + chineseCharacters / 400))
 }
 
 export function getFeaturedPosts(posts: Post[], count = 3): Post[] {

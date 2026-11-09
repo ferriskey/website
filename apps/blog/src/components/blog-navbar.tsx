@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LocaleSwitcher, getAppLinks } from '@explainer/ui'
 import { Icon } from '@iconify/react'
+import { getClientLocale } from '@explainer/ui/lib/locale'
 import { useTranslations } from '../i18n/utils'
 
 interface BlogNavbarProps {
@@ -46,8 +47,9 @@ export function BlogNavbar({ activePath, appUrlOverrides, locale: initialLocale,
   const { appearance, toggle } = useAppearance()
 
   useEffect(() => {
-    setLocale(initialLocale)
-  }, [initialLocale])
+    const preferred = getClientLocale()
+    setLocale(isListing && locales.includes(preferred) ? preferred : initialLocale)
+  }, [initialLocale, isListing, locales])
 
   const t = useTranslations(locale)
   const appLinks = getAppLinks('blog', appUrlOverrides)
@@ -68,6 +70,7 @@ export function BlogNavbar({ activePath, appUrlOverrides, locale: initialLocale,
         document.querySelectorAll<HTMLElement>('[data-locale]').forEach((el) => {
           el.style.display = el.dataset.locale === newLocale ? '' : 'none'
         })
+        window.dispatchEvent(new Event('ferriskey:locale-change'))
         document.dispatchEvent(new Event('tags:filter'))
       }
     : undefined

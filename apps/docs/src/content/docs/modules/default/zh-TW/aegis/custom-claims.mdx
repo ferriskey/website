@@ -1,0 +1,215 @@
+---
+title: "自定義宣告"
+description: "將業務資料放入 FerrisKey 權杖的真真實模式，以及可用的對映器配置。"
+icon: plus
+order: 52
+---
+
+<span id="custom-claims" />
+
+# 自定義宣告
+
+FerrisKey的預設作用域涵蓋了標準的OIDC宣告。實際應用需要更多：閘道器可以強制執行的角色、租戶識別符號、計劃層級、功能標誌。自定義宣告會把這些資料準確放入權杖中，這樣你的後端無需第二次呼叫即可自行決定。
+
+以下所有配置都使用對映器實際讀取的點線Keycloak風格鍵。完整金鑰參考請參見[協議對映器](/zh-TW/modules/aegis/protocol-mappers)。
+
+<span id="realm-roles-for-an-api-gateway" />
+
+## API閘道器的身分域角色
+
+你的閘道器會對路由強制基於角色的存取。身分域角色對映器已經把角色寫入權杖;唯一的決定是寫入哪裡。
+
+作用域是`roles`，預設作用域在每個身分域都種子，對映器`oidc-usermodel-realm-role-mapper`。
+
+```json
+{
+  "claim.name": "realm_access.roles",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim"
+{
+  "realm_access": {
+    "roles": ["admin", "editor", "viewer"]
+  }
+}
+```
+
+閘道器讀取 `realm_access.roles` 並在不回撥 FerrisKey 的情況下允許或拒絕路由。將 `id.token.claim` 設定為 `false` 可以將角色排除在 ID 權杖之外，瀏覽器可以讀取。閘道器是唯一需要它們的方。
+
+<Callout variant="info" title="扁平宣告而非巢狀">
+
+`claim.name` 支援點路徑，因此 `realm_access.roles` 是巢狀的。如果您的閘道器在 `roles` 下期望一個扁平陣列，請改為將 `claim.name` 設定為 `roles`。預設是巢狀形式，因為這是與 Keycloak 相容的庫所查詢的。
+
+</Callout>
+
+<Callout variant="warning" title="宣告名稱有長度限制">
+
+宣告名稱是一個最多包含8個非空段、總長度不超過255個字元的點分路徑。當你建立或更新對映器時，API 會拒絕更長的 `claim.name` 或 `token.claim.name`，並返回 422 `invalid_claim_name`。如果名稱仍然透過，例如對映器在沒有 `claim.name` 時回退使用的較長 `user.attribute`，則在權杖生成時會被靜默丟棄。對映器看起來已配置，但宣告永遠不會出現。
+
+</Callout>
+
+<span id="tenant-identifier-for-a-multi-tenant-backend" />
+
+## 多租戶後端的租戶識別符號
+
+每個域都是一個租戶，後端需要知道查詢哪個租戶資料庫。
+
+該作用域是 `tenant` 作用域，被分配為預設值，對映器為 `oidc-hardcoded-claim-mapper`。
+
+```json
+{
+  "claim.name": "tenant",
+  "claim.value": "acme-corp",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+由於該值是特定於域的，你需要在每個域中使用正確的值建立此作用域。
+
+<Callout variant="info" title="當租戶是按使用者而非按域時">
+
+將其儲存為使用者屬性，並用 `oidc-usermodel-attribute-mapper` 替換 `"user.attribute": "tenant"`。如果租戶是透過 [Organizations 模組](/zh-TW/modules/organization/overview) 建模的，請跳過兩者：`oidc-organization-membership-mapper` 按別名寫入使用者的組織，無需每個身分域的設定。已種子化的 `organization` 作用域已經完成此操作。
+
+</Callout>
+
+<span id="a-user-attribute-as-a-claim" />
+
+## 作為宣告的使用者屬性
+
+使用 `oidc-usermodel-attribute-mapper` 來承載使用者上的業務資料，例如計劃級別或座位限制。
+
+```json
+{
+  "user.attribute": "seat_limit",
+  "claim.name": "seat_limit",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim"
+{
+  "seat_limit": "25"
+}
+```
+
+使用者屬性以字串形式儲存，此對映器將其作為字串輸出。它不讀取 `jsonType.label`，因此數字或布林值會以文字形式到達，消費者需要自行解析。在 `oidc-usermodel-property-mapper` 和 `oidc-hardcoded-claim-mapper` 上存在型別轉換，而此處不存在。
+
+<span id="audience-for-several-resource-servers" />
+
+## 多個資源伺服器的受眾
+
+您的權杖必須在 `api.yourapp.com` 和 `admin.yourapp.com` 上都被接受。每個受眾新增一個對映器，`oidc-audience-mapper` 使用兩次。
+
+```json title="Mapper 1"
+{
+  "included.client.audience": "api.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Mapper 2"
+{
+  "included.client.audience": "admin.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim in the access token"
+{
+  "aud": ["acme-realm", "account", "api.yourapp.com", "admin.yourapp.com"]
+}
+```
+
+存取權杖的 `aud` 總是以身分域受眾 (`<realm_name>-realm`) 和 `account` 開頭，對映器會在其後附加內容。攜帶 `resource` 引數的權杖請求會用該資源替換整個列表。
+
+<Callout variant="warning" title="aud 需要這個對映器的特別處理">
+
+`aud` 是保留的宣告名稱：對映器執行後會被移除，因此指向 `aud` 的硬編碼宣告對映器不會起作用。受眾對映器透過一個單獨的通道提供受眾，這就是它能正常工作的原因。該通道僅提供給存取權杖。ID 權杖的 `aud` 始終是客戶端自己的 `client_id`。
+
+</Callout>
+
+<span id="feature-flags-in-the-id-token" />
+
+## ID 權杖中的功能標誌
+
+前端決定渲染哪些功能，因此標誌應該放在 ID 權杖中供其讀取，而不應該放在 API 驗證的存取權杖中。
+
+該作用域是一個 `features` 作用域，被分配為 **可選**，因此只有請求它的客戶端才會支付權杖大小。對映器是 `oidc-hardcoded-claim-mapper`。
+
+```json
+{
+  "claim.name": "features.new_dashboard",
+  "claim.value": "true",
+  "jsonType.label": "Boolean",
+  "access.token.claim": "false",
+  "id.token.claim": "true"
+}
+```
+
+```json title="Resulting claim"
+{
+  "features": {
+    "new_dashboard": true
+  }
+}
+```
+
+帶點的 `claim.name` 會將每個標誌巢狀在一個 `features` 物件下，因此寫入 `features.beta_export` 的第二個對映器會合併到同一個物件，而不是覆蓋它。
+
+客戶端必須在其 `scope` 中命名 `features` 才能應用可選作用域，並且請求必須包含 `openid`：FerrisKey 只有在作用域中包含 `openid` 時才會從對映器構建 ID-token 宣告。
+
+<span id="group-membership-for-a-hierarchy-aware-app" />
+
+## 支援層級結構的應用的組成員身分
+
+對映器是 `oidc-group-membership-mapper`。
+
+```json
+{
+  "claim.name": "groups",
+  "membership": "direct",
+  "full.path": "true",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+`direct` 僅發出使用者直接所屬的組。預設的 `effective` 也會發出每個祖先路徑。當消費者在不重建層次結構的情況下檢查父組時選擇該選項，而當你想要更小的權杖並減少其中的組織結構時選擇 `direct`。
+
+<span id="scope-assignment-strategy" />
+
+## 作用域分配策略
+
+| 在以下情況下分配為預設 | 在以下情況下分配為可選 |
+|---|---|
+| 此客戶端的每個請求都需要該宣告 | 該宣告攜帶敏感資料 |
+| 該宣告對於授權決策是必需的 | 該宣告很大，會膨脹每個權杖 |
+| 缺少該宣告會導致客戶端出錯 | 只有某些流程需要該資料 |
+
+<span id="before-you-debug-the-claim-check-the-key" />
+
+## 在除錯該宣告之前，請檢查金鑰
+
+配置鍵拼寫錯誤的對映器會被 API 接受，然後在權杖時被忽略。`config` 欄位是自由形式 JSON，唯一被驗證的是`claim.name`的形狀。對於非十一種型別之一的`mapper_type`也是如此：API 儲存它，權杖生成器會跳過並用伺服器日誌中的警告。當申報未顯示時：
+
+1. 檢查`mapper_type`和按鍵。它們是虛線（`claim.name`，不是`claim_name`）。
+2. 請檢查申訴名稱是否為[保留](/zh-TW/modules/aegis/protocol-mappers#reserved-claim-names)，且不超過8個段和255個字元。
+3. 檢查該作用域是否在客戶端上實際啟用，是預設的還是按名稱請求的，並且如果申報屬於ID權杖，`openid`是否在請求中。
+4. 使用 `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` 結合 `user_id` 和可選的 `scope` 檢視客戶端將獲得的宣告，而無需完全登入。控制檯在客戶端的客戶端作用域選項卡下的 **評估** 中有相同的預覽。
+
+::::card-group{cols=2}
+:::card{label="協議對映器" icon="lucide:arrow-right-left" href="/zh-TW/modules/aegis/protocol-mappers"}
+所有十一種對映器型別以及它們讀取的每個配置鍵。
+:::
+:::card{label="JWT 宣告" icon="lucide:file-json" href="/zh-TW/learn/jwt/claims"}
+在新增自己的宣告之前，標準宣告的含義。
+:::
+::::

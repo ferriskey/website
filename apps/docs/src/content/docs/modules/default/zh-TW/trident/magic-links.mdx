@@ -1,0 +1,117 @@
+---
+title: "免密登入連結"
+description: "FerrisKey 的無密碼郵箱登入：要求、瀏覽器繫結以及連結失敗的原因。"
+icon: mail
+order: 13
+---
+
+<span id="magic-links" />
+
+# 免密登入連結
+
+魔法連結允許使用者透過收件箱登入，而無需密碼。使用者在登入頁面輸入電子郵件地址，收到連結，開啟連結即可完成登入。該連結只能在請求它的瀏覽器中使用。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+::::step-group
+:::step{title="使用者請求一個連結"}
+登入頁面使用 `email` 和可選的 `remember_me` 呼叫 `POST /login-actions/send-magic-link`。該呼叫會攜帶登入頁面已有的 `FERRISKEY_SESSION` cookie。無論賬戶是否存在該地址，回答都是相同的，因此該端點不會洩露哪些地址存在。
+:::
+
+:::step{title="FerrisKey 儲存連結"}
+FerrisKey 建立一個連結識別符號（`token_id`，一個 UUID）和一個由 43 個隨機字母數字字元組成的金鑰。它儲存該識別符號、金鑰的 Argon2 雜湊、過期時間以及請求所在的會話。金鑰本身從不儲存。
+:::
+
+:::step{title="電子郵件傳送出"}
+該電子郵件是從身分域的魔法連結模板生成的，幷包含形式為 `<WEBAPP_URL>/realms/<realm_name>/authentication/magic-link?token_id=...&magic_token=...` 的連結。
+:::
+
+:::step{title="使用者開啟該連結"}
+門戶的 `magic_link_verify` 頁面呼叫 `GET /login-actions/verify-magic-link` 並傳遞兩個查詢引數。
+:::
+
+:::step{title="FerrisKey 進行驗證"}
+FerrisKey 檢查瀏覽器是否持有請求該連結的登入的 `FERRISKEY_SESSION` cookie，檢查連結是否未過期，以及金鑰是否與其雜湊匹配。然後刪除該連結並回復 `{ "status": "Success", "url": ... }`，其中 `url` 攜帶授權碼，並設定 SSO 會話 cookie。
+:::
+::::
+
+<span id="requirements" />
+
+## 要求
+
+| 設定 | 預設 | 說明 |
+|---|---|---|
+| `magic_link_enabled` | `false` | 啟用魔法連結登入。在關閉時，`send-magic-link` 返回 400 `magic_link_not_enabled` |
+| `magic_link_ttl` | `15` | 連結保持有效的分鐘數。最少為 1 分鐘 |
+| `magic_link_template_id` | 無 | 用於郵件的電子郵件模板 |
+
+在控制檯中，前兩個位於“登入方法”螢幕上，或在管理員面板的 Realm 設定的“登入”標籤中。
+
+<Callout variant="warning" title="SMTP 和模板都是必需的">
+
+除非 Realm 配置了 SMTP 並且有 `magic_link_template_id`，否則 FerrisKey 不會傳送任何內容。請求仍然返回 200，因此使用者會等待一封永遠不會到達的郵件。FerrisKey 在 [SeaWatch](/zh-TW/modules/seawatch/overview) 中記錄一個 `email_not_sent` 事件，並給出原因，可能是 `SMTP_NOT_CONFIGURED` 或 `TEMPLATE_NOT_CONFIGURED`。如 [Email & Templates](/zh-TW/discover/guides/email) 中所述，在控制檯 **Emails** 頁面 SMTP 標籤上設定伺服器，並在那裡分配模板。
+
+</Callout>
+
+<span id="how-a-link-fails" />
+
+## 連結失敗的方式
+
+| 情況 | 結果 |
+|---|---|
+| 在沒有請求 `FERRISKEY_SESSION` cookie 的瀏覽器中開啟連結 | 401 `invalid_magic_link`。連結在原始瀏覽器中保持有效 |
+| 請求連結時未攜帶會話 cookie | 無法完成 |
+| 連結已過期 | 401 `magic_link_expired`，連結已刪除 |
+| 金鑰錯誤 | 401 `invalid_magic_link`，連結已刪除。一次錯誤嘗試即燒燬連結 |
+| 使用者已啟用身分認證器 | 403。連結未響應TOTP驗證 |
+| 除了`verify_email`之外的必填操作已到期 | 403 |
+
+瀏覽器繫結可防止從轉發郵件或洩露郵箱中讀取的連結在其他地方登入。對誠實使用者來說會有成本：在手機郵件應用中開啟連結，而登入是在筆記本上開始的，會失敗。
+
+待處理的`verify_email`必填操作不會阻止魔法連結登入。如果客戶端要求[同意](/zh-TW/discover/core-concepts/consent)，答案中的`url`將首先進入同意介面。
+
+<span id="security" />
+
+## 安全
+
+<span id="the-secret-is-hashed" />
+
+### 金鑰已被雜湊
+
+FerrisKey 僅儲存金鑰的 Argon2 雜湊。資料庫的副本並不會給任何人提供可用的連結。
+
+<span id="single-use" />
+
+### 一次性使用
+
+連結在用於登入時會被刪除。已過期的連結在被開啟時會被刪除，或者在隨後針對同一身分域建立新連結時也會被刪除。
+
+<span id="expiry" />
+
+### 過期
+
+連結在 `magic_link_ttl` 分鐘後過期。保持短時間視窗以限制未讀電子郵件洩露的風險。
+
+<span id="the-inbox-is-the-factor" />
+
+### 收件箱即認證因素
+
+無論誰控制了使用者的收件箱，並能夠在請求連結的瀏覽器中開啟它，即可完成登入。當你想要額外的第二因素時，魔法連結並不適用：擁有認證器的使用者無法使用它，因此應為這些使用者提供密碼或通行金鑰。
+
+<span id="where-it-fits" />
+
+## 適用場景
+
+<span id="internal-tools" />
+
+### 內部工具
+
+對於已經擁有企業郵箱的儀表板使用者，魔法連結可以免去密碼管理。使用者點選“傳送連結給我”，檢查郵箱，然後即可登入。
+
+<span id="a-fallback-for-a-forgotten-password" />
+
+### 忘記密碼的備用方法
+
+在沒有身分認證器的使用者的密碼重置流程旁提供魔法連結。他們無需選擇新密碼即可登入。

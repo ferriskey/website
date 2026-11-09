@@ -35,7 +35,7 @@ function cardProps(post: (typeof posts)[number]) {
     tags: post.data.tags,
     cover: post.data.cover ?? `${getPostHref(post)}/thumbnail.png`,
     href: getPostHref(post),
-    locale,
+    locale: getPostLocale(post),
     readingTime: getReadingTime(post.body ?? ''),
     author: post.data.author ? getAuthor(post.data.author) : undefined,
   }
@@ -43,11 +43,11 @@ function cardProps(post: (typeof posts)[number]) {
 ---
 
 <Base title={t('index.title')} locale={locale} locales={locales}>
-  <section class="border-b border-border">
+  <section class="border-b border-border" data-blog-locales={JSON.stringify(locales)}>
     <div class="mx-auto max-w-6xl border-x border-border px-5 py-20 sm:px-8 sm:py-32">
-      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">{t('index.label')}</p>
+      <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary"><span data-blog-t="index.label">{t('index.label')}</span></p>
       <h1 class="mt-6 max-w-3xl text-balance text-[clamp(2.25rem,5.5vw,4.5rem)] font-medium leading-[1.03] tracking-[-0.04em]">
-        {t('index.heading.prefix')} <span class="text-primary">{t('index.heading.highlight')}</span>
+        <span data-blog-t="index.heading.prefix">{t('index.heading.prefix')}</span> <span class="text-primary"><span data-blog-t="index.heading.highlight">{t('index.heading.highlight')}</span></span>
       </h1>
     </div>
   </section>
@@ -93,20 +93,25 @@ function cardProps(post: (typeof posts)[number]) {
   </div>
 </Base>
 
-<script define:vars={{ supportedLocales: locales, fallbackLocale: locale }}>
-  function filterByLocale() {
-    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
-    const cookieLocale = match ? match[1] : null
-    const browserLang = (navigator.language || '').split('-')[0]
-    const detected = (cookieLocale && supportedLocales.includes(cookieLocale))
-      ? cookieLocale
-      : supportedLocales.includes(browserLang) ? browserLang : fallbackLocale
+<script>
+  import { getClientLocale } from '@explainer/ui/lib/locale'
+  import { useTranslations } from '../i18n/utils'
 
-    document.querySelectorAll('[data-locale]').forEach(function (el) {
+  function filterByLocale() {
+    const locales: string[] = JSON.parse(document.querySelector<HTMLElement>('[data-blog-locales]')?.dataset.blogLocales ?? '[]')
+    const preferred = getClientLocale()
+    const detected = locales.includes(preferred) ? preferred : 'en'
+    document.documentElement.lang = detected
+    const t = useTranslations(detected)
+    document.querySelectorAll<HTMLElement>('[data-blog-t]').forEach((el) => {
+      el.textContent = t(el.dataset.blogT as Parameters<typeof t>[0])
+    })
+    document.querySelectorAll<HTMLElement>('[data-locale]').forEach((el) => {
       el.style.display = el.dataset.locale === detected ? '' : 'none'
     })
   }
 
   filterByLocale()
   document.addEventListener('astro:after-swap', filterByLocale)
+  window.addEventListener('ferriskey:locale-change', filterByLocale)
 </script>

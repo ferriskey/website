@@ -1,0 +1,211 @@
+---
+title: "配置提供程序"
+description: "在 FerrisKey 中设置 Google、GitHub、Discord 和自定义 OIDC 提供商，稍后可以编辑它们，并管理它们创建的链接。"
+icon: settings
+order: 41
+---
+
+<span id="configuring-providers" />
+
+# 配置提供程序
+
+本指南讲解如何在 Abyss 中注册身份提供商。每个提供商都需要在外部平台上创建一个 OAuth2 或 OIDC 应用程序，然后在 FerrisKey 中创建一个匹配的提供商。两者必须在一个值上达成一致：提供商回调的重定向 URI。
+
+<span id="adding-a-provider-in-the-console" />
+
+## 在控制台中添加提供商
+
+在控制台中打开 “身份提供商” 并选择 “添加提供商”。控制台会要求选择协议（OIDC 或 OAuth2），然后选择模板：Google、Discord、GitHub、Microsoft、Apple、Facebook、GitLab、X（Twitter）、LinkedIn 或自定义提供商。模板会填充端点和默认作用域，因此只需填写您的应用程序凭据。自定义提供商则从空白开始。
+
+创建屏幕显示要在提供者处声明的重定向 URI。它是根据你选择的别名生成的：
+
+```text
+https://your-ferriskey.com/realms/{realm}/broker/{alias}/endpoint
+```
+
+别名是该 URL 的一部分，这就是为什么一旦提供者存在，它就固定不变。之后更改它会破坏在提供者处注册的回调。
+
+## Google
+
+::::step-group
+:::step{title="创建 Google OAuth2 应用"}
+在 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) 中，创建一个 OAuth 2.0 客户端 ID，并设置：
+
+- 应用类型：Web 应用
+- 授权重定向 URI：`https://your-ferriskey.com/realms/{realm}/broker/google/endpoint`
+:::
+
+:::step{title="在 FerrisKey 中注册它"}
+选择 Google 模板并填写两个凭据。其余部分已预填：
+
+| 字段 | 值 |
+|---|---|
+| 别名 | `google` |
+| 显示名称 | Google |
+| 客户端 ID | 来自 Google 控制台 |
+| 客户端密钥 | 来自 Google 控制台 |
+| 授权 URL | `https://accounts.google.com/o/oauth2/v2/auth` |
+| 令牌 URL | `https://oauth2.googleapis.com/token` |
+| 用户信息 URL | `https://www.googleapis.com/oauth2/v3/userinfo` |
+| 作用域 | `openid`, `email`, `profile` |
+:::
+::::
+
+## GitHub
+
+::::step-group
+:::step{title="创建 GitHub OAuth 应用"}
+进入GitHub，然后选择设置、开发者设置、OAuth 应用和新 OAuth 应用，将授权回调URL设置为`https://your-ferriskey.com/realms/{realm}/broker/github/endpoint`。
+:::
+
+:::step{title="在 FerrisKey 中注册它"}
+选择GitHub模板：
+
+| 字段 | 值 |
+|---|---|
+| 别名 | `github` |
+| 显示名称 | GitHub |
+| 客户端 ID | 来自GitHub |
+| 客户端密钥 | 来自GitHub |
+| 授权 URL | `https://github.com/login/oauth/authorize` |
+| 令牌 URL | `https://github.com/login/oauth/access_token` |
+| 用户信息 URL | `https://api.github.com/user` |
+| 作用域 | `read:user`, `user:email` |
+:::
+::::
+
+## Discord
+
+::::step-group
+:::step{title="创建一个Discord应用"}
+在[Discord开发者门户](https://discord.com/developers/applications)中，创建一个应用程序并添加OAuth2重定向：`https://your-ferriskey.com/realms/{realm}/broker/discord/endpoint`。
+:::
+
+:::step{title="在 FerrisKey 中注册它"}
+选择Discord模板：
+
+| 字段 | 值 |
+|---|---|
+| 别名 | `discord` |
+| 显示名称 | Discord |
+| 客户端 ID | 来自Discord |
+| 客户端密钥 | 来自Discord |
+| 授权 URL | `https://discord.com/api/oauth2/authorize` |
+| 令牌 URL | `https://discord.com/api/oauth2/token` |
+| 用户信息 URL | `https://discord.com/api/users/@me` |
+| 作用域 | `identify`, `email` |
+:::
+::::
+
+<span id="custom-oidc-provider" />
+
+## 自定义OIDC提供者
+
+对于任何 OpenID Connect 提供商（Okta、Auth0、Azure AD、Keycloak），选择自定义提供商，并从提供者的发现文档中阅读端点，`https://provider.example/.well-known/openid-configuration`：
+
+| FerrisKey 设定 | 发现场 |
+|---|---|
+| 授权 URL | `authorization_endpoint` |
+| 令牌 URL | `token_endpoint` |
+| 用户信息 URL | `userinfo_endpoint` |
+| 作用域 | 通常`openid email profile` |
+| `jwks_url`（仅限API） | `jwks_uri` |
+| `issuer`（仅限API） | `issuer` |
+
+控制台表单没有 `jwks_url` 和 `issuer` 的字段。当你希望 FerrisKey 验证 ID 令牌而不是调用 userinfo 端点时，通过 API 在提供者的 `config` 中设置它们。它们只有同时生效。请参阅 [ID token 或 userinfo](/zh-CN/modules/abyss/overview#id-token-or-userinfo)。
+
+<Callout variant="warning" title="提供者端点必须是公开的">
+
+FerrisKey 从服务器调用 token、userinfo 和 JWKS 端点。它拒绝任何解析到环回、私有或链路本地地址的端点，以及任何使用纯 `http` 的端点。你内部网络上的身份提供者在未启动带有 `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 的 API 之前会提示“无效的提供者 URL”。该设置用于本地开发：开启后，除环回地址外，纯 `http` 仍被拒绝，而链路本地地址无论如何都会被拒绝。
+
+</Callout>
+
+<span id="editing-a-provider" />
+
+## 编辑提供者
+
+在列表中选择一个提供商以打开其编辑屏幕。它显示常规设置（别名、显示名称、启用状态）以及 OAuth 配置：客户端 ID、客户端密钥、三个 URL、权限作用域和 PKCE 切换。
+
+<img class="only-light" src="/dashboard/idp_edit-light.jpg" alt="FerrisKey GitHub 身份提供商的编辑屏幕：授权、令牌和用户信息 URL，权限作用域字段，PKCE 切换设置为启用（S256），以及下面的元数据和删除部分" />
+<img class="only-dark" src="/dashboard/idp_edit-dark.jpg" alt="FerrisKey GitHub 身份提供商的编辑屏幕：授权、令牌和用户信息 URL，权限作用域字段，PKCE 切换设置为启用（S256），以及下面的元数据和删除部分" />
+
+将客户端密钥留空以保留已存储的密钥；您输入的任何内容都会替换它。PKCE 切换控制 `use_pkce`：当它开启时，FerrisKey 会在授权请求中发送 `code_challenge`（S256），并在交换授权码时发送匹配的验证器。仅对拒绝额外参数的提供商关闭它。
+
+通过 API 也可以进行相同的更改：
+
+```text
+PUT /realms/{realm_name}/identity-providers/{alias}
+```
+
+只有你发送的字段会改变。主体接受 `display_name`、`enabled`、`store_token`、`trust_email`、`link_only` 以及两个流别名，再加上这些配置字段，它们会合并到存储的 `config` 中，并保持其其他键不变：
+
+| 字段 | 行为 |
+|---|---|
+| `client_id`, `client_secret`, `authorization_url`, `token_url` | 发送时会被替换。发送空字符串会被拒绝并返回 400，因为没有它们提供者无法工作 |
+| `userinfo_url` | 发送时会被替换。空字符串会移除它 |
+| `scopes` | 发送时会被替换，作为空格分隔的字符串。空字符串被接受且不发送任何作用域 |
+| `use_pkce` | 发送时会被替换 |
+
+你也可以发送一个完整的 `config` 对象。它会替换已存储的配置，并且同一请求中的任何上述字段都会合并到其中。不要发送你从 API 读取的 `config`：它携带 `***` 作为密钥，而 FerrisKey 会将那三个字符存储为新的密钥。要更改某个值，请单独发送该字段。
+
+别名无法更改。响应会将更新后的提供者包装在 `data` 中。
+
+<span id="disabling-and-rotating" />
+
+## 禁用和轮换
+
+将 `enabled` 设置为 `false` 可以将提供者从登录页面移除而不删除其配置。被禁用的提供者会拒绝使用 403 进行登录，指向它的链接仍然存在。通过它创建的账户没有自己的密码，因此这些用户无法登录，除非你再次启用该提供者或为他们提供其他方式。
+
+当您在提供商处更换客户端密钥时，请在 FerrisKey 中同时更新它。密钥不匹配会导致通过该提供商的每次登录在令牌交换时失败。
+
+<span id="api-reference" />
+
+## API参考
+
+```text
+GET    /realms/{realm_name}/identity-providers
+POST   /realms/{realm_name}/identity-providers
+GET    /realms/{realm_name}/identity-providers/{alias}
+PUT    /realms/{realm_name}/identity-providers/{alias}
+DELETE /realms/{realm_name}/identity-providers/{alias}
+```
+
+列表是分页的，接口契约描述在[API 列表](/zh-CN/discover/guides/api-listings)中。除了 `search`，它匹配别名或显示名称外，还会过滤：
+
+| 参数 | 匹配 |
+|---|---|
+| `alias`, `display_name` | 不区分大小写的子字符串 |
+| `provider_id` | 精确值，例如 `oidc` 或 `google` |
+| `enabled` | `true`或`false` |
+| `health` | `healthy`, `degraded` 或 `error` |
+| `created_from`, `created_to` | RFC 3339 日期时间，包括和不包括 |
+
+`order_by` 接受 `alias`、`display_name`、`provider_id`、`enabled`、`created_at`（默认）和 `updated_at`。
+
+`health` 来源于存储的配置，而不是调用提供者得来。当 `client_id`、`client_secret`、`authorization_url` 或 `token_url` 缺失时，提供者为 `error`；当仅缺失 `scopes` 时，为 `degraded`；否则为 `healthy`。控制台显示为 不完整、无作用域 和 完整。
+
+删除提供者也会移除其链接。它们指向的账户仍然存在。
+
+两个经纪端点就是流程本身。浏览器调用它们，而不是你：
+
+```text
+GET  /realms/{realm_name}/broker/{alias}/login
+GET  /realms/{realm_name}/broker/{alias}/endpoint
+```
+
+提供者端点的权限：`view_identity_providers` 或 `manage_identity_providers` 可读取，`manage_identity_providers` 可创建、更新或删除。`manage_realm` 两者皆可。
+
+<span id="links-on-a-user" />
+
+### 用户上的链接
+
+```text
+GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
+DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
+```
+
+一个链接将一个外部身份绑定到一个本地账户。`data` 数组中的每个条目都包含链接 `id`、提供者的 `identity_provider_id` 和 `identity_provider_alias`、`identity_provider_user_id`（提供者的主体）以及两个时间戳。存储的提供者令牌永远不会返回。
+
+删除链接会保留账户完整性，但会移除该登录方式。移除操作会在 [SeaWatch](/zh-CN/modules/seawatch/event-types) 中记录为 `identity_provider_link_removed`。如果同一个人再次通过该提供者登录，该流程可以创建一个新的链接，但须遵循 [account resolution](/zh-CN/modules/abyss/federation-flow#account-resolution) 规则。
+
+这两个端点需要与更新用户相同的权限：`manage_users` 或 `manage_realm`。

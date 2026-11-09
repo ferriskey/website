@@ -1,0 +1,147 @@
+---
+title: "概述"
+description: "FerrisKey 中的组织：B2B 租户，用于将具有共享成员资格、群组、角色和自定义属性的用户归类。"
+icon: building-2
+order: 80
+---
+
+<span id="organizations" />
+
+# 组织
+
+组织是在身份域内的 B2B 分组层。一个身份域可以容纳多个组织，一个用户可以同时属于多个组织，每个组织都有自定义的键值元数据，成员可以被分配具有组织范围的角色。这涵盖了常见的多租户 SaaS 模式：客户是组织，用户是成员。
+
+<Callout variant="info" title="刚接触 B2B 身份？">
+
+关于面向客户（B2B/CIAM）身份与员工 IAM 不同的概念背景，请参见 Learn 部分的 [什么是 CIAM？](/zh-CN/learn/ciam/overview) 和 [品牌、门户与组织策略](/zh-CN/learn/ciam/org-policies)。
+
+</Callout>
+
+<span id="why-organizations" />
+
+## 为什么需要组织？
+
+Realm 在部署层面进行隔离，每个产品或每个环境一个 Realm。组织位于其下一层。它们让你可以建模客户的业务结构，而无需为每个客户创建一个 Realm。
+
+在以下情况下使用组织：
+
+- 你的用户属于具有不同身份的客户账户（公司名称、计费方案、外部 ID）。
+- 你需要列出给定用户所属的每个组织，或给定组织的每个成员。
+- 你希望将任意元数据附加到客户账户（CRM ID、订阅层级、功能标记）而无需扩展用户模式。
+
+当您需要完全的凭据隔离、不同的认证策略或每个租户不同的令牌有效期时，请为每个租户使用单独的身份域。
+
+<span id="organization-fields" />
+
+## 组织字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | UUID v7 | 已生成 | 标识符 |
+| `realm_id` | UUID | 已生成 | 该组织所属的身份域 |
+| `name` | 字符串（1 到 255） | 是 | 可读标签 |
+| `alias` | 字符串（1 到 255） | 是 | URL 安全标识符：小写 ASCII 字母、数字、`-` 和 `_`。每个身份域唯一 |
+| `domain` | 字符串（最多 255） | 不 | 电子邮件域名。已存储并验证，但尚未用于自动入职。请参阅下面的路线图 |
+| `redirect_url` | 字符串 | 不 | 回调 URL |
+| `description` | 字符串 | 不 | 自由文本描述 |
+| `enabled` | 布尔值 | 不 | 默认为 `true`。被禁用的组织会拒绝新成员加入 |
+| `created_at` | 日期时间（UTC） | 已生成 | 创建时间戳 |
+| `updated_at` | 日期时间（UTC） | 已生成 | 最后修改时间戳 |
+
+<span id="endpoints" />
+
+## 端点
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations` | 列出该身份域的所有组织 |
+| `POST` | `/realms/{realm_name}/organizations` | 创建一个组织。回答 `201` |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}` | 读取一个组织 |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}` | 更新一个组织。您留空的字段将保持其原有值 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}` | 删除一个组织。答案 `204` |
+
+删除一个组织会删除其属性、成员关系及其组。用户保持不变。
+
+<span id="listing-organizations" />
+
+### 列出组织
+
+列表是分页的，如 [API 列表](/zh-CN/discover/guides/api-listings) 所述。在共享参数之上，它会根据以下条件筛选：
+
+| 参数 | 匹配 |
+|---|---|
+| `search` | 名称、别名、域名或描述的不区分大小写的子字符串 |
+| `name`, `alias`, `domain`, `description` | 该字段的大小写不敏感子字符串 |
+| `enabled` | `true`或`false` |
+| `has_domain` | `true` 保留有域名的组织，`false` 保留没有域名的组织 |
+| `without_member` | 一个用户 ID：保留该用户未加入的组织 |
+| `ids` | 最多 100 个组织 ID 的逗号分隔列表 |
+| `created_from`, `created_to` | RFC 3339 日期时间，包括和不包括 |
+
+`order_by` 接受 `name`、`alias`、`enabled`、`created_at`（默认）和 `updated_at`。
+
+<span id="realm-scoping" />
+
+## 身份域范围
+
+每个组织只属于一个身份域。所有 API 端点都是按身份域划分的：
+
+```text
+/realms/{realm_name}/organizations
+```
+
+用户及其加入的组织必须在同一身份域。跨身份域的成员资格会被拒绝。
+
+`alias` 在身份域内必须是唯一的。使用已被占用的别名创建或更新组织会返回 400，并给出原因 `already_exists`。
+
+<span id="the-enabled-flag" />
+
+## `enabled` 标志
+
+设置 `enabled: false` 会冻结成员添加：`POST /members` 开始拒绝请求。现有成员保持不变。这是暂停客户而不删除组织或清空其内容的方法。
+
+<span id="permissions" />
+
+## 权限
+
+组织有它们自己的权限，`view_organizations` 和 `manage_organizations`，而 `manage_realm` 在任一权限下都被接受。用户权限 `manage_users` 和 `view_users` 不授予访问组织的权限，因为管理身份域的用户与管理其组织是不同的权限。
+
+| 操作 | 所需权限 |
+|---|---|
+| 列出和读取组织、成员、成员角色、组、组成员、组角色和属性。列出用户所属的组织 | `view_organizations`, `manage_organizations` 或 `manage_realm` |
+| 创建、更新和删除组织。添加和移除成员。分配和撤销角色。创建、更新和删除组。更改属性 | `manage_organizations`或`manage_realm` |
+
+仅持有 `view_organizations` 的管理员可以浏览组织但不能更改其中的内容。
+
+<Callout variant="info" title="路线图">
+
+仍然缺少：
+
+- 基于域的自动入职。`domain` 字段已存储并验证，但还没有根据用户的电子邮件域将其分配到组织。
+- 组织策略。强制单点登录、域匹配规则和组织级身份认证策略尚未提供。
+- 软删除。删除是永久性的，没有归档或恢复功能。
+
+</Callout>
+
+<span id="organizations-or-separate-realms" />
+
+## 组织还是单独的身份域？
+
+| 场景 | 推荐 |
+|---|---|
+| B2B SaaS，客户共享身份认证策略 | 一个身份域内的组织 |
+| 客户需要完全不同的令牌有效期或身份提供商联合 | 每个客户单独的身份域 |
+| 内部多团队产品 | 一个身份域内的组织 |
+| 受监管的多租户隔离（数据驻留） | 单独的身份域 |
+
+::::card-group{cols=3}
+:::card{label="成员" icon="lucide:users" href="/zh-CN/modules/organization/members"}
+添加、移除和列出成员，在组织内分配角色，并查找用户的组织。
+:::
+:::card{label="群组" icon="lucide:network" href="/zh-CN/modules/organization/groups"}
+在群组树中嵌套成员，并让他们从每个祖先继承角色。
+:::
+:::card{label="属性" icon="lucide:tags" href="/zh-CN/modules/organization/attributes"}
+向组织附加键值元数据：计划层级、CRM ID、功能标记。
+:::
+::::

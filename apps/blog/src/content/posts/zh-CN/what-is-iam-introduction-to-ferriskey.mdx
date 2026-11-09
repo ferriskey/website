@@ -1,0 +1,184 @@
+---
+title: "你是谁，又能在这里做什么？"
+description: "IAM（身份与访问管理）支撑着几乎所有现代应用的安全。它究竟是什么、负责什么，为什么又很难做好？本文拆解这些问题，并介绍 FerrisKey。"
+short_description: "从零理解身份与访问管理，认识 FerrisKey。"
+date: 2026-03-19
+tags: [iam, identity, access-management, ferriskey, rust, open-source]
+status: published
+author: nathaelb
+---
+
+每个计算机系统每天都要无数次地向尝试访问资源的用户、应用和服务提出同一个问题。
+
+*你是谁？你被允许在这里做什么？*
+
+问题看似简单，背后却是一整套专业体系，关系到几乎所有现代应用的安全性、可扩展性和可靠性：**身份与访问管理**，也就是 IAM。
+
+## 问题其实很具体
+
+想象一家大公司：数百名员工，数十个应用，涵盖财务、人力资源、CRM、开发工具和生产服务器。员工每天登录、退出，在此期间访问数据、触发流程、阅读文档。
+
+现在回答几个问题：
+
+- 如何确保会计无法访问生产服务器？
+- 如何让离职开发者立即失去全部访问权限？
+- 如何允许外部合作伙伴调用某个 API，同时无法接触其他资源？
+- 半年之后，如何查清谁在什么时候修改了什么？
+
+:::callout{variant="warning" title="临时拼凑的办法难以扩展"}
+如果没有专门的系统，这些问题往往只能靠脚本、各个应用重复维护的用户表、在 Slack 中共享的密码，以及安全审计前的通宵加班来应付。
+:::
+
+IAM 用一套有组织的机制来解决这些混乱。
+
+---
+
+## IAM 系统具体负责什么
+
+IAM 是基础设施统一的访问关口，同时承担多个职责。
+
+::::card-group{cols=3}
+:::card{label="身份目录" icon="lucide:users"}
+记录系统中有哪些身份。每个用户、应用和机器服务都有唯一身份，由同一个可信来源统一管理。
+:::
+
+:::card{label="身份认证" icon="lucide:key-round"}
+通过密码、TOTP 验证码、硬件密钥或免密登录链接，验证你确实是你所声称的那个人。点击“使用 Google 登录”时，Google 就在承担身份管理的职责。
+:::
+
+:::card{label="授权" icon="lucide:shield-check"}
+确认身份之后，决定你能做什么：读取、写入、删除，还是管理？角色与权限需要精确分配。
+:::
+
+:::card{label="标准协议" icon="lucide:globe"}
+可靠的 IAM 支持 OAuth2 和 OpenID Connect 这些 Web 通用标准。应用可以委托身份认证，无需自行处理密码。
+:::
+
+:::card{label="审计" icon="lucide:scroll-text"}
+记录谁在何时、从哪里、以什么访问权限登录。这些信息是合规与事件响应的基础。
+:::
+
+:::card{label="减少重复建设" icon="lucide:zap"}
+有了 IAM，就不必为每个新应用重新实现一遍身份管理。
+:::
+::::
+
+---
+
+## 为什么难以做好
+
+IAM 听起来很简单。不就是一张带有 `password_hash` 的 `users` 表吗？
+
+:::callout{variant="danger" title="问题远不止一张用户表"}
+认真管理身份，就必须处理不断叠加的问题：密钥轮换、令牌撤销、会话过期、服务账户、多租户、多因素认证策略、Webhook，以及防篡改审计日志等。
+
+而且这一切都必须经受住负载。IAM 是必经的关口，每次经过认证的请求都依赖它。如果它变慢或宕机，后面的系统也会停下来。
+:::
+
+这就是大型企业愿意为 Okta、Auth0 或 Azure AD 等方案投入大量资金的原因。开源领域的 Keycloak 已经发展多年，能够完成这些工作，但配置复杂性与 JVM 资源占用并不适合所有团队。
+
+FerrisKey 并不声称自己是最终答案。它提供另一种取舍：使用 Rust 而非 Java，以六边形架构追求清晰和易维护，并希望保持运维简单。
+
+---
+
+## 认识 FerrisKey
+
+FerrisKey 是使用 **Rust** 编写、采用六边形架构的开源 IAM 系统。
+
+:::callout{variant="info" title="为什么选择 Rust？"}
+对如此关键的组件，性能与可靠性都不能妥协。Rust 提供接近 C 的速度，同时避开常见陷阱：没有垃圾回收器、数据竞争或意外的内存问题。对处理数百万次认证的服务，这些特性非常重要。
+:::
+
+六边形架构让业务逻辑保持独立，与基础设施解耦。数据库可以更换，HTTP 框架可以演进，而领域核心仍然稳定、易于测试。
+
+FerrisKey 签发的 OIDC ID 令牌解码后如下：
+
+```json title="id_token (decoded)"
+{
+  "sub": "user_01HZ93BKGZ7Y3QPFMJ4E5RW0X",
+  "iss": "https://auth.example.com/realms/acme",
+  "aud": "my-app",
+  "exp": 1718100000,
+  "iat": 1718096400,
+  "email": "alice@example.com",
+  "realm_access": {
+    "roles": ["developer", "read:billing"]
+  }
+}
+```
+
+在实际使用中，FerrisKey 提供以下能力：
+
+::::card-group{cols=2}
+:::card{label="身份域" icon="lucide:layers"}
+完全隔离的空间。每个组织、项目或环境都有自己的身份域，以及各自的用户、角色和客户端，彼此互不混用。
+:::
+
+:::card{label="OAuth2 与 OIDC" icon="lucide:lock-keyhole"}
+正确实现 Web 标准，让应用顺畅地委托身份认证。
+:::
+
+:::card{label="Trident：多因素认证" icon="lucide:shield"}
+FerrisKey 的多因素认证模块，支持 TOTP、WebAuthn（硬件密钥与通行密钥）、免密登录链接和恢复码。
+:::
+
+:::card{label="SeaWatch：审计" icon="lucide:eye"}
+完整的审计系统，可在控制台中查询，追踪各身份域中的每个安全事件。
+:::
+
+:::card{label="Webhook" icon="lucide:webhook"}
+将 FerrisKey 接入现有系统，响应用户创建、访问权限撤销等生命周期事件。
+:::
+
+:::card{label="云原生" icon="lucide:cloud"}
+官方 Helm Chart、Kubernetes Operator 和 Docker Compose 支持，便于按需部署和扩展。
+:::
+::::
+
+:::callout{variant="success" title="Apache 2.0，完全开放"}
+没有付费门槛，也不会将关键功能藏在需要联系销售的“企业版”中。代码开放，社区就在这里。
+:::
+
+---
+
+## 适合哪些团队
+
+::::card-group{cols=3}
+:::card{label="SaaS 团队" icon="lucide:rocket"}
+正在构建平台，希望拥有可靠的认证能力，无需从零开发，也不希望按月活跃用户付费。
+:::
+
+:::card{label="平台工程师" icon="lucide:server"}
+希望统一管理各服务的身份，同时避免依赖专有厂商。
+:::
+
+:::card{label="好奇的开发者" icon="lucide:code-2"}
+希望通过阅读清晰、结构良好的 Rust 代码，理解 IAM 的实际工作方式。
+:::
+::::
+
+FerrisKey 目前还不是 Okta。但它是一个认真推进、持续开发的项目，也在为长远发展打好基础。
+
+---
+
+## 接下来
+
+后续文章会进一步介绍 OAuth2 和 OIDC 的内部机制、如何通过角色系统建模权限，以及如何在 Kubernetes 上部署 FerrisKey 等内容。
+
+::::step-group
+:::step{title="动手试用"}
+代码仓库位于 [GitHub](https://github.com/ferriskey/ferriskey)。可以点个星标、克隆仓库，在本地运行。
+:::
+
+:::step{title="阅读文档"}
+入门所需的信息都在 [docs.ferriskey.rs](https://docs.ferriskey.rs/zh-CN/discover/getting-started)。
+:::
+
+:::step{title="加入社区"}
+GitHub 上已开放讨论。欢迎贡献代码、报告问题和提出想法。
+:::
+::::
+
+IAM 已经在无数个彼此封闭的专有系统中被重复实现。我们希望以开放的方式，把这件事做好。
+
+*这就是 FerrisKey 想做的事。*

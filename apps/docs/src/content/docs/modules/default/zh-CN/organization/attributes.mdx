@@ -1,0 +1,107 @@
+---
+title: "属性"
+description: "FerrisKey 组织的自定义键值元数据。"
+icon: tags
+order: 83
+---
+
+<span id="attributes" />
+
+# 属性
+
+属性是挂在组织上的键值对。它们保存属于客户记录、订阅等级、外部系统 ID、功能标志的业务数据，而无需任何人扩展核心模式。
+
+群组也携带属性，形态相同，插入更新语义相同，在 `/groups/{group_id}/attributes` 下。参见 [Groups](/zh-CN/modules/organization/groups#attributes)。
+
+<span id="attribute-endpoints" />
+
+## 属性端点
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/attributes` | 列出一个组织的所有属性 |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | 通过键更新或插入属性 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | 通过键删除属性。响应 `204`，包括键不存在时也返回该响应 |
+
+列出操作需要 `view_organizations`、`manage_organizations` 或 `manage_realm`。更新插入和删除操作需要 `manage_organizations` 或 `manage_realm`。
+
+<span id="upsert-semantics" />
+
+## 更新插入语义
+
+`PUT` 根据键进行更新插入。已有键的值会被覆盖；新键会被创建。没有单独的创建端点。响应是该属性。
+
+```json title="PUT /realms/acme/organizations/{org_id}/attributes/plan"
+{
+  "value": "enterprise"
+}
+```
+
+键来自路径，值来自请求体。两者都是必需的，FerrisKey 会去掉它们周围的空白字符。空值或缺失值将被拒绝。
+
+<span id="attribute-fields" />
+
+## 属性字段
+
+| 字段 | 类型 | 约束条件 | 说明 |
+|---|---|---|---|
+| `id` | UUID v7 | 已生成 | 标识符 |
+| `organization_id` | UUID | 已生成 | 该属性所属的组织 |
+| `key` | 字符串 | 1 到 255 个字符，必填 | 属性名称 |
+| `value` | 字符串 | 必填 | 属性值 |
+| `created_at` | 日期时间（UTC） | 已生成 | 在第一次插入或更新时设置，覆盖时保持不变 |
+
+<span id="several-attributes-at-once" />
+
+## 一次多个属性
+
+一个典型的组织可能有多个属性。该列表以 `data` 数组的对象形式返回：
+
+```json title="GET /realms/acme/organizations/{org_id}/attributes"
+{
+  "data": [
+    {
+      "id": "01936b2e-aaaa-7000-abcd-000000000001",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "plan",
+      "value": "enterprise",
+      "created_at": "2026-01-15T09:00:00Z"
+    },
+    {
+      "id": "01936b2e-bbbb-7000-abcd-000000000002",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "stripe_customer_id",
+      "value": "cus_Qx8mN2kLpR4t",
+      "created_at": "2026-01-15T09:01:00Z"
+    },
+    {
+      "id": "01936b2e-cccc-7000-abcd-000000000003",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "feature_advanced_reporting",
+      "value": "true",
+      "created_at": "2026-03-01T14:30:00Z"
+    }
+  ]
+}
+```
+
+列表未分页。
+
+<span id="real-world-uses" />
+
+## 实际应用
+
+| 键模式 | 示例值 | 使用场景 |
+|---|---|---|
+| `plan` | `free`, `pro`, `enterprise` | 按订阅等级控制功能访问 |
+| `stripe_customer_id` | `cus_Qx8mN2kLpR4t` | 关联到计费提供商 |
+| `salesforce_account_id` | `001Dn00000KjlHSIAZ` | 关联到 CRM 记录 |
+| `feature_<name>` | `true` / `false` | 每个组织的功能标志 |
+| `max_seats` | `50` | 在应用逻辑中强制执行座位限制 |
+| `onboarded_at` | `2026-01-15` | 跟踪入职完成情况 |
+
+<Callout variant="warning" title="值始终为字符串">
+
+属性只存储字符串。数值 (`50`)、布尔值 (`true`) 和日期 (`2026-01-15`) 都以其字符串表示形式存储。您的应用程序负责将它们解析回适当的类型。
+
+</Callout>
