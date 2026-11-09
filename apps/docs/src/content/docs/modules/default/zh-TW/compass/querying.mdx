@@ -1,0 +1,349 @@
+---
+title: "查詢和分析"
+description: "透過四個端點讀取 Compass 流程、統計資訊和每日活動：引數、分頁，以及回答常見問題的查詢。"
+icon: bar-chart-3
+order: 32
+---
+
+<span id="querying-and-analytics" />
+
+# 查詢和分析
+
+Compass 將每個被追蹤的認證流程在 PostgreSQL 中儲存 30 天，並透過四個只讀端點提供服務。使用它們來除錯登入失敗、觀察認證延遲，以及檢視一個身分域的流量日變化。
+
+所有四個都需要 `view_events`、`manage_events` 或 `manage_realm`。路徑寫成沒有根路徑，即伺服器預設路徑。如果設定了 `SERVER_ROOT_PATH`，每個路徑都會加上該字首。
+
+| 端點 | 迴歸 |
+|---|---|
+| `GET /realms/{realm_name}/compass/v1/stats` | 整個身分域的計數和平均持續時間 |
+| `GET /realms/{realm_name}/compass/v1/flows` | 一頁的流程及其步驟 |
+| `GET /realms/{realm_name}/compass/v1/flows/{flow_id}` | 一個流程及其步驟 |
+| `GET /realms/{realm_name}/compass/v1/activity/daily` | 某日期視窗的每日計數 |
+
+<span id="flow-statistics" />
+
+## 流程統計
+
+統計端點可一目瞭然地返回整個身分域的彙總資料：
+
+```json title="GET /realms/{realm_name}/compass/v1/stats"
+{
+  "data": {
+    "total": 15234,
+    "success_count": 14102,
+    "failure_count": 987,
+    "pending_count": 145,
+    "avg_duration_ms": 142.5
+  }
+}
+```
+
+| 欄位 | 說明 |
+|---|---|
+| `total` | 每個記錄的流程，包括 `expired` 的流程 |
+| `success_count` | 狀態為 `success` 的流程 |
+| `failure_count` | 狀態為 `failure` 的流程 |
+| `pending_count` | 仍然是 `pending` 的流程。被放棄的流程在 12 小時後會計入此計數，屆時它們會變為 `expired` |
+| `avg_duration_ms` | 有 `duration_ms` 的流程的平均 `duration_ms`。當沒有時為 null |
+
+沒有 `expired` 計數，因此 `total` 可以超過其他三項的總和。請記住，`duration_ms` 是流程關閉步驟的持續時間，而不是使用者登入所花的時間。`failure_count` 或 `avg_duration_ms` 的上升仍然告訴你流水線中有變化。
+
+<span id="listing-flows" />
+
+## 列出流程
+
+```
+GET /realms/{realm_name}/compass/v1/flows
+```
+
+列表遵循 [分頁列表](/zh-TW/discover/guides/api-listings) 中描述的共享協議：`page`、`limit`、`order_by`、`order`、過濾器和 `{data, metadata}` 響應。每個流程都包含其步驟，按 `started_at` 排序。
+
+| 引數 | 型別 | 說明 |
+|---|---|---|
+| `page` | 整數，1 或更大 | 頁碼。預設為 1 |
+| `limit` | 整數，1 到 100 | 每頁大小。預設為 20 |
+| `order_by` | `status`, `started_at`, `duration_ms` 或 `created_at` | 排序列。預設為 `created_at` |
+| `order` | `asc`或`desc` | 排序方向。預設為 `desc` |
+| `client_id` | 字串 | 客戶端的 OAuth `client_id`，精確匹配 |
+| `user_id` | UUID | 此使用者的流程已關閉，完全匹配 |
+| `grant_type` | 字串 | 完全匹配，例如 `authorization_code` 或 `password` |
+| `status` | `pending`, `success`, `failure` 或 `expired` | 完全匹配 |
+| `ip_address` | 字串 | 在地址中的任意位置進行不區分大小寫的匹配。沒有地址的流程永遠不會匹配 |
+| `search` | 字串 | 與 `ip_address` 相同的匹配 |
+| `identified` | 布林值 | `true` 將流程繫結到使用者，`false` 保留匿名流程 |
+| `completed` | 布林值 | `true` 保留具有 `completed_at` 的流程，`false` 保留未完成的流程 |
+| `from` | RFC 3339 日期-時間 | 在此時間點或之後開始的流程，在 `started_at` 上 |
+| `to` | RFC 3339 日期-時間 | 在此時間點或之前開始的流程，在 `started_at` 上 |
+
+過濾器以 AND 方式組合，傳送空值的過濾器將被忽略。在 `duration_ms` 上排序時，未完成的流程在升序時位於最後，降序時位於最前。
+
+其他引數被拒絕，400 個`invalid_query`命名。這包括該端點沒有的`offset`：請使用`page`。它還包括`from_timestamp`、`to_timestamp`、`from_date`和`to_date`：該端點的視窗引數分別為`from`和`to`。
+
+:::callout{variant="info"}
+流程關閉時`user_id`。登入頁面出現錯誤密碼或程式碼會導致流程`pending`無使用者，因此這些嘗試不在`user_id`中出現，也不計入`failure`。用`status=pending`找到這些嘗試，尋找失敗步驟，如下面查詢。
+:::
+
+<span id="example-queries" />
+
+### 示例查詢
+
+從視窗開始並因失敗而關閉的流程：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=failure" \
+  --data-urlencode "from=2026-10-30T00:00:00Z" \
+  --data-urlencode "limit=50" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+那些從未關閉的簽到，最早的先，看看他們停在哪裡：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=pending" \
+  --data-urlencode "completed=false" \
+  --data-urlencode "order_by=started_at" \
+  --data-urlencode "order=asc" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+一個客戶端的密碼授予流程：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "client_id=my-frontend" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "limit=10" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+最慢的水流先行：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "order_by=duration_ms" \
+  --data-urlencode "order=desc" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+<span id="flow-detail" />
+
+## 流線細節
+
+透過 ID 獲取一個流程以檢視其所有步驟：
+
+```json title="GET /realms/{realm_name}/compass/v1/flows/{flow_id}"
+{
+  "data": {
+    "id": "01914b3c-7e8a-7f5a-b456-789012345678",
+    "realm_id": "01914b3c-1234-7f5a-b456-000000000001",
+    "client_id": "my-frontend",
+    "user_id": null,
+    "grant_type": "authorization_code",
+    "status": "pending",
+    "ip_address": "203.0.113.42",
+    "user_agent": "Mozilla/5.0 ...",
+    "started_at": "2026-10-30T14:30:00.000000Z",
+    "completed_at": null,
+    "duration_ms": null,
+    "steps": [
+      {
+        "id": "01914b3c-7e8a-7f5a-b456-789012345001",
+        "flow_id": "01914b3c-7e8a-7f5a-b456-789012345678",
+        "step_name": "authorize",
+        "status": "success",
+        "duration_ms": null,
+        "error_code": null,
+        "error_message": null,
+        "details": null,
+        "started_at": "2026-10-30T14:30:00.004000Z"
+      },
+      {
+        "id": "01914b3c-7e8a-7f5a-b456-789012345002",
+        "flow_id": "01914b3c-7e8a-7f5a-b456-789012345678",
+        "step_name": "credential_validation",
+        "status": "failure",
+        "duration_ms": 85,
+        "error_code": "InvalidPassword",
+        "error_message": null,
+        "details": null,
+        "started_at": "2026-10-30T14:30:07.511000Z"
+      }
+    ]
+  }
+}
+```
+
+故事已完成：授權請求被接受，然後在驗證 85 毫秒後密碼錯誤。流程仍然是 `pending`，因為使用者在登入頁面，可以再次嘗試。
+
+<span id="daily-activity" />
+
+## 每日活動
+
+```
+GET /realms/{realm_name}/compass/v1/activity/daily
+```
+
+此端點按日彙總，並且可以接收日期視窗。
+
+| 引數 | 型別 | 說明 |
+|---|---|---|
+| `from` | date, `YYYY-MM-DD` | 第一天（包含）。預設值為 `to` 之前 29 天，總共 30 天視窗。 |
+| `to` | date, `YYYY-MM-DD` | 最後一天（包含）。預設值為當前 UTC 日。 |
+| `client_id` | 字串 | 將流程計數限制為一個客戶端 |
+| `user_id` | UUID | 將流程計數限制為一個賬戶 |
+| `grant_type` | 字串 | 將流程計數限制為一種授權型別 |
+
+一個格式錯誤的日期，在 `to` 之後的 `from`，或者超過 366 天的視窗會返回 400。與流程列表不同，這個端點會忽略它不認識的引數，所以拼寫錯誤的 `from_date` 會默默地回退到預設視窗。
+
+```json title="GET /realms/my-app/compass/v1/activity/daily?from=2026-10-28&to=2026-10-30"
+{
+  "data": [
+    {
+      "date": "2026-10-28",
+      "signups": 12,
+      "logins": 431,
+      "login_failures": 7,
+      "pending_logins": 3,
+      "expired_logins": 9,
+      "total_flows": 450,
+      "unique_login_users": 212,
+      "avg_login_duration_ms": 38.4
+    },
+    {
+      "date": "2026-10-29",
+      "signups": 9,
+      "logins": 402,
+      "login_failures": 5,
+      "pending_logins": 2,
+      "expired_logins": 11,
+      "total_flows": 420,
+      "unique_login_users": 198,
+      "avg_login_duration_ms": 36.9
+    },
+    {
+      "date": "2026-10-30",
+      "signups": 0,
+      "logins": 0,
+      "login_failures": 0,
+      "pending_logins": 0,
+      "expired_logins": 0,
+      "total_flows": 0,
+      "unique_login_users": 0,
+      "avg_login_duration_ms": null
+    }
+  ]
+}
+```
+
+視窗的每一天都會生成一行，如果什麼都沒有發生則為零。天數使用 UTC 天，從 `started_at` 獲取。
+
+| 欄位 | 說明 |
+|---|---|
+| `signups` | 該身分域當天建立的賬號。過濾器不適用於它。 |
+| `logins` | 狀態為 `success` 的流程 |
+| `login_failures` | 狀態為 `failure` 的流程 |
+| `pending_logins` | 仍然是 `pending` 流程。 |
+| `expired_logins` | 狀態為 `expired` 的流程 |
+| `total_flows` | 當天啟動的所有流程。 |
+| `unique_login_users` | 成功流程中不同的使用者。 |
+| `avg_login_duration_ms` | 成功流程的平均 `duration_ms`。如果沒有則為 null。 |
+
+<span id="queries-people-actually-run" />
+
+## 使用者實際執行的查詢。
+
+<span id="authentication-latency" />
+
+### 認證延遲。
+
+按計劃輪詢統計端點並繪製 `avg_duration_ms`：
+
+```bash
+curl -s "http://localhost:3333/realms/my-app/compass/v1/stats" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | {total, failure_count, avg_duration_ms}'
+```
+
+<span id="failed-steps-and-their-errors" />
+
+### 失敗步驟及其錯誤。
+
+因為錯誤的密碼會使其流程 `pending` 失敗，所以應統計失敗的步驟而不是失敗的流程。此方法按錯誤程式碼對最近待處理流程的失敗步驟進行分組：
+
+```bash
+curl -s -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=pending" \
+  --data-urlencode "limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '[.data[].steps[] | select(.status == "failure") | .error_code]
+      | group_by(.) | map({code: .[0], count: length}) | sort_by(-.count)'
+```
+
+你會遇到的程式碼有：
+
+| `error_code` | 步驟 | 含義 |
+|---|---|---|
+| `InvalidPassword` | `credential_validation` | 密碼錯誤 |
+| `UserDisabled` | `credential_validation` | 賬戶被禁用 |
+| `AccountLocked` | `credential_validation` | 賬戶在多次失敗後被鎖定 |
+| `invalid_otp_code` | `mfa_challenge` | 一次性驗證碼錯誤 |
+
+權杖步驟的失敗同樣會按內部錯誤名稱記錄，而 SAML 和權杖交換步驟則有各自的錯誤程式碼。
+
+<span id="finding-slow-sign-ins" />
+
+### 查詢慢速登入
+
+查詢 `credential_validation` 成功完成但使用者查詢和密碼雜湊檢查耗時超過 500 毫秒的流程：
+
+```bash
+curl -s -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "status=success" \
+  --data-urlencode "limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  jq '.data[] | select(.steps[] | select(.step_name == "credential_validation" and .duration_ms > 500))'
+```
+
+<span id="identity-provider-performance" />
+
+### 身分提供者效能
+
+當您透過 [Abyss](/zh-TW/modules/abyss/overview) 使用外部提供者登入時，`idp_callback` 步驟是等待提供者的權杖端點的步驟，因此其 `duration_ms` 即為提供者的響應時間。失敗會攜帶提供者自己的 `error` 和 `error_description` 於 `error_message` 中。透過經紀人授予型別進行篩選，可以僅檢視這些流程，例如對於別名為 `github` 的提供者使用 `grant_type=broker_github`。
+
+<span id="a-users-history" />
+
+### 使用者的歷史記錄
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/compass/v1/flows" \
+  --data-urlencode "user_id=USER_UUID" \
+  --data-urlencode "limit=20" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+這會列出使用者已關閉的流程，對於支援工單非常有用（“我上次何時從何處登入？”）。它不會列出使用者失敗的密碼嘗試，因為那些流程仍然是匿名的。對於這些流程，請匹配 `ip_address` 或檢視待處理的流程。
+
+<span id="keeping-flows-longer" />
+
+## 保留流程更長時間
+
+Compass 會在流開始 30 天后刪除它們，這個時間視窗無法配置。要保留更長的歷史記錄，請在它們過期之前讀取流：使用 `order_by=started_at`、`order=asc` 和 `from` 在 `GET .../flows` 中分頁，並將它們儲存在您自己的系統中。
+
+<span id="compass-and-seawatch" />
+
+## Compass 與 SeaWatch
+
+這兩個模組互為補充。
+
+| 方面 | SeaWatch | Compass |
+|---|---|---|
+| 它記錄的內容 | 安全事件：登入、使用者和角色更改、金鑰讀取 | 認證流程，逐步記錄 |
+| 粒度 | 每個動作一個事件 | 每個流程包含多個步驟 |
+| 時間安排 | 時間戳 | 每個步驟和整個流程的持續時間 |
+| 錯誤詳情 | 狀態，以及失敗登入的原因 | 每步錯誤程式碼和訊息 |
+| 網路背景 | 未錄製 | 當請求攜帶IP地址和使用者代理時 |
+| 擔保 | 附帶期待已久的插頁，被FerrisKey鎖鏈，從未刪除 | 盡力而為：可在負載下丟棄事件，30天后刪除，可按伺服器關閉 |
+| 最佳 | 審計記錄，“發生了什麼” | 除錯，“哪裡以及為什麼出錯” |
+
+當你需要知道發生了什麼並能夠證明時，使用SeaWatch。需要知道登入中斷位置時，使用Compass。要將SeaWatch事件與其流程聯絡起來，請參見[查詢事件](/zh-TW/modules/seawatch/querying)。

@@ -1,0 +1,331 @@
+---
+title: "透過 SSO 連線應用程式"
+description: "在 FerrisKey 中配置 OpenID Connect 應用，並向其他服務提供它們所需的值以便讓使用者登入。"
+icon: plug
+order: 19
+---
+
+<span id="connect-an-application-with-sso" />
+
+# 透過 SSO 連線應用程式
+
+當一個應用程式使用 OpenID Connect 並且你希望 FerrisKey 處理登入時，請使用本指南。
+
+最終，你將擁有：
+
+- 一個專門針對該應用程式或組織的 FerrisKey 域
+- 一個 OpenID Connect 客戶端
+- 一個客戶端 ID 和客戶端金鑰
+- 在 FerrisKey 中註冊的重定向 URI
+- 你的應用程式所需的簽發者 URL 和發現端點
+
+<span id="before-you-start" />
+
+## 在開始之前
+
+在開啟 FerrisKey 之前，找到你想要連線的應用程式中的這些值：
+
+| 值 | 示例 |
+|---|---|
+| 應用程式 URL | `https://vault.example.com` |
+| 回撥或重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+| 所需的作用域 | `openid profile email` |
+
+:::callout{variant="info" title="使用應用程式的精確回撥 URL"}
+重定向 URI 必須與應用在登入時傳送的 URI 匹配。如果應用顯示回撥是 `/identity/connect/oidc-signin`，不要將其替換為應用首頁。
+:::
+
+<span id="example-values" />
+
+## 示例值
+
+本教程使用這些值。請將它們替換為您自己的域名和身分域名稱。
+
+| 設定 | 值 |
+|---|---|
+| FerrisKey URL | `https://sso.example.com` |
+| 身分域 | `home` |
+| 客戶端 ID | `vaultwarden` |
+| 應用程式 URL | `https://vault.example.com` |
+| 重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+| 作用域 | `openid profile email` |
+
+<span id="create-or-select-the-realm" />
+
+## 建立或選擇身分域
+
+一個身分域將使用者、客戶端、角色和權限作用域組合在一起。避免在應用中使用 `master`。
+
+::::step-group
+:::step{title="開啟身分域選擇器"}
+點選 **頂部欄** 中 FerrisKey 標誌旁的身分域名稱。選擇將擁有此應用的身分域，或者如果需要新建身分域，點選 **建立身分域**。選擇器支援搜尋，這在部署多個身分域時非常有用。
+
+<img class="only-light" src="/dashboard/realm_switch-light.jpg" alt="頂部欄中開啟的 FerrisKey 身分域選擇器，列出各個身分域和建立身分域操作" />
+<img class="only-dark" src="/dashboard/realm_switch-dark.jpg" alt="頂部欄中開啟的 FerrisKey 身分域選擇器，列出各個身分域和建立身分域操作" />
+:::
+
+:::step{title="保持在應用身分域"}
+切換後，在建立客戶端之前檢查身分域指示器。客戶端將被建立在儀表板當前選擇的身分域中。
+:::
+::::
+
+<span id="create-the-client" />
+
+## 建立客戶端
+
+客戶端是 FerrisKey 中的應用條目。它告訴 FerrisKey 哪個應用正在請求使用者登入。
+
+::::step-group
+:::step{title="開啟客戶端"}
+在側邊欄中，點選 **客戶端**，然後點選 **新建客戶端**。
+
+<img class="only-light" src="/dashboard/list_clients-light.jpg" alt="FerrisKey 客戶端列表，顯示總數、活動、公有和機密客戶端的計數，以及“新建客戶端”按鈕" />
+<img class="only-dark" src="/dashboard/list_clients-dark.jpg" alt="FerrisKey 客戶端列表，顯示總數、活動、公有和機密客戶端的計數，以及“新建客戶端”按鈕" />
+
+在新增任何內容之前，值得閱讀該列表頂部的橫幅：它列出了所有沒有重定向 URI 的客戶端，因為沒有該 URI 授權碼流程無法工作。
+:::
+
+:::step{title="選擇協議"}
+建立始於詢問應用程式使用哪種協議：**OpenID Connect** 適用於任何基於權杖的應用，或 **SAML 2.0** 適用於不使用其他協議的應用。
+
+<img class="only-light" src="/dashboard/client_protocol-light.jpg" alt="FerrisKey 客戶端協議對話方塊提供 OpenID Connect 或 SAML 2.0 選項" />
+<img class="only-dark" src="/dashboard/client_protocol-dark.jpg" alt="FerrisKey 客戶端協議對話方塊提供 OpenID Connect 或 SAML 2.0 選項" />
+
+:::callout{variant="warning" title="此選擇為最終選擇"}
+它決定應用程式如何讓使用者登入，並且建立後無法更改。以後從 SAML 轉向 OIDC 的應用需要一個新的客戶端，而不是編輯現有的。如需瞭解每個協議提供的功能，請參見 [身分認證](/zh-TW/discover/core-concepts/authentication#saml-20)。
+:::
+
+:::step{title="填寫客戶端詳情"}
+使用穩定的客戶端 ID。在此示例中：
+
+| 欄位 | 值 |
+|---|---|
+| 客戶端 ID | `vaultwarden` |
+| 名稱 | `Vaultwarden` |
+| 客戶端啟用 | 已啟用 |
+| 客戶端認證 | 機密 |
+
+客戶端認證是在“Confidential（金鑰）”和“Public（公開）”之間的選擇，這也是最終決定。對於可以儲存金鑰的伺服器端應用程式，請選擇“Confidential”，FerrisKey 會生成一個金鑰。對於 SPA、移動應用或 CLI，請選擇“Public”，因為金鑰會最終落入使用者手中，而 PKCE 則提供保護。
+
+對於瀏覽器 SSO，將兩個功能開關都關閉：**直接存取授權** 是[已棄用的密碼授權](/zh-TW/discover/core-concepts/authentication#password-resource-owner)，而 **裝置授權** 則適用於無瀏覽器客戶端。
+
+客戶端建立時要求 PKCE，這意味著應用程式必須在授權請求中傳送 S256 程式碼挑戰。大多數 OIDC 庫預設這樣做。**Require PKCE（要求 PKCE）** 開關位於客戶端 **設定** 標籤頁下的 **功能配置** 中。
+
+<img class="only-light" src="/dashboard/create_client-light.jpg" alt="FerrisKey 新客戶端表單，包括客戶端 ID、名稱、啟用狀態、機密/公開選擇以及功能開關" />
+<img class="only-dark" src="/dashboard/create_client-dark.jpg" alt="FerrisKey 新客戶端表單，包括客戶端 ID、名稱、啟用狀態、機密/公開選擇以及功能開關" />
+:::
+::::
+
+<span id="configure-the-redirect-uri" />
+
+## 配置重定向 URI
+
+重定向 URI 是在登入成功後 FerrisKey 將瀏覽器傳送到的地址。
+
+::::step-group
+:::step{title="開啟客戶端設定"}
+開啟您剛建立的客戶端，並停留在 **設定** 選項卡。
+:::
+
+:::step{title="新增重定向 URI"}
+滾動到 **存取** 部分，並新增您應用程式中的精確回撥 URL。每條記錄在新增時都會儲存，因此此列表沒有單獨的儲存按鈕。
+
+例如：
+
+```text
+https://vault.example.com/identity/connect/oidc-signin
+```
+
+<img class="only-light" src="/dashboard/client_access-light.jpg" alt="FerrisKey 客戶端存取部分，包含重定向 URIs、網頁源和登出後重定向 URIs" />
+<img class="only-dark" src="/dashboard/client_access-dark.jpg" alt="FerrisKey 客戶端存取部分，包含重定向 URIs、網頁源和登出後重定向 URIs" />
+
+FerrisKey 會逐字元地將回撥與條目進行比較。只有寫成 `^...$` 的條目才會被當作正規表示式讀取，因此除非回撥確實有所不同，否則請保持字面地址不變。
+
+同一區域的兩個鄰居與重定向 URI 一樣重要：
+
+- Web 來源是指此應用程式可以在瀏覽器中從中呼叫 FerrisKey 的來源。`+` 按鈕會根據您剛剛輸入的重定向 URI 推導它們，但僅限於字面 URI：正規表示式模式會被跳過。移除一個來源需要幾分鐘以清除瀏覽器預檢快取，並且最多需 30 秒才能傳播到其他 API 副本。
+- 登出後重定向 URI，在 **登出** 下，是會話結束後使用者可以到達的頁面。FerrisKey 僅在登出請求指定了地址並確認了客戶端時才會重定向到該地址，並且該地址必須與條目完全匹配。如果沒有重定向，登出會以空 `204` 響應，使用者會停留在發出請求的頁面：FerrisKey 不會顯示自己的頁面。
+
+同樣的 **登出** 部分包含 **Back-channel 登出 URL**，FerrisKey 會告知應用程式的後端會話已經結束。參見 [back-channel 登出](/zh-TW/discover/core-concepts/backchannel-logout)。
+:::
+::::
+
+<span id="copy-the-client-secret" />
+
+## 複製客戶端金鑰
+
+::::step-group
+:::step{title="開啟憑據"}
+開啟客戶端的 **憑據** 選項卡。
+:::
+
+:::step{title="複製金鑰"}
+金鑰是隱藏的。點選 **顯示** 以檢視，然後複製到應用程式的 OIDC 配置中，並將其視為密碼。
+
+<img class="only-light" src="/dashboard/client_secret-light.jpg" alt="FerrisKey 客戶端憑據標籤顯示客戶端 ID 和帶掩碼的客戶端金鑰，並具有顯示操作" />
+<img class="only-dark" src="/dashboard/client_secret-dark.jpg" alt="FerrisKey 客戶端憑據標籤顯示客戶端 ID 和帶掩碼的客戶端金鑰，並具有顯示操作" />
+
+顯示金鑰會被記錄為安全事件，在 [SeaWatch](/zh-TW/modules/seawatch/event-types) 中為 `client_secret_viewed`。這是故意為之：無法解釋的顯示操作會在審計跟蹤中可見。
+:::
+::::
+
+:::callout{variant="danger" title="洩露的金鑰目前無法透過 API 進行輪換"}
+如憑據標籤所示，在此版本中，管理 API 不提供輪換客戶端金鑰的功能。因此，如果金鑰被貼上到公共問題、日誌、截圖或程式碼庫中，沒有可進行的輪換呼叫。
+
+在功能推出之前，遏制方法是建立一個替代客戶端，遷移應用程式，並刪除受影響的客戶端。計劃這一過程會比輪換慢，並相應地處理客戶端金鑰：將其儲存在金鑰管理器中，切勿放在截圖中。
+:::
+
+<span id="check-the-client-scopes" />
+
+## 檢查客戶端作用域
+
+大多數OIDC申請需要`openid`、`profile`和`email`。
+
+::::step-group
+:::step{title="開放客戶端作用域"}
+開啟客戶端的**客戶端作用域**標籤頁。
+:::
+
+:::step{title="確認所需瞄準鏡"}
+每個分配的作用域都帶有預設或可選的交換機。確保這三個交換機處於預設狀態，也就是說每個權杖都能獲得它們，應用程式無需請求：
+
+- `openid`
+- `profile`
+- `email`
+
+現在建立的客戶端預設有 `openid`、`profile`、`email`、`roles` 和 `organization`，因此這一步主要是檢查。`address`、`phone` 和 `offline_access` 存在於身分域，但不連線到新客戶端。如果應用程式需要，可新增一個作為可選，且僅在請求在其 `scope` 引數中命名時應用。
+
+<img class="only-light" src="/dashboard/client_client_scopes-light.jpg" alt="FerrisKey 客戶端 客戶端作用域選項卡列出分配的作用域及其預設和可選開關" />
+<img class="only-dark" src="/dashboard/client_client_scopes-dark.jpg" alt="FerrisKey 客戶端 客戶端作用域選項卡列出分配的作用域及其預設和可選開關" />
+
+分配列表旁的 **Evaluate** 子選項卡回答了此步驟真正關心的問題：它顯示此客戶端將接收到的宣告，而無需先進行登入。
+:::
+::::
+
+<span id="configure-the-application" />
+
+## 配置應用程式
+
+將這些值貼上到應用程式中。
+
+| 應用設定 | FerrisKey 值 |
+|---|---|
+| 簽發者 / 權威 | `https://sso.example.com/realms/home` |
+| 發現端點 | `https://sso.example.com/realms/home/.well-known/openid-configuration` |
+| 客戶端 ID | `vaultwarden` |
+| 客戶端金鑰 | 來自 **Credentials** 選項卡的值 |
+| 作用域 | `openid profile email` |
+| 重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+
+<span id="what-the-discovery-endpoint-does" />
+
+### 發現端點的作用
+
+發現端點是 OpenID Connect 應用程式瞭解如何與 FerrisKey 通訊的地方。
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+當應用程式開啟該 URL 時，FerrisKey 會返回包含身分域 OIDC 後設資料的 JSON 文件。該文件告訴應用程式：
+
+- 當使用者點選“登入”時應重定向到哪裡
+- 將授權碼換取權杖的位置
+- 權杖中應期望的簽發者值
+- 用於獲取驗證權杖簽名的公鑰的位置
+- 支援哪些作用域、授權型別和客戶端認證方法
+
+這就是為什麼許多應用程式只要求提供簽發者、權限或發現 URL，而不需要你手動填寫每一個端點的原因。
+
+:::callout{variant="info" title="權限或發現端點"}
+有些應用程式要求提供簽發者或權限 URL，有些則要求提供發現端點。當它要求提供權限時，請提供不帶 `/.well-known/openid-configuration` 字尾的身分域 URL。
+:::
+
+<span id="test-the-login" />
+
+## 測試登入
+
+1. 在私密瀏覽器視窗中開啟應用程式。
+2. 點選 SSO 或 OpenID Connect 登入按鈕。
+3. 確認瀏覽器是否重定向到 FerrisKey。
+4. 使用同一身分域的使用者登入。
+5. 確認 FerrisKey 是否重定向回應用程式。
+6. 退出應用程式。如果它呼叫了 FerrisKey 登出端點，SSO 會話將結束，下次登入會再次要求輸入憑據。
+
+如果使用者登入成功，但應用程式顯示賬戶不被允許，請檢視應用程式自身的註冊、域、組或角色規則。FerrisKey 已驗證使用者身分；應用程式仍然可以決定該使用者是否被允許。
+
+<span id="troubleshooting" />
+
+## 故障排除
+
+<span id="invalid-redirect-uri" />
+
+### 無效的重定向 URI
+
+FerrisKey不會將瀏覽器傳送到應用程式請求的地址。它會轉到FerrisKey登入頁面並顯示錯誤資訊。
+
+檢查客戶端設定中的重定向URI是否與應用程式傳送的回撥URL完全匹配。比較協議、域名、路徑、末尾斜槓和埠。只有寫成`^...$`的條目被視為模式。
+
+<span id="discovery-endpoint-does-not-load" />
+
+### 發現端點無法載入
+
+從瀏覽器及應用程式容器或伺服器中開啟此URL：
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+它應返回一個JSON文件。如果沒有，請檢查FerrisKey公共URL、反向代理、TLS證書和身分域名稱。
+
+<span id="issuer-mismatch" />
+
+### 簽發者不匹配
+
+某些應用程式會驗證配置的權限是否等於發現端點返回的`issuer`欄位。
+
+開啟發現端點並複製`issuer`值。使用該精確值作為應用的發行方或權限。
+
+FerrisKey 從每個請求的`Host`和`X-Forwarded-Proto`首部構建發行點。如果發件方顯示內部主機名或`http://`，而使用者透過 https 存取 FerrisKey，反向代理則不會轉發這些頭部。
+
+<span id="client-authentication-failed" />
+
+### 客戶端認證失敗
+
+應用程式到達FerrisKey，但權杖交換失敗。
+
+檢查：
+
+- 客戶端已啟用
+- **客戶端認證**已為機密應用啟用
+- 應用程式使用當前客戶端金鑰
+- 複製的金鑰周圍沒有多餘的空格
+- 包含`+`或`%`的金鑰在透過HTTP Basic頭部傳輸時會被編碼為百分比編碼
+
+FerrisKey 用 `401` 回答 `invalid_client`，無論客戶端是未知的、被禁用的還是傳送了錯誤的金鑰。在同一地址在一分鐘內對同一客戶端嘗試失敗 10 次後，它將以 `Retry-After: 60` 回答 `429`，直到延遲結束。
+
+<span id="pkce-is-required" />
+
+### 需要 PKCE
+
+授權請求失敗，返回 `invalid_request` 並顯示關於 PKCE 的資訊。客戶端需要 S256 程式碼挑戰，而應用程式未傳送。讓應用程式以 `code_challenge_method=S256` 傳送 `code_challenge`。只有在無法傳送時，才在客戶端的功能配置中關閉 **Require PKCE**。
+
+<span id="the-application-gets-login_required-or-consent_required" />
+
+### 應用程式會收到 login_required 或 consent_required
+
+使用 `prompt=none` 的授權請求從未顯示頁面。當不存在 SSO 會話時，FerrisKey 會使用 `login_required` 將瀏覽器返回；當賬戶仍欠缺某個步驟時，返回 `interaction_required`；當需要顯示同意螢幕時，返回 `consent_required`。應用程式必須回退到互動式請求。請參閱 [授權請求](/zh-TW/discover/core-concepts/authentication#the-authorization-request)。
+
+<span id="missing-email-or-profile-data" />
+
+### 缺少電子郵件或個人資料資料
+
+登入成功，但應用程式無法建立或匹配賬戶。
+
+檢查 `openid`、`profile` 和 `email` 是否被分配為預設客戶端作用域。也請檢查 FerrisKey 使用者是否有電子郵件地址。
+
+<span id="the-application-asks-for-password-grant" />
+
+### 應用程式請求密碼授權
+
+當應用程式支援時，優先使用授權碼流程。僅在應用程式明確需要 `grant_type=password` 並且您信任它可以直接處理使用者密碼時，才啟用**直接存取授權**。

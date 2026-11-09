@@ -1,0 +1,118 @@
+---
+title: "客戶端"
+description: "在一個身分域內建立、檢查和刪除 OAuth2 客戶端，並讀取機密客戶端的金鑰。"
+icon: box
+order: 3
+---
+
+# `client`
+
+在一個身分域中管理 OAuth2 客戶端。
+
+```bash
+ferris-ctl client <subcommand>
+```
+
+每個子命令都接受 `--realm <name>` 來選擇命令作用的域；否則使用上下文的域。CLI 始終登入到上下文的域，因此即使你傳遞 `--realm`，上下文也必須有一個域。見 [認證](/zh-TW/cli/authentication#contexts)。
+
+<Callout variant="warning" title="已知限制：僅讀取客戶端的第一頁">
+
+伺服器預設每頁返回 20 個客戶端（最多 100 個），而 `ferris-ctl` 只讀取第一頁。在具有超過 20 個客戶端的域中，`client list` 顯示的是子集。`client get`、`client delete` 和 `client secret` 在同一頁中透過精確的 `client_id` 匹配查詢客戶端，因此對於不在頁面中的客戶端，它們返回 `client '<id>' not found`。API 透過其 `page` 和 `limit` 引數存取其餘的客戶端，管理控制檯也是如此。
+
+</Callout>
+
+## `client list`
+
+列出一個身分域中的客戶端。
+
+```bash
+ferris-ctl client list [--realm <realm>]
+```
+
+表格列: CLIENT_ID, ID, NAME。
+
+## `client get`
+
+顯示客戶端的詳細資訊。
+
+```bash
+ferris-ctl client get <client_id> [--realm <realm>]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客戶端識別符號 |
+| `--realm` | 否 | 身分域（預設為上下文身分域） |
+
+返回 id、client_id、name、realm、enabled、protocol、public_client、service_accounts_enabled 和 direct_access_grants_enabled。secret 不包含在內：請使用 [`client secret`](#client-secret)。
+
+## `client create`
+
+建立客戶端。
+
+```bash
+ferris-ctl client create <name> [flags]
+```
+
+| 引數 | 預設 | 說明 |
+|----------|---------|-------------|
+| `<name>` |  | 客戶端名稱（必填） |
+| `--client-id` | `<name>` | 客戶端識別符號 |
+| `--realm` | 上下文身分域 | 身分域 |
+| `--type` | `public` | 客戶端型別：`public`、`confidential` 或 `system` |
+| `--enabled` | 關閉 | 建立啟用的客戶端。沒有該標誌時，它會被建立為禁用狀態，而禁用的客戶端無法認證任何人 |
+| `--protocol` | `openid-connect` | 客戶端使用的協議 |
+| `--direct-access-grants` | 關閉 | 啟用直接存取授權 |
+
+客戶端型別控制一些預設設定：
+
+| 型別 | `public_client` | 服務賬戶 |
+|------|-----------------|-----------------|
+| `public` | `true` | 禁用 |
+| `confidential` | `false` | 啟用 |
+| `system` | `false` | 啟用 |
+
+```bash title="Create an enabled confidential client"
+ferris-ctl client create backend \
+  --type confidential \
+  --enabled \
+  --direct-access-grants
+```
+
+該命令列印建立的客戶端。除此之外不設定其他內容：不設定重定向 URI，不設定 Web 來源，並且 OAuth 2.0 裝置授權 grant 始終關閉。在管理員控制檯中設定這些，或在 [描述檔案](/zh-TW/cli/import/config-file#clients) 中描述客戶端並匯入。
+
+## `client secret`
+
+列印一個保密客戶端的金鑰。
+
+```bash
+ferris-ctl client secret <client_id> [--realm <realm>]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客戶端識別符號 |
+| `--realm` | 否 | 身分域（預設為上下文身分域） |
+
+金鑰會單獨輸出到標準輸出，每行只有金鑰本身，沒有其他內容，因此你可以捕捉它：
+
+```bash
+ferris-ctl client secret backend > backend.secret
+SECRET="$(ferris-ctl client secret backend)"
+```
+
+`-o` 在這裡沒有效果。只有機密客戶端才有金鑰。讀取它需要的不僅是讀取客戶端：已登入的身分需要 `manage_clients`（或 `manage_realm`），並且每次呼叫都會在伺服器上記錄一個 `client_secret_viewed` 安全事件。
+
+## `client delete`
+
+刪除客戶端。會提示確認，顯示客戶端名稱及其 ID，除非傳遞了 `--force`。
+
+```bash
+ferris-ctl client delete <client_id> [--realm <realm>] [--force]
+```
+
+| 引數 | 必填 | 說明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客戶端識別符號 |
+| `--realm` | 否 | 身分域（預設為上下文身分域） |
+| `--force` / `-f` | 否 | 跳過確認提示（在非互動式 shell 中必需） |

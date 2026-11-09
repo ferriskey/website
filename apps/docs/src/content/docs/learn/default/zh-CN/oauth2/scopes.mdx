@@ -1,0 +1,126 @@
+---
+title: "作用域与同意"
+description: "作用域是限制访问令牌功能的徽章。"
+icon: badge-check
+order: 4
+---
+
+<span id="scopes--consent" />
+
+# 作用域与同意
+
+作用域是附加到访问令牌上的标签，表示“此令牌可以执行这些操作，不能执行其他操作。”资源服务器在处理请求之前会查看作用域。
+
+<span id="the-badge-analogy" />
+
+## 徽章类比
+
+想象一个会议。在门口，你会得到一个徽章。徽章上有贴纸：
+
+- `attendee`：进入主会场
+- `lunch`：在自助餐厅用餐
+- ~~`backstage`~~：未授予
+
+你将徽章递给你遇到的人。后台门口的保镖会查看正确的贴纸，并拒绝你进入。
+
+OAuth2 作用域的工作方式也是如此。访问令牌是徽章，每个作用域是贴纸，资源服务器则是保镖。
+
+```http
+GET /api/admin/users
+Authorization: Bearer ...
+
+→ 403 Forbidden (required scope: admin:users)
+```
+
+<span id="what-scopes-look-like" />
+
+## 望远镜长什么样
+
+示波器只是短字符串。没有通用的命名规范;选一个保持一致。常见形状：
+
+- `read:orders`，`write:orders`（动词：资源）
+- `orders.read`，`orders.write`（resource.verb）
+- `openid`、`profile`、`email`（OIDC标准瞄准镜，稍后会详细介绍）
+- `admin`（粗糙、类似角色的示波器）
+
+权限通常在授权URL中请求：
+
+```
+GET /authorize?
+  response_type=code&
+  client_id=my-frontend&
+  scope=openid profile read:orders&
+  ...
+```
+
+<span id="consent-asking-the-user" />
+
+## 同意：征求用户同意
+
+当客户端请求影响用户数据的作用域时，授权服务器可以显示同意界面：
+
+```
+my-frontend wants to:
+  ☑ Access your basic profile
+  ☑ Read your orders
+  ☐ Modify your billing details
+
+   [Deny]    [Allow]
+```
+
+同意赋予用户最终决定权。这正是让 OAuth2 感觉像委托协议，而非许可橡皮图章的原因。
+
+并非所有作用域都需要同意。两类：
+
+- **用户可同意的作用域**：对最终用户有意义。向他们展示。
+- **内部/技术作用域**：对用户无意义（`internal_service_call`）。跳过同意；客户端是受信任的。
+
+<span id="standard-oidc-scopes" />
+
+## 标准 OIDC 作用域
+
+OIDC 保留了一些众所周知的作用域：
+
+| 作用域 | 含义 |
+| --- | --- |
+| `openid` | OIDC 的必需项。触发 ID Token 的颁发。 |
+| `profile` | 添加标准的个人资料声明（`name`, `family_name`, `picture`...） |
+| `email` | 添加 `email` 和 `email_verified` 声明 |
+| `address` | 添加 `address` 声明 |
+| `phone` | 添加 `phone_number` 声明 |
+| `offline_access` | 请求刷新令牌 |
+
+如果你在实际使用中只看到一个 OIDC 作用域，那通常是 `openid`。没有它，就不在使用 OIDC。你只是进行普通的 OAuth2。
+
+<span id="scopes-vs-roles-vs-permissions" />
+
+## 作用域 vs 角色 vs 权限
+
+新手经常混淆三者。它们是不同的。
+
+- **作用域**: _此令牌被允许执行的操作._ 在授权时根据客户端请求授予，可能需要用户同意。
+- **角色**: _该用户在组织中的身份._ 一个持久属性（管理员、支持、查看者）。角色通常作为声明映射到令牌中。
+- **权限**: _一个细粒度的允许操作._ 从资源服务器内的角色、作用域和策略中派生而来。
+
+对于超出作用域编码能力的细粒度授权，请参见 [AuthZEN](/zh-CN/learn/authzen/overview)。
+
+<span id="client-scopes" />
+
+## 客户端作用域
+
+一个常见模式是将默认作用域附加到客户端，使它们始终出现在发给该客户端的令牌中。FerrisKey 直接支持此功能：客户端有 _默认_ 和 _可选_ 作用域。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 允许你为每个身份域定义作用域，将它们附加到客户端（默认或可选），并精确控制它们添加到令牌中的声明内容。
+
+::::card-group{cols=2}
+:::card{label="保护模块" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+FerrisKey 中的作用域和协议映射器。
+:::
+:::card{label="令牌" icon="lucide:key" href="/zh-CN/learn/oauth2/tokens"}
+作用域在访问令牌中的位置。
+:::
+::::

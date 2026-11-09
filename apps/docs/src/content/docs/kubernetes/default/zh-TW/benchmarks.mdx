@@ -1,0 +1,198 @@
+---
+title: "基準測試"
+description: "FerrisKey 0.10.1 與同一 Kubernetes 平臺上的 Keycloak 26.8.1 比較：六個端點的持續速率、延遲、CPU 和記憶體。"
+icon: gauge
+order: 5
+---
+
+<span id="benchmarks" />
+
+# 基準測試
+
+FerrisKey 0.10.1 和 Keycloak 26.8.1 在同一個 Kubernetes 叢集上以相同的負載規模執行，資源相同，PostgreSQL 設定相同，使用者數相同，覆蓋六個端點：`client_credentials`、`password`、`refresh`、`introspect`、`userinfo` 和 `jwks`。由 Nathaël Bonnal 測量;包含所有步驟的完整報告見 [IAM-performance-tester](https://github.com/ferriskey/IAM-performance-tester/blob/main/reports/2026-10-31-ferriskey-vs-keycloak.md)。
+
+:::callout{variant="info" title="構建測量"}
+FerrisKey 是由 `main` 在 `ace8c1a` 上構建的，與 `v0.10.1` 標籤使用相同的程式碼（兩者僅文件不同）。它執行在 `REFRESH_TOKEN_FORMAT=opaque` 和 `REFRESH_TOKEN_COMMIT=async` 上，這兩個設定自 0.10.1 起引入，預設關閉；有關它們的更改，請參見 [重新整理](#refresh)。
+:::
+
+<span id="summary" />
+
+## 摘要
+
+- FerrisKey 在所有六個端點上保持與 Keycloak 相同的最高步驟。
+- 它幾乎在所有地方比 Keycloak 使用更少的 CPU，通常在相同速率下 CPU 減半。唯一的例外是從 3,200 req/s 開始的 `userinfo`。
+- 在 `refresh` 上，800 req/s 時，FerrisKey 的 p95 為 5.7 毫秒，而 Keycloak 為 14.5 毫秒，同時 CPU 使用減少 40%。
+- 從 800 req/s 開始，在 `client_credentials` 上，Keycloak 保持較低的尾部延遲（p99）；在 `password` 上也如此，並且在 `introspect` 和 `userinfo` 上從 3,200 req/s 起相同。
+- 差距在機器對機器的端點（`client_credentials`、`refresh`、`introspect`、`jwks`）上最為明顯；人類 `password` 登入是 Keycloak 保留下尾的地方。
+- FerrisKey 使用的記憶體更少：最多 618 MiB，而 Keycloak 為 823 MiB。
+
+<span id="sustained-rate-latency-and-cpu" />
+
+## 持續速率、延遲和 CPU
+
+持續速率是指在錯誤率低於 1% 的條件下，所服務的目標速率至少達到 95% 且 p95 低於 250 毫秒的最高步驟。延遲和 CPU 在 800 req/s 下讀取，`password` 除外（80 req/s），因為 Argon2id 雜湊使每個請求的開銷設計上較高。CPU 指 IAM 伺服器本身的核心數，在測量的一分鐘內取平均值。
+
+| 端點 | FerrisKey 持續效能 | Keycloak 持續效能 | FerrisKey p95 | Keycloak p95 | FerrisKey CPU | Keycloak CPU |
+|---|---|---|---|---|---|---|
+| `client_credentials` | 3,200 req/s | 3,200 req/s | 2.7毫秒 | 2.0毫秒 | 0.66 核心 | 0.94 核心 |
+| `password`（80 req/s） | 160 req/s（測試的最高步長） | 160 req/s | 29.2毫秒 | 20.9毫秒 | 1.26 核心 | 1.46 核心 |
+| `refresh` | 1600 req/s（測試的最高步長） | 1,600 req/s | 5.7毫秒 | 14.5毫秒 | 1.47 核心 | 2.47 核心 |
+| `introspect` | 6,400 req/s | 6,400 req/s | 1.6毫秒 | 2.7毫秒 | 0.28 核心 | 0.57 核心 |
+| `userinfo` | 6,400 req/s | 6,400 req/s | 1.7毫秒 | 2.6毫秒 | 0.21 核心 | 0.51 核心 |
+| `jwks` | 6,400 req/s | 6,400 req/s | 1.1毫秒 | 1.9毫秒 | 0.15 核心 | 0.40 核心 |
+
+<span id="memory" />
+
+## 記憶
+
+艙體工作組覆蓋所有步驟。FerrisKey從低階開始，隨著場景執行逐漸增長;Keycloak從未低於530 MiB。
+
+| 系統 | 最低 | 最高點 |
+|---|---|---|
+| Ferriskey | 62 MiB | 618 MiB |
+| Keycloak | 533 MiB | 823 MiB |
+
+<span id="endpoint-by-endpoint" />
+
+## 逐端點
+
+每個表格在每一步都給出延遲（p50 / p95 / p99）和IAM伺服器CPU。“未測試”表示該系統的梯級停止在更低的位置。
+
+### client_credentials
+
+客戶端用其金鑰認證並獲得存取權杖。FerrisKey 的中位數較低，每步使用更少的 CPU。不過它的尾端從 800 req/s 變長：p99 在 800 req/s 時為 65.6 毫秒，在 1,600 req/s 時為 25.6 毫秒，而 Keycloak 不到 7 毫秒。在 3,200 req/s 下，FerrisKey 仍能提供 3,181 req/s，但錯誤率為 0.56%，p95 為 54 毫秒，而 Keycloak 仍為 10 毫秒。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 50 | 2.4 / 5.4 / 7.2毫秒 | 5.0 / 8.0 / 9.1毫秒 | 0.11 | 0.29 |
+| 100 | 1.4 / 3.9 / 10.3毫秒 | 3.4 / 6.7 / 7.5毫秒 | 0.17 | 0.34 |
+| 200 | 1.2 / 2.8 / 3.6毫秒 | 2.5 / 3.6 / 5.5毫秒 | 0.25 | 0.29 |
+| 400 | 1.1 / 2.2 / 3.3毫秒 | 1.7 / 2.6 / 3.9毫秒 | 0.41 | 0.60 |
+| 800 | 1.1 / 2.7 / 65.6毫秒 | 1.4 / 2.0 / 3.5毫秒 | 0.66 | 0.94 |
+| 1,600 | 1.1 / 4.0 / 25.6毫秒 | 1.5 / 3.7 / 6.7毫秒 | 1.51 | 2.02 |
+| 3,200 | 2.3 / 53.6 / 92.6毫秒，0.56% 誤差 | 3.2 / 10.5 / 22.5毫秒 | 2.64 | 3.63 |
+
+<span id="password" />
+
+### 密碼
+
+使用者用密碼登入。兩臺系統均使用Argon2id進行雜湊（m=7168，t=5，p=1），延遲約為20毫秒。Keycloak的尾巴較短：在160 req/s時，p95為32毫秒，對比87毫秒。Keycloak飽和約為155 req/s。FerrisKey未被測試超過160 req/s。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 10 | 20.6 / 28.5 / 47.3毫秒 | 27.6 / 32.6 / 36.5毫秒 | 0.16 | 0.30 |
+| 20 | 19.7 / 24.1 / 30.4毫秒 | 18.6 / 21.5 / 23.6毫秒 | 0.26 | 0.31 |
+| 40 | 20.0 / 33.7 / 70.6毫秒 | 18.0 / 20.1 / 22.7毫秒 | 0.64 | 0.72 |
+| 80 | 22.2 / 29.2 / 46.0毫秒 | 18.4 / 20.9 / 26.7毫秒 | 1.26 | 1.46 |
+| 160 | 30.9 / 87.4 / 170毫秒 | 21.5 / 32.3 / 40.9毫秒 | 3.14 | 3.29 |
+| 320 | 未測試 | 2018 / 2216 / 2266毫秒，服務152請求/秒 | 無 | 3.52 |
+| 640 | 未測試 | 1992 / 2077 / 2124毫秒，155請求/秒 | 無 | 3.40 |
+
+<span id="refresh" />
+
+### 重新整理
+
+客戶端用重新整理權杖換取一組新權杖。雙方的舊重新整理權杖在每次交換中都失效（Keycloak 啟用輪換）。FerrisKey 在每步的中位數較低，CPU 消耗約 40%。其 p95 在 800 和 1,600 req/s 上表現更好。在 400 req/s 時，孤立的峰值將 p99 提升至 206 毫秒，而鄰近步數保持在 13 毫秒以下。Keycloak 最高為 1,766 req/s。FerrisKey 未測試超過 1,600 req/s。
+
+FerrisKey 執行時有 `REFRESH_TOKEN_FORMAT=opaque`（重新整理權杖是隨機字串，其雜湊值被儲存，而不是有符號的 JWT）和 `REFRESH_TOKEN_COMMIT=async`（輪換用 `synchronous_commit=off` 寫入）。兩者預設都是關閉狀態。使用 `async` 時，資料庫崩潰可能會丟失最後的輪次：每個因失去旋轉而消耗的權杖都會重新工作，其後一個權杖則停止工作。無論哪種方式，撤銷都保持持久。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 50 | 4.2 / 9.2 / 18.4毫秒 | 5.3 / 7.8 / 12.5毫秒 | 0.17 | 0.37 |
+| 100 | 3.4 / 5.6 / 7.6毫秒 | 4.3 / 6.0 / 11.5毫秒 | 0.25 | 0.43 |
+| 200 | 2.5 / 4.4 / 7.5毫秒 | 4.0 / 6.2 / 13.4毫秒 | 0.43 | 0.74 |
+| 400 | 2.8 / 38.1 / 206毫秒 | 3.8 / 7.7 / 17.9毫秒 | 0.90 | 1.35 |
+| 800 | 2.6 / 5.7 / 12.1毫秒 | 4.0 / 14.5 / 34.0毫秒 | 1.47 | 2.47 |
+| 1,600 | 6.4 / 93.2 / 187毫秒 | 15.3 / 139 / 216毫秒 | 2.97 | 4.63 |
+| 3,200 | 未測試 | 162 / 232 / 274毫秒，服務1,766請求/秒 | 無 | 5.27 |
+
+<span id="introspect" />
+
+### 內省
+
+服務詢問存取權杖是否仍然有效。在200到3,200 req/s之間，兩者在中位數不到毫秒內接應。FerrisKey每步使用更少的CPU，最多可減少三倍。從3,200 req/s起，Keycloak的p95和p99更低。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 50 | 1.6 / 4.5 / 7.1毫秒 | 3.6 / 6.1 / 11.8毫秒 | 0.06 | 0.18 |
+| 100 | 1.2 / 3.4 / 5.6毫秒 | 2.9 / 4.8 / 6.4毫秒 | 0.09 | 0.25 |
+| 200 | 0.9 / 2.4 / 3.6 毫秒 | 1.5 / 3.3 / 4.3 毫秒 | 0.13 | 0.25 |
+| 400 | 0.7 / 1.9 / 3.4 毫秒 | 0.8 / 2.9 / 3.8 毫秒 | 0.19 | 0.37 |
+| 800 | 0.6 / 1.6 / 2.7 毫秒 | 0.7 / 2.7 / 4.5 毫秒 | 0.28 | 0.57 |
+| 1,600 | 0.7 / 1.9 / 4.8 毫秒 | 0.7 / 2.4 / 5.2 毫秒 | 0.45 | 0.63 |
+| 3,200 | 0.7 / 2.6 / 8.4 毫秒 | 0.5 / 1.4 / 4.1 毫秒 | 0.59 | 1.03 |
+| 6,400 | 1.1 / 6.0 / 19.8 毫秒 | 0.7 / 3.5 / 7.8 毫秒 | 1.33 | 1.55 |
+
+<span id="userinfo" />
+
+### 使用者資訊
+
+客戶端使用其存取權杖讀取使用者的個人資料。高達 1,600 請求/秒時，FerrisKey 的中位數較低且佔用更少 CPU。超過此速度時 Keycloak 領先：在 6,400 請求/秒時，其 p99 為 3.7 毫秒，而 FerrisKey 為 12.1 毫秒，並且 Keycloak 使用 1.29 核心，而 FerrisKey 使用 1.55 核心。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 50 | 1.9 / 5.6 / 9.4 毫秒 | 3.3 / 5.4 / 6.7 毫秒 | 0.08 | 0.16 |
+| 100 | 1.3 / 3.8 / 5.6 毫秒 | 2.8 / 4.5 / 5.6 毫秒 | 0.09 | 0.24 |
+| 200 | 0.8 / 2.6 / 6.0 毫秒 | 1.6 / 3.2 / 3.9毫秒 | 0.12 | 0.29 |
+| 400 | 0.5 / 1.8 / 3.3毫秒 | 0.7 / 2.7 / 3.6毫秒 | 0.13 | 0.33 |
+| 800 | 0.5 / 1.7 / 3.1毫秒 | 0.6 / 2.6 / 3.8毫秒 | 0.21 | 0.51 |
+| 1,600 | 0.6 / 1.7 / 3.4毫秒 | 0.6 / 2.8 / 4.7毫秒 | 0.42 | 0.74 |
+| 3,200 | 0.8 / 2.3 / 4.6毫秒 | 0.5 / 1.2 / 2.6毫秒 | 0.88 | 0.75 |
+| 6,400 | 1.0 / 4.3 / 12.1毫秒 | 0.6 / 1.7 / 3.7毫秒 | 1.55 | 1.29 |
+
+### JWKS
+
+客戶端獲取身分域的公鑰以檢查簽名。這是最輕的端點。FerrisKey 的 CPU 消耗是 Keycloak 的 1.7 到 6 倍。P99 在兩端都保持在 5.2 毫秒以內。
+
+| 目標（需求） | FerrisKey p50 / p95 / p99 | 鑰隱 p50 / p95 / p99 | FerrisKey CPU（核心） | Keycloak CPU（核心） |
+|---|---|---|---|---|
+| 100 | 0.4 / 1.2 / 2.0毫秒 | 2.2 / 3.9 / 5.1毫秒 | 0.03 | 0.19 |
+| 200 | 0.4 / 1.1 / 1.8毫秒 | 1.5 / 2.9 / 4.0毫秒 | 0.05 | 0.25 |
+| 400 | 0.3 / 1.1 / 1.9毫秒 | 1.0 / 2.3 / 3.2毫秒 | 0.09 | 0.33 |
+| 800 | 0.3 / 1.1 / 2.1毫秒 | 0.6 / 1.9 / 3.0毫秒 | 0.15 | 0.40 |
+| 1,600 | 0.4 / 1.3 / 2.5毫秒 | 0.5 / 2.2 / 3.8毫秒 | 0.20 | 0.56 |
+| 3,200 | 0.4 / 1.5 / 3.2毫秒 | 0.4 / 1.2 / 3.1毫秒 | 0.30 | 0.64 |
+| 6,400 | 0.6 / 2.0 / 3.4毫秒 | 0.5 / 1.4 / 3.4毫秒 | 0.59 | 1.00 |
+
+<span id="test-conditions" />
+
+## 測試條件
+
+- **叢集：** 在 Mac 上的 OrbStack 上執行 k3d，負載發生器、IAM 伺服器和 PostgreSQL 共享 8 個 vCPU。每個角色都有自己的 k3d 節點，但物理核心是共享的。
+- **IAM 伺服器：** 1個副本，請求3個CPU，無CPU限制，1,536 MiB記憶體。Keycloak在生產模式（`start`）執行，`-XX:ActiveProcessorCount=3`。
+- **Database：** PostgreSQL 17（CloudNativePG），每個系統一個，1個CPU，3GiB，`max_connections` 400個，在獨立節點上。
+- **負載：** k6 以恆定到達率（開放型號），1000名使用者，預熱15秒，然後每步測量60秒。
+- **FerrisKey：** 使用 `main` 在 `ace8c1a` 構建的映象，搭配 `REFRESH_TOKEN_FORMAT=opaque` 和 `REFRESH_TOKEN_COMMIT=async`。於 2026-10-31 以 300 個預分配的 k6 VU 測量。
+- **Keycloak：** 映象 `quay.io/keycloak/keycloak:26.8.1`，身分域包含 `revokeRefreshToken=true` 和 `refreshTokenMaxReuse=0`。重新整理於 2026-10-31 使用 300 個預分配 VU 測量。其他五個端點於 2026-10-26 測量，使用 k6 預設數量的預分配 VU。
+
+<span id="what-this-bench-does-not-tell-you" />
+
+## 此基準測試未告訴您的內容
+
+- **共享機器：** 負載生成器、伺服器和資料庫爭用 8 個 vCPU。絕對數值無法直接應用於生產叢集；兩套系統之間的差距才是可靠的部分。
+- **無 CPU 限制：** 兩臺伺服器都請求 3 個 CPU 且無上限，但 Keycloak 透過 `-XX:ActiveProcessorCount=3` 將自己限制在 3 核，而 FerrisKey 可以使用更多。無論如何，在每個比較步驟中 FerrisKey 的 CPU 使用都更少；其最高讀取為 3.14 核，在 `password` 上以 160 req/s 測得。
+- **單次執行：** 每個步驟僅測量一次。p50 小於 1 毫秒或 p99 小於 20% 的差異屬於可能的噪聲。在 `refresh` 上以 400 req/s 測得的 206 ms p99 峰值就是這樣的讀數。
+- **Keycloak 的兩個日期：** 其五個端點來自 2026-10-26 的執行，使用 k6 預設的 VU 分配；FerrisKey 和 Keycloak `refresh` 則在 2026-10-31 測量，預分配 300 個 VU。
+- **非預設重新整理設定**在 FerrisKey 端，如 [refresh](#refresh) 所述。
+- **梯子提前停止：** FerrisKey 在 `password` 上沒有超過 160 請求/秒，在 `refresh` 上沒有超過 1,600 請求/秒；表格顯示了每個系統已知的限制和未知的限制。
+- **原始資料：** 每一步的 JSON 資料保留在作者手中，不在倉庫中；報告列出了它所基於的三個執行。
+
+<span id="reproduce" />
+
+## 復現
+
+工具位於 IAM-performance-tester 的 [`k8s/`](https://github.com/ferriskey/IAM-performance-tester/tree/main/k8s) 中，每個變數都在其 [README](https://github.com/ferriskey/IAM-performance-tester/blob/main/k8s/README.md) 中有文件說明。每次只執行一個系統；`bench.sh` 在每個階段前將另一個系統縮放到零。
+
+```bash
+cd k8s
+./bench.sh platform     # once per cluster: node roles, CNPG, kube-prometheus-stack
+./bench.sh deploy       # Postgres x2, FerrisKey, Keycloak
+./bench.sh seed         # realm perf, client perf-client, 1000 users, in both systems
+./bench.sh run          # every scenario, both systems, about 1h30 worst case
+```
+
+<span id="before-0101" />
+
+## 在 0.10.1 之前
+
+在 2026-10-26 使用 0.10 版本 token-path 工作之前的構建（`sha-d73af3e`）執行相同的基準測試顯示，Keycloak 在 `refresh` 上的負載是之前的兩倍（1,600 對 800 req/s），在 `userinfo` 上也是兩倍（6,400 對 3,200 req/s），因為 FerrisKey 對每一個請求都會查詢 PostgreSQL。重新整理授權在 [#1875](https://github.com/ferriskey/ferriskey/pull/1875) 中進行了重構，`userinfo` 自 [#1863](https://github.com/ferriskey/ferriskey/pull/1863) 起復用了已認證的使用者，並且會話和權杖狀態在請求之間被快取，自 [#1870](https://github.com/ferriskey/ferriskey/pull/1870) 起。以上三個功能都在 0.10.1 中釋出，上表顯示了結果。

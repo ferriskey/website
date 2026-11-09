@@ -1,0 +1,83 @@
+---
+title: "什么是FerrisKey？"
+description: "一个用 Rust 构建的现代开源身份与访问管理系统。"
+icon: shield
+order: 1
+---
+
+<span id="what-is-ferriskey" />
+
+# 什么是FerrisKey？
+
+FerrisKey 是一个用 Rust 编写的开源身份与访问管理（IAM）系统。它处理您应用程序的认证、授权和用户管理，而不会带来旧IAM平台的运营负担。
+
+<span id="what-is-iam" />
+
+## 什么是 IAM？
+
+身份与访问管理回答系统收到的每个请求的两个问题：
+
+- **认证**：你是谁？通过密码、多因素挑战、通行密钥或联合提供者进行验证。
+- **授权**：你被允许做什么？经过身份认证的身份可以访问哪些资源和操作。
+
+在这两者之上，IAM 系统会签发和验证 JWT，使用单点登录将应用程序绑定在一起，跟踪会话，记录审计日志，并与外部身份提供商通信。
+
+<span id="why-ferriskey" />
+
+## 为什么选择 FerrisKey？
+
+FerrisKey 是从零开始为那些希望拥有可以实际阅读和理解的 IAM 的团队而编写的。
+
+- **Rust 基础**：内存安全和可预测的性能，贯穿异步 I/O。
+- **多租户**：身份域隔离用户、客户端、角色、凭据和配置，因此一次部署可以服务多个组织。
+- **模块化**：产品被拆分为专注的模块。只开启你需要的模块。
+- **开源**：采用 Apache-2.0 许可证，在公开环境中开发。
+
+<span id="modules" />
+
+## 模块
+
+每个模块负责身份管理的一部分。
+
+::::card-group{cols=3}
+:::card{label="Trident" icon="lucide:shield-check" href="/zh-CN/modules/trident/overview"}
+使用 TOTP、WebAuthn 密钥、魔法链接和恢复码的多因素认证。
+:::
+:::card{label="SeaWatch" icon="lucide:eye" href="/zh-CN/modules/seawatch/overview"}
+对跨您的身份域的关键操作进行审计和安全事件管理。
+:::
+:::card{label="Compass" icon="lucide:compass" href="/zh-CN/modules/compass/overview"}
+用于多步骤登录的认证流程记录和调试。
+:::
+:::card{label="Abyss" icon="lucide:link" href="/zh-CN/modules/abyss/overview"}
+为 Google、GitHub、Discord 以及自定义 OIDC 提供商实现身份提供商联合。
+:::
+:::card{label="Aegis" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+作用域和协议映射器，用于控制进入令牌的内容。
+:::
+:::card{label="Webhook" icon="lucide:webhook" href="/zh-CN/modules/webhooks/overview"}
+针对生命周期事件和外部通知的事件驱动集成。
+:::
+:::card{label="组织" icon="lucide:building-2" href="/zh-CN/modules/organization/overview"}
+B2B 租户管理：组织、组、成员资格和自定义属性。
+:::
+:::card{label="SAML" icon="lucide:file-badge" href="/zh-CN/discover/core-concepts/saml"}
+FerrisKey 作为支持 SAML 2.0 的身份提供商，为只支持该协议的应用提供服务。
+:::
+::::
+
+<span id="next-steps" />
+
+## 下一步
+
+::::card-group{cols=3}
+:::card{label="入门指南" icon="lucide:rocket" href="/zh-CN/discover/getting-started"}
+通过 Docker 在几分钟内部署 FerrisKey，并创建您的第一个身份域。
+:::
+:::card{label="核心概念" icon="lucide:layers" href="/zh-CN/discover/core-concepts/realms"}
+了解身份域、客户端、用户、角色以及认证模型。
+:::
+:::card{label="贡献" icon="lucide:git-pull-request" href="/zh-CN/discover/guides/contributing"}
+报告问题，改进文档，并开放聚焦拉取请求。
+:::
+::::

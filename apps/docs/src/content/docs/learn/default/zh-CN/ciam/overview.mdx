@@ -1,0 +1,107 @@
+---
+title: "什么是 CIAM？"
+description: "客户身份访问管理：面向产品最终用户的 IAM 类型，而非员工。"
+icon: users
+order: 1
+---
+
+<span id="what-is-ciam" />
+
+# 什么是 CIAM？
+
+CIAM 代表客户身份与访问管理。它是面向你产品最终用户的 IAM 类型，相对于面向员工的企业员工 IAM (Workforce IAM)。
+
+相同的底层协议（OIDC、OAuth2、JWT）。上层问题截然不同。
+
+<span id="ciam-and-workforce-iam" />
+
+## CIAM 和企业员工身份管理（IAM）
+
+| | 企业员工身份管理（IAM） | 客户身份与访问管理 (CIAM) |
+| --- | --- | --- |
+| 谁登录 | 员工 | 客户 / 终端用户 |
+| 用户数量 | 数千 | 数百万 |
+| 账户创建 | 由 IT 配置 | 自助注册 |
+| 外观和感觉 | 内部、功能性 | 品牌化、符合品牌风格 |
+| 登录方式 | 企业单点登录（SSO）、多因素认证（MFA） | 社交登录、邮件链接、密码钥匙、多因素认证（MFA） |
+| 组织结构 | 部门、团队 | _租户_、_组织_、B2B 团体 |
+| 审计需求 | 符合内部政策 | 合规性 + 用户可见审计 |
+| 入职目标 | 开始工作 | 不要丢失注册 |
+
+技术核心是相同的；体验和规模则不一样。
+
+<span id="what-ciam-actually-adds" />
+
+## CIAM 实际增加的功能
+
+在普通 IAM 之上，CIAM 系统必须做好以下几个方面：
+
+<span id="branded-experiences" />
+
+### 品牌化体验
+每个租户（或产品）都应体现其自身特色。`acme.example.com` 的登录页面应该是 Acme 的，而不是你的。这意味着每个身份域/每个组织都可以自定义主题、徽标、文案和电子邮件模板。
+
+<span id="self-service-everything" />
+
+### 自助服务的所有功能
+客户不能等待 IT 部门。他们期望能够注册、重置密码、关联社交账户、启用多因素认证、删除账户以及导出数据，所有操作都无需人工干预。
+
+<span id="many-login-methods" />
+
+### 多种登录方式
+电子邮件 + 密码是基础。在它之上：通行密钥（WebAuthn）、魔法链接、社交登录（Google、GitHub、Apple）、针对B2B客户的企业单点登录（SSO）、手机一次性密码（OTP）。
+
+<span id="organizations--b2b" />
+
+### 组织 / B2B
+单个客户通常是_公司_而非个人。CIAM需要建模：
+
+- 属于多个组织的用户
+- 每个组织的政策（这个组织要求多因素认证，那个组织只允许企业SSO）
+- 管理自己用户的组织级管理员
+- 邀请流程、域声明、即时配置（JIT provisioning）
+
+<span id="scale-and-abuse-resistance" />
+
+### 规模和防滥用能力
+一百万用户意味着持续不断的机器人注册、凭据填充尝试、欺诈性密码重置。CIAM系统需要速率限制、机器人检测、基于风险的多因素认证，以及在事件发生时全局使会话失效的能力。
+
+<span id="privacy--consent" />
+
+### 隐私与同意
+GDPR、CCPA 及类似法规要求明确同意、数据可携带性以及删除能力。CIAM 拥有同意记录：用户同意了什么、何时同意以及适用于哪个作用域。
+
+<span id="why-not-just-use-workforce-iam-tools" />
+
+## 为什么不直接使用企业 IAM 工具？
+
+可以。但问题很快显现：
+
+- 企业工具假设 IT 控制用户生命周期。而 CIAM 的用户是自助注册的。
+- 企业工具按座位许可销售。CIAM 的规模（数百万用户）会打破这种定价模型及供应商关系。
+- 企业登录页面功能化而非品牌化。客户会立即注意到。
+
+协议不变。操作模式会变化。
+
+<span id="a-useful-mental-model" />
+
+## 一个有用的思维模型
+
+企业 IAM 是你的办公安全：门禁读卡器、受控访问、仅限员工。
+
+CIAM 是你的店面：任何人都可以进来，你需要识别常客，入口是你品牌的一部分，并且门是全天候24/7全球开放的。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 的设计以 CIAM 为先。Realms 隔离租户。每个 Realm 有自己的品牌、登录方式、多因素认证策略和身份提供者。
+
+::::card-group{cols=2}
+:::card{label="组织级别策略" icon="lucide:building-2" href="/zh-CN/learn/ciam/org-policies"}
+每个组织的策略和登录体验如何工作。
+:::
+:::card{label="Abyss 模块" icon="lucide:link" href="/zh-CN/modules/abyss/overview"}
+在每个 Realm 联盟社会和企业身份提供者。
+:::
+::::

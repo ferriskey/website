@@ -1,0 +1,114 @@
+---
+title: "什么是 OpenID Connect？"
+description: "OIDC 是 OAuth2 之上的身份层。它回答“用户是谁？”"
+icon: id-card
+order: 1
+---
+
+<span id="what-is-openid-connect" />
+
+# 什么是 OpenID Connect？
+
+OpenID Connect (OIDC) 是 OAuth2 之上的一个薄身份层。当 OAuth2 回答 _“这个令牌允许做什么？”_ 时，OIDC 会附加上 _“顺便说一下，用户是谁？”_
+
+如果你曾点击“使用 Google 登录”，你就使用过 OIDC。
+
+<span id="the-one-paragraph-version" />
+
+## 一段文字版
+
+OIDC重用了OAuth2的所有内容：流程、端点、令牌管道。它在上面增加了一个新东西：一个签名的ID令牌，用来证明用户身份。客户端在本地验证ID令牌，现在知道用户身份，没有密码碰过它。
+
+<span id="oidc-vs-oauth2" />
+
+## OIDC 与 OAuth2 比较
+
+一个并排对比，解开了大部分疑惑：
+
+| | OAuth2 | OIDC |
+| --- | --- | --- |
+| **问题已解答** | 这个令牌能做_What事？_ | _Who是用户（token能做什么）？_ |
+| **主令牌** | 访问令牌 | 身份令牌 + 访问令牌 |
+| **为**而生** | API 访问委派 | 用户认证 / 单点登录 |
+| **触发** | 任何瞄准镜 | `openid`作用域是强制的 |
+| **定义`/userinfo`端点？** | 不 | 是 |
+
+OIDC = OAuth2 + ID 令牌 + 几个额外的端点。你学到的所有关于 OAuth2 流程的内容依然适用。
+
+<span id="when-oidc-is-in-play" />
+
+## 当OIDC介入时
+
+决定性信号是授权请求中的`openid`作用域：
+
+```
+scope=openid profile email
+```
+
+- 没有`openid`：普通的OAuth2，没有ID令牌。
+- 使用`openid`：OIDC，你会获得一个ID令牌和访问令牌。
+
+如果客户端要求`profile`和`email`但忘记`openid`，服务器会默默将其视为仅 OAuth2。这是最常见的“为什么没有 ID 令牌？”的错误。
+
+<span id="what-oidc-standardizes" />
+
+## OIDC标准化的内容
+
+在OAuth2之上，OIDC还新增了：
+
+1. **身份令牌**：携带关于认证用户声明的JWT。
+2. **`/userinfo`端点**：用访问令牌调用以获取最新的用户声明。
+3. **发现**：每个 OIDC 提供者都会发布 `/.well-known/openid-configuration`，这是一个 JSON 文档，列出其所有端点、支持的作用域、签名密钥和功能。客户端可以自动配置自己。
+4. **会话管理**：用于跟踪用户在提供者处登出时间的可选标准。
+5. **标准声明**：`sub`、`name`、`email`、`email_verified` 以及一个文档化词汇表。
+
+<span id="discovery-in-one-example" />
+
+## 一个发现示例
+
+指向 `https://auth.example.com/realms/my-app` 的客户端可以找到所需的一切：
+
+```bash
+curl https://auth.example.com/realms/my-app/.well-known/openid-configuration
+```
+
+```json
+{
+  "issuer": "https://auth.example.com/realms/my-app",
+  "authorization_endpoint": ".../authorize",
+  "token_endpoint": ".../token",
+  "userinfo_endpoint": ".../userinfo",
+  "jwks_uri": ".../certs",
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "response_types_supported": ["code", "id_token", "token id_token"],
+  ...
+}
+```
+
+大多数现代 OIDC 库只需要签发者 URL 即可搞定其余部分。
+
+<span id="a-mental-model" />
+
+## 一个思维模型
+
+把 OIDC 想象成带有护照的 OAuth2。
+
+- 访问令牌是你的签证：_你可以做什么_
+- ID 令牌是你的护照：_你是谁_
+
+护照是供客户端检查的（这样它可以按名字向你打招呼）。签证是供 API 检查的（这样它知道允许你做什么）。它们是面向不同受众的不同文件。将它们混用，比如使用 ID 令牌去调用 API，是 #1 OIDC 常见错误。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 支持 OIDC。你注册的任何客户端都会自动获得 OIDC 发现 URL。
+
+::::card-group{cols=2}
+:::card{label="ID 令牌" icon="lucide:id-card" href="/zh-CN/learn/oidc/id-token"}
+ID 令牌内部的内容，以及客户端如何验证它。
+:::
+:::card{label="入门指南" icon="lucide:rocket" href="/zh-CN/discover/getting-started"}
+通过 OIDC 登录并检查你的第一个 ID 令牌。
+:::
+::::

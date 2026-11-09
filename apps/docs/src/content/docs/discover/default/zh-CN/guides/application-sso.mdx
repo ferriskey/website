@@ -1,0 +1,331 @@
+---
+title: "通过 SSO 连接应用程序"
+description: "在 FerrisKey 中配置 OpenID Connect 应用，并向其他服务提供它们所需的值以便让用户登录。"
+icon: plug
+order: 19
+---
+
+<span id="connect-an-application-with-sso" />
+
+# 通过 SSO 连接应用程序
+
+当一个应用程序使用 OpenID Connect 并且你希望 FerrisKey 处理登录时，请使用本指南。
+
+最终，你将拥有：
+
+- 一个专门针对该应用程序或组织的 FerrisKey 域
+- 一个 OpenID Connect 客户端
+- 一个客户端 ID 和客户端密钥
+- 在 FerrisKey 中注册的重定向 URI
+- 你的应用程序所需的签发者 URL 和发现端点
+
+<span id="before-you-start" />
+
+## 在开始之前
+
+在打开 FerrisKey 之前，找到你想要连接的应用程序中的这些值：
+
+| 值 | 示例 |
+|---|---|
+| 应用程序 URL | `https://vault.example.com` |
+| 回调或重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+| 所需的作用域 | `openid profile email` |
+
+:::callout{variant="info" title="使用应用程序的精确回调 URL"}
+重定向 URI 必须与应用在登录时发送的 URI 匹配。如果应用显示回调是 `/identity/connect/oidc-signin`，不要将其替换为应用首页。
+:::
+
+<span id="example-values" />
+
+## 示例值
+
+本教程使用这些值。请将它们替换为您自己的域名和身份域名称。
+
+| 设置 | 值 |
+|---|---|
+| FerrisKey URL | `https://sso.example.com` |
+| 身份域 | `home` |
+| 客户端 ID | `vaultwarden` |
+| 应用程序 URL | `https://vault.example.com` |
+| 重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+| 作用域 | `openid profile email` |
+
+<span id="create-or-select-the-realm" />
+
+## 创建或选择身份域
+
+一个身份域将用户、客户端、角色和权限作用域组合在一起。避免在应用中使用 `master`。
+
+::::step-group
+:::step{title="打开身份域选择器"}
+点击 **顶部栏** 中 FerrisKey 标志旁的身份域名称。选择将拥有此应用的身份域，或者如果需要新建身份域，点击 **创建身份域**。选择器支持搜索，这在部署多个身份域时非常有用。
+
+<img class="only-light" src="/dashboard/realm_switch-light.jpg" alt="顶部栏中打开的 FerrisKey 身份域选择器，列出各个身份域和创建身份域操作" />
+<img class="only-dark" src="/dashboard/realm_switch-dark.jpg" alt="顶部栏中打开的 FerrisKey 身份域选择器，列出各个身份域和创建身份域操作" />
+:::
+
+:::step{title="保持在应用身份域"}
+切换后，在创建客户端之前检查身份域指示器。客户端将被创建在仪表板当前选择的身份域中。
+:::
+::::
+
+<span id="create-the-client" />
+
+## 创建客户端
+
+客户端是 FerrisKey 中的应用条目。它告诉 FerrisKey 哪个应用正在请求用户登录。
+
+::::step-group
+:::step{title="打开客户端"}
+在侧边栏中，点击 **客户端**，然后点击 **新建客户端**。
+
+<img class="only-light" src="/dashboard/list_clients-light.jpg" alt="FerrisKey 客户端列表，显示总数、活动、公有和机密客户端的计数，以及“新建客户端”按钮" />
+<img class="only-dark" src="/dashboard/list_clients-dark.jpg" alt="FerrisKey 客户端列表，显示总数、活动、公有和机密客户端的计数，以及“新建客户端”按钮" />
+
+在添加任何内容之前，值得阅读该列表顶部的横幅：它列出了所有没有重定向 URI 的客户端，因为没有该 URI 授权码流程无法工作。
+:::
+
+:::step{title="选择协议"}
+创建始于询问应用程序使用哪种协议：**OpenID Connect** 适用于任何基于令牌的应用，或 **SAML 2.0** 适用于不使用其他协议的应用。
+
+<img class="only-light" src="/dashboard/client_protocol-light.jpg" alt="FerrisKey 客户端协议对话框提供 OpenID Connect 或 SAML 2.0 选项" />
+<img class="only-dark" src="/dashboard/client_protocol-dark.jpg" alt="FerrisKey 客户端协议对话框提供 OpenID Connect 或 SAML 2.0 选项" />
+
+:::callout{variant="warning" title="此选择为最终选择"}
+它决定应用程序如何让用户登录，并且创建后无法更改。以后从 SAML 转向 OIDC 的应用需要一个新的客户端，而不是编辑现有的。如需了解每个协议提供的功能，请参见 [身份认证](/zh-CN/discover/core-concepts/authentication#saml-20)。
+:::
+
+:::step{title="填写客户端详情"}
+使用稳定的客户端 ID。在此示例中：
+
+| 字段 | 值 |
+|---|---|
+| 客户端 ID | `vaultwarden` |
+| 名称 | `Vaultwarden` |
+| 客户端启用 | 已启用 |
+| 客户端认证 | 机密 |
+
+客户端认证是在“Confidential（密钥）”和“Public（公开）”之间的选择，这也是最终决定。对于可以保存密钥的服务器端应用程序，请选择“Confidential”，FerrisKey 会生成一个密钥。对于 SPA、移动应用或 CLI，请选择“Public”，因为密钥会最终落入用户手中，而 PKCE 则提供保护。
+
+对于浏览器 SSO，将两个功能开关都关闭：**直接访问授权** 是[已弃用的密码授权](/zh-CN/discover/core-concepts/authentication#password-resource-owner)，而 **设备授权** 则适用于无浏览器客户端。
+
+客户端创建时要求 PKCE，这意味着应用程序必须在授权请求中发送 S256 代码挑战。大多数 OIDC 库默认这样做。**Require PKCE（要求 PKCE）** 开关位于客户端 **设置** 标签页下的 **功能配置** 中。
+
+<img class="only-light" src="/dashboard/create_client-light.jpg" alt="FerrisKey 新客户端表单，包括客户端 ID、名称、启用状态、机密/公开选择以及功能开关" />
+<img class="only-dark" src="/dashboard/create_client-dark.jpg" alt="FerrisKey 新客户端表单，包括客户端 ID、名称、启用状态、机密/公开选择以及功能开关" />
+:::
+::::
+
+<span id="configure-the-redirect-uri" />
+
+## 配置重定向 URI
+
+重定向 URI 是在登录成功后 FerrisKey 将浏览器发送到的地址。
+
+::::step-group
+:::step{title="打开客户端设置"}
+打开您刚创建的客户端，并停留在 **设置** 选项卡。
+:::
+
+:::step{title="添加重定向 URI"}
+滚动到 **访问** 部分，并添加您应用程序中的精确回调 URL。每条记录在添加时都会保存，因此此列表没有单独的保存按钮。
+
+例如：
+
+```text
+https://vault.example.com/identity/connect/oidc-signin
+```
+
+<img class="only-light" src="/dashboard/client_access-light.jpg" alt="FerrisKey 客户端访问部分，包含重定向 URIs、网页源和注销后重定向 URIs" />
+<img class="only-dark" src="/dashboard/client_access-dark.jpg" alt="FerrisKey 客户端访问部分，包含重定向 URIs、网页源和注销后重定向 URIs" />
+
+FerrisKey 会逐字符地将回调与条目进行比较。只有写成 `^...$` 的条目才会被当作正则表达式读取，因此除非回调确实有所不同，否则请保持字面地址不变。
+
+同一区域的两个邻居与重定向 URI 一样重要：
+
+- Web 来源是指此应用程序可以在浏览器中从中调用 FerrisKey 的来源。`+` 按钮会根据您刚刚输入的重定向 URI 推导它们，但仅限于字面 URI：正则表达式模式会被跳过。移除一个来源需要几分钟以清除浏览器预检缓存，并且最多需 30 秒才能传播到其他 API 副本。
+- 注销后重定向 URI，在 **注销** 下，是会话结束后用户可以到达的页面。FerrisKey 仅在注销请求指定了地址并确认了客户端时才会重定向到该地址，并且该地址必须与条目完全匹配。如果没有重定向，注销会以空 `204` 响应，用户会停留在发出请求的页面：FerrisKey 不会显示自己的页面。
+
+同样的 **注销** 部分包含 **Back-channel 注销 URL**，FerrisKey 会告知应用程序的后端会话已经结束。参见 [back-channel 注销](/zh-CN/discover/core-concepts/backchannel-logout)。
+:::
+::::
+
+<span id="copy-the-client-secret" />
+
+## 复制客户端密钥
+
+::::step-group
+:::step{title="打开凭据"}
+打开客户端的 **凭据** 选项卡。
+:::
+
+:::step{title="复制密钥"}
+密钥是隐藏的。点击 **显示** 以查看，然后复制到应用程序的 OIDC 配置中，并将其视为密码。
+
+<img class="only-light" src="/dashboard/client_secret-light.jpg" alt="FerrisKey 客户端凭据标签显示客户端 ID 和带掩码的客户端密钥，并具有显示操作" />
+<img class="only-dark" src="/dashboard/client_secret-dark.jpg" alt="FerrisKey 客户端凭据标签显示客户端 ID 和带掩码的客户端密钥，并具有显示操作" />
+
+显示密钥会被记录为安全事件，在 [SeaWatch](/zh-CN/modules/seawatch/event-types) 中为 `client_secret_viewed`。这是故意为之：无法解释的显示操作会在审计跟踪中可见。
+:::
+::::
+
+:::callout{variant="danger" title="泄露的密钥目前无法通过 API 进行轮换"}
+如凭据标签所示，在此版本中，管理 API 不提供轮换客户端密钥的功能。因此，如果密钥被粘贴到公共问题、日志、截图或代码库中，没有可进行的轮换调用。
+
+在功能推出之前，遏制方法是创建一个替代客户端，迁移应用程序，并删除受影响的客户端。计划这一过程会比轮换慢，并相应地处理客户端密钥：将其保存在密钥管理器中，切勿放在截图中。
+:::
+
+<span id="check-the-client-scopes" />
+
+## 检查客户端作用域
+
+大多数OIDC申请需要`openid`、`profile`和`email`。
+
+::::step-group
+:::step{title="开放客户端作用域"}
+打开客户端的**客户端作用域**标签页。
+:::
+
+:::step{title="确认所需瞄准镜"}
+每个分配的作用域都带有默认或可选的交换机。确保这三个交换机处于默认状态，也就是说每个令牌都能获得它们，应用程序无需请求：
+
+- `openid`
+- `profile`
+- `email`
+
+现在创建的客户端默认有 `openid`、`profile`、`email`、`roles` 和 `organization`，因此这一步主要是检查。`address`、`phone` 和 `offline_access` 存在于身份域，但不连接到新客户端。如果应用程序需要，可添加一个作为可选，且仅在请求在其 `scope` 参数中命名时应用。
+
+<img class="only-light" src="/dashboard/client_client_scopes-light.jpg" alt="FerrisKey 客户端 客户端作用域选项卡列出分配的作用域及其默认和可选开关" />
+<img class="only-dark" src="/dashboard/client_client_scopes-dark.jpg" alt="FerrisKey 客户端 客户端作用域选项卡列出分配的作用域及其默认和可选开关" />
+
+分配列表旁的 **Evaluate** 子选项卡回答了此步骤真正关心的问题：它显示此客户端将接收到的声明，而无需先进行登录。
+:::
+::::
+
+<span id="configure-the-application" />
+
+## 配置应用程序
+
+将这些值粘贴到应用程序中。
+
+| 应用设置 | FerrisKey 值 |
+|---|---|
+| 签发者 / 权威 | `https://sso.example.com/realms/home` |
+| 发现端点 | `https://sso.example.com/realms/home/.well-known/openid-configuration` |
+| 客户端 ID | `vaultwarden` |
+| 客户端密钥 | 来自 **Credentials** 选项卡的值 |
+| 作用域 | `openid profile email` |
+| 重定向 URI | `https://vault.example.com/identity/connect/oidc-signin` |
+
+<span id="what-the-discovery-endpoint-does" />
+
+### 发现端点的作用
+
+发现端点是 OpenID Connect 应用程序了解如何与 FerrisKey 通信的地方。
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+当应用程序打开该 URL 时，FerrisKey 会返回包含身份域 OIDC 元数据的 JSON 文档。该文档告诉应用程序：
+
+- 当用户点击“登录”时应重定向到哪里
+- 将授权码换取令牌的位置
+- 令牌中应期望的签发者值
+- 用于获取验证令牌签名的公钥的位置
+- 支持哪些作用域、授权类型和客户端认证方法
+
+这就是为什么许多应用程序只要求提供签发者、权限或发现 URL，而不需要你手动填写每一个端点的原因。
+
+:::callout{variant="info" title="权限或发现端点"}
+有些应用程序要求提供签发者或权限 URL，有些则要求提供发现端点。当它要求提供权限时，请提供不带 `/.well-known/openid-configuration` 后缀的身份域 URL。
+:::
+
+<span id="test-the-login" />
+
+## 测试登录
+
+1. 在私密浏览器窗口中打开应用程序。
+2. 点击 SSO 或 OpenID Connect 登录按钮。
+3. 确认浏览器是否重定向到 FerrisKey。
+4. 使用同一身份域的用户登录。
+5. 确认 FerrisKey 是否重定向回应用程序。
+6. 退出应用程序。如果它调用了 FerrisKey 登出端点，SSO 会话将结束，下次登录会再次要求输入凭据。
+
+如果用户登录成功，但应用程序显示账户不被允许，请查看应用程序自身的注册、域、组或角色规则。FerrisKey 已验证用户身份；应用程序仍然可以决定该用户是否被允许。
+
+<span id="troubleshooting" />
+
+## 故障排除
+
+<span id="invalid-redirect-uri" />
+
+### 无效的重定向 URI
+
+FerrisKey不会将浏览器发送到应用程序请求的地址。它会转到FerrisKey登录页面并显示错误信息。
+
+检查客户端设置中的重定向URI是否与应用程序发送的回调URL完全匹配。比较协议、域名、路径、末尾斜杠和端口。只有写成`^...$`的条目被视为模式。
+
+<span id="discovery-endpoint-does-not-load" />
+
+### 发现端点无法加载
+
+从浏览器及应用程序容器或服务器中打开此URL：
+
+```text
+https://sso.example.com/realms/home/.well-known/openid-configuration
+```
+
+它应返回一个JSON文档。如果没有，请检查FerrisKey公共URL、反向代理、TLS证书和身份域名称。
+
+<span id="issuer-mismatch" />
+
+### 签发者不匹配
+
+某些应用程序会验证配置的权限是否等于发现端点返回的`issuer`字段。
+
+打开发现端点并复制`issuer`值。使用该精确值作为应用的发行方或权限。
+
+FerrisKey 从每个请求的`Host`和`X-Forwarded-Proto`首部构建发行点。如果发件方显示内部主机名或`http://`，而用户通过 https 访问 FerrisKey，反向代理则不会转发这些头部。
+
+<span id="client-authentication-failed" />
+
+### 客户端认证失败
+
+应用程序到达FerrisKey，但令牌交换失败。
+
+检查：
+
+- 客户端已启用
+- **客户端认证**已为机密应用启用
+- 应用程序使用当前客户端密钥
+- 复制的密钥周围没有多余的空格
+- 包含`+`或`%`的密钥在通过HTTP Basic头部传输时会被编码为百分比编码
+
+FerrisKey 用 `401` 回答 `invalid_client`，无论客户端是未知的、被禁用的还是发送了错误的密钥。在同一地址在一分钟内对同一客户端尝试失败 10 次后，它将以 `Retry-After: 60` 回答 `429`，直到延迟结束。
+
+<span id="pkce-is-required" />
+
+### 需要 PKCE
+
+授权请求失败，返回 `invalid_request` 并显示关于 PKCE 的信息。客户端需要 S256 代码挑战，而应用程序未发送。让应用程序以 `code_challenge_method=S256` 发送 `code_challenge`。只有在无法发送时，才在客户端的功能配置中关闭 **Require PKCE**。
+
+<span id="the-application-gets-login_required-or-consent_required" />
+
+### 应用程序会收到 login_required 或 consent_required
+
+使用 `prompt=none` 的授权请求从未显示页面。当不存在 SSO 会话时，FerrisKey 会使用 `login_required` 将浏览器返回；当账户仍欠缺某个步骤时，返回 `interaction_required`；当需要显示同意屏幕时，返回 `consent_required`。应用程序必须回退到交互式请求。请参阅 [授权请求](/zh-CN/discover/core-concepts/authentication#the-authorization-request)。
+
+<span id="missing-email-or-profile-data" />
+
+### 缺少电子邮件或个人资料数据
+
+登录成功，但应用程序无法创建或匹配账户。
+
+检查 `openid`、`profile` 和 `email` 是否被分配为默认客户端作用域。也请检查 FerrisKey 用户是否有电子邮件地址。
+
+<span id="the-application-asks-for-password-grant" />
+
+### 应用程序请求密码授权
+
+当应用程序支持时，优先使用授权码流程。仅在应用程序明确需要 `grant_type=password` 并且您信任它可以直接处理用户密码时，才启用**直接访问授权**。

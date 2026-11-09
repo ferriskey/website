@@ -1,0 +1,6 @@
+{
+  "icon": "square-terminal",
+  "title": "命令",
+  "type": "group",
+  "order": 4
+}

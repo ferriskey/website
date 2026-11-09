@@ -1,0 +1,117 @@
+---
+title: "免密登录链接"
+description: "FerrisKey 的无密码邮箱登录：要求、浏览器绑定以及链接失败的原因。"
+icon: mail
+order: 13
+---
+
+<span id="magic-links" />
+
+# 免密登录链接
+
+魔法链接允许用户通过收件箱登录，而无需密码。用户在登录页面输入电子邮件地址，收到链接，打开链接即可完成登录。该链接只能在请求它的浏览器中使用。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+::::step-group
+:::step{title="用户请求一个链接"}
+登录页面使用 `email` 和可选的 `remember_me` 调用 `POST /login-actions/send-magic-link`。该调用会携带登录页面已有的 `FERRISKEY_SESSION` cookie。无论账户是否存在该地址，回答都是相同的，因此该端点不会泄露哪些地址存在。
+:::
+
+:::step{title="FerrisKey 存储链接"}
+FerrisKey 创建一个链接标识符（`token_id`，一个 UUID）和一个由 43 个随机字母数字字符组成的密钥。它存储该标识符、密钥的 Argon2 哈希、过期时间以及请求所在的会话。密钥本身从不存储。
+:::
+
+:::step{title="电子邮件发送出"}
+该电子邮件是从身份域的魔法链接模板生成的，并包含形式为 `<WEBAPP_URL>/realms/<realm_name>/authentication/magic-link?token_id=...&magic_token=...` 的链接。
+:::
+
+:::step{title="用户打开该链接"}
+门户的 `magic_link_verify` 页面调用 `GET /login-actions/verify-magic-link` 并传递两个查询参数。
+:::
+
+:::step{title="FerrisKey 进行验证"}
+FerrisKey 检查浏览器是否持有请求该链接的登录的 `FERRISKEY_SESSION` cookie，检查链接是否未过期，以及密钥是否与其哈希匹配。然后删除该链接并回复 `{ "status": "Success", "url": ... }`，其中 `url` 携带授权码，并设置 SSO 会话 cookie。
+:::
+::::
+
+<span id="requirements" />
+
+## 要求
+
+| 设置 | 默认 | 说明 |
+|---|---|---|
+| `magic_link_enabled` | `false` | 启用魔法链接登录。在关闭时，`send-magic-link` 返回 400 `magic_link_not_enabled` |
+| `magic_link_ttl` | `15` | 链接保持有效的分钟数。最少为 1 分钟 |
+| `magic_link_template_id` | 无 | 用于邮件的电子邮件模板 |
+
+在控制台中，前两个位于“登录方法”屏幕上，或在管理员面板的 Realm 设置的“登录”标签中。
+
+<Callout variant="warning" title="SMTP 和模板都是必需的">
+
+除非 Realm 配置了 SMTP 并且有 `magic_link_template_id`，否则 FerrisKey 不会发送任何内容。请求仍然返回 200，因此用户会等待一封永远不会到达的邮件。FerrisKey 在 [SeaWatch](/zh-CN/modules/seawatch/overview) 中记录一个 `email_not_sent` 事件，并给出原因，可能是 `SMTP_NOT_CONFIGURED` 或 `TEMPLATE_NOT_CONFIGURED`。如 [Email & Templates](/zh-CN/discover/guides/email) 中所述，在控制台 **Emails** 页面 SMTP 标签上设置服务器，并在那里分配模板。
+
+</Callout>
+
+<span id="how-a-link-fails" />
+
+## 链接失败的方式
+
+| 情况 | 结果 |
+|---|---|
+| 在没有请求 `FERRISKEY_SESSION` cookie 的浏览器中打开链接 | 401 `invalid_magic_link`。链接在原始浏览器中保持有效 |
+| 请求链接时未携带会话 cookie | 无法完成 |
+| 链接已过期 | 401 `magic_link_expired`，链接已删除 |
+| 密钥错误 | 401 `invalid_magic_link`，链接已删除。一次错误尝试即烧毁链接 |
+| 用户已启用身份认证器 | 403。链接未响应TOTP验证 |
+| 除了`verify_email`之外的必填操作已到期 | 403 |
+
+浏览器绑定可防止从转发邮件或泄露邮箱中读取的链接在其他地方登录。对诚实用户来说会有成本：在手机邮件应用中打开链接，而登录是在笔记本上开始的，会失败。
+
+待处理的`verify_email`必填操作不会阻止魔法链接登录。如果客户端要求[同意](/zh-CN/discover/core-concepts/consent)，答案中的`url`将首先进入同意界面。
+
+<span id="security" />
+
+## 安全
+
+<span id="the-secret-is-hashed" />
+
+### 密钥已被哈希
+
+FerrisKey 仅存储密钥的 Argon2 哈希。数据库的副本并不会给任何人提供可用的链接。
+
+<span id="single-use" />
+
+### 一次性使用
+
+链接在用于登录时会被删除。已过期的链接在被打开时会被删除，或者在随后针对同一身份域创建新链接时也会被删除。
+
+<span id="expiry" />
+
+### 过期
+
+链接在 `magic_link_ttl` 分钟后过期。保持短时间窗口以限制未读电子邮件泄露的风险。
+
+<span id="the-inbox-is-the-factor" />
+
+### 收件箱即认证因素
+
+无论谁控制了用户的收件箱，并能够在请求链接的浏览器中打开它，即可完成登录。当你想要额外的第二因素时，魔法链接并不适用：拥有认证器的用户无法使用它，因此应为这些用户提供密码或通行密钥。
+
+<span id="where-it-fits" />
+
+## 适用场景
+
+<span id="internal-tools" />
+
+### 内部工具
+
+对于已经拥有企业邮箱的仪表板用户，魔法链接可以免去密码管理。用户点击“发送链接给我”，检查邮箱，然后即可登录。
+
+<span id="a-fallback-for-a-forgotten-password" />
+
+### 忘记密码的备用方法
+
+在没有身份认证器的用户的密码重置流程旁提供魔法链接。他们无需选择新密码即可登录。

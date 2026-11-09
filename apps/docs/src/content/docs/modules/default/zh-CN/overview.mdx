@@ -1,0 +1,56 @@
+---
+title: "模块概览"
+description: "FerrisKey 的模块化架构：为身份认证、审计、联合等量身定制的系统。"
+icon: puzzle
+order: 1
+---
+
+<span id="modules" />
+
+# 模块
+
+FerrisKey 是一些模块的集合。每个模块管理身份管理的一部分，并可以单独读取、配置和扩展。
+
+::::card-group{cols=2}
+:::card{label="Trident" icon="lucide:shield-check" href="/zh-CN/modules/trident/overview"}
+多因素认证：TOTP、WebAuthn 密钥、魔法链接和恢复代码。
+:::
+:::card{label="SeaWatch" icon="lucide:eye" href="/zh-CN/modules/seawatch/overview"}
+审计和安全事件：跨您的身份域的每个关键操作，可查询。
+:::
+:::card{label="Compass" icon="lucide:compass" href="/zh-CN/modules/compass/overview"}
+身份认证流程记录：哪个步骤出错，以及每个步骤持续了多长时间。
+:::
+:::card{label="Abyss" icon="lucide:link" href="/zh-CN/modules/abyss/overview"}
+身份提供者联合：Google、GitHub、Discord，以及自定义 OIDC 提供者。
+:::
+:::card{label="Aegis" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+Scopes 和协议映射器，决定精确包含在令牌中的内容。
+:::
+:::card{label="Webhook" icon="lucide:webhook" href="/zh-CN/modules/webhooks/overview"}
+事件驱动的集成：订阅生命周期事件并将其推送出去。
+:::
+:::card{label="组织" icon="lucide:building-2" href="/zh-CN/modules/organization/overview"}
+B2B 租户：组织、群组、成员资格、角色和自定义属性。
+:::
+:::card{label="授权" icon="lucide:scale" href="/zh-CN/modules/authz/overview"}
+您自己应用程序的访问决策：每个域的 Cedar 策略，通过 AuthZEN API 回答。
+:::
+:::card{label="账户" icon="lucide:user-cog" href="/zh-CN/modules/account/overview"}
+自助服务：用户对自己进行的更改，无需管理员和权限。
+:::
+:::card{label="门户" icon="lucide:palette" href="/zh-CN/modules/portal/overview"}
+域呈现的公共身份认证页面的主题和布局。
+:::
+:::card{label="维护" icon="lucide:wrench" href="/zh-CN/modules/maintenance/overview"}
+关闭客户端，除了白名单外，不动其配置。
+:::
+::::
+
+<span id="how-a-module-is-built" />
+
+## 模块是如何构建的
+
+一个模块可以作为 `core/src/domain/` 下的领域模块存在，接近核心，或者当它值得单独测试和版本控制时，作为 `libs/` 下的独立 crate 存在。有几个模块正在从第一种形式迁移到第二种形式。
+
+无论哪种方式，其结构都是相同的，并遵循六边形架构：业务逻辑是纯粹的，其依赖通过端口引入，而基础设施位于边界上。`ferriskey-api-*` crate 承载已经被拆分的模块的 HTTP 层。

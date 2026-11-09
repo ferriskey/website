@@ -1,0 +1,215 @@
+---
+title: "自定义声明"
+description: "将业务数据放入 FerrisKey 令牌的真实模式，以及可用的映射器配置。"
+icon: plus
+order: 52
+---
+
+<span id="custom-claims" />
+
+# 自定义声明
+
+FerrisKey的默认作用域涵盖了标准的OIDC声明。实际应用需要更多：网关可以强制执行的角色、租户标识符、计划层级、功能标志。自定义声明会把这些数据准确放入令牌中，这样你的后端无需第二次调用即可自行决定。
+
+以下所有配置都使用映射器实际读取的点线Keycloak风格键。完整密钥参考请参见[协议映射器](/zh-CN/modules/aegis/protocol-mappers)。
+
+<span id="realm-roles-for-an-api-gateway" />
+
+## API网关的身份域角色
+
+你的网关会对路由强制基于角色的访问。身份域角色映射器已经把角色写入令牌;唯一的决定是写入哪里。
+
+作用域是`roles`，默认作用域在每个身份域都种子，映射器`oidc-usermodel-realm-role-mapper`。
+
+```json
+{
+  "claim.name": "realm_access.roles",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim"
+{
+  "realm_access": {
+    "roles": ["admin", "editor", "viewer"]
+  }
+}
+```
+
+网关读取 `realm_access.roles` 并在不回调 FerrisKey 的情况下允许或拒绝路由。将 `id.token.claim` 设置为 `false` 可以将角色排除在 ID 令牌之外，浏览器可以读取。网关是唯一需要它们的方。
+
+<Callout variant="info" title="扁平声明而非嵌套">
+
+`claim.name` 支持点路径，因此 `realm_access.roles` 是嵌套的。如果您的网关在 `roles` 下期望一个扁平数组，请改为将 `claim.name` 设置为 `roles`。默认是嵌套形式，因为这是与 Keycloak 兼容的库所查找的。
+
+</Callout>
+
+<Callout variant="warning" title="声明名称有长度限制">
+
+声明名称是一个最多包含8个非空段、总长度不超过255个字符的点分路径。当你创建或更新映射器时，API 会拒绝更长的 `claim.name` 或 `token.claim.name`，并返回 422 `invalid_claim_name`。如果名称仍然通过，例如映射器在没有 `claim.name` 时回退使用的较长 `user.attribute`，则在令牌生成时会被静默丢弃。映射器看起来已配置，但声明永远不会出现。
+
+</Callout>
+
+<span id="tenant-identifier-for-a-multi-tenant-backend" />
+
+## 多租户后端的租户标识符
+
+每个域都是一个租户，后端需要知道查询哪个租户数据库。
+
+该作用域是 `tenant` 作用域，被分配为默认值，映射器为 `oidc-hardcoded-claim-mapper`。
+
+```json
+{
+  "claim.name": "tenant",
+  "claim.value": "acme-corp",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+由于该值是特定于域的，你需要在每个域中使用正确的值创建此作用域。
+
+<Callout variant="info" title="当租户是按用户而非按域时">
+
+将其存储为用户属性，并用 `oidc-usermodel-attribute-mapper` 替换 `"user.attribute": "tenant"`。如果租户是通过 [Organizations 模块](/zh-CN/modules/organization/overview) 建模的，请跳过两者：`oidc-organization-membership-mapper` 按别名写入用户的组织，无需每个身份域的设置。已种子化的 `organization` 作用域已经完成此操作。
+
+</Callout>
+
+<span id="a-user-attribute-as-a-claim" />
+
+## 作为声明的用户属性
+
+使用 `oidc-usermodel-attribute-mapper` 来承载用户上的业务数据，例如计划级别或座位限制。
+
+```json
+{
+  "user.attribute": "seat_limit",
+  "claim.name": "seat_limit",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim"
+{
+  "seat_limit": "25"
+}
+```
+
+用户属性以字符串形式存储，此映射器将其作为字符串输出。它不读取 `jsonType.label`，因此数字或布尔值会以文本形式到达，消费者需要自行解析。在 `oidc-usermodel-property-mapper` 和 `oidc-hardcoded-claim-mapper` 上存在类型转换，而此处不存在。
+
+<span id="audience-for-several-resource-servers" />
+
+## 多个资源服务器的受众
+
+您的令牌必须在 `api.yourapp.com` 和 `admin.yourapp.com` 上都被接受。每个受众添加一个映射器，`oidc-audience-mapper` 使用两次。
+
+```json title="Mapper 1"
+{
+  "included.client.audience": "api.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Mapper 2"
+{
+  "included.client.audience": "admin.yourapp.com",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+```json title="Resulting claim in the access token"
+{
+  "aud": ["acme-realm", "account", "api.yourapp.com", "admin.yourapp.com"]
+}
+```
+
+访问令牌的 `aud` 总是以身份域受众 (`<realm_name>-realm`) 和 `account` 开头，映射器会在其后附加内容。携带 `resource` 参数的令牌请求会用该资源替换整个列表。
+
+<Callout variant="warning" title="aud 需要这个映射器的特别处理">
+
+`aud` 是保留的声明名称：映射器运行后会被移除，因此指向 `aud` 的硬编码声明映射器不会起作用。受众映射器通过一个单独的通道提供受众，这就是它能正常工作的原因。该通道仅提供给访问令牌。ID 令牌的 `aud` 始终是客户端自己的 `client_id`。
+
+</Callout>
+
+<span id="feature-flags-in-the-id-token" />
+
+## ID 令牌中的功能标志
+
+前端决定渲染哪些功能，因此标志应该放在 ID 令牌中供其读取，而不应该放在 API 验证的访问令牌中。
+
+该作用域是一个 `features` 作用域，被分配为 **可选**，因此只有请求它的客户端才会支付令牌大小。映射器是 `oidc-hardcoded-claim-mapper`。
+
+```json
+{
+  "claim.name": "features.new_dashboard",
+  "claim.value": "true",
+  "jsonType.label": "Boolean",
+  "access.token.claim": "false",
+  "id.token.claim": "true"
+}
+```
+
+```json title="Resulting claim"
+{
+  "features": {
+    "new_dashboard": true
+  }
+}
+```
+
+带点的 `claim.name` 会将每个标志嵌套在一个 `features` 对象下，因此写入 `features.beta_export` 的第二个映射器会合并到同一个对象，而不是覆盖它。
+
+客户端必须在其 `scope` 中命名 `features` 才能应用可选作用域，并且请求必须包含 `openid`：FerrisKey 只有在作用域中包含 `openid` 时才会从映射器构建 ID-token 声明。
+
+<span id="group-membership-for-a-hierarchy-aware-app" />
+
+## 支持层级结构的应用的组成员身份
+
+映射器是 `oidc-group-membership-mapper`。
+
+```json
+{
+  "claim.name": "groups",
+  "membership": "direct",
+  "full.path": "true",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+`direct` 仅发出用户直接所属的组。默认的 `effective` 也会发出每个祖先路径。当消费者在不重建层次结构的情况下检查父组时选择该选项，而当你想要更小的令牌并减少其中的组织结构时选择 `direct`。
+
+<span id="scope-assignment-strategy" />
+
+## 作用域分配策略
+
+| 在以下情况下分配为默认 | 在以下情况下分配为可选 |
+|---|---|
+| 此客户端的每个请求都需要该声明 | 该声明携带敏感数据 |
+| 该声明对于授权决策是必需的 | 该声明很大，会膨胀每个令牌 |
+| 缺少该声明会导致客户端出错 | 只有某些流程需要该数据 |
+
+<span id="before-you-debug-the-claim-check-the-key" />
+
+## 在调试该声明之前，请检查密钥
+
+配置键拼写错误的映射器会被 API 接受，然后在令牌时被忽略。`config` 字段是自由形式 JSON，唯一被验证的是`claim.name`的形状。对于非十一种类型之一的`mapper_type`也是如此：API 存储它，令牌生成器会跳过并用服务器日志中的警告。当申报未显示时：
+
+1. 检查`mapper_type`和按键。它们是虚线（`claim.name`，不是`claim_name`）。
+2. 请检查申诉名称是否为[保留](/zh-CN/modules/aegis/protocol-mappers#reserved-claim-names)，且不超过8个段和255个字符。
+3. 检查该作用域是否在客户端上实际激活，是默认的还是按名称请求的，并且如果申报属于ID令牌，`openid`是否在请求中。
+4. 使用 `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` 结合 `user_id` 和可选的 `scope` 查看客户端将获得的声明，而无需完全登录。控制台在客户端的客户端作用域选项卡下的 **评估** 中有相同的预览。
+
+::::card-group{cols=2}
+:::card{label="协议映射器" icon="lucide:arrow-right-left" href="/zh-CN/modules/aegis/protocol-mappers"}
+所有十一种映射器类型以及它们读取的每个配置键。
+:::
+:::card{label="JWT 声明" icon="lucide:file-json" href="/zh-CN/learn/jwt/claims"}
+在添加自己的声明之前，标准声明的含义。
+:::
+::::

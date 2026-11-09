@@ -1,0 +1,84 @@
+---
+title: "來自 Keycloak"
+description: "透過 Keycloak 例項的 Admin REST API 實時匯入一個身分域。"
+icon: server
+order: 3
+---
+
+<span id="import-from-keycloak" />
+
+# 從 Keycloak 匯入
+
+`--from keycloak` 透過其 Admin REST API 直接從正在執行的 Keycloak 例項讀取 realm，並在 FerrisKey 中重新建立它。
+
+```bash
+ferris-ctl realm import --from keycloak \
+  --source-url https://keycloak.example.com \
+  --source-realm acme \
+  --source-client-id ferriskey-import \
+  --source-client-secret "$KC_SECRET" \
+  --target-realm acme
+```
+
+<span id="required-flags" />
+
+## 必需的標誌
+
+| 標誌 | 說明 |
+|------|-------------|
+| `--source-url` | Keycloak 例項的基礎 URL |
+| `--source-realm` | 從 Keycloak 讀取的身分域 |
+
+<span id="authentication" />
+
+## 身分認證
+
+兩個選項：
+
+- 客戶端憑據：使用 `--source-client-id` 和 `--source-client-secret`。CLI 對源身分域的權杖端點執行客戶端憑據授權，因此客戶端必須在該身分域中註冊，並具有可透過 Admin REST API 讀取該身分域的服務賬戶。
+- 已準備好的權杖：當你手中已經有一個承載權杖時，使用 `--source-token`。
+
+當設定了 `--source-token` 時，客戶端 ID 和金鑰將被忽略。
+
+```bash title="Using a stored source"
+ferris-ctl source add kc-prod --kind keycloak \
+  --url https://keycloak.example.com --realm acme \
+  --client-id ferriskey-import --client-secret "$KC_SECRET"
+
+ferris-ctl realm import --source-ref kc-prod --target-realm acme
+```
+
+<span id="what-gets-imported" />
+
+## 匯入內容
+
+匯入器讀取身分域表示，然後在 `/admin/realms/{realm}` 下讀取 `clients`、`roles` 和 `users`，並進行如下對映：
+
+| Keycloak | Ferriskey |
+|----------|-----------|
+| 身分域 | 一個與源身分域同名的身分域，或者 `--target-realm` |
+| 身分域設定 `accessTokenLifespan`、`registrationAllowed`、`resetPasswordAllowed`、`rememberMe`、`verifyEmail` | `access_token_lifetime`, `user_registration_enabled`, `forgot_password_enabled`, `remember_me_enabled`, `email_verification_enabled` |
+| 身分域角色 | 身分域角色，帶有名稱和描述 |
+| 客戶端 | 擁有 `clientId`、`name`、`enabled`、`protocol`、`serviceAccountsEnabled`、`directAccessGrantsEnabled` 和 `redirectUris` 的客戶端。設定了 `publicClient` 的客戶端是 `public`，其他任何客戶端都是 `confidential` |
+| 客戶端角色 | 限定於其客戶端的角色，帶有名稱和描述 |
+| 使用者 | 使用者具有使用者名稱、郵箱、名、姓，以及郵件驗證標誌 |
+
+只有這五個身分域設定被對映；每個其他 Keycloak 設定保持 FerrisKey 預設。使用者一次讀取 100 個，直到列表用完。
+
+<span id="what-does-not-come-across" />
+
+## 未傳達的內容
+
+- 密碼。Keycloak 從不匯出密碼雜湊，因此使用者到達時沒有憑據。
+- 角色分配。角色已建立，但持有這些角色的人不會被攜帶過來。
+- 權限。角色建立時沒有任何權限，因此在 Keycloak 中具有某種意義的角色，在 FerrisKey 中在設定其權限之前不會授予任何權限。
+- 使用者的 `enabled` 標誌。它不會被讀取，因此每個使用者都是使用 FerrisKey 的預設值建立的。
+- 每個客戶端的 OAuth 詳細資訊：登出後重定向 URI、Web 來源、PKCE 要求、權杖生命週期以及裝置授權。客戶端在這些方面使用 FerrisKey 的預設值，需要手動完成設定。
+- 客戶端金鑰。保密客戶端從 FerrisKey 獲取新的金鑰，在[匯入報告](/zh-TW/cli/import/overview#the-import-report)中列出；使用 Keycloak 金鑰的應用程式需要使用新的金鑰。
+- 匯入器未請求的所有內容，例如組、身分提供者、客戶端作用域和對映器。
+
+客戶端永遠不會被建立為 `system`。
+
+對某個客戶端角色讀取失敗不會顯示訊息：該客戶端只是沒有角色地到達。將報告中的角色數量與您期望的進行比較。
+
+隨後瀏覽匯入的身分域，並重新建立憑據、權限和角色分配。首先執行 `--dry-run -o yaml` 以確切檢視將會建立什麼。

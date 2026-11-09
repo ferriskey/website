@@ -1,0 +1,142 @@
+---
+title: "什么是 AuthZEN？"
+description: "细粒度授权以及 AuthZEN 试图解决的互操作性问题。"
+icon: shield-check
+order: 1
+---
+
+<span id="what-is-authzen" />
+
+# 什么是 AuthZEN？
+
+OAuth2 和 OIDC 处理身份认证和粗粒度委派。它们并不真正处理授权，换句话说，就是“这个特定用户现在能否对这个特定资源执行这个特定操作？”
+
+这就是 AuthZEN 试图以标准方式回答的问题。
+
+<span id="the-fine-grained-authorization-problem" />
+
+## 细粒度授权问题
+
+粗粒度授权很简单：
+
+```
+user.role == "admin"  →  allow
+```
+
+但真实系统很快就超越了它。真实的问题看起来像：
+
+- “Alice 能否编辑财务工作区中 ID 为 4271 的发票？”
+- “这个支持代理能否仅查看欧盟客户的记录？”
+- “这个共享链接持有者在接下来的 24 小时内能否下载？”
+
+这些决策取决于用户、操作、资源、资源属性、上下文（时间、位置、多因素身份认证级别）以及通常存在于 IAM 系统之外的业务规则。
+
+这被称为细粒度授权（FGA），有时也称为基于属性的访问控制（ABAC）。在过去十年中，大多数团队都是自己摸索的混乱方法。
+
+<span id="the-interop-problem" />
+
+## 互操作性问题
+
+每个细粒度授权工具说的是不同的方言：
+
+- 一种需要允许/拒绝规则的 YAML 文件。
+- 另一种需要关系图。
+- 第三种需要拥有自己 DSL 的策略语言。
+
+更换工具，就要重写所有内容。运行多个应用程序时，它们通常选择不同的工具，最终无法彼此通信。
+
+AuthZEN是OpenID基金会提出的一个规范，旨在解决这个问题。它定义了一个用于请求和回答授权问题的底层API。不同的策略引擎可以实现相同的API，应用程序可以在它们之间切换，或者同时与多个引擎通信，而无需更改一行代码。
+
+<span id="what-authzen-looks-like" />
+
+## AuthZEN的样子
+
+核心理念是请求/响应的形式：
+
+```http
+POST /access/v1/evaluation
+```
+
+```json
+{
+  "subject": { "type": "user", "id": "alice@example.com" },
+  "action":  { "name": "edit" },
+  "resource": {
+    "type": "invoice",
+    "id": "4271",
+    "properties": { "workspace": "finance" }
+  },
+  "context": { "mfa": true }
+}
+```
+
+```json
+{ "decision": true }
+```
+
+可理解为：_“主体S在上下文C中是否可以对资源R执行操作A？是或否。”_
+
+AuthZEN并不规定引擎如何做出决策。这取决于策略引擎，无论是OPA、Cerbos、Cedar、OpenFGA还是其他。AuthZEN只标准化了对话。
+
+<span id="why-this-matters" />
+
+## 为什么这很重要
+
+如果AuthZEN得到推广：
+
+- **供应商更换。** 先试用 Cedar，如果你决定想用 Cerbos，只需更换 URL。策略仍然需要迁移，但应用程序不需要。
+- **多引擎部署。** 使用一个引擎处理基于关系的查询，另一个处理基于属性的规则。无论哪种方式，应用程序都通过相同的通信协议。
+- **工具和网关。** API 网关、服务网格和 IAM 平台可以向 _任何_ 策略引擎使用 AuthZEN。
+
+<span id="authzen-vs-oauth2-scopes" />
+
+## AuthZEN 与 OAuth2 作用域
+
+作用域是一个粗粒度的能力标签：“此令牌可以读取订单”。作为第一道过滤非常有用。
+
+细粒度授权决策会问：“此用户现在可以读取 **此** 订单吗？” 作用域无法表达这一点，否则会爆炸成数百个命名作用域。
+
+健康的模式是：作用域在门口对 API 进行门槛（这里允许这个令牌吗？）;类似 AuthZEN 的决策发生在 API 内部（而且这种具体操作是否被允许？）。
+
+<span id="a-mental-model" />
+
+## 一个思维模型
+
+OAuth2的视野镜就像前门的保安：令牌贴着正确的贴纸，你可以进去。AuthZEN是里面的经理：“你可以进楼，但这个房间？让我查一下你的日程安排、预订情况，以及你今天是否升级了你的证件。”
+
+粗细交织，协同工作。
+
+<span id="where-to-go-next" />
+
+## 下一步该去哪里
+
+::::card-group{cols=2}
+:::card{label="AuthZEN 生态系统" icon="lucide:network" href="/zh-CN/learn/authzen/ecosystem"}
+OPA、Cerbos、Cedar、OpenFGA，以及AuthZEN连接的引擎。
+:::
+:::card{label="作用域与同意" icon="lucide:badge-check" href="/zh-CN/learn/oauth2/scopes"}
+更粗的表亲AuthZEN是补补的。
+:::
+::::
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 是一个 AuthZEN 1.0 策略决策点，每个身份域一个，由 Cedar 作为其背后的引擎。你上传一个 Cedar 模式并编写策略。一个以服务账户身份认证的应用程序随后发送一个像上面一样的请求到 `POST /realms/{realm_name}/authzen/access/v1/evaluation`，使用模式的命名空间命名资源类型（`App::Invoice` 而不是 `invoice`），而 FerrisKey 会回答 `{ "decision": true }` 或 `{ "decision": false }`。第二个端点一次可处理多达 100 个问题，并且在 `/.well-known/authzen-configuration/realms/{realm_name}/authzen` 的元数据文档告诉客户端它们的位置。
+
+身份部分保留在 FerrisKey。当主体是 `FerrisKey::User` 时，其角色、组、组织和属性会从身份域中读取，因此策略可以使用你已经管理的内容。如果你运行另一个引擎，对它没有任何变化：FerrisKey 令牌中的作用域、角色和声明仍然是输入。
+
+模块在操作员设置 `AUTHZ_ENABLED` 之前处于关闭状态，每个身份域会自行开启它。
+
+::::card-group{cols=2}
+:::card{label="授权模块" icon="lucide:scale" href="/zh-CN/modules/authz/overview"}
+编写方案和策略，并调用评估端点。
+:::
+:::card{label="什么是FerrisKey？" icon="lucide:shield" href="/zh-CN/discover/what-is-ferriskey"}
+身份基础 FerrisKey 提供。
+:::
+:::card{label="保护模块" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+塑造下游授权引擎看到的声明。
+:::
+::::

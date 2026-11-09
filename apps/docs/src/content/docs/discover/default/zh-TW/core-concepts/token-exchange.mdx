@@ -1,0 +1,235 @@
+---
+title: "權杖交換"
+description: "將存取權杖換成更窄的，換成其他服務，或代表他人使用（RFC 8693）。"
+icon: arrow-left-right
+order: 20
+---
+
+<span id="token-exchange" />
+
+# 權杖交換
+
+權杖交換允許客戶端用它已持有的存取權杖交換一個新的權杖。FerrisKey 實現了 [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) 三個任務：
+
+| 工作 | 客戶端的要求 | 示例 |
+|---|---|---|
+| **降級 | 同樣的道理，只是作用域更少 | 閘道器將一個僅限 `profile` 的權杖傳遞給一個不太受信任的元件 |
+| **受眾** | 為另一個服務準備的權杖 | 訂單 API 以登入使用者的身分呼叫計費 API |
+| **委託** | 一個說明誰替使用者操作的權杖 | 支援人員在客戶的賬戶上工作，權杖同時標明雙方 |
+
+發出的權杖是普通存取權杖。資源伺服器像驗證其他權杖一樣驗證它。
+
+:::callout{variant="info" title="0.8.0 中沒有"}
+權杖交換隨 FerrisKey 0.8.0 之後的版本釋出
+:::
+
+<span id="before-you-start" />
+
+## 在開始之前
+
+1. 請求客戶端是**保密**的。公共客戶端總是被拒絕，因為它們無法保留證明請求者身分的金鑰。而且必須由管理員啟用並註冊：透過動態註冊建立或透過後設資料文件解析的客戶端，會被`unauthorized_client`拒絕。
+2. 在該客戶端上開啟**權杖交換**：在設定裡的開關，或者透過API `token_exchange_enabled: true`。預設是關閉的。
+3. 要針對其他服務，為該受眾新增[委託政策](#delegation-policies)。沒有受眾的縮減範圍不需要策略。
+
+<span id="the-request" />
+
+## 請求
+
+`POST /realms/{realm}/protocol/openid-connect/token`，表單編碼。客戶端透過HTTP BASIC（`client_secret_basic`）或正文中的`client_id`+`client_secret`（`client_secret_post`）進行認證。
+
+| 引數 | 必填 | 值 |
+|---|---|---|
+| `grant_type` | 是 | `urn:ietf:params:oauth:grant-type:token-exchange` |
+| `subject_token` | 是 | 交換的存取權杖 |
+| `subject_token_type` | 是 | `urn:ietf:params:oauth:token-type:access_token` |
+| `requested_token_type` | 否 | 只有`urn:ietf:params:oauth:token-type:access_token`，預設 |
+| `scope` | 否 | 以空格分隔的主體權杖作用域的子集 |
+| `audience` | 否 | 同一身分域客戶端的 `client_id` |
+| `actor_token` | 否 | 代表使用者操作方的存取權杖，見 [delegation](#delegation-the-act-claim) |
+| `actor_token_type` | 帶有 `actor_token` | `urn:ietf:params:oauth:token-type:access_token` |
+| `resource` | 否 | 尚不支援，回答 `invalid_target` |
+
+縮小權杖的作用域，無受眾，無策略：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d scope=profile
+```
+
+獲取另一個服務權杖，該服務需要 `orders-api` 的 [policy](#delegation-policies)：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
+```
+
+請求客戶端必須是主體權杖的一方：其 `azp`、列在其 `aud` 中，或是列在其 `aud` 中的資源的所有者（見 [resource owners](/zh-TW/discover/core-concepts/mcp#resource-owners)）。客戶端不能交換它截獲的權杖。
+
+<span id="the-response" />
+
+## 響應
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "orders:read"
+}
+```
+
+- 當 `scope` 等於主體權杖的作用域時省略。
+- 沒有重新整理權杖和ID權杖。新權杖過期後，再次兌換。
+- 沒有餅乾，回覆也轉`Cache-Control: no-store`。
+
+<span id="what-the-issued-token-contains" />
+
+## 發行權杖包含的內容
+
+| 宣告 | 它的來源 |
+|---|---|
+| `iss`, `sub`, `sid` | 主題標記。它們永遠不會改變 |
+| `azp` | 請求客戶端，現在持有權杖 |
+| `aud` | 設定時為`audience`引數，否則主語標記的`aud` |
+| `scope` | 縮小作用域，參見[作用域規則](#scope-rules) |
+| `exp` | 客戶端的存取權杖壽命，上限為該權杖的 `exp` |
+| 對映的宣告 | 由消耗權杖的客戶端的[協議對映器](/zh-TW/modules/aegis/protocol-mappers)重新計算 |
+| `act` | 設在委託交換中，見[下文](#delegation-the-act-claim) |
+
+對映的宣告不會從主體權杖中複製。FerrisKey 會再次執行協議對映器，如果設定了 `audience` 客戶端，則執行它的對映器，否則執行請求客戶端的對映器，並且只針對新權杖攜帶的作用域。請求 `scope=profile` 後，即使主體權杖有 `email`，該宣告也會消失。
+
+因為新權杖保留了主體的 `sid`，它與使用者會話的生命週期一致。登出使用者或撤銷會話後，交換的權杖在檢查時也會失效。
+
+<span id="scope-rules" />
+
+## 作用域規則
+
+- 請求的 `scope` 必須是主體權杖作用域的子集，否則返回 `invalid_scope`。
+- 如果有策略，在該列表設定時，它還必須符合策略的 `allowed_scopes`。
+- 如果未請求 `scope`，權杖將獲得雙方允許的內容：主體的作用域，與 `allowed_scopes` 的交集。
+- `offline_access` 從不被授予，因為交換不會發放重新整理權杖。
+
+<span id="delegation-policies" />
+
+## 委託策略
+
+策略允許一個客戶端針對一個受眾。沒有匹配的策略時，使用 `audience` 的交換將回答 `invalid_target`。
+
+| 欄位 | 含義 |
+|---|---|
+| `target_audience` | 客戶端發放的權杖對應的 `client_id` |
+| `allowed_scopes` | 作用域上限。`null` 表示沒有額外上限。空陣列會被拒絕，包含空格的條目也會被拒絕。 |
+| `allow_impersonation` | 客戶端可以在沒有執行者的情況下進行交換，作為使用者操作。 |
+| `allow_delegation` | 客戶端可以與 `actor_token` 進行交換，權杖將指定執行者。 |
+
+這兩個開關是獨立的。只允許委託的策略會拒絕普通交換，反之亦然。
+
+可以從客戶端頁面的 **權杖交換** 選項卡或透過管理 API 管理策略：
+
+<img class="only-light" src="/dashboard/client_token_exchange-light.jpg" alt="FerrisKey 客戶端頁面在權杖交換標籤頁，列出每個策略及其目標受眾、允許作用域以及模擬和委派指標" />
+<img class="only-dark" src="/dashboard/client_token_exchange-dark.jpg" alt="FerrisKey 客戶端頁面在權杖交換標籤頁，列出每個策略及其目標受眾、允許作用域以及模擬和委派指標" />
+
+| 方法 | 路徑 | 權限 |
+|---|---|---|
+| `GET` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `view_clients`, `manage_clients` 或 `manage_realm` |
+| `POST` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `manage_clients`或`manage_realm` |
+| `DELETE` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies/{policy_id}` | `manage_clients`或`manage_realm` |
+
+```json
+{
+  "target_audience": "orders-api",
+  "allowed_scopes": ["orders:read"],
+  "allow_impersonation": true,
+  "allow_delegation": false
+}
+```
+
+客戶端可以為每個受眾持有一個策略：第二個負責回應`409`。刪除策略將在下一次交換時生效。
+
+建立一個允許委託的策略，並使用管理員權杖。`$CLIENT_UUID` 是請求客戶端的 ID，而不是其 `client_id`：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/clients/$CLIENT_UUID/token-exchange-policies \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "target_audience": "orders-api",
+    "allowed_scopes": ["orders:read"],
+    "allow_impersonation": false,
+    "allow_delegation": true
+  }'
+```
+
+<span id="delegation-the-act-claim" />
+
+## 授權：該法案的宣告
+
+使用模擬時，發出的權杖看起來就像使用者直接呼叫了受眾。使用委託時，它也會顯示誰行動了。客戶端傳送`actor_token`，已發出的權杖帶有`act`宣告（[RFC 8693 §4.1](https://datatracker.ietf.org/doc/html/rfc8693#section-4.1)）：
+
+```json
+{
+  "sub": "1b0e…",
+  "azp": "support-desk",
+  "aud": ["orders-api"],
+  "act": { "sub": "7c4f…", "client_id": "support-desk" }
+}
+```
+
+執行一個委託交易所。`$ACTOR_TOKEN` 是為使用者行動方的存取權杖：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'support-desk:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$CUSTOMER_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d actor_token="$ACTOR_TOKEN" \
+  -d actor_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
+```
+
+- 執行者權杖必須是該身分域的有效存取權杖，由請求客戶端（`azp`）簽發。客戶端本身的 `client_credentials` 權杖可以使用，已經登入到該客戶端的代理的權杖也可以使用。
+- 委派需要 `allow_delegation` 的策略。沒有 `audience` 的 `actor_token` 會被拒絕，因為只有策略才能授予委派權限。
+- 當主體權杖已攜帶 `act` 時，新的執行者會將其封裝：`act.act` 持有之前的權杖。鏈從當前執行者向下讀取到第一個執行者。
+- 普通的委派權杖交換保持其 `act` 不變。交換永遠不會刪除之前的操作人資訊。
+
+<span id="errors" />
+
+## 錯誤
+
+錯誤遵循 [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) 的格式：`{ "error": "...", "error_description": "..." }`。
+
+| `error` | 狀態 | 原因 |
+|---|---|---|
+| `invalid_client` | 401 | 未知或公共客戶端，或金鑰錯誤。伴隨 `WWW-Authenticate: Basic` |
+| `unauthorized_client` | 400 | 客戶端的權杖交換已關閉，客戶端不是相關權杖的一方，或策略不允許此類交換 |
+| `invalid_request` | 400 | 缺少主題或行為者權杖，格式錯誤，已過期，已吊銷，為重新整理權杖，來自另一個域，或屬於另一個客戶端的行為者權杖。也包括僅有 `actor_token` 而缺少 `actor_token_type`，反之亦然 |
+| `unsupported_token_type` | 400 | 除 `access_token` 之外的權杖型別 |
+| `invalid_scope` | 400 | 作用域超過主體權杖或策略上限 |
+| `invalid_target` | 400 | 未知或已禁用的受眾，沒有相關策略，或設定了 `resource` |
+
+<span id="discovery-and-observability" />
+
+## 發現和可觀測性
+
+- [發現文件](/zh-TW/discover/core-concepts/authentication#openid-connect-discovery) 在 `grant_types_supported` 中列出了 `urn:ietf:params:oauth:grant-type:token-exchange`。
+- 每個經過身分認證客戶端的交換都是具有 `subject_token_exchange` 步驟的 [Compass](/zh-TW/modules/compass/overview) 流程，以及具有客戶端、主題、受眾、策略和行為者命名的 [SeaWatch](/zh-TW/modules/seawatch/event-types) `token_exchanged` 事件。
+- 客戶端認證失敗的請求不會留下痕跡，因此一個未知的 `client_id` 無法填充這些表格。
+
+<span id="when-not-to-use-it" />
+
+## 何時不使用它
+
+- **一個服務以自身身分呼叫另一個服務**：使用[客戶端憑據](/zh-TW/discover/core-concepts/authentication#client-credentials)。不涉及使用者。
+- **一個後端將使用者的權杖不變地傳遞給下一個環節**：轉發權杖並在每個環節進行驗證。當下一個環節應該獲得較少資訊，或應該知道誰在操作時，請進行交換。

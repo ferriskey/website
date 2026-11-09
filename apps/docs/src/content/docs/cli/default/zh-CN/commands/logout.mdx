@@ -1,0 +1,25 @@
+---
+title: "注销"
+description: "删除已存储的登录会话。"
+icon: log-out
+order: 7
+---
+
+# `logout`
+
+删除由 [`login`](/zh-CN/cli/commands/login) 保存的会话。它会删除 `credentials.toml`，因此下一个命令会回退到客户端凭据（如果上下文中有密钥）或要求你重新登录。
+
+```bash
+ferris-ctl logout
+```
+
+该命令不接受任何参数，也不会进行网络调用。它会报告是否删除了会话：
+
+- 当存在会话时的 `Logged out. Stored credentials removed.`。
+- 当没有可删除内容时的 `No active session; nothing to remove.`。
+
+无论 `-o` 怎么说，消息都是纯文本。你的上下文和存储的源信息仍保存在 `config.toml`。
+
+`logout` 只删除本地文件。它不会向服务器发送任何内容，因此会话及其令牌不会在服务器上被撤销。
+
+参见 [Authentication](/zh-CN/cli/authentication) 了解会话如何存储和刷新。

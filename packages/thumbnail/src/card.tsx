@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
 import satori from 'satori'
+import { getCjkFonts } from './cjk-font'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const asset = (name: string) => readFileSync(resolve(__dirname, 'assets', name))
@@ -219,6 +220,7 @@ export async function generateBrandCard(options: PixelCardOptions): Promise<stri
         { name: 'Space Grotesk', data: spaceMedium, weight: 500 },
         { name: 'Space Grotesk', data: spaceSemiBold, weight: 600 },
         { name: 'Silkscreen', data: silkscreen, weight: 400 },
+        ...getCjkFonts([...options.lines, options.lede ?? '', options.eyebrow, options.meta ?? ''].join(' ')),
       ],
     },
   )

@@ -1,0 +1,56 @@
+---
+title: "模組概覽"
+description: "FerrisKey 的模組化架構：為身分認證、審計、聯合等量身定製的系統。"
+icon: puzzle
+order: 1
+---
+
+<span id="modules" />
+
+# 模組
+
+FerrisKey 是一些模組的集合。每個模組管理身分管理的一部分，並可以單獨讀取、配置和擴充套件。
+
+::::card-group{cols=2}
+:::card{label="Trident" icon="lucide:shield-check" href="/zh-TW/modules/trident/overview"}
+多因素認證：TOTP、WebAuthn 金鑰、魔法連結和恢復程式碼。
+:::
+:::card{label="SeaWatch" icon="lucide:eye" href="/zh-TW/modules/seawatch/overview"}
+審計和安全事件：跨您的身分域的每個關鍵操作，可查詢。
+:::
+:::card{label="Compass" icon="lucide:compass" href="/zh-TW/modules/compass/overview"}
+身分認證流程記錄：哪個步驟出錯，以及每個步驟持續了多長時間。
+:::
+:::card{label="Abyss" icon="lucide:link" href="/zh-TW/modules/abyss/overview"}
+身分提供者聯合：Google、GitHub、Discord，以及自定義 OIDC 提供者。
+:::
+:::card{label="Aegis" icon="lucide:lock" href="/zh-TW/modules/aegis/overview"}
+Scopes 和協議對映器，決定精確包含在權杖中的內容。
+:::
+:::card{label="Webhook" icon="lucide:webhook" href="/zh-TW/modules/webhooks/overview"}
+事件驅動的整合：訂閱生命週期事件並將其推送出去。
+:::
+:::card{label="組織" icon="lucide:building-2" href="/zh-TW/modules/organization/overview"}
+B2B 租戶：組織、群組、成員資格、角色和自定義屬性。
+:::
+:::card{label="授權" icon="lucide:scale" href="/zh-TW/modules/authz/overview"}
+您自己應用程式的存取決策：每個域的 Cedar 策略，透過 AuthZEN API 回答。
+:::
+:::card{label="賬戶" icon="lucide:user-cog" href="/zh-TW/modules/account/overview"}
+自助服務：使用者對自己進行的更改，無需管理員和權限。
+:::
+:::card{label="門戶" icon="lucide:palette" href="/zh-TW/modules/portal/overview"}
+域呈現的公共身分認證頁面的主題和佈局。
+:::
+:::card{label="維護" icon="lucide:wrench" href="/zh-TW/modules/maintenance/overview"}
+關閉客戶端，除了白名單外，不動其配置。
+:::
+::::
+
+<span id="how-a-module-is-built" />
+
+## 模組是如何構建的
+
+一個模組可以作為 `core/src/domain/` 下的領域模組存在，接近核心，或者當它值得單獨測試和版本控制時，作為 `libs/` 下的獨立 crate 存在。有幾個模組正在從第一種形式遷移到第二種形式。
+
+無論哪種方式，其結構都是相同的，並遵循六邊形架構：業務邏輯是純粹的，其依賴透過埠引入，而基礎設施位於邊界上。`ferriskey-api-*` crate 承載已經被拆分的模組的 HTTP 層。

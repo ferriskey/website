@@ -1,0 +1,83 @@
+---
+title: "為什麼存在 IAM"
+description: "面向初學者的身分標準導覽：OAuth2、OIDC、JWT、CIAM 和 AuthZEN。"
+icon: graduation-cap
+order: 1
+---
+
+<span id="why-iam-exists" />
+
+# 為什麼存在 IAM
+
+幾乎沒有軟體是獨立執行的。前端呼叫一個 API。這個 API 又呼叫三個其他 API。在某處有人在點選按鈕。每一次跳轉都需要回答兩個問題：
+
+- _這是誰？_（身分認證）
+- _他們被允許做什麼？_（授權）
+
+在白板上，這兩者看起來都很簡單。但在實際操作中，一旦出現多個應用程式，或者多個團隊必須共享答案，情況就會變得複雜。
+
+<span id="the-problem-in-one-picture" />
+
+## 用一張圖看問題
+
+假設你釋出了三個應用程式：一個客戶網頁應用、一個內部管理工具、一個移動應用。每個都需要登入。沒有 IAM，你會：
+
+- 在三個資料庫中儲存密碼。
+- 三次構建“忘記密碼”、多因素認證（MFA）和賬戶鎖定功能。
+- 在每個應用中重新實現會話處理、權杖頒發和撤銷。
+- 每次有人釋出功能時，都要重新發明權限管理。
+
+大多數團隊在開發到第二個應用時就會注意到這個問題，並開始走捷徑。IAM 系統是解決之道：一個可信服務，所有應用都委託給它。該服務支援少量協議，本節討論的就是這些協議。
+
+<span id="the-standards-you-will-meet" />
+
+## 你將會遇到的標準
+
+每個標準解決 IAM 問題的一個切片：
+
+::::card-group{cols=2}
+:::card{label="OAuth2" icon="lucide:key-round" href="/zh-TW/learn/oauth2/overview"}
+委託協議。允許一個應用代表使用者呼叫另一個應用，而無需共享使用者密碼。
+:::
+:::card{label="OpenID Connect" icon="lucide:id-card" href="/zh-TW/learn/oidc/overview"}
+建立在 OAuth2 之上的薄層，新增“使用者是誰”的功能，並提供可驗證的身分權杖。
+:::
+:::card{label="JWT" icon="lucide:file-key-2" href="/zh-TW/learn/jwt/overview"}
+一種緊湊的、簽名的權杖格式。由 OIDC、OAuth2 以及許多 API 使用，用於攜帶關於身分的宣告。
+:::
+:::card{label="客戶身分與存取管理 (CIAM)" icon="lucide:users" href="/zh-TW/learn/ciam/overview"}
+客戶 IAM。面向產品終端使用者而非員工的 IAM 型別：品牌化、自助註冊、組織級策略。
+:::
+:::card{label="AuthZEN" icon="lucide:shield-check" href="/zh-TW/learn/authzen/overview"}
+一種新興的細粒度授權標準。使用者可以做什麼，透過跨工具一致的方式決定。
+:::
+::::
+
+<span id="how-to-read-this-section" />
+
+## 如何閱讀本節
+
+可以按任何順序閱讀。每一頁都獨立成章。兩個合理的起點：
+
+- 如果你曾想過“使用谷歌登入”為何能像現在這樣工作，或者你正在構建一個其他應用會呼叫的 API，那麼可以從 OAuth2 開始。
+- 如果你在實際應用中接觸過真實的權杖，並且只是想在放大之前瞭解它的內容，那麼可以從 JWT 開始。
+
+每一頁最後都有一個“In FerrisKey”部分，指向該概念在產品中的位置。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 實現了 OAuth2、OIDC、JWT、SAML 和 AuthZEN。除了發放身分和粗粒度授權之外，一旦例項啟用了模組，FerrisKey 還可以充當每個身分域的 AuthZEN 策略決策點：你為自己的應用程式編寫 Cedar 策略，然後它們透過 AuthZEN 評估 API 向 FerrisKey 詢問是或否。實踐中可以這樣操作：
+
+::::card-group{cols=2}
+:::card{label="什麼是FerrisKey？" icon="lucide:shield" href="/zh-TW/discover/what-is-ferriskey"}
+平臺的高層概覽。
+:::
+:::card{label="入門指南" icon="lucide:rocket" href="/zh-TW/discover/getting-started"}
+在本地執行 FerrisKey，並獲取你的第一個權杖。
+:::
+:::card{label="授權模組" icon="lucide:scale" href="/zh-TW/modules/authz/overview"}
+為你自己的應用程式編寫 Cedar 策略，並讓它們向 FerrisKey 詢問決策。
+:::
+::::

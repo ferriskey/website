@@ -1,0 +1,174 @@
+---
+title: "安全"
+description: "自助密碼、身分認證器和金鑰操作，以及每項操作所需的權限提升。"
+icon: shield-check
+order: 71
+---
+
+<span id="account-security" />
+
+# 賬戶安全
+
+使用者在自己賬戶上執行的憑據操作。每項操作都需要一個[提升](/zh-TW/modules/account/overview#sensitive-operations-need-an-elevation)：一個五分鐘有效的證明，與呼叫會話繫結，從`POST /users/me/reauthenticate`獲取。錯誤的證明會像錯誤密碼一樣計入賬戶鎖定。
+
+在本頁中，`{realm}`表示`/realms/{realm_name}`。
+
+<span id="changing-the-password" />
+
+## 更改密碼
+
+```
+PUT {realm}/users/me/password
+```
+
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "current_password": "...",
+  "new_password": "..."
+}
+```
+
+該呼叫需要一個`elevation_id`，就像其他敏感操作一樣，但任何有效的提升都可以，包括使用TOTP程式碼證明的提升。請求體中的當前密碼本身就是主要證明，因此額外要求已用密碼證明的提升只會讓使用者輸入兩次密碼。透過外部目錄登入的賬戶沒有本地密碼，將返回409。
+
+新密碼會根據域的[密碼策略](/zh-TW/discover/core-concepts/password-policy)進行檢查。控制檯在你輸入過程中會應用相同規則，檢查 `GET {realm}/password-policy/public`，因此錯誤會在提交前顯示，而不是提交後。
+
+<Callout variant="warning" title="其他會話已登出">
+
+成功更改密碼會撤銷賬戶的其他會話，並保留當前會話。這就是密碼更改的預期行為：如果更改密碼的原因是其他人知道了密碼，保留他們的會話將使操作失效。如果你構建了自己的使用者介面，請警告使用者，因為他們的手機被靜默登出會被誤認為是程式錯誤。
+
+</Callout>
+
+<span id="listing-credentials" />
+
+## 列出憑據
+
+```
+GET {realm}/users/me/credentials
+```
+
+返回賬戶已繫結的憑據列表，供介面在提供新增或刪除操作之前展示。每個條目包含 `id`、`credential_type`、`label` 和 `created_at`。型別包括 `password`、`otp`、表示通行金鑰的 `webauthn-public-key-credential`，以及 `recovery-code`；每個尚未使用的[恢復碼](/zh-TW/modules/trident/recovery-codes)各對應一個條目。介面絕不返回敏感憑據內容。通行金鑰只返回後設資料和 ID，該 ID 用於 `DELETE` 操作。
+
+<span id="authenticator-app-totp" />
+
+## 驗證器應用（TOTP）
+
+註冊需要兩次呼叫，因為伺服器在使用者證明他們能夠從中讀取程式碼之前，不應信任使用者已經成功儲存了金鑰資訊。
+
+::::step-group
+:::step{title="開始註冊"}
+```
+POST {realm}/users/me/mfa/otp
+```
+
+主體是 `{ "elevation_id": "..." }`，高權限操作必須進行密碼驗證。響應包含 `secret` 和 `otpauth_uri`，用於渲染成二維碼。FerrisKey 在伺服器上儲存金鑰 10 分鐘，因此確認不會重複使用該金鑰。引數固定為 SHA-1、六位數字和三十秒週期，如 [TOTP](/zh-TW/modules/trident/totp) 所述。
+:::
+
+:::step{title="用程式碼進行確認"}
+```
+PUT {realm}/users/me/mfa/otp
+```
+
+主體是 `{ "elevation_id": "...", "code": "123456", "label": "Alice's phone" }`，`label` 可選。高權限操作必須進行密碼驗證。在此呼叫成功之前，驗證器不啟用，賬戶的登入狀態保持不變，因此放棄註冊不會留下任何痕跡。
+
+待處理的金鑰只能使用一次。無論程式碼是否正確，該呼叫都會消耗它，因此錯誤的程式碼會返回 401，使用者必須重新開始。有效程式碼會替換賬戶中已存在的任何驗證器。
+:::
+
+:::step{title="稍後刪除"}
+```
+DELETE {realm}/users/me/mfa/otp
+```
+
+主體是 `{ "elevation_id": "..." }`。它需要經過密碼驗證的升級。一次性密碼（OTP）程式碼不被接受作為移除 OTP 的證明。
+:::
+::::
+
+<span id="passkeys" />
+
+## 通行金鑰
+
+金鑰註冊遵循 WebAuthn，因此也需要兩次呼叫：瀏覽器需要伺服器的挑戰，伺服器需要瀏覽器返回的認證資訊。
+
+::::step-group
+:::step{title="請求註冊選項"}
+```
+POST {realm}/users/me/passkeys/options
+```
+
+主體是 `{ "elevation_id": "..." }`，並且升級必須經過密碼驗證。返回 `PublicKeyCredentialCreationOptions` 以交給 `navigator.credentials.create()`，排除賬戶已經持有的金鑰。挑戰儲存在伺服器上，存活時間為 5 分鐘，因此不能重放。
+:::
+
+:::step{title="將憑據傳送回去"}
+```
+POST {realm}/users/me/passkeys
+```
+
+請求體是 `{ "elevation_id": "...", "credential": { ... } }`，其中 `credential` 是瀏覽器的響應。提升權限必須經過密碼驗證。伺服器會使用儲存的挑戰，檢查響應是否與之匹配以及是否符合依賴方 ID，然後將通行金鑰附加到賬戶上。過期或缺失的挑戰，或者不匹配的響應，將被拒絕。
+:::
+
+:::step{title="刪除一個"}
+```
+DELETE {realm}/users/me/passkeys/{credential_id}
+```
+
+`credential_id` 來自憑據列表。請求體是 `{ "elevation_id": "..." }`，提升權限必須經過密碼驗證。屬於他人或非通行金鑰的憑據 ID，將返回 404。
+:::
+::::
+
+依賴方 ID 是 Web 應用 URL 的主機名，因此透過一個主機名註冊的通行金鑰無法透過另一個主機名使用。[WebAuthn](/zh-TW/modules/trident/webauthn#where-the-origin-comes-from) 解釋了來源的來源。
+
+<Callout variant="info" title="註冊時不會檢查 passkey_enabled">
+
+`passkey_enabled` 決定登入頁面是否顯示通行金鑰按鈕。在設定關閉的身分域上註冊通行金鑰仍然有效，但登入頁面不會提供使用該金鑰的方式。
+
+</Callout>
+
+<span id="what-a-removal-is-refused-for" />
+
+## 被拒絕移除的原因
+
+當移除認證器或通行金鑰會導致賬戶無法登入時（沒有密碼、沒有其他通行金鑰且沒有聯合身分），返回 409。移除認證器在域或使用者的某個角色有 `require_mfa` 時也會返回 409，因為這會使其必須擁有的第二因素丟失。移除通行金鑰從不會觸發第二條規則，因為只有認證器才能滿足該規則。
+
+<span id="endpoint-summary" />
+
+## 端點摘要
+
+| 方法 | 路徑 | 需要提升權限 |
+|---|---|---|
+| `GET` | `{realm}/users/me` | 無 |
+| `PUT` | `{realm}/users/me` | 無 |
+| `PUT` | `{realm}/users/@me/locale` | 無 |
+| `POST` | `{realm}/users/me/reauthenticate` | 無，它會產生提升權限 |
+| `PUT` | `{realm}/users/me/password` | 任何有效的提升權限，加上正文中的當前密碼 |
+| `GET` | `{realm}/users/me/credentials` | 無 |
+| `POST` | `{realm}/users/me/mfa/otp` | 密碼驗證 |
+| `PUT` | `{realm}/users/me/mfa/otp` | 密碼驗證 |
+| `DELETE` | `{realm}/users/me/mfa/otp` | 密碼驗證 |
+| `POST` | `{realm}/users/me/passkeys/options` | 密碼驗證 |
+| `POST` | `{realm}/users/me/passkeys` | 密碼驗證 |
+| `DELETE` | `{realm}/users/me/passkeys/{credential_id}` | 密碼驗證 |
+| `GET` | `{realm}/users/{user_id}/sessions` | 無，適用於呼叫者自己的ID |
+| `DELETE` | `{realm}/users/{user_id}/sessions/{session_id}` | 無，適用於呼叫者自己的ID |
+
+`/users/me`呼叫不受權限控制。權杖用於識別主體，而主體就是目標。這兩個會話呼叫在呼叫者使用自己ID時無需權限，而呼叫他人ID則需要`manage_users`，如[Account](/zh-TW/modules/account/overview#sessions)所述。
+
+<span id="what-gets-recorded" />
+
+## 什麼被記錄
+
+<Callout variant="warning" title="憑據操作不會記錄在審計日誌中">
+
+自助憑據操作不會記錄[SeaWatch](/zh-TW/modules/seawatch/overview)安全事件。使用者自行更改密碼、註冊驗證器或刪除金鑰時，不會在域的審計日誌中留下記錄，也不會觸發[webhook](/zh-TW/modules/webhooks/overview)
+
+管理操作的等效行為如下：管理員重置密碼會觸發 `password_reset`，而刪除使用者的憑據會觸發 `user.credentials.deleted` webhook。如果今天你需要在審計日誌中進行自助憑據更改，請在你自己的端進行捕獲。在自助服務方面，撤銷會話是例外：它會記錄一個 `session_revoked` 事件。
+
+</Callout>
+
+::::card-group{cols=2}
+:::card{label="密碼策略" icon="lucide:key-round" href="/zh-TW/discover/core-concepts/password-policy"}
+檢查新密碼的規則，以及公開端點。
+:::
+:::card{label="WebAuthn" icon="lucide:fingerprint" href="/zh-TW/modules/trident/webauthn"}
+登入時使用金鑰，而不是註冊時。
+:::
+::::

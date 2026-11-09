@@ -1,0 +1,166 @@
+---
+title: "授权同意"
+description: "FerrisKey 中的同意屏幕：哪些客户端会触发它、已登录用户何时被要求批准权限、决定如何存储，以及拒绝时返回什么。"
+icon: user-check
+order: 22
+---
+
+<span id="consent" />
+
+# 授权同意
+
+同意是已登录用户在 FerrisKey 颁发授权码之前批准客户端将要接收内容的步骤。
+
+FerrisKey 会为你不完全控制的客户端显示该屏幕，例如自行注册的应用程序，以及任何你自己标记的客户端。屏幕仅针对**可选**权限进行询问。默认权限是客户端定义的一部分，因此用户能看到它们的列表，但无法拒绝。
+
+<span id="which-clients-require-consent" />
+
+## 哪些客户端需要同意
+
+| 客户端 | 授权同意 |
+|---|---|
+| 由管理员注册，`consent_required` 是 `false` | 从不。这是默认值 |
+| 由管理员注册，`consent_required` 是 `true` | 当下面的规则说明时 |
+| 由[动态注册或客户端ID元数据文档](/zh-CN/discover/core-concepts/mcp)注册 | 始终，并且该标志无法关闭 |
+
+`consent_required` 只能通过 API 设置，在 `POST /realms/{realm_name}/clients` 或 `PATCH /realms/{realm_name}/clients/{client_id}` 上设置。控制台没有开关。
+
+```json title="PATCH /realms/home/clients/{client_id}"
+{
+  "consent_required": true
+}
+```
+
+<span id="when-the-screen-appears" />
+
+## 当屏幕出现时
+
+该屏幕是授权码流程的一步，在用户已认证且代码尚未签发之前。
+
+| 情况 | 屏幕 |
+|---|---|
+| 客户端不需要用户同意 | 不。所有请求都已批准 |
+| 请求不指定可选作用域，也不包含`prompt=consent` | 没有。只有默认的作用域被授予 |
+| 请求命名为可选作用域，且没有实时存储的决策涵盖所有这些 | 是 |
+| 实时存储的决策涵盖了所有请求的可选作用域 | 不。该决定的作用域已被认可 |
+| 这个请求`prompt=consent` | 是的，即使有存储的决策，即使没有可选的瞄准镜 |
+| 客户端自行注册 | 是的，每次授权申请都会有 |
+
+存储的决策在每个可选作用域之前已被授予或拒绝时涵盖请求。拒绝也会被记住：在决策到期之前，相同的请求不会再次提出，客户端只会获得默认作用域。
+
+`prompt=none` 永远不会显示屏幕。当用户有有效的单点登录 (SSO) 会话并且需要同意时，客户端会被发送回其 `redirect_uri` 并带有 `error=consent_required`。没有会话时，它会得到 `login_required`。
+
+<span id="the-screen" />
+
+## 屏幕
+
+用户登陆门户页面 `/realms/{realm_name}/authentication/consent`。页面显示客户端名称，在“始终授予”下列出默认权限作用域，在“选择共享内容”下列出请求的可选权限作用域，每个权限作用域默认勾选，并显示客户端权限作用域中设置的描述。按钮为 **允许** 和 **拒绝**。
+
+<img class="only-light" src="/dashboard/consent_screen-light.jpg" alt="FerrisKey 同意屏幕标题为“授权访问”，显示请求的应用程序名称，包含一个始终授予列表、一个可选择共享的可选权限列表，以及允许和拒绝按钮。" />
+<img class="only-dark" src="/dashboard/consent_screen-dark.jpg" alt="FerrisKey 同意屏幕标题为“授权访问”，显示请求的应用程序名称，包含一个始终授予列表、一个可选择共享的可选权限列表，以及允许和拒绝按钮。" />
+
+对于自注册的客户端，屏幕还显示“应用程序服务于”及主机名：对于动态注册客户端，为第一个重定向 URI 的主机；对于元数据文档客户端，为 `client_id` URL 的主机。由管理员注册的客户端不显示主机行。
+
+该页面可进行主题化。在门户主题中，它是页面类型 `consent`，在控制台中标记为 **同意**，并且必须包含块 `consent_scopes`、`consent_allow_button` 和 `consent_deny_button`。如果缺少其中任何一个，保存页面或激活主题将失败。请参阅 [门户](/zh-CN/modules/portal/overview) 模块。
+
+设备流程有其自己的批准和拒绝屏幕。这是一个不同的页面和不同的机制，本页面不涵盖该内容。
+
+<span id="the-decision" />
+
+## 决策
+
+选择允许并勾选某些可选权限，将授予这些权限。选择允许并且全部不勾选或选择拒绝，则拒绝客户端请求的可选权限。在这两种情况下，FerrisKey 都会存储该决策。
+
+| 存储内容 | 详情 |
+|---|---|
+| 关键 | 每个身份域中每个用户和客户端只有一个决策。新的决策会替换之前的决策。 |
+| 内容 | 授予的可选权限作用域和被拒绝的权限作用域 |
+| 有效期 | 从创建之时起 30 天 |
+
+通过 API 或控制台无法更改这 30 天。FerrisKey 也不提供列出或撤销已存储决策的接口或控制台页面。
+
+接下来会发生什么取决于选择：
+
+| 选择 | 结果 |
+|---|---|
+| 授予的每个可选权限作用域，或其中的一部分 | 流程继续，客户端收到其授权代码。令牌的权限作用域被限制为已授予的作用域 |
+| 客户端请求的每个可选权限作用域都被拒绝 | 用户被重定向到客户端的 `redirect_uri`，并附带 `error=access_denied`，回显 `state` 并添加 `iss`。不会颁发代码 |
+
+拒绝只会撤销可选的权限作用域。在请求中未指定任何权限的情况下强制显示屏幕没有可拒绝的内容，因此两个按钮都允许继续登录。
+
+<span id="narrowing-the-scope" />
+
+### 缩小权限作用域
+
+当客户端在令牌端点兑换代码时，FerrisKey 会从请求的作用域中删除所有可选权限，除非用户当场同意授予这些权限。默认权限作用域从不被移除。刷新令牌会携带缩小后的权限作用域，因此刷新后的访问令牌也会保留这些作用域。
+
+检查使用的是兑换时的决策。在屏幕显示和令牌请求之间过期的决定会导致可选权限被排除。
+
+<span id="every-way-of-signing-in" />
+
+## 所有登录方式
+
+授权检查在任何可以完成登录的地方都会运行，而不仅仅是在密码表单上：
+
+- 密码、一次性代码、恢复代码、魔法链接和安全密钥登录；
+- 密码重置结束，以及授权请求中的自助注册；
+- 恢复现有的 SSO 会话；
+- 从外部身份提供者返回。
+
+自 0.9.0 版本起存在同意功能。在 0.10.0 之前的版本并未在所有这些路径上应用它，因此如果你在密码表单以外依赖此功能，请使用 0.10.0 或更高版本。
+
+<span id="the-consent-endpoints" />
+
+## 同意端点
+
+门户驱动两个端点。如果你构建自己的同意页面，则仅在需要时使用它们。
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/auth/consent?consent_token=...` | 屏幕显示内容 |
+| `POST` | `/realms/{realm_name}/auth/consent` | 提交决策 |
+
+`consent_token` 会出现在门户网址中。它只能使用一次，会在授权请求后过期，并且只能从发起请求的浏览器使用：调用必须携带该请求的 `FERRISKEY_SESSION` Cookie。未知、已使用或已过期的令牌，或不匹配的 Cookie，将返回 `404`。
+
+```json title="GET response"
+{
+  "client_name": "Reports app",
+  "client_uri_host": "reports.example.com",
+  "granted_by_default": [
+    { "name": "openid", "description": null },
+    { "name": "profile", "description": null }
+  ],
+  "awaiting_decision": [
+    { "name": "reports:read", "description": "Read your reports" }
+  ]
+}
+```
+
+```json title="POST body"
+{
+  "consent_token": "...",
+  "approved_scopes": ["reports:read"]
+}
+```
+
+```json title="POST response"
+{
+  "redirect_url": "https://reports.example.com/callback?code=...&state=...&iss=https%3A%2F%2Fsso.example.com%2Frealms%2Fhome"
+}
+```
+
+空的 `approved_scopes` 表示拒绝。浏览器会跟随 `redirect_url`，该 `redirect_url` 指向带有代码的客户端，或者带有 `error=access_denied`。当该决策开启 SSO 会话时，响应也会设置 SSO Cookie。
+
+同意决策不会写入 [SeaWatch](/zh-CN/modules/seawatch/overview) 或 [Compass](/zh-CN/modules/compass/overview)。
+
+::::card-group{cols=3}
+:::card{label="客户端作用域" icon="lucide:scan" href="/zh-CN/discover/core-concepts/client-scopes"}
+默认和可选权限作用域，以及每个作用域在令牌中包含的内容。
+:::
+:::card{label="门户" icon="lucide:layout-template" href="/zh-CN/modules/portal/overview"}
+主题和页面，包括同意页面。
+:::
+:::card{label="MCP 和动态客户端注册" icon="lucide:plug" href="/zh-CN/discover/core-concepts/mcp"}
+始终会通过同意屏幕的客户端。
+:::
+::::

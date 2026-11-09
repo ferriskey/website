@@ -1,0 +1,122 @@
+---
+title: "身分認證"
+description: "FerrisKey Terraform 提供程式如何登入：密碼和客戶端憑據授權、環境變數、TLS、權杖重新整理和重試。"
+icon: key-round
+order: 3
+---
+
+<span id="authentication" />
+
+# 身分認證
+
+該提供程式從一個身分域的權杖端點獲取存取權杖，身分域為 `{url}/realms/{realm}/protocol/openid-connect/token`，並在每次 API 呼叫中將其作為承載權杖傳送。權杖允許的操作取決於已登入使用者或客戶端服務賬戶的角色允許的操作。請參閱 [角色和權限](/zh-TW/discover/core-concepts/roles)。
+
+<span id="choosing-the-grant" />
+
+## 選擇授權型別
+
+提供程式從其找到的憑據中選擇授權型別：
+
+| 已設定的憑據 | 授權 | 用於 |
+|---|---|---|
+| `client_id`, `client_secret` | `client_credentials` | 日常使用：CI、流水線、工作站 |
+| `client_id`, `username`, `password` | `password` | 一次性，用於 [引導](/zh-TW/terraform/getting-started) 服務賬戶 |
+
+同時設定 `password` 和 `client_secret` 是錯誤的，不設定也同樣錯誤。密碼授權不會傳送任何金鑰，因此其 `client_id` 必須是啟用了 **直接存取授權** 的公共客戶端。客戶端憑據授權需要具有 `service_account_enabled` 的機密客戶端。
+
+密碼授權已被 [棄用](/zh-TW/discover/core-concepts/authentication#password-resource-owner)，對於有必需操作未完成的管理員，或者使用通行金鑰或聯合身分提供者登入的管理員，會失敗。保留它用於初始化。
+
+<span id="provider-arguments" />
+
+## 提供者引數
+
+| 引數 | 環境變數 | 說明 |
+|---|---|---|
+| `url` | `FERRISKEY_URL` | API 的基本 URL，不帶 `/realms` 字尾。必填 |
+| `realm` | `FERRISKEY_REALM` | 提供者登入的身分域，通常是 `master`。必填 |
+| `client_id` | `FERRISKEY_CLIENT_ID` | 請求權杖的客戶端。必填 |
+| `client_secret` | `FERRISKEY_CLIENT_SECRET` | 選擇客戶端憑據授權。敏感 |
+| `username` | `FERRISKEY_USERNAME` | 密碼授權的使用者 |
+| `password` | `FERRISKEY_PASSWORD` | 選擇密碼授權。敏感 |
+| `scope` | `FERRISKEY_SCOPE` | 隨權杖請求傳送的作用域。可選 |
+| `ca_cert` | `FERRISKEY_CA_CERT` | 用於信任的 PEM 證書或證書包，適用於私有 CA 後面的例項 |
+| `tls_insecure_skip_verify` | `FERRISKEY_TLS_INSECURE` | 跳過證書驗證。僅用於開發 |
+
+在配置中設定的引數優先於環境變數。
+
+`url` 是 API 響應的位置，而不是控制檯的位置。使用 Helm Chart時，API 預設在 `api.server.rootPath`、`/api` 下提供服務，因此 `url` 是 `https://auth.example.com/api`。本地伺服器在埠 3333 上啟動且沒有根路徑時是 `http://localhost:3333`。
+
+`realm` 只是提供者登入的位置。資源命名它們自己的域，因此一個登入到 `master` 的提供者可以管理例項的每個域。
+
+<span id="environment-variables" />
+
+## 環境變數
+
+將憑據儲存在 `.tf` 檔案之外。CI 作業設定變數，provider 塊只列出不涉及金鑰的部分：
+
+```hcl
+provider "ferriskey" {
+  url       = "https://auth.example.com/api"
+  realm     = "master"
+  client_id = "terraform-runner"
+}
+```
+
+```bash
+export FERRISKEY_CLIENT_SECRET='<secret>'
+terraform plan
+```
+
+整個 provider 塊可以從環境中獲取，這種情況下 `provider "ferriskey" {}` 就足夠了。
+
+<span id="several-instances" />
+
+## 多個例項
+
+每個例項使用一個別名，並將別名傳遞給屬於它的資源：
+
+```hcl
+provider "ferriskey" {
+  alias         = "staging"
+  url           = "https://auth.staging.example.com/api"
+  realm         = "master"
+  client_id     = "terraform-runner"
+  client_secret = var.staging_runner_secret
+}
+
+resource "ferriskey_realm" "acme_staging" {
+  provider = ferriskey.staging
+  name     = "acme"
+}
+```
+
+## TLS
+
+對於證書來自私有 CA 的例項，傳遞該 CA：
+
+```hcl
+provider "ferriskey" {
+  url     = "https://auth.internal.example/api"
+  realm   = "master"
+  ca_cert = file("${path.module}/ca.pem")
+}
+```
+
+`tls_insecure_skip_verify = true` 會關閉驗證。它會將客戶端金鑰傳送給響應者，因此僅在針對自簽名證書的本地例項時使用。
+
+<span id="tokens-and-retries" />
+
+## 權杖和重試
+
+提供者在第一次 API 呼叫時請求一個權杖，保留它，並在過期前不久獲得一個新的權杖：有重新整理權杖時使用，否則使用新的授權。`401`會讓它丟棄權杖並重試一次呼叫。長 `apply` 不需要更長的權杖壽命。
+
+限速和失敗的通話最多可重試三次，並實現指數式退回，以遵守`Retry-After`：
+
+| 失敗 | 重新審判 |
+|---|---|
+| `429 Too Many Requests` | 每種方法 |
+| `5xx`，連線錯誤 | `GET`、`HEAD`、`PUT`和`DELETE` |
+
+`5xx`失敗的`POST`或`PATCH`不會重試，因為該更改可能已被應用。執行`terraform plan`檢視伺服器狀態，然後再次應用。
+
+設定`TF_LOG=DEBUG`在輸出中看到權杖請求和重試。

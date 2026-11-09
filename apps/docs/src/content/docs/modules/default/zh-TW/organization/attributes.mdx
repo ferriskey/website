@@ -1,0 +1,107 @@
+---
+title: "屬性"
+description: "FerrisKey 組織的自定義鍵值後設資料。"
+icon: tags
+order: 83
+---
+
+<span id="attributes" />
+
+# 屬性
+
+屬性是掛在組織上的鍵值對。它們儲存屬於客戶記錄、訂閱等級、外部系統 ID、功能標誌的業務資料，而無需任何人擴充套件核心模式。
+
+群組也攜帶屬性，形態相同，插入更新語義相同，在 `/groups/{group_id}/attributes` 下。參見 [Groups](/zh-TW/modules/organization/groups#attributes)。
+
+<span id="attribute-endpoints" />
+
+## 屬性端點
+
+| 方法 | 端點 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/attributes` | 列出一個組織的所有屬性 |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | 透過鍵更新或插入屬性 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/attributes/{key}` | 透過鍵刪除屬性。響應 `204`，包括鍵不存在時也返回該響應 |
+
+列出操作需要 `view_organizations`、`manage_organizations` 或 `manage_realm`。更新插入和刪除操作需要 `manage_organizations` 或 `manage_realm`。
+
+<span id="upsert-semantics" />
+
+## 更新插入語義
+
+`PUT` 根據鍵進行更新插入。已有鍵的值會被覆蓋；新鍵會被建立。沒有單獨的建立端點。響應是該屬性。
+
+```json title="PUT /realms/acme/organizations/{org_id}/attributes/plan"
+{
+  "value": "enterprise"
+}
+```
+
+鍵來自路徑，值來自請求體。兩者都是必需的，FerrisKey 會去掉它們周圍的空白字元。空值或缺失值將被拒絕。
+
+<span id="attribute-fields" />
+
+## 屬性欄位
+
+| 欄位 | 型別 | 約束條件 | 說明 |
+|---|---|---|---|
+| `id` | UUID v7 | 已生成 | 識別符號 |
+| `organization_id` | UUID | 已生成 | 該屬性所屬的組織 |
+| `key` | 字串 | 1 到 255 個字元，必填 | 屬性名稱 |
+| `value` | 字串 | 必填 | 屬性值 |
+| `created_at` | 日期時間（UTC） | 已生成 | 在第一次插入或更新時設定，覆蓋時保持不變 |
+
+<span id="several-attributes-at-once" />
+
+## 一次多個屬性
+
+一個典型的組織可能有多個屬性。該列表以 `data` 陣列的物件形式返回：
+
+```json title="GET /realms/acme/organizations/{org_id}/attributes"
+{
+  "data": [
+    {
+      "id": "01936b2e-aaaa-7000-abcd-000000000001",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "plan",
+      "value": "enterprise",
+      "created_at": "2026-01-15T09:00:00Z"
+    },
+    {
+      "id": "01936b2e-bbbb-7000-abcd-000000000002",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "stripe_customer_id",
+      "value": "cus_Qx8mN2kLpR4t",
+      "created_at": "2026-01-15T09:01:00Z"
+    },
+    {
+      "id": "01936b2e-cccc-7000-abcd-000000000003",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "key": "feature_advanced_reporting",
+      "value": "true",
+      "created_at": "2026-03-01T14:30:00Z"
+    }
+  ]
+}
+```
+
+列表未分頁。
+
+<span id="real-world-uses" />
+
+## 實際應用
+
+| 鍵模式 | 示例值 | 使用場景 |
+|---|---|---|
+| `plan` | `free`, `pro`, `enterprise` | 按訂閱等級控制功能存取 |
+| `stripe_customer_id` | `cus_Qx8mN2kLpR4t` | 關聯到計費提供商 |
+| `salesforce_account_id` | `001Dn00000KjlHSIAZ` | 關聯到 CRM 記錄 |
+| `feature_<name>` | `true` / `false` | 每個組織的功能標誌 |
+| `max_seats` | `50` | 在應用邏輯中強制執行座位限制 |
+| `onboarded_at` | `2026-01-15` | 跟蹤入職完成情況 |
+
+<Callout variant="warning" title="值始終為字串">
+
+屬性只儲存字串。數值 (`50`)、布林值 (`true`) 和日期 (`2026-01-15`) 都以其字串表示形式儲存。您的應用程式負責將它們解析回適當的型別。
+
+</Callout>

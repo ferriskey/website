@@ -59,6 +59,9 @@ const thumbnailUrl = Astro.site ? new URL(thumbnailPath, Astro.site).toString() 
     </script>
   </head>
   <body class="min-h-screen antialiased flex flex-col">
+    <script>
+      import '../i18n/client'
+    </script>
     <slot />
   </body>
 </html>

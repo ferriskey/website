@@ -1,0 +1,284 @@
+---
+title: "入门"
+description: "几分钟内用 Docker 部署 FerrisKey，并认证你的第一个用户。"
+icon: rocket
+order: 2
+---
+
+<span id="getting-started" />
+
+# 入门
+
+本指南将带你从无到有，建立一个有认证用户的 FerrisKey 实例。你将启动 Docker 栈，创建身份域，注册客户端，创建用户，并请求令牌。
+
+<span id="prerequisites" />
+
+## 先决条件
+
+- [Docker](https://docs.docker.com/get-docker/)和[Docker Compose](https://docs.docker.com/compose/install/)已安装
+- 终端和网页浏览器
+- 可用的端口`3333`（API）、`5555`（UI）和`5432`（PostgreSQL）
+
+<span id="deploy-ferriskey" />
+
+## 部署FerrisKey
+
+::::step-group
+:::step{title="开始堆叠"}
+克隆仓库并启动所有服务：
+
+```bash
+git clone https://github.com/ferriskey/ferriskey.git
+cd ferriskey
+docker compose --profile registry up -d
+```
+
+这将启动 PostgreSQL、FerrisKey API 服务器、数据库迁移和管理控制台。`registry` 配置文件拉取已发布的镜像。而 `build` 配置文件则从您的检出版本构建相同的服务。
+:::
+
+:::step{title="验证部署"}
+等待几秒钟以完成迁移，然后检查所有服务是否健康：
+
+```bash
+docker compose --profile registry ps
+```
+
+API 可通过 `http://localhost:3333` 访问，UI 可通过 `http://localhost:5555` 访问。
+:::
+
+:::step{title="登录管理控制台"}
+在浏览器中打开 `http://localhost:5555` 并使用默认凭据登录：
+
+- **用户名：** `admin`
+- **密码：** `admin`
+
+您将进入 `master` 域，这是管理所有其他域的内置域。
+:::
+::::
+
+:::callout{variant="warning" title="更改默认凭据"}
+默认的管理员凭据仅用于本地开发。在任何其他环境中，请在第一次启动前设置 `ADMIN_USERNAME`、`ADMIN_PASSWORD` 和 `ADMIN_EMAIL`。FerrisKey 仅在管理员用户没有密码时应用该密码，因此在已经运行过的部署上，请改为在控制台中更改密码。
+:::
+
+<span id="deploy-without-cloning-the-repository" />
+
+## 部署而不克隆仓库
+
+上面的快速开始会克隆仓库，但运行 FerrisKey 不需要源码。API、Web 应用和数据库迁移都以已发布的镜像形式提供在 `ghcr.io/ferriskey` 上。要在服务器上部署，请将以下内容保存为 `docker-compose.yml` 并直接启动，无需执行 checkout：
+
+```yaml title="docker-compose.yml"
+services:
+  db:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: ferriskey
+      POSTGRES_USER: ferriskey
+      POSTGRES_PASSWORD: ferriskey
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ferriskey"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  db-migrations:
+    image: ghcr.io/ferriskey/ferriskey-api
+    entrypoint: ["sqlx"]
+    command: ["migrate", "run", "--source", "/usr/local/src/ferriskey/migrations"]
+    environment:
+      DATABASE_URL: postgresql://ferriskey:ferriskey@db/ferriskey
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/ferriskey/ferriskey-api
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5555
+      WEBAPP_URL: http://localhost:5555
+      DATABASE_HOST: db
+      DATABASE_NAME: ferriskey
+      DATABASE_USER: ferriskey
+      DATABASE_PASSWORD: ferriskey
+    ports:
+      - 3333:3333
+    depends_on:
+      db-migrations:
+        condition: service_completed_successfully
+
+  webapp:
+    image: ghcr.io/ferriskey/ferriskey-webapp
+    environment:
+      API_URL: http://localhost:3333
+    ports:
+      - 5555:80
+
+volumes:
+  pgdata:
+    name: ferriskey_pgdata
+```
+
+然后启动堆栈：
+
+```bash
+docker compose up -d
+```
+
+迁移文件已经嵌入到 `ferriskey-api` 镜像中（位于 `/usr/local/src/ferriskey/migrations` 下），因此 `db-migrations` 服务可以在没有任何签出源代码的情况下应用模式。这些是仓库的 `registry` 配置文件使用的相同镜像，提取为一个自包含文件，你可以将其放到任何主机上或转换为 Docker Swarm 堆栈。
+
+:::callout{variant="info" title="为生产环境固定版本"}
+上述镜像跟踪 `latest` 标签。为了实现可重复部署，请在 `api`、`db-migrations` 和 `webapp` 服务上固定明确的标签，例如 `ghcr.io/ferriskey/ferriskey-api:0.10.0`。标签不带任何 `v` 前缀。像 `0.10` 这样的标签对应于该次要版本的补丁发布。在 `api` 和 `db-migrations` 上使用相同标签，可以保持二进制文件和模式同步。
+:::
+
+<span id="upgrading-ferriskey" />
+
+## 升级 FerrisKey
+
+模式更改随 API 镜像一起发布，因此升级运行中的堆栈意味着拉取、迁移、重启。
+
+::::step-group
+:::step{title="拉取新的镜像"}
+```bash
+docker compose pull
+```
+:::
+
+:::step{title="应用新的迁移"}
+`db-migrations` 服务运行 `sqlx migrate run`，它只会应用尚未运行的迁移，因此每次升级都是安全的：
+
+```bash
+docker compose up -d db-migrations
+```
+:::
+
+:::step{title="重启应用程序"}
+迁移完成后，在新镜像上重新创建 API 和 Web 应用程序：
+
+```bash
+docker compose up -d api webapp
+```
+:::
+::::
+
+`sqlx migrate run` 处理模式。然后，API 在模式就位后每次启动时都会运行自己的数据迁移：它按版本顺序应用待处理的迁移，记录每个迁移，并记录以确保不会重复运行。如果某个迁移失败，API 会与 `Migration v<N> '<name>' failed: <reason>` 一起停止并不会启动。修复原因后再次启动，它会从失败的迁移处继续。
+
+:::callout{variant="warning" title="保持 API 与迁移在同一标签上"}
+始终从相同的镜像标签中拉取 `api` 和 `db-migrations` 服务。将较新的 API 与较旧的模式配合使用，或将较旧的 API 与较新的模式配合使用，可能在启动时失败。
+:::
+
+<span id="create-your-first-realm" />
+
+## 创建您的第一个身份域
+
+身份域是一个隔离的租户。用户、客户端、角色和凭据都存在于身份域内。
+
+::::step-group
+:::step{title="创建身份域"}
+点击顶部栏中 FerrisKey 标志旁的身份域名称，然后点击 **创建身份域**。在 **名称** 中输入 `my-app`，然后点击 **创建身份域**。
+
+名称会显示在 URL 和令牌中，之后无法更改。它可以包含字母、数字、连字符和下划线。
+:::
+
+:::step{title="在新身份域中工作"}
+身份域一旦创建，控制台会立即打开新身份域。所有后续操作均在该身份域内进行。要稍后返回该身份域，在相同的选择器中选择 `my-app`。
+:::
+::::
+
+<span id="register-a-client" />
+
+## 注册客户端
+
+客户端代表使用 FerrisKey 进行身份认证的应用程序。
+
+::::step-group
+:::step{title="创建客户端"}
+在侧边栏中，点击 **Clients（客户端）**，然后 **New client（新建客户端）**。选择 **OpenID Connect** 并填写：
+
+- **Client ID（客户端 ID）：** `my-frontend`
+- **Name（名称）：** `my-frontend`
+- **Client authentication（客户端认证）：** `Public`（适用于单页应用）
+
+协议以及公有与保密的选择在创建后无法更改。
+:::
+
+:::step{title="启用直接访问授权"}
+如果你想通过 API（密码授权）直接测试身份认证，请在 **Capability config（功能配置）** 部分开启 **Direct access grants（直接访问授权）**。
+:::
+
+:::step{title="保存客户端"}
+点击 **创建客户端**。重定向 URI 不在此表单中填写。你可以在客户端的 **设置** 标签下的 **访问** 中添加它们，当你连接一个真实应用程序时。下面的密码授权不使用它们。
+:::
+::::
+
+<span id="create-a-user" />
+
+## 创建用户
+
+::::step-group
+:::step{title="创建用户"}
+在侧边栏中，点击 **用户**，然后点击 **新建用户**。填写：
+
+- **用户名：** `alice`
+- **名字和姓氏：** `Alice` 和 `Smith`
+- **电子邮件：** `alice@example.com`
+
+点击 **创建用户**。账户创建后没有任何凭据。
+:::
+
+:::step{title="设置密码"}
+打开用户的 **凭据** 标签，选择 **设置密码**。在 **有效性** 下选择 **永久**，除非你希望在首次登录时强制更改密码，然后输入 **新密码**，确认后点击 **设置密码**。
+:::
+::::
+
+<span id="authenticate" />
+
+## 认证
+
+启用直接访问权限后，您可以直接从 API 请求令牌：
+
+```bash title="Obtain tokens via password grant"
+curl -X POST http://localhost:3333/realms/my-app/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=my-frontend" \
+  -d "username=alice" \
+  -d "password=your-password"
+```
+
+包含 `access_token`、`refresh_token`，并可选地包含 `id_token` 的响应表示用户已通过身份认证。
+
+:::callout{variant="info" title="管理 API 的令牌"}
+管理一个身份域的路由（用户、客户端、角色及其余管理员 API）检查的不仅仅是签名和调用者的权限。令牌必须在其 `aud` 声明中携带 `<realm>-realm`，其中 `<realm>` 是签发它的身份域，并且其 `azp` 声明必须指定一个已启用且由管理员创建的客户端。
+
+任何未通过任一检查的令牌都会返回 401。这包括为资源服务器请求的令牌（`resource` 参数替代受众）以及通过动态注册或客户端元数据文档注册的客户端发放的令牌。
+:::
+
+<span id="connect-a-real-application" />
+
+## 连接真实应用程序
+
+上面的密码授权适合快速的 API 测试，仅此而已：它已被[弃用](/zh-CN/discover/core-concepts/authentication)。真实应用程序使用基于浏览器的 SSO 和授权码流程，而 CLI 使用设备码授权。
+
+要连接仪表板、内部服务或自托管工具，请按照接下来的应用程序 SSO 指南操作。指南会讲解哪些控制台界面需要使用、复制哪些值，以及如何调试常见的设置错误。
+
+<span id="whats-next" />
+
+## 接下来做什么
+
+::::card-group{cols=2}
+:::card{label="核心概念" icon="lucide:layers" href="/zh-CN/discover/core-concepts/realms"}
+深入了解 realms、clients、users、roles 和 tokens。
+:::
+:::card{label="连接应用程序" icon="lucide:plug" href="/zh-CN/discover/guides/application-sso"}
+使用 FerrisKey 仪表板为应用程序设置 OpenID Connect SSO。
+:::
+:::card{label="配置" icon="lucide:settings" href="/zh-CN/discover/guides/configuration"}
+每个环境变量，以及默认值和 API 在启动时进行的检查。
+:::
+:::card{label="静态存储密钥" icon="lucide:lock" href="/zh-CN/discover/guides/secrets-at-rest"}
+在数据库中加密身份域签名密钥、TOTP 种子和 SMTP 密码。
+:::
+::::

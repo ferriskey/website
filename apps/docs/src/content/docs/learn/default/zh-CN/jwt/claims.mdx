@@ -1,0 +1,134 @@
+---
+title: "JWT 声明"
+description: "标准声明、OIDC 声明，以及如何安全地添加自定义声明。"
+icon: list-checks
+order: 3
+---
+
+<span id="jwt-claims" />
+
+# JWT 声明
+
+声明是 JWT 有效载荷中的键值对。有些声明在各处都有约定的含义。其他的则是你的应用自定义的。知道哪些是哪些能够保持令牌的可移植性。
+
+<span id="registered-claims-rfc-7519" />
+
+## 注册声明（RFC 7519）
+
+核心 JWT 规范中定义了七个声明。它们故意简短；JWT 本身很小。
+
+| 声明 | 含义 |
+| --- | --- |
+| `iss` | 签发者。生成该令牌的实体的 URL。 |
+| `sub` | 主题。令牌所涉及的主体。对于用户来说，这是他们的稳定 ID。 |
+| `aud` | 受众。预期接收者。可以是字符串或字符串数组。 |
+| `exp` | 过期时间。Unix 时间戳。过期后拒绝。 |
+| `nbf` | 生效时间。Unix 时间戳。如果当前时间早于此时间则拒绝。 |
+| `iat` | 签发时间。Unix 时间戳。 |
+| `jti` | JWT ID。唯一标识符，有助于撤销列表管理。 |
+
+在接收到的令牌上始终检查 `exp`、`nbf`、`iss` 和 `aud`。跳过其中任何一个都是已知的错误类型，但人们仍然不断发布。
+
+<span id="oidc-standard-claims" />
+
+## OIDC 标准声明
+
+OIDC 为用户身份增加了一个词汇表：
+
+<span id="identity" />
+
+### 身份
+- `name`, `given_name`, `family_name`, `middle_name`, `nickname`
+- `preferred_username`
+- `profile`, `picture`, `website`
+- `gender`, `birthdate`
+- `zoneinfo`, `locale`
+- `updated_at`
+
+<span id="contact" />
+
+### 联系方式
+- `email`, `email_verified`
+- `phone_number`, `phone_number_verified`
+- `address`（结构化声明）
+
+<span id="authentication-context" />
+
+### 认证上下文
+- `auth_time`：用户实际登录的时间
+- `nonce`：重放保护（仅限 ID 令牌）
+- `acr`，`amr`：使用的认证上下文类别和方法
+
+这些信息会在 ID 令牌中返回，并在 `/userinfo` 中根据客户端请求进行范围限定（`profile`、`email` 等）。
+
+<span id="oauth2-access-token-claims" />
+
+## OAuth2 访问令牌声明
+
+碰巧是 JWT 的访问令牌（常见情况）通常会包含：
+
+- `scope`：以空格分隔的已授予作用域列表
+- `client_id`：请求令牌的客户端
+- `sub`：用户，或对于 `client_credentials` 是客户端自身
+- `roles` / `realm_access` / `resource_access`：特定于提供者的角色声明
+
+这些在所有提供者之间并不统一，但它们非常常见。
+
+<span id="custom-claims" />
+
+## 自定义声明
+
+你可以添加你自己的。两个经验法则：
+
+**为其命名空间。** 一个名为 `tenant_id` 的平面声明在你的应用中今天可以正常工作。但明天你导入的库添加了自己的 `tenant_id`，含义就会冲突。为自定义声明加上 URL 或反转域字符串前缀：
+
+```json
+{
+  "https://example.com/tenant_id": "acme",
+  "https://example.com/feature_flags": ["beta-search"]
+}
+```
+
+这是非标准声明的 [OIDC 约定](https://openid.net/specs/openid-connect-core-1_0.html#AdditionalClaims)，可以避免与注册名称冲突。
+
+**保持它们小巧。** 每个声明都会随带有令牌的每个 HTTP 请求发送。一个 4 KB 的 Cookie 头是真正的开销。如果某个值很大或很少需要，请通过 `/userinfo` 来访问。
+
+<span id="audience-aud-deserves-a-section" />
+
+## 主题（`aud`）值得单独说明
+
+`aud` 是最容易被误解的标准声明。它说明了这个令牌是给谁的。
+
+- ID 令牌的 `aud` 是客户端 ID。客户端检查 `aud == my_client_id`。
+- 访问令牌的 `aud` 是资源服务器。API 检查 `aud` 是否与其标识符匹配。
+
+如果你有多个 API，每个 API 都应验证传入令牌是否是**为其**生成的。否则，为 `api-A` 发出的令牌可以在 `api-B` 上重放。这是 ID 令牌作为承载令牌攻击所利用的失败模式。
+
+<span id="a-practical-validation-checklist" />
+
+## 一个实用的验证检查清单
+
+对于任何传入的 JWT：
+
+1. ✅ 签名与预期密钥核验通过。
+2. ✅ `alg` 在你的允许列表中（绝不使用 `none`）。
+3. ✅ `iss` 与预期的签发者匹配。
+4. ✅ `aud` 包含你的标识符。
+5. ✅ `exp` 时间在将来。
+6. ✅ `nbf`（如果存在）时间在过去。
+7. ✅ 类型特定检查：`nonce`（ID 令牌）、`scope`（访问令牌）等。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 允许您通过客户端和作用域上的 **协议映射器** 控制令牌中显示的声明。您可以附加标准 OIDC 声明，添加自定义声明，并配置它们的生命周期。
+
+::::card-group{cols=2}
+:::card{label="保护模块" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+FerrisKey 中的协议映射器和作用域配置。
+:::
+:::card{label="ID 令牌" icon="lucide:id-card" href="/zh-CN/learn/oidc/id-token"}
+哪些 OIDC 声明位于 ID 令牌中。
+:::
+::::

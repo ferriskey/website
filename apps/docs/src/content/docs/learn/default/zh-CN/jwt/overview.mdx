@@ -1,0 +1,109 @@
+---
+title: "什么是 JWT？"
+description: "一种紧凑的、已签名的令牌格式，用于携带关于身份的可验证声明。"
+icon: file-code-2
+order: 1
+---
+
+<span id="what-is-a-jwt" />
+
+# 什么是 JWT？
+
+JSON Web 令牌（JWT，通常读作“jot”）是一种紧凑且 URL 安全的方式，用于在双方之间传递已签名的声明。如果您拥有签发者的公钥，就可以自行验证 JWT，无需网络调用。
+
+JWT不是一种协议。它们是一种格式。OAuth2和OIDC恰好使用它们，但它们在许多其他地方也会出现。
+
+<span id="what-signed-means-here" />
+
+## 这里的“签名”是什么意思
+
+签发者对令牌进行签名。任何拥有签发者公钥的人都可以验证签名。如果验证通过，你可以知道两件事：
+
+1. 声明是由持有私钥的人（即签发者）生成的。
+2. 令牌自生成以来没有被篡改。
+
+这足以在令牌有效期间相信声明的表面值。
+
+<span id="a-jwt-in-the-wild" />
+
+## 实际中的JWT
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OD
+kwIiwibmFtZSI6IkFsaWNlIiwiaWF0IjoxNzM2Mzc2NDAwfQ.SfXPyZbR2X4
+...
+```
+
+由三部分Base64URL编码后用点连接：
+
+```
+header.payload.signature
+```
+
+前两部分是JSON。签名是二进制的，用Base64URL编码。
+
+<span id="why-jwts-are-everywhere" />
+
+## 为什么JWT无处不在
+
+两个特性起了决定性作用。JWT 是自包含的：接收方需要的所有信息都在令牌中。而且它们无需数据库查找便可验证，因为单靠加密就能证明信任。RFC 7519 确定了格式，现在几乎每种语言都有对应的库。
+
+对于高流量的 API，无状态性是关键特性。每秒一百万个请求都可以在本地进行认证，无需共享会话存储来限制任何人。
+
+<span id="what-jwts-are-not" />
+
+## JWT 不是什么
+
+- 默认不加密。JWT 的负载只是 Base64URL 编码。任何人都可以解码并读取它。除非你也使用 JWE（加密 JWT），否则不要在 JWT 中放置密钥信息。
+- 不是会话 Cookie。JWT 不能被“销毁”。它在 `exp` 之前都是有效的。根据你的需求，将其视为特性（无状态）或缺点（无法立即撤销）。
+- 不是权限系统。JWT 携带声明。这些声明的意义由资源服务器决定。授权决策仍然属于您的应用程序代码。
+
+<span id="jwt-vs-opaque-tokens" />
+
+## JWT 与不透明令牌
+
+简短对比：
+
+| | JWT | 不透明令牌 |
+| --- | --- | --- |
+| 格式 | Base64URL 编码的 JSON | 随机字符串 |
+| 验证方式 | 本地验证签名 | 调用 introspection 端点 |
+| 在过期前可撤销？ | 不可以（没有额外机制） | 是 |
+| 携带声明 | 是的，任何人都可以读取 | 不可以，仅服务器端可读 |
+| 每次验证的网络调用 | 0 | 1 |
+
+大多数 OIDC 提供商，包括 FerrisKey，默认都会颁发 JWT。
+
+<span id="a-mental-model" />
+
+## 一个思维模型
+
+JWT 是贴在声明上的防篡改标签。你可以透过这个标签读取声明（没有加密）。你不能撕下并重新贴上它（签名会失效）。而且标签上印有过期日期。
+
+<span id="where-to-read-next" />
+
+## 接下来阅读的内容
+
+::::card-group{cols=2}
+:::card{label="结构解析" icon="lucide:scan-text" href="/zh-CN/learn/jwt/anatomy"}
+头部、负载、签名，字段逐项解析。
+:::
+:::card{label="声明" icon="lucide:list-checks" href="/zh-CN/learn/jwt/claims"}
+标准声明与自定义声明，以及如何使用它们。
+:::
+::::
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 将 JWT 作为访问令牌和身份令牌发布。每个身份域的签名密钥都在该身份域发现文档中列出的 JWKS 端点公开。
+
+::::card-group{cols=2}
+:::card{label="访问令牌" icon="lucide:key" href="/zh-CN/learn/oauth2/tokens"}
+JWT 最常见的作用。
+:::
+:::card{label="保护模块" icon="lucide:lock" href="/zh-CN/modules/aegis/overview"}
+决定 FerrisKey 签发的 JWT 中出现哪些声明。
+:::
+::::

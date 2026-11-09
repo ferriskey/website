@@ -1,0 +1,79 @@
+---
+title: "本地化"
+description: "FerrisKey 控制檯和登入頁面使用哪些語言，儲存位置，以及會話語言的選擇方式。"
+icon: languages
+order: 29
+---
+
+<span id="localization" />
+
+# 本地化
+
+主機和預設登入頁面支援兩種語言：英文（`en`）和簡體中文（簡體中文`zh-CN`）。
+
+<img class="only-light" src="/dashboard/console_zh_cn-light.jpg" alt="FerrisKey 使用者頁面介面為簡體中文：側邊欄、標題和表格標題已翻譯，賬戶名稱保持原儲存狀態" />
+<img class="only-dark" src="/dashboard/console_zh_cn-dark.jpg" alt="FerrisKey 使用者頁面介面為簡體中文：側邊欄、標題和表格標題已翻譯，賬戶名稱保持原儲存狀態" />
+
+被翻譯的是介面。來自您的資料的文字，例如賬戶名稱、客戶端名稱和域顯示名稱，按照儲存狀態顯示，電子郵件構建器的拖放引擎未被翻譯。控制檯透過查詢其[原因程式碼](/zh-TW/discover/guides/api-errors)顯示所選語言的 API 錯誤，而不是顯示英文 `message`。電子郵件未被翻譯：參見[電子郵件與模板](/zh-TW/discover/guides/email#language)。
+
+<span id="where-a-locale-lives" />
+
+## 語言環境所在位置
+
+一個區域設定是一個帶有兩個字母的語言標籤，可選擇性地跟一個連字元和兩個字母的地區程式碼：`en`, `zh-CN`。FerrisKey 用小寫字母表示語言，用大寫字母表示地區，所以 `zh-cn` 被儲存為 `zh-CN`。其他任何內容，例如 `zh-Hans`，都被拒絕，因為格式錯誤。
+
+| 其中 | 欄位 | 預設 |
+|---|---|---|
+| 身分域 | `default_locale` | `en` |
+| 身分域 | `supported_locales` | `["en"]` |
+| 使用者 | `locale` | `null`，意味著由身分域決定 |
+
+一個僅列出 `en` 的身分域僅提供英語。要在其登入頁面提供中文，請將 `zh-CN` 新增到列表中。控制檯沒有用於這兩個設定的介面，因此透過 API 進行設定：
+
+```json title="PUT /realms/{realm_name}/settings"
+{
+  "default_locale": "en",
+  "supported_locales": ["en", "zh-CN"]
+}
+```
+
+兩個欄位都是可選的，並且設定其中一個的請求會與另一個儲存的值進行檢查。列表不能為空，預設值必須在其中，並且都不能是 `null`。違反規則的請求將返回 `422`，並指明失敗的欄位以及以下程式碼之一：`malformed_locale`、`empty_supported_locales`、`default_locale_not_supported` 或 `null_not_allowed`。
+
+登入頁面在沒有經過 `GET /realms/{realm_name}/login-settings` 認證的情況下讀取這兩個設定，這就是頁面在有人登入之前如何知道提供哪些選項的方式。
+
+<span id="how-the-language-is-chosen" />
+
+## 語言選擇方式
+
+控制檯會使用以下優先順序中第一個有對應語言的：
+
+1. 使用者登入後儲存的 `locale`。
+2. 頁面地址中的 `ui_locales` 引數，例如 `?ui_locales=zh-CN`。
+3. 之前在此瀏覽器中做出的選擇，儲存在本地儲存的 `ferriskey-ui-locale` 下。
+4. 瀏覽器的語言，按順序排列。
+5. 該身分域的 `default_locale`。
+6. 英語。
+
+標籤按其語言匹配。`en-GB` 對應 `en`，而每個 `zh` 標籤，包括繁體標籤，對應 `zh-CN`，因為那是唯一的中文目錄。
+
+未登入的訪客會進行另一次檢查：如果從列表中得出的語言不在該身分域的 `supported_locales` 中，則使用該身分域的 `default_locale`。設定為中文的瀏覽器會開啟一個身分域，該身分域僅以英語列出 `en`。一旦使用者登入，該檢查將不再適用。
+
+`ui_locales` 引數是從頁面自身的地址讀取的。授權端點不會從應用請求中讀取 `ui_locales` 引數，因此應用無法透過它選擇登入語言。
+
+<span id="changing-it" />
+
+## 更改它
+
+語言選單位於控制檯的頂部欄中。選擇一種語言會立即切換介面，並在瀏覽器中記住該選擇。它還會儲存到賬戶中，因此該選擇會跟隨使用者到另一個瀏覽器，並且優先於上面列表中的其他所有選項。無論身分域列表中提供什麼語言，選單都會提供兩種語言。登入頁面沒有選單：它們遵循上述列表。
+
+其背後的呼叫：
+
+```json title="PUT /realms/{realm_name}/users/@me/locale"
+{ "locale": "zh-CN" }
+```
+
+傳送 `{ "locale": null }` 以清除儲存的值，身分域預設設定將再次生效。返回結果包含更新後的使用者及其 `locale`。
+
+路徑拼寫呼叫者 `@me`。賬戶 API 的其他自助服務路徑拼寫為 `me`：`/users/me`、`/users/me/password` 及其餘部分。兩者都是真實存在的，且不可互換。
+
+呼叫檢查標籤是否格式良好，不與該身分域的 `supported_locales` 進行比較。控制檯沒有目錄的標籤，`fr`，會被儲存，選擇語言後忽略。

@@ -1,0 +1,158 @@
+---
+title: "後通道登出"
+description: "FerrisKey中的OIDC後臺通道登出：客戶端如何註冊終結點、登出權杖包含的內容、何時傳送以及傳遞行為如何。"
+icon: log-out
+order: 21
+---
+
+<span id="back-channel-logout" />
+
+# 後通道登出
+
+後臺登出允許 FerrisKey 告訴應用程式的伺服器使用者的會話已經結束，因此應用程式可以在不等待瀏覽器返回的情況下結束自己的會話。
+
+如果沒有它，應用程式只有在使用者點選自己的登出按鈕時才能知道登出。管理員撤銷會話、重置密碼或禁用賬戶都會使應用程式保持登入狀態，直到其本地會話超時。使用它時，FerrisKey 會將簽名的登出權杖直接傳送到應用程式，伺服器到伺服器，無論是什麼結束了會話。
+
+<span id="registering-an-endpoint" />
+
+## 註冊一個端點
+
+開啟客戶端，然後進入**設定**，然後是**登出**部分。
+
+| 控制檯標籤 | API 欄位 | 含義 |
+|---|---|---|
+| 後端登出 URL | `backchannel_logout_uri` | FerrisKey POST 登出權杖的地址。留空表示選擇不使用 |
+| 需要會話 ID（sid） | `backchannel_logout_session_required` | 記錄該應用程式需要`sid`宣告。預設值為`true`。 |
+
+<img class="only-light" src="/dashboard/client_settings_logout-light.jpg" alt="FerrisKey 客戶端設定標籤顯示登出部分，包含登出後重定向 URI 和後端登出 URL 欄位" />
+<img class="only-dark" src="/dashboard/client_settings_logout-dark.jpg" alt="FerrisKey 客戶端設定標籤顯示登出部分，包含登出後重定向 URI 和後端登出 URL 欄位" />
+
+透過API，將兩個欄位都傳送到`PATCH /realms/{realm_name}/clients/{client_id}`。不傳送`backchannel_logout_uri`將保留當前值，傳送`null`將清除它。
+
+```json title="PATCH /realms/home/clients/{client_id}"
+{
+  "backchannel_logout_uri": "https://app.example.com/backchannel-logout"
+}
+```
+
+儲存時會檢查URL的格式：它需要一個主機，沒有嵌入的憑據，並且使用`https`方案（僅限迴環主機接受`http`）。如果值不正確，將在`backchannel_logout_uri`欄位上返回`422`。地址是否實際可達將在傳送時根據主機解析的地址決定。
+
+會話ID始終是權杖的一部分。`backchannel_logout_session_required` 被記錄儲存，並不會改變 FerrisKey 傳送的內容。
+
+Discovery 宣傳這一功能：`/realms/{realm_name}/.well-known/openid-configuration` 攜帶 `backchannel_logout_supported` 和 `backchannel_logout_session_supported`，兩者都是 `true`。
+
+<span id="when-a-logout-token-is-sent" />
+
+## 當傳送登出權杖時
+
+FerrisKey 在使用者會話被刪除時會傳送通知，但會話自然過期時除外。這包括：
+
+- 登出端點，`GET` 或 `POST /realms/{realm_name}/protocol/openid-connect/logout`；
+- 會話被 `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}` 撤銷；
+- 使用者被禁用或刪除，包括批次刪除；
+- 密碼重置，由管理員執行或透過重置連結，完成必需操作的密碼更新，以及在賬戶頁面進行的密碼更改，這會使使用者的其他會話退出。
+
+接收者是參與會話的客戶端：每個啟用的客戶端，其 `backchannel_logout_uri` 已被授予攜帶該會話 `sid` 的存取權杖。未在會話中收到權杖的客戶端不會被聯絡，也不會聯絡沒有端點的客戶端。`client_credentials` 權杖沒有會話，因此不會觸發任何操作。
+
+如果客戶端在同一會話中從兩個不同的簽發者 URL 收到權杖，它會為每個簽發者各收到一個登出權杖。
+
+<span id="what-ferriskey-sends" />
+
+## FerrisKey 傳送的內容
+
+一個 `POST`，包含 `Content-Type: application/x-www-form-urlencoded` 以及一個欄位 `logout_token`：
+
+```http
+POST /backchannel-logout HTTP/1.1
+Host: app.example.com
+Content-Type: application/x-www-form-urlencoded
+
+logout_token=eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...
+```
+
+該權杖是使用身分域金鑰簽署的 JWT，該金鑰用於簽署所有其他權杖，因此應用程式使用相同的 JWKS（發現文件中的 `jwks_uri`）進行驗證。頭部包含金鑰 ID 和一個獨特的型別：
+
+```json
+{ "alg": "RS256", "kid": "5c1e0b7a-...", "typ": "logout+jwt" }
+```
+
+```json
+{
+  "iss": "https://sso.example.com/realms/home",
+  "sub": "8d1f3c52-0a4e-4d1c-9a57-2f0a1c9e7b11",
+  "aud": "orders-web",
+  "iat": 1790000000,
+  "exp": 1790000120,
+  "jti": "0192f7c4-5e1a-7b3e-9d0c-3a6f1b2c4d5e",
+  "sid": "b2a4c6e8-1f3d-4a5b-8c7e-9d0f1a2b3c4d",
+  "events": {
+    "http://schemas.openid.net/event/backchannel-logout": {}
+  }
+}
+```
+
+| 宣告 | 值 |
+|---|---|
+| `iss` | 客戶端在該會話中收到的權杖的簽發者，因此它與應用程式已看到的 `iss` 匹配 |
+| `sub` | 使用者的 ID |
+| `aud` | 客戶端的 `client_id`，作為單個字串 |
+| `iat`, `exp` | 發行時間，以及 120 秒後 |
+| `jti` | 每個權杖的新識別符號 |
+| `sid` | 會話 ID。該值與該會話生成的存取權杖和 ID 權杖中的 `sid` 宣告相同 |
+| `events` | 後通道登出事件成員 |
+
+永遠不存在 `nonce`。
+
+<span id="what-the-application-must-check" />
+
+## 應用程式必須檢查的內容
+
+OpenID Connect 後通道登出 1.0 要求接收方在執行操作前驗證權杖。實際上：
+
+1. 使用 JWKS 中的金鑰驗證簽名，由 `kid` 選擇，並檢查 `typ` 頭是否為 `logout+jwt`。
+2. 檢查 `iss` 是否為身分域的簽發者，`aud` 是否包含你的 `client_id`，以及 `iat` 和 `exp` 是否將權杖置於當前時間。
+3. 檢查 `events` 是否包含 `http://schemas.openid.net/event/backchannel-logout` 成員，`sub` 或 `sid` 是否存在，並且 `nonce` 不存在。
+4. 拒絕你已經見過的 `jti`。
+
+然後結束與該 `sid` 相關的每個本地會話，並用 `2xx` 回答。FerrisKey 將任何 `2xx` 視為已交付。當權杖無效時回答 `400`：這是規範要求的狀態，FerrisKey 不會重試。
+
+<span id="delivery" />
+
+## 投遞
+
+傳送是非同步的。登出時從不等待應用程式，也不會因為應用程式執行緩慢或宕機而失敗。
+
+| 行為 | 值 |
+|---|---|
+| 嘗試 | 3 次，每次前等待 0、2 和 10 秒 |
+| 已重試 | 連線、DNS 和超時失敗，以及 `5xx` 回答 |
+| 不重試 | 任何其他狀態，包括 `4xx`，以及被拒絕的地址或不可用的 URL |
+| 重定向 | 從未跟隨過。`3xx` 計為拒絕 |
+| 超時 | 連線 5 秒，每個請求 10 秒 |
+| 佇列 | 記憶體中保持 1024 個已結束的會話，每次交付 16 個 |
+
+投遞盡力而為。一個在三次嘗試後仍不可達的客戶端將錯過通知，而當伺服器重啟時通知被排入佇列的客戶端也將錯過。當佇列滿時，新的會話將被丟棄，日誌中會有警告，但使用者的登出仍然成功。保持應用程式自身的會話生命週期有限，以作為後備措施。
+
+FerrisKey 會一次性解析主機並將連線固定到它可能到達的地址，使用與保護 [webhook 傳送](/zh-TW/modules/webhooks/deliveries) 相同的防護措施。需要一個 `https` 端點。迴環地址、私有地址和其他非公開地址會被拒絕，而鏈路本地地址（包括雲後設資料地址）無論設定如何都會被拒絕。`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 允許迴環地址和私有地址用於本地開發，並且只允許普通 `http` 透過迴環地址。它與 webhook 使用的開關相同，在生產環境中應保持關閉。請參見 [配置](/zh-TW/discover/guides/configuration)。
+
+失敗資訊會寫入伺服器日誌，而不會寫入 [SeaWatch](/zh-TW/modules/seawatch/overview)。需要關注的訊息有：
+
+| 日誌訊息 | 含義 |
+|---|---|
+| `Logout token not delivered, retrying` | 可重試的失敗，以及嘗試次數 |
+| `Logout token refused` | 端點返回了一個不重試的狀態，或者地址被拒絕 |
+| `Gave up delivering a logout token` | 三次嘗試都失敗了 |
+| `Back-channel logout queue full, dropping a session` | 佇列已滿 |
+| `Could not sign a logout token` | 身分域金鑰無法簽署權杖 |
+
+::::card-group{cols=3}
+:::card{label="客戶端" icon="lucide:app-window" href="/zh-TW/discover/core-concepts/clients"}
+登出後重定向的 URI 以及客戶端的其他設定。
+:::
+:::card{label="權杖" icon="lucide:ticket" href="/zh-TW/discover/core-concepts/tokens"}
+`sid` 宣告將一個權杖繫結到一個會話。
+:::
+:::card{label="Webhook 投遞" icon="lucide:webhook" href="/zh-TW/modules/webhooks/deliveries"}
+登出權杖與 webhook 共享的地址保護。
+:::
+::::

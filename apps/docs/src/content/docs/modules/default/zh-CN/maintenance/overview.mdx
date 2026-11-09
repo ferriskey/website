@@ -1,0 +1,165 @@
+---
+title: "概述"
+description: "关闭客户端，除了白名单外，不动其配置。"
+icon: wrench
+order: 100
+---
+
+<span id="maintenance-mode" />
+
+# 维护模式
+
+维护模式会暂时限制谁可以通过客户端进行认证，而不修改客户端的配置。它存在的目的是在应用程序迁移过程中，不应该允许用户登录时使用，但你又不想禁用客户端然后再去记住它的具体设置。
+
+与禁用客户端不同的地方有两点：
+
+- 它可以通过一个开关恢复，并且不改变其他任何设置。重定向 URI、权限作用域和密钥都保持不变。
+- 它故意设计了一个漏洞。白名单中的用户和角色仍然可以进行认证，因此你的团队可以在重新开放客户端之前，在真实客户端上验证迁移情况。
+
+<span id="closing-a-client" />
+
+## 关闭客户端
+
+<img class="only-light" src="/dashboard/client_maintenance-light.jpg" alt="FerrisKey 客户端维护标签页显示维护开关、原因、会话策略和允许的用户" />
+<img class="only-dark" src="/dashboard/client_maintenance-dark.jpg" alt="FerrisKey 客户端维护标签页显示维护开关、原因、会话策略和允许的用户" />
+
+```
+PUT /realms/{realm_name}/clients/{client_id}/maintenance
+```
+
+```json title="Request body"
+{
+  "enabled": true,
+  "reason": "Migration under way, back at 2pm.",
+  "session_strategy": "expire"
+}
+```
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `enabled` | 必填 | `true`会关闭客户端，除了白名单之外的所有人 |
+| `reason` | 无 | 显示给被封禁的用户。没有消息，他们会看到“此服务目前正在维护中”。 |
+| `session_strategy` | `expire` | `expire`或`terminate`。见下文 |
+
+开关一切换就生效。没有排空期。
+
+<Callout variant="info" title="在用户阅读时写下原因">
+
+`reason`是被封的用户被告知的，他们当时正试图继续他们的一天。“迁移正在进行中，下午2点返回”回答了他们的真实问题。“MAINT-4417”则没有。
+
+</Callout>
+
+<span id="what-maintenance-blocks" />
+
+## 哪些维护区块
+
+维护门禁在用户进入的那一刻就被关闭。不在白名单上的用户会被拒绝使用`reason`，无论登录方式如何。登录页面的`authenticate`呼叫回答了503：
+
+| 进入 | 被封锁 |
+|---|---|
+| 登录页面的密码登录 | 是 |
+| 密码授权 (`grant_type=password`) | 是 |
+| 通过已有的 SSO 会话返回 | 是 |
+| 回答第二因素挑战：TOTP 代码或恢复代码 | 是 |
+| 完成登录时的必需操作：OTP 或通行密钥注册、强制密码更新 | 是 |
+| 通行密钥登录 | 是 |
+| 免密登录链接 | 是 |
+| 继续原始登录的密码重置 (`login_url`) | 是 |
+| 通过身份提供者（中介）登录 | 是 |
+| 设备流程，当设备收集其令牌时 | 是 |
+
+每次登录完成都要经过相同的检查，因此跳过密码的方式并不会跳过维护。设备流程是唯一的例外：当设备在用户批准代码后收集其令牌时，检查才会运行，而拒绝会以引用原因的 500 `token_issuance_failed` 返回。到那时，代码已经使用过，所以设备必须重新开始。
+
+`reset-password` 在其主体中返回的令牌响应是在没有客户端的情况下发出的，因此维护不适用于它。
+
+维护不会影响已经存在的会话。刷新令牌会持续刷新，访问令牌会一直有效直到过期，因为检查是在登录时运行，而不是在每次请求时运行。`client_credentials` 令牌没有用户在背后，因此不受影响。
+
+<span id="session-strategy" />
+
+### 会话策略
+
+`session_strategy` 接受 `expire`（默认）或 `terminate`，控制台显示为“自然过期”和“立即终止”。在 FerrisKey 0.10.0 中，服务器将该值存储在客户端并写入审计事件，但登录检查从未读取它。在这两个值下，在维护开始前开启的会话会一直有效，直到它们耗尽为止。
+
+<Callout variant="warning" title="terminate 还不会切断会话">
+
+如果因为令牌泄露而关闭客户端，请不要依赖 `terminate`。使用 `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}` 撤销重要会话，这需要 `manage_users`，并会立即使该会话的令牌失效。
+
+</Callout>
+
+<span id="the-whitelist" />
+
+## 白名单
+
+白名单条目命名用户或角色。所有被命名的人以及所有持有被命名角色的人，在客户端维护期间都可以正常认证。
+
+条目存在于两个层级，并且它们是**累加的**：客户端的有效白名单是其自身条目加上身份域的条目。
+
+<span id="per-client" />
+
+### 按客户端
+
+```
+GET    /realms/{realm_name}/clients/{client_id}/maintenance/whitelist
+POST   /realms/{realm_name}/clients/{client_id}/maintenance/whitelist
+DELETE /realms/{realm_name}/clients/{client_id}/maintenance/whitelist/{entry_id}
+```
+
+<span id="per-realm" />
+
+### 按身份域
+
+身份域级条目会被该身份域下的每个置于维护状态的客户端继承。它们是那些永远不应被锁定的人的固定列表。
+
+<img class="only-light" src="/dashboard/realm_maintenance-light.jpg" alt="FerrisKey身份域设置维护选项卡显示用户和角色的默认维护成员" />
+<img class="only-dark" src="/dashboard/realm_maintenance-dark.jpg" alt="FerrisKey身份域设置维护选项卡显示用户和角色的默认维护成员" />
+
+```
+GET    /realms/{realm_name}/settings/maintenance/whitelist
+POST   /realms/{realm_name}/settings/maintenance/whitelist
+DELETE /realms/{realm_name}/settings/maintenance/whitelist/{entry_id}
+```
+
+```json title="Adding an entry: supply one or the other"
+{
+  "role_id": "01a0d3dd-a750-7817-aa2b-7e8b98f68e66"
+}
+```
+
+`user_id` 和 `role_id` 在负载中都是可选的；提供描述你想要的条目的那个。
+
+<Callout variant="warning" title="在需要角色之前，将其添加到身份域白名单中">
+
+基于角色的身份域访问，例如你们平台团队的角色，是计划性维护窗口和事故之间的区别。添加白名单条目需要在管理员控制台进行身份认证，如果你刚关闭的就是控制台自身的客户端，你就将自己锁在了需要用来解锁它的工具之外。
+
+</Callout>
+
+<span id="permissions" />
+
+## 权限
+
+| 操作 | 权限 |
+|---|---|
+| 读取白名单 | `view_clients`，或者 `manage_clients` |
+| 切换维护模式，添加或移除条目 | `manage_clients` |
+
+`manage_realm` 同样授予全部权限。
+
+<span id="what-gets-recorded" />
+
+## 什么被记录
+
+这两种转换都是可观察的，这很重要，因为维护模式可能会被意外保持开启：
+
+- [SeaWatch](/zh-CN/modules/seawatch/event-types) 记录 `client_maintenance_enabled` 和 `client_maintenance_disabled`。
+- [Webhooks](/zh-CN/modules/webhooks/triggers) 触发 `client.maintenance.enabled` 和 `client.maintenance.disabled`。
+
+在启用的触发器上设置一个打开提醒的 webhook，在禁用的触发器上设置一个关闭提醒的 webhook，是防止周五下午窗口持续到周一的最便宜方法。
+
+::::card-group{cols=2}
+:::card{label="客户端" icon="lucide:app-window" href="/zh-CN/discover/core-concepts/clients"}
+配置维护模式会被故意忽略。
+:::
+:::card{label="Webhook 触发器" icon="lucide:webhook" href="/zh-CN/modules/webhooks/triggers"}
+将两种维护转换连接到能够察觉的东西。
+:::
+::::

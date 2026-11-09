@@ -1,0 +1,97 @@
+---
+title: "单点登录 & 会话管理"
+description: "OIDC 如何实现单点登录以及注销实际是如何工作的。"
+icon: log-in
+order: 4
+---
+
+<span id="sso--session-management" />
+
+# 单点登录 & 会话管理
+
+单点登录 (SSO) 是一次登录后，后续每个应用都能识别你的体验。OIDC 实现这一点，而无需每个应用保存用户凭据的副本。
+
+<span id="the-mechanism-in-plain-terms" />
+
+## 用通俗的话解释机制
+
+三个应用程序（`intranet`、`wiki`、`dashboard`）都信任同一个授权服务器。用户第一次访问 `intranet` 时，会被重定向去登录。授权服务器对其进行身份认证，并在用户的浏览器中设置一个会话 cookie，范围限定在其自身域名下。
+
+当用户稍后访问 `wiki` 并被重定向到同一个授权服务器时，cookie 已经存在。服务器跳过登录表单，直接悄无声息地返回一个新的授权码。从用户的角度来看，`wiki` "就知道" 他们已经登录了。
+
+```
+First visit:   User → intranet → AuthServer (login form) → cookie set → intranet
+Second visit:  User → wiki     → AuthServer (cookie present) → wiki (no form)
+```
+
+会话存在于授权服务器中，而不在任何一个应用程序中。
+
+<span id="sessions-not-tokens" />
+
+## 会话，而非令牌
+
+这会让人措手不及：令牌寿命很短，而会话不是。用户可以同时拥有一个 30 分钟的访问令牌和一个 8 小时的会话。正是会话让在访问令牌过期时可以进行静默重新认证成为可能。
+
+如果你的刷新令牌过期，但你请求一个新的令牌而会话仍然有效，则会静默成功。如果会话已过期，用户会看到登录表单。
+
+<span id="logout-harder-than-it-looks" />
+
+## 注销：比看起来更难
+
+“注销”在不同的上下文中需要表示不同的含义：
+
+- **本地注销**：清除应用自身的 cookie/存储。简单。
+- **SSO 注销（单点注销）**：在授权服务器上使会话失效，因此未来访问任何应用都需要重新登录。更难。
+- **后端登出**：通知共享会话的_所有其他应用_，以便它们也可以清除本地状态。最难实现。
+
+OIDC 定义了几个相关规范：
+
+- **RP 发起的登出**：应用将用户重定向到授权服务器上的 `/logout` 端点，该端点会清除 SSO Cookie。
+- **前端登出**：授权服务器返回一个页面，页面中有指向每个应用登出 URL 的隐藏 iframe。每个 iframe 会清除本地状态。仅在用户在浏览器前时有效。
+- **后端登出**：授权服务器向每个应用发起服务器到服务器的调用，发送登出令牌。更可靠。
+
+大多数团队首先实现 RP 发起的登出，然后如果有多个应用需要在不依赖浏览器的情况下清除状态，再添加后端登出。
+
+<span id="detecting-is-the-user-still-logged-in" />
+
+## 检测“用户是否仍然登录？”
+
+OIDC 还在授权端点上定义了 `prompt=none` 参数。客户端发送正常的授权请求，但会添加 `prompt=none`：
+
+- 如果会话仍然有效：静默成功，获取新的令牌。
+- 如果无效：返回 `interaction_required` 错误。
+
+适用于应用加载时检查“他们是否仍然登录？”的情况。隐藏的 iframe（或现代 `<iframe>` 替代方案）使这种后台检查成为可能。
+
+<span id="max_age-and-auth_time" />
+
+## `max_age` 和 `auth_time`
+
+当你真的不信任旧会话时（例如，在执行敏感操作前），你可以强制重新认证：
+
+```
+GET /authorize?max_age=300&...
+```
+
+这表示：“如果 `auth_time` 超过 300 秒，则再次提示输入密码。”ID 令牌中的 `auth_time` 声明会告诉客户端上次输入密码的时间。
+
+<span id="a-mental-model" />
+
+## 一个思维模型
+
+授权服务器就像办公大楼的前台。你在前台刷一次卡。然后在大楼内部，你可以进入任何会议室。会议室（应用程序）只会检查你是否最近经过了前台。要“退出大楼”，你必须去前台，而不仅仅是离开一个会议室。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 充当中央会话持有者。同一身份域内的多个客户端在每个浏览器中共享一个 SSO 会话。
+
+::::card-group{cols=2}
+:::card{label="什么是FerrisKey？" icon="lucide:shield" href="/zh-CN/discover/what-is-ferriskey"}
+身份域如何将共享会话的应用程序分组。
+:::
+:::card{label="Compass 模块" icon="lucide:compass" href="/zh-CN/modules/compass/overview"}
+逐步检查和调试身份认证流程。
+:::
+::::

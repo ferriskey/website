@@ -1,0 +1,206 @@
+---
+title: "概述"
+description: "主題並佈局一個身分域呈現的公共身分認證頁面：顏色、排版以及十三種頁面型別。"
+icon: palette
+order: 90
+---
+
+<span id="portal" />
+
+# 門戶
+
+門戶是終端使用者實際看到的內容：登入頁面、MFA 挑戰、密碼重置、電子郵件驗證確認。它由 FerrisKey 提供服務，在 FerrisKey 的域上，這使它成為使用者直接接觸 IAM 的唯一介面，以及未樣式預設頁面立即可見的唯一位置。
+
+門戶模組是讓它看起來不像別人的產品的方式。它分為兩部分：
+
+- **主題**承載外觀：顏色、排版以及每個頁面的內容。
+- **佈局**承載結構：頁面的組成結構。
+
+兩者按身分域劃分，因此一個部署中的兩個身分域可以看起來完全不同。
+
+<img class="only-light" src="/dashboard/portal_themes-light.jpg" alt="FerrisKey 門戶主題標籤顯示主題數量、活動主題和匯入操作" />
+<img class="only-dark" src="/dashboard/portal_themes-dark.jpg" alt="FerrisKey 門戶主題標籤顯示主題數量、活動主題和匯入操作" />
+
+<span id="themes" />
+
+## 主題
+
+一個身分域可以包含任意數量的主題，但**一次只能有一個是啟用的**。啟用的主題是門戶呈現的內容。其他所有都是草稿，你可以在不影響使用者可見內容的情況下進行編輯。
+
+<span id="the-thirteen-page-types" />
+
+### 十三種頁面型別
+
+一個主題包含十三個頁面的內容。全部包含：
+
+| 頁面型別 | 渲染時 |
+|---|---|
+| `login` | 登入表單 |
+| `register` | 自助註冊，如果身分域啟用了此功能 |
+| `totp` | 正在請求身分認證器程式碼 |
+| `totp_setup` | 使用者正在透過必需操作註冊身分認證器 |
+| `forgot_password` | 使用者請求重置密碼 |
+| `reset_password` | 使用者點選重置連結 |
+| `magic_link_request` | 使用者請求魔法連結 |
+| `magic_link_verify` | 魔法連結正在被使用 |
+| `verify_email` | 電子郵件地址正在等待確認 |
+| `email_verified` | 確認成功 |
+| `device_verify` | 正在輸入裝置流程使用者程式碼 |
+| `device_verified` | 裝置流程已被批准 |
+| `consent` | 使用者被要求授予客戶端可選權限。參見 [同意](/zh-TW/discover/core-concepts/consent) |
+
+一次編輯一頁：
+
+```
+PUT /realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}
+```
+
+草稿接受任何樹，因為驗證會等待啟用。一旦一個主題成為活動主題，每次頁面寫入都會被驗證，因為公共門戶已經渲染它，而缺少必需區塊的樹會返回 422。
+
+<span id="activation-is-gated-on-validity" />
+
+### 啟用以有效性為門檻
+
+只有當**每**個頁面都有效時，主題才能被啟用。控制檯稱之為“可啟用”，併為你計數。這是有意為之：部分完成的主題會為任何恰好觸及空缺的流程渲染出破損頁面，而該流程可能在凌晨 2 點進行密碼重置。
+
+```
+GET  /realms/{realm_name}/portal/page-requirements
+POST /realms/{realm_name}/portal/themes/{theme_id}/activate
+```
+
+`page-requirements` 列出了每個頁面必須包含的區塊型別，這就是向設計師展示的內容，而不是一個空白的“不可啟用”。啟用失敗會返回 422，並列出每個無效頁面缺失的區塊。
+
+在十三頁中，有兩頁 `email_verified` 和 `device_verified` 不需要塊：一個靜態標題和文字就是有效頁面。`consent` 頁面需要塊 `consent_scopes`、`consent_allow_button` 和 `consent_deny_button`。
+
+透過 API 建立的主題從空的頁面樹開始，因此在填寫每個有要求的頁面之前無法啟用。在控制檯建立主題時，控制檯會使用預設組合填充每個頁面，因此新的控制檯主題可以立即啟用。
+
+<Callout variant="warning" title="早於同意頁面的主題">
+
+在 `consent` 頁面型別新增之前存在的主題，其同意頁面為空。在填寫該頁面之前無法啟用，匯入不包含 `consent` 樹的檔案也是如此。如果之前可用的主題啟用失敗，請首先檢查 `consent`。
+
+</Callout>
+
+<Callout variant="info" title="沒有主題是有效狀態">
+
+沒有主題，或者沒有啟用，傳送門會恢復到內建的外觀。沒有任何損壞：你只是看到FerrisKey的預設狀態。控制檯顯示這個數值為零。
+
+</Callout>
+
+<span id="theme-api" />
+
+### 主題 API
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/portal/themes` | 列出該身分域的主題 |
+| `POST` | `/realms/{realm_name}/portal/themes` | 建立一個主題，頁面樹是空的 |
+| `GET` | `/realms/{realm_name}/portal/themes/{theme_id}` | 讀一個主題 |
+| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}` | 更新主題名稱、佈局和設計標記 |
+| `DELETE` | `/realms/{realm_name}/portal/themes/{theme_id}` | 刪除主題。回答400個活躍主題 |
+| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}` | 替換一頁 |
+| `POST` | `/realms/{realm_name}/portal/themes/{theme_id}/activate` | 讓這個主題成為主動的 |
+| `GET` | `/realms/{realm_name}/portal/theme` | 閱讀該身分域的主題配置（遺留單主題終點） |
+| `PUT` | `/realms/{realm_name}/portal/theme` | 更新該身分域的主題配置（遺留單主題端點） |
+| `GET` | `/realms/{realm_name}/portal/page-requirements` | 每頁必須包含的區塊 |
+
+主題列表是分頁的且可過濾的。它使用 `search`、`name`、`layout_id`、`activatable`（`true` 保留每頁包含其所需模組的主題）、`created_from` 和 `created_to`，並在 [分頁列表](/zh-TW/discover/guides/api-listings) 中通用的合約基礎上。
+
+**所需權限:** `manage_realm`，用於讀取和寫入。`page-requirements` 只需要有效的權杖。
+
+<Callout variant="info" title="主題沒有隻讀存取權限。">
+
+與大多數管理介面不同，門戶端點不接受 `view_realm`：列出主題需要 `manage_realm`，與啟用主題所需的權限相同。今天無法授予設計師僅檢視主題而不能啟用主題的權限。下面的公開端點是無需任何權限的讀取路徑。
+
+</Callout>
+
+<span id="the-public-endpoint" />
+
+### 公共端點
+
+```
+GET /realms/{realm_name}/portal/active?page_type=login
+```
+
+未認證，因為登入頁面必須在任何人登入之前能夠呈現。需要 `page_type`。響應包含該頁面的 `theme_id`、`design_tokens`、`layout_id` 和 `page_tree`，除此之外別無其他。在沒有活動主題的情況下，它返回預設權杖和空樹。主題本質上是公開的，因此請相應地處理你放入其中的內容。
+
+<span id="layouts" />
+
+## 佈局
+
+<img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="帶有佈局計數器和匯入操作的 FerrisKey 門戶佈局標籤" />
+<img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="帶有佈局計數器和匯入操作的 FerrisKey 門戶佈局標籤" />
+
+沒有佈局的主題會以空白形式呈現其頁面，這是一種有效的組合，而不是錯誤。計數器區分了**附加**到主題的佈局與那些僅因無人使用而**可刪除**的佈局。
+
+佈局儲存的是排列而不是顏色。每個佈局都有一個 `tree`，每個身分域的佈局中有一個被標記為**預設**。你在身分域中建立的第一個佈局會自動成為預設佈局。作為身分域預設的佈局，或被主題使用的佈局，不能被刪除：兩者都會返回 400。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/portal-layouts` | 列出身分域的佈局 |
+| `POST` | `/realms/{realm_name}/portal-layouts` | 建立佈局 |
+| `GET` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 讀取一個佈局 |
+| `PUT` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 更新佈局 |
+| `DELETE` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 刪除佈局 |
+| `PUT` | `/realms/{realm_name}/portal-layouts/{layout_id}/default` | 將其標記為身分域預設 |
+| `GET` | `/realms/{realm_name}/portal-layouts/public/{layout_id}` | 公開讀取一個佈局 |
+| `GET` | `/realms/{realm_name}/portal-layouts/public/default` | 公開讀取預設佈局 |
+
+佈局列表分頁顯示，類似於主題列表。它接受 `search`、`name`、`is_default`、`in_use`、`ids`（最多 100 個，用逗號分隔）、`created_from` 和 `created_to`，每個條目都有一個 `theme_count`。
+
+這兩個 `public/` 端點未經過身分認證，原因與 `portal/active` 相同。它們不會提供身分域的每個佈局：僅提供活動主題命名的佈局和身分域的預設佈局。任何其他佈局會返回 200 並帶有 `data: null`，因此草稿佈局在使用它的主題上線之前保持私有。
+
+<span id="moving-a-theme-between-realms" />
+
+## 在不同身分域之間移動主題
+
+```
+GET  /realms/{realm_name}/portal/themes/{theme_id}/export
+POST /realms/{realm_name}/portal/themes/import
+GET  /realms/{realm_name}/portal-layouts/{layout_id}/export
+POST /realms/{realm_name}/portal-layouts/import
+```
+
+主題會作為一個自包含的 JSON 包匯出：它的設計權杖、所有十三個頁面樹、**以及由值攜帶的其框架佈局**。將其匯入到另一個身分域或另一個部署中會重新建立該佈局並將其繫結到新主題，因此該檔案不依賴於目標中已存在的任何內容。
+
+匯入檔案可能只包含部分頁面。被省略的頁面將保持空白，主題在這些頁面被填充之前無法啟用。遇到未知的頁面名稱 FerrisKey 會返回 400 錯誤，而不是被丟棄。
+
+佈局匯入在儲存之前會驗證樹結構，而普通的建立端點不會：建立端點由控制檯的構建器提供資料，並信任其輸入。如果你透過指令碼生成佈局，匯入端點將捕捉到你的錯誤。
+
+[匯出與匯入](/zh-TW/discover/guides/portability) 涵蓋了整個可移植性範圍，包括電子郵件模板。
+
+<span id="working-on-a-theme-safely" />
+
+## 安全地操作主題
+
+::::step-group
+:::step{title="複製而不是編輯正在使用的主題"}
+建立新主題，而不是編輯正在啟用的主題。啟用的主題在你工作時服務實際登入，每次對其頁面的寫入都會經過驗證。
+:::
+
+:::step{title="填寫每個頁面"}
+十三種頁面型別，每個帶有所需區塊的頁面都必須有效啟用。`page-requirements`列出了每個頁面的需求。
+:::
+
+:::step{title="檢查你沒想到的流量"}
+`login`會被看一看。`device_verified`、`email_verified`和`consent`不會，而且正是那些頁面會被放置幾個月的地方。
+:::
+
+:::step{title="啟動"}
+呼叫一次，下一個請求生效。啟用是可逆的：啟用之前的主題以回滾。
+:::
+::::
+
+<Callout variant="warning" title="主題啟用不是一個身分域設定">
+
+身分域確實儲存了哪個主題處於啟用狀態，但這不是你可以透過`PUT /realms/{realm_name}/settings`寫入的欄位。啟用透過啟用端點，這才是強制有效性門的關鍵。
+
+</Callout>
+
+::::card-group{cols=2}
+:::card{label="電子郵件及模板" icon="lucide:mail" href="/zh-TW/discover/guides/email"}
+另一個品牌表面：門戶流程傳送的交易性郵件。
+:::
+:::card{label="身分域" icon="lucide:layers" href="/zh-TW/discover/core-concepts/realms"}
+決定哪些門戶頁面可以存取的設定。
+:::
+::::

@@ -1,0 +1,206 @@
+---
+title: "概述"
+description: "主题并布局一个身份域呈现的公共身份认证页面：颜色、排版以及十三种页面类型。"
+icon: palette
+order: 90
+---
+
+<span id="portal" />
+
+# 门户
+
+门户是最终用户实际看到的内容：登录页面、MFA 挑战、密码重置、电子邮件验证确认。它由 FerrisKey 提供服务，在 FerrisKey 的域上，这使它成为用户直接接触 IAM 的唯一界面，以及未样式默认页面立即可见的唯一位置。
+
+门户模块是让它看起来不像别人的产品的方式。它分为两部分：
+
+- **主题**承载外观：颜色、排版以及每个页面的内容。
+- **布局**承载结构：页面的组成结构。
+
+两者按身份域划分，因此一个部署中的两个身份域可以看起来完全不同。
+
+<img class="only-light" src="/dashboard/portal_themes-light.jpg" alt="FerrisKey 门户主题标签显示主题数量、活动主题和导入操作" />
+<img class="only-dark" src="/dashboard/portal_themes-dark.jpg" alt="FerrisKey 门户主题标签显示主题数量、活动主题和导入操作" />
+
+<span id="themes" />
+
+## 主题
+
+一个身份域可以包含任意数量的主题，但**一次只能有一个是激活的**。激活的主题是门户呈现的内容。其他所有都是草稿，你可以在不影响用户可见内容的情况下进行编辑。
+
+<span id="the-thirteen-page-types" />
+
+### 十三种页面类型
+
+一个主题包含十三个页面的内容。全部包含：
+
+| 页面类型 | 渲染时 |
+|---|---|
+| `login` | 登录表单 |
+| `register` | 自助注册，如果身份域启用了此功能 |
+| `totp` | 正在请求身份认证器代码 |
+| `totp_setup` | 用户正在通过必需操作注册身份认证器 |
+| `forgot_password` | 用户请求重置密码 |
+| `reset_password` | 用户点击重置链接 |
+| `magic_link_request` | 用户请求魔法链接 |
+| `magic_link_verify` | 魔法链接正在被使用 |
+| `verify_email` | 电子邮件地址正在等待确认 |
+| `email_verified` | 确认成功 |
+| `device_verify` | 正在输入设备流程用户代码 |
+| `device_verified` | 设备流程已被批准 |
+| `consent` | 用户被要求授予客户端可选权限。参见 [同意](/zh-CN/discover/core-concepts/consent) |
+
+一次编辑一页：
+
+```
+PUT /realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}
+```
+
+草稿接受任何树，因为验证会等待激活。一旦一个主题成为活动主题，每次页面写入都会被验证，因为公共门户已经渲染它，而缺少必需区块的树会返回 422。
+
+<span id="activation-is-gated-on-validity" />
+
+### 激活以有效性为门槛
+
+只有当**每**个页面都有效时，主题才能被激活。控制台称之为“可激活”，并为你计数。这是有意为之：部分完成的主题会为任何恰好触及空缺的流程渲染出破损页面，而该流程可能在凌晨 2 点进行密码重置。
+
+```
+GET  /realms/{realm_name}/portal/page-requirements
+POST /realms/{realm_name}/portal/themes/{theme_id}/activate
+```
+
+`page-requirements` 列出了每个页面必须包含的区块类型，这就是向设计师展示的内容，而不是一个空白的“不可激活”。激活失败会返回 422，并列出每个无效页面缺失的区块。
+
+在十三页中，有两页 `email_verified` 和 `device_verified` 不需要块：一个静态标题和文本就是有效页面。`consent` 页面需要块 `consent_scopes`、`consent_allow_button` 和 `consent_deny_button`。
+
+通过 API 创建的主题从空的页面树开始，因此在填写每个有要求的页面之前无法激活。在控制台创建主题时，控制台会使用默认组合填充每个页面，因此新的控制台主题可以立即激活。
+
+<Callout variant="warning" title="早于同意页面的主题">
+
+在 `consent` 页面类型添加之前存在的主题，其同意页面为空。在填写该页面之前无法激活，导入不包含 `consent` 树的文件也是如此。如果之前可用的主题激活失败，请首先检查 `consent`。
+
+</Callout>
+
+<Callout variant="info" title="没有主题是有效状态">
+
+没有主题，或者没有激活，传送门会恢复到内置的外观。没有任何损坏：你只是看到FerrisKey的默认状态。控制台显示这个数值为零。
+
+</Callout>
+
+<span id="theme-api" />
+
+### 主题 API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/portal/themes` | 列出该身份域的主题 |
+| `POST` | `/realms/{realm_name}/portal/themes` | 创建一个主题，页面树是空的 |
+| `GET` | `/realms/{realm_name}/portal/themes/{theme_id}` | 读一个主题 |
+| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}` | 更新主题名称、布局和设计标记 |
+| `DELETE` | `/realms/{realm_name}/portal/themes/{theme_id}` | 删除主题。回答400个活跃主题 |
+| `PUT` | `/realms/{realm_name}/portal/themes/{theme_id}/pages/{page_type}` | 替换一页 |
+| `POST` | `/realms/{realm_name}/portal/themes/{theme_id}/activate` | 让这个主题成为主动的 |
+| `GET` | `/realms/{realm_name}/portal/theme` | 阅读该身份域的主题配置（遗留单主题终点） |
+| `PUT` | `/realms/{realm_name}/portal/theme` | 更新该身份域的主题配置（遗留单主题端点） |
+| `GET` | `/realms/{realm_name}/portal/page-requirements` | 每页必须包含的区块 |
+
+主题列表是分页的且可过滤的。它使用 `search`、`name`、`layout_id`、`activatable`（`true` 保留每页包含其所需模块的主题）、`created_from` 和 `created_to`，并在 [分页列表](/zh-CN/discover/guides/api-listings) 中通用的合约基础上。
+
+**所需权限:** `manage_realm`，用于读取和写入。`page-requirements` 只需要有效的令牌。
+
+<Callout variant="info" title="主题没有只读访问权限。">
+
+与大多数管理界面不同，门户端点不接受 `view_realm`：列出主题需要 `manage_realm`，与激活主题所需的权限相同。今天无法授予设计师仅查看主题而不能激活主题的权限。下面的公开端点是无需任何权限的读取路径。
+
+</Callout>
+
+<span id="the-public-endpoint" />
+
+### 公共端点
+
+```
+GET /realms/{realm_name}/portal/active?page_type=login
+```
+
+未认证，因为登录页面必须在任何人登录之前能够呈现。需要 `page_type`。响应包含该页面的 `theme_id`、`design_tokens`、`layout_id` 和 `page_tree`，除此之外别无其他。在没有活动主题的情况下，它返回默认令牌和空树。主题本质上是公开的，因此请相应地处理你放入其中的内容。
+
+<span id="layouts" />
+
+## 布局
+
+<img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="带有布局计数器和导入操作的 FerrisKey 门户布局标签" />
+<img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="带有布局计数器和导入操作的 FerrisKey 门户布局标签" />
+
+没有布局的主题会以空白形式呈现其页面，这是一种有效的组合，而不是错误。计数器区分了**附加**到主题的布局与那些仅因无人使用而**可删除**的布局。
+
+布局保存的是排列而不是颜色。每个布局都有一个 `tree`，每个身份域的布局中有一个被标记为**默认**。你在身份域中创建的第一个布局会自动成为默认布局。作为身份域默认的布局，或被主题使用的布局，不能被删除：两者都会返回 400。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/portal-layouts` | 列出身份域的布局 |
+| `POST` | `/realms/{realm_name}/portal-layouts` | 创建布局 |
+| `GET` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 读取一个布局 |
+| `PUT` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 更新布局 |
+| `DELETE` | `/realms/{realm_name}/portal-layouts/{layout_id}` | 删除布局 |
+| `PUT` | `/realms/{realm_name}/portal-layouts/{layout_id}/default` | 将其标记为身份域默认 |
+| `GET` | `/realms/{realm_name}/portal-layouts/public/{layout_id}` | 公开读取一个布局 |
+| `GET` | `/realms/{realm_name}/portal-layouts/public/default` | 公开读取默认布局 |
+
+布局列表分页显示，类似于主题列表。它接受 `search`、`name`、`is_default`、`in_use`、`ids`（最多 100 个，用逗号分隔）、`created_from` 和 `created_to`，每个条目都有一个 `theme_count`。
+
+这两个 `public/` 端点未经过身份认证，原因与 `portal/active` 相同。它们不会提供身份域的每个布局：仅提供活动主题命名的布局和身份域的默认布局。任何其他布局会返回 200 并带有 `data: null`，因此草稿布局在使用它的主题上线之前保持私有。
+
+<span id="moving-a-theme-between-realms" />
+
+## 在不同身份域之间移动主题
+
+```
+GET  /realms/{realm_name}/portal/themes/{theme_id}/export
+POST /realms/{realm_name}/portal/themes/import
+GET  /realms/{realm_name}/portal-layouts/{layout_id}/export
+POST /realms/{realm_name}/portal-layouts/import
+```
+
+主题会作为一个自包含的 JSON 包导出：它的设计令牌、所有十三个页面树、**以及由值携带的其框架布局**。将其导入到另一个身份域或另一个部署中会重新创建该布局并将其绑定到新主题，因此该文件不依赖于目标中已存在的任何内容。
+
+导入文件可能只包含部分页面。被省略的页面将保持空白，主题在这些页面被填充之前无法激活。遇到未知的页面名称 FerrisKey 会返回 400 错误，而不是被丢弃。
+
+布局导入在存储之前会验证树结构，而普通的创建端点不会：创建端点由控制台的构建器提供数据，并信任其输入。如果你通过脚本生成布局，导入端点将捕捉到你的错误。
+
+[导出与导入](/zh-CN/discover/guides/portability) 涵盖了整个可移植性范围，包括电子邮件模板。
+
+<span id="working-on-a-theme-safely" />
+
+## 安全地操作主题
+
+::::step-group
+:::step{title="复制而不是编辑正在使用的主题"}
+创建新主题，而不是编辑正在激活的主题。激活的主题在你工作时服务实际登录，每次对其页面的写入都会经过验证。
+:::
+
+:::step{title="填写每个页面"}
+十三种页面类型，每个带有所需区块的页面都必须有效激活。`page-requirements`列出了每个页面的需求。
+:::
+
+:::step{title="检查你没想到的流量"}
+`login`会被看一看。`device_verified`、`email_verified`和`consent`不会，而且正是那些页面会被放置几个月的地方。
+:::
+
+:::step{title="启动"}
+调用一次，下一个请求生效。激活是可逆的：激活之前的主题以回滚。
+:::
+::::
+
+<Callout variant="warning" title="主题激活不是一个身份域设置">
+
+身份域确实存储了哪个主题处于激活状态，但这不是你可以通过`PUT /realms/{realm_name}/settings`写入的字段。激活通过激活端点，这才是强制有效性门的关键。
+
+</Callout>
+
+::::card-group{cols=2}
+:::card{label="电子邮件及模板" icon="lucide:mail" href="/zh-CN/discover/guides/email"}
+另一个品牌表面：门户流程发送的交易性邮件。
+:::
+:::card{label="身份域" icon="lucide:layers" href="/zh-CN/discover/core-concepts/realms"}
+决定哪些门户页面可以访问的设置。
+:::
+::::

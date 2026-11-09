@@ -1,0 +1,321 @@
+---
+title: "配置"
+description: "FerrisKey API 的環境變數、啟動檢查和部署選項。"
+icon: settings
+order: 20
+---
+
+<span id="configuration" />
+
+# 配置
+
+FerrisKey API 完全透過命令列標誌進行配置，每個標誌都有對應的環境變數。每個設定都有適用於本地開發的預設值，因此你只需覆蓋部署所需的設定。
+
+執行 `ferriskey-api --help` 以直接從二進位制檔案檢視標誌及其詳細描述。
+
+<span id="environment-variables" />
+
+## 環境變數
+
+<span id="admin" />
+
+### 管理員
+
+管理員賬戶在 `master` 域的首次啟動時建立。
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `ADMIN_USERNAME` | `admin` | 初始管理員使用者名稱 |
+| `ADMIN_PASSWORD` | `admin` | 初始管理員密碼 |
+| `ADMIN_EMAIL` | `admin@local` | 初始管理員郵箱 |
+
+FerrisKey 僅在管理員使用者沒有密碼時應用 `ADMIN_PASSWORD`。更改正在執行的部署中的變數不會更改密碼：請使用控制檯。使用不同的 `ADMIN_USERNAME` 啟動會建立第二個管理員使用者，而不是重新命名第一個。
+
+<span id="database" />
+
+### 資料庫
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `DATABASE_HOST` | `localhost` | PostgreSQL 主機 |
+| `DATABASE_PORT` | `5432` | PostgreSQL 埠 |
+| `DATABASE_NAME` | `ferriskey` | 資料庫名稱 |
+| `DATABASE_USER` | `ferriskey` | 資料庫使用者 |
+| `DATABASE_PASSWORD` | `ferriskey` | 資料庫密碼 |
+| `DATABASE_SCHEMA` | `public` | 資料庫模式 |
+| `DATABASE_MAX_CONNECTIONS` | `20`，或者當其更高時使用 `DATABASE_MIN_CONNECTIONS` | 單個例項對資料庫開啟的最大連線數 |
+| `DATABASE_MIN_CONNECTIONS` | `2` | 單個例項在空閒時保持的連線數 |
+
+連線池是每個例項獨立的。空閒 60 秒的連線會被關閉，直至達到最小值。每個連線會佔用 PostgreSQL 幾兆位元組，所以較小的連線池對資料庫負擔較輕。
+
+在為 PostgreSQL 的 `max_connections` 設定大小時，計數要大於連線池。啟用配置快取時（見 [快取](#caching)），每個例項在連線池外額外持有兩個用於 LISTEN/NOTIFY 的連線。在副本之間，`replicas × (DATABASE_MAX_CONNECTIONS + 2)` 必須在伺服器限制下執行，同時考慮到該資料庫的其他所有客戶端。
+
+<span id="server" />
+
+### 伺服器
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `SERVER_HOST` | `0.0.0.0` | 繫結地址 |
+| `SERVER_PORT` | `3333` | HTTP 埠 |
+| `SERVER_ROOT_PATH` | 空 | URL 路徑字首，用於部署在反向代理之後。如果省略，將新增前導 `/`，並移除尾部斜槓 |
+| `SERVER_PUBLIC_URL` | 未設定 | 源瀏覽器和服務提供者透過 `scheme://host[:port]` 存取此部署。SAML 需要此項 |
+| `SERVER_TRUST_FORWARDED_FOR` | `false` | 從 `X-Forwarded-For` 而不是 TCP 對等端讀取呼叫者的地址。參見 [客戶端地址和限制](#client-addresses-and-throttles) |
+| `SERVER_TOKEN_MAX_IN_FLIGHT` | 每 CPU 32 | 大多數 `client_credentials` 權杖請求一次處理完畢。超出部分，請求將返回 503 並帶有 `Retry-After: 1`，而不是排隊。必須至少為 1 |
+| `ALLOWED_ORIGINS` | 空 | 每條路由允許使用逗號分隔的瀏覽器來源 |
+| `ENV` | `development` | `development` 或 `production`。由 `/config` 回傳，否則未使用。已棄用，保留以相容 |
+
+`ALLOWED_ORIGINS` 值得單獨說明。每個條目必須是序列化的源（`scheme://host[:port]`），不能有路徑和萬用字元，且無效條目會在啟動時停止伺服器。它適用於每條路徑，包括那些沒有身分域的路徑：`/config`、健康檢查和 API 文件。客戶端也會為每個身分域宣告自己的 Web 源，但這些僅覆蓋身分域範圍的路徑，因此從不同於 API 的源提供的控制檯仍然需要在此列出其源。
+
+:::callout{variant="warning" title="SERVER_PUBLIC_URL 和 SAML"}
+沒有 `SERVER_PUBLIC_URL`，SAML 無法工作。如果未設定，每個 SAML 請求（登入端點、其繼續請求和後設資料描述符）都會返回 HTTP 500，並顯示錯誤頁面：“此伺服器未配置單點登入。請設定 SERVER_PUBLIC_URL。”不會回退到 `Host` 頭，因為實體 ID 已簽入每個斷言中，並且當請求透過不同主機名到達時不能更改。
+
+其他功能不需要它。OpenID Connect 發行者仍然會從每個請求構建，使用其 `Host` 頭和 `X-Forwarded-Proto`，因此在代理後，請確保兩者都能不變地到達 API。
+:::
+
+<span id="console-and-webapp-links" />
+
+### 控制檯和 Web 應用連結
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `WEBAPP_URL` | `http://localhost:5555` | 管理員控制檯的 URL。用於登入和授權頁面、電子郵件連結和 WebAuthn 來源，並用於在啟動時將控制檯的回撥註冊為重定向 URI |
+| `WEBAPP_URL_FROM_REQUEST` | `false` | 從每個請求的方案和 `Host` 構建這些連結，而不是 `WEBAPP_URL` |
+| `WEBAPP_ALLOWED_HOSTS` | 空 | 以逗號分隔的主機名，Web 應用程式所服務的主機。啟用 `WEBAPP_URL_FROM_REQUEST` 時為必填項 |
+
+除非一個部署服務多個主機名，每個主機名在 `/` 下有 Web 應用程式，並在 `SERVER_ROOT_PATH` 下有 API，否則請關閉 `WEBAPP_URL_FROM_REQUEST`。啟用時：
+
+- 伺服器在沒有 `WEBAPP_ALLOWED_HOSTS` 的情況下拒絕啟動。連結是基於 `Host` 頭構建的，否則未列出的主機可能會在密碼重置和魔術連結電子郵件中放入攻擊者的地址。
+- 每個條目為 `host`、`host:port` 或 `*.domain`，其中 `*` 代表恰好一個標籤：`*.example.com` 匹配 `acme.example.com`，不匹配 `example.com`，也不匹配 `a.b.example.com`。忽略大小寫和一個尾隨點。沒有埠的條目僅匹配方案的預設埠。
+- 當 `X-Forwarded-Proto` 是 `https` 時，該方案為 `https`，否則為 `http`，因此代理必須設定或覆蓋該頭。
+- 在構建 web 應用連結的路由上，如果請求的 `Host` 缺失、重複、非 ASCII 或不在列表中，將以 400 拒絕該請求。
+- 金鑰保持繫結在其註冊的主機上：在 `a.example.com` 上註冊的金鑰在 `b.example.com` 上無效。
+
+在此模式下，`WEBAPP_URL` 在啟動時仍然重要：它為管理控制檯的重定向 URI 提供種子。
+
+### TLS
+
+兩個變數必須一起設定。不設定任意一個即可提供普通 HTTP 並在代理處終止 TLS。
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `SERVER_TLS_CERT` | 未設定 | 證書檔案路徑，PEM 格式 |
+| `SERVER_TLS_KEY` | 未設定 | 私鑰檔案路徑，PEM 格式 |
+
+<span id="caching" />
+
+### 快取
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `CONFIG_CACHE_TTL_SECONDS` | `5` | 一個例項在重新讀取之前在記憶體中保留身分域配置的時間。`0` 可以關閉快取 |
+
+每個例項快取身分域及其設定、客戶端、分配給客戶端的作用域及其協議對映器，以及服務賬戶的角色和組。透過 API 進行的寫操作會立即清除處理該操作的例項上的條目。其他副本會在 TTL 過後看到更改。
+
+對於 `client_credentials` 授權，服務賬戶狀態最為重要：在任何例項上對服務賬戶的角色或組進行的更改，只有在 TTL 之後才能影響新的權杖。
+
+會話和已撤銷的權杖的快取時間相同，最長為 30 秒。副本透過 PostgreSQL `LISTEN`/`NOTIFY` 在頻道 `ferriskey_token_state` 上相互通報更改，因此在一個副本上登出或撤銷會立即清空其他副本的快取。當例項沒有工作監聽器時，它會跳過快取，從資料庫中讀取會話。`LISTEN` 需要保持會話的連線，因此請直接連線 PostgreSQL 或透過會話模式的連線池，而不是事務模式。
+
+使用 `CONFIG_CACHE_TTL_SECONDS=0` 時不會進行快取，沒有監聽器，每個例項也不需要額外連線。
+
+驅動 CORS 的每個客戶端 Web 源在每個身分域內的快取時間為 30 秒，無論 TTL 如何，這個延遲是固定的。透過 API 更改它們會立即重新整理處理該更改的例項。其他副本會在 30 秒內追趕上來。
+
+<span id="password-hashing" />
+
+### 密碼雜湊
+
+新的密碼雜湊使用 Argon2id，成本如下。
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `PASSWORD_HASH_MEMORY_KIB` | `7168` | 新雜湊的記憶體成本，以 KiB 為單位 |
+| `PASSWORD_HASH_ITERATIONS` | `5` | 新雜湊的迭代次數 |
+| `PASSWORD_HASH_PARALLELISM` | `1` | 新雜湊的並行度 |
+| `PASSWORD_HASH_MEMORY_BUDGET_MIB` | `256` | Argon2 在所有進行中的雜湊和驗證過程中可能一次性使用的記憶體，以 MiB 為單位 |
+
+這些值僅適用於新雜湊。驗證密碼時會從儲存的雜湊中讀取成本，當使用者使用使用了其他成本的儲存雜湊登入時，FerrisKey 會將其替換為配置成本的雜湊。提高成本後，每個使用者的雜湊將在下一次登入時升級。
+
+伺服器在啟動時會檢查這些值，並拒絕以下值：
+
+| 設定 | 限制 |
+|---|---|
+| `PASSWORD_HASH_ITERATIONS` | 至少 1，最多 16 |
+| `PASSWORD_HASH_PARALLELISM` | 至少 1，最多 8 |
+| `PASSWORD_HASH_MEMORY_KIB` | 最多 262144（256 MiB），至少達到 OWASP 對迭代次數的最低要求：1 次迭代為 47104，2 次為 19456，3 次為 12288，4 次為 9216，5 次或更多為 7168 |
+| `PASSWORD_HASH_MEMORY_BUDGET_MIB` | 足夠大以存放一個雜湊：`PASSWORD_HASH_MEMORY_BUDGET_MIB × 1024` 必須至少為 `PASSWORD_HASH_MEMORY_KIB` |
+
+預設成本為 7168 KiB，5 次迭代，1 個並行度，是 OWASP 列出的 Argon2id 配置之一。
+
+預算限制的是記憶體，而不是請求。若雜湊或驗證操作會將總記憶體超出預算，它會等待記憶體釋放，而不是分配更多，因此登入高峰會排隊而不是增加程序。驗證一個儲存的雜湊，如果其成本超過整個預算，將佔用全部預算並單獨執行。
+
+保持預算遠低於容器的記憶體限制。Helm Chart預設給 API pod 設定 512Mi 的限制，而 Argon2 只是程序佔用的一部分。
+
+<span id="secrets-at-rest" />
+
+### 靜態儲存金鑰
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `SECRETS_ENCRYPTION_KEYS` | 空 | 金鑰用於加密資料庫中的身分域簽名金鑰、TOTP種子和SMTP密碼，`id:base64`寫並用逗號分隔。Empty保持它們清晰，並在每次開始時記錄警告 |
+
+`--help`不列印該值。[靜止的金鑰](/zh-TW/discover/guides/secrets-at-rest)涵蓋格式、旋轉以及未加密的內容。
+
+<span id="authorization" />
+
+### 授權
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `AUTHZ_ENABLED` | `false` | 掛載 AuthZEN 評估端點及其後設資料文件，以及授權管理 API 的 `/realms/{realm_name}/authz` |
+
+關閉該變數後，這些路由未被掛載，答案是404。開啟該項不會為任何人開啟授權：每個身分域仍需為自己啟用租戶授權。參見[授權](/zh-TW/modules/authz/overview)。
+
+<span id="logging" />
+
+### 伐木
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `LOG_FILTER` | `info` | [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives)比如指令`info,ferriskey_core=debug` |
+| `LOG_JSON` | `false` | 傳送結構化的JSON日誌，而不是人類可讀的行 |
+
+<span id="outbound-requests" />
+
+### 出站請求
+
+FerrisKey 在交付 webhook 或獲取客戶端後設資料文件時拒絕呼叫迴環和私有地址。這兩個開關可以解除該規則，並在啟用時在開始時記錄警告。
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS` | `false` | 允許 webhook 端點解析到迴環或私有地址。僅用於本地開發。鏈路本地地址仍然被拒絕。 |
+| `CLIENT_METADATA_ALLOW_PRIVATE_ENDPOINTS` | `false` | 允許透過 http 從迴環或私有地址獲取客戶端後設資料文件。僅用於測試。鏈路本地地址仍然被拒絕。 |
+
+<span id="observability" />
+
+### 可觀測性
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `ACTIVE_OBSERVABILITY` | `false` | 啟用追蹤和指標匯出 |
+| `OTLP_ENDPOINT` | 未設定 | 用於追蹤和日誌的 OTLP 收集器端點（gRPC）。當 `ACTIVE_OBSERVABILITY` 啟用時需要。 |
+| `METRICS_ENDPOINT` | 未設定 | 用於指標的 OTLP 收集器端點（gRPC）。當 `ACTIVE_OBSERVABILITY` 啟用時需要 |
+
+Prometheus 指標也直接在 `/metrics` 上暴露，無需收集器。
+
+:::callout{variant="warning" title="某些路由不需要權杖"}
+`/metrics`、`/config`、API 文件（`/scalar`、`/swagger-ui`、`/redoc`、`/rapidoc` 和 `/api-docs/openapi.json`）以及健康探針（`/health/live` 和 `/health/ready`）都在未認證情況下掛載。設定認證後，它們位於 `SERVER_ROOT_PATH` 下。`/config` 返回版本和 `ENV` 值，`/metrics` 返回 HTTP 請求指標。如果 API 可從網際網路存取，請在您的代理或入口確定要暴露哪些。
+:::
+
+<span id="client-addresses-and-throttles" />
+
+## 客戶端地址和流量限制
+
+FerrisKey 會在 [SeaWatch](/zh-TW/modules/seawatch/overview) 安全事件和 [Compass](/zh-TW/modules/compass/overview) 流量中記錄呼叫者的 IP 地址，同時一些限流功能會按地址統計請求次數。預設情況下，地址是 TCP 對端的地址。在 Ingress 或任何代理後面，這個地址就是代理地址：每個呼叫者共享一個地址，審計記錄雖然準確，但用處不大，而限流功能會將你所有使用者計算為同一個。
+
+將 `SERVER_TRUST_FORWARDED_FOR=true` 設定為改為使用 `X-Forwarded-For` 中的地址。FerrisKey 讀取第一個、最左邊的條目，因此代理必須用真實客戶端地址替換該請求頭，而不是附加到它後面。只有在你控制的代理是唯一入口時才啟用該功能。開啟此標誌後，直接存取 API 的客戶端可以寫入任意地址，記錄和限流的地址就是該地址。
+
+節流器是固定的，儲存在記憶體中，並按副本計數，因此執行三個副本會使有效配額增加三倍。IPv6 呼叫者按其 /64 字首分組。
+
+| 節流器 | 限制 | 按……計數 | 答案 |
+|---|---|---|---|
+| 權杖端點的客戶端身分認證失敗 | 每分鐘 10 次失敗 | IP 地址、身分域和客戶端 ID | 429 錯誤，`Retry-After: 60` |
+| 動態客戶端註冊 | 每分鐘 10 次請求 | IP 地址 | 429 錯誤，`Retry-After: 60` |
+| 動態客戶端註冊 | 每小時 60 次註冊 | 身分域 | 429 錯誤，`Retry-After: 60` |
+| 首次使用尚未成為客戶端的客戶端後設資料文件 URL | 每分鐘 30 次 | IP 地址 | 視為無效客戶端 |
+
+<span id="startup-checks" />
+
+## 啟動檢查
+
+API 在啟動時驗證其配置，並在以下情況之一發生時退出，同時列印原因：
+
+| 設定 | 拒絕 |
+|---|---|
+| `ALLOWED_ORIGINS` | 條目不是`http`或`https`起源：它是萬用牌，不是URL，也不是攜帶路徑、查詢、片段或憑據 |
+| `SECRETS_ENCRYPTION_KEYS` | 條目未被`id:base64`，id使用除字母、數字、`-`和`_`以外的字元，或出現兩次，或者某個鍵在base64中不是32位元組 |
+| `PASSWORD_HASH_*` | 某個值超出了[密碼雜湊](#password-hashing)中列出的限制。 |
+| `DATABASE_MAX_CONNECTIONS`, `DATABASE_MIN_CONNECTIONS` | 最大值為0，或最小值高於最大值 |
+| `WEBAPP_URL_FROM_REQUEST` | 它開啟時，`WEBAPP_ALLOWED_HOSTS`為空或包含非`host`、`host:port`或`*.domain`的條目 |
+| `ACTIVE_OBSERVABILITY` | 它開著，但缺了 `OTLP_ENDPOINT` 或 `METRICS_ENDPOINT` |
+| `SERVER_TLS_CERT`, `SERVER_TLS_KEY` | 只有一個是設定好的 |
+| `SERVER_TOKEN_MAX_IN_FLIGHT` | 其值為0 |
+
+資料遷移失敗也會停止啟動。參見[升級](/zh-TW/discover/getting-started#upgrading-ferriskey)。
+
+<span id="generating-the-openapi-spec" />
+
+## 生成 OpenAPI 規範
+
+API 二進位制檔案攜帶一個子命令，可以在不觸碰資料庫的情況下列印其 OpenAPI 文件：
+
+```bash
+ferriskey-api gen-api --output openapi.json
+```
+
+省略 `--output` 將規範寫入標準輸出。
+
+<span id="deployment-examples" />
+
+## 部署示例
+
+### Docker Compose
+
+```yaml title="docker-compose.override.yaml"
+services:
+  api:
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=ferriskey
+      - DATABASE_USER=ferriskey
+      - DATABASE_PASSWORD=a-strong-password
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=a-strong-admin-password
+      - ADMIN_EMAIL=admin@yourorg.com
+      - ALLOWED_ORIGINS=https://iam.yourorg.com
+      - WEBAPP_URL=https://iam.yourorg.com
+      - LOG_FILTER=info
+```
+
+<span id="bare-metal" />
+
+### 裸機
+
+直接設定變數，或者在啟動伺服器的目錄中放置一個 `.env` 檔案。伺服器也會在父目錄中查詢。
+
+```bash title=".env"
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=ferriskey
+DATABASE_USER=ferriskey
+DATABASE_PASSWORD=a-strong-password
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=a-strong-admin-password
+ADMIN_EMAIL=admin@yourorg.com
+ALLOWED_ORIGINS=https://iam.yourorg.com
+WEBAPP_URL=https://iam.yourorg.com
+SERVER_PORT=3333
+LOG_FILTER=info
+```
+
+然後執行伺服器：
+
+```bash
+./ferriskey-api
+```
+
+<span id="moving-configuration-between-realms" />
+
+## 在身分域之間移動配置
+
+門戶主題、門戶佈局和電子郵件模板可以作為檔案匯出和匯入，來自其他 IAM 的密碼雜湊可以按使用者匯入。參見 [匯出與匯入](/zh-TW/discover/guides/portability)。
+
+<span id="smtp-configuration" />
+
+## SMTP 配置
+
+魔法連結、密碼重置和電子郵件驗證的電子郵件傳送是按身分域（realm）配置的，在資料庫中設定，而不是透過環境變數。在管理控制檯側邊欄中開啟 **Emails**，切換到 **SMTP** 選項卡，然後填寫主機、埠、加密模式、憑據和發件人。SMTP 密碼是 `SECRETS_ENCRYPTION_KEYS` 加密的值之一。
+
+:::callout{variant="info" title="沒有全域性 SMTP"}
+每個身分域都有自己的 SMTP 配置，並且可以指向不同的郵件提供商。[電子郵件與模板指南](/zh-TW/discover/guides/email) 包含完整的欄位參考和 API 端點。
+:::

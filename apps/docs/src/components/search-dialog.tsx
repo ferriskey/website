@@ -10,18 +10,19 @@ interface PagefindResult {
 }
 
 let pagefindInstance: any = null
-let pagefindFailed = false
+let pagefindLanguage: string | null = null
 
 async function getPagefind() {
-  if (pagefindInstance) return pagefindInstance
-  if (pagefindFailed) return null
+  const language = document.documentElement.lang
+  if (pagefindInstance && pagefindLanguage === language) return pagefindInstance
   try {
     const module = await new Function("return import('/pagefind/pagefind.js')")()
+    if (pagefindInstance) await module.destroy()
     await module.init()
     pagefindInstance = module
+    pagefindLanguage = language
     return pagefindInstance
   } catch {
-    pagefindFailed = false
     return null
   }
 }
@@ -29,9 +30,10 @@ async function getPagefind() {
 interface SearchDialogProps {
   open: boolean
   onClose: () => void
+  locale: string
 }
 
-export function SearchDialog({ open, onClose }: SearchDialogProps) {
+export function SearchDialog({ open, onClose, locale }: SearchDialogProps) {
   const [query, setQuery] = React.useState('')
   const [results, setResults] = React.useState<PagefindResult[]>([])
   const [loading, setLoading] = React.useState(false)
@@ -54,9 +56,11 @@ export function SearchDialog({ open, onClose }: SearchDialogProps) {
       return
     }
 
+    let cancelled = false
     const timeout = setTimeout(async () => {
       setLoading(true)
       const pagefind = await getPagefind()
+      if (cancelled) return
       if (!pagefind) {
         setLoading(false)
         setUnavailable(true)
@@ -65,13 +69,17 @@ export function SearchDialog({ open, onClose }: SearchDialogProps) {
 
       const search = await pagefind.search(query)
       const data = await Promise.all(search.results.slice(0, 8).map((r: any) => r.data()))
+      if (cancelled) return
       setResults(data)
       setSelectedIndex(0)
       setLoading(false)
     }, 200)
 
-    return () => clearTimeout(timeout)
-  }, [query])
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
+  }, [query, locale])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {

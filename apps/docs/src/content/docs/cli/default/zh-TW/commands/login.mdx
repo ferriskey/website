@@ -1,0 +1,72 @@
+---
+title: "登入"
+description: "透過 OAuth 2.0 裝置授權登入併為其他命令保持會話。"
+icon: log-in
+order: 6
+---
+
+# `login`
+
+使用 OAuth 2.0 裝置授權（[RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)）登入 FerrisKey。成功後，權杖將儲存到 `credentials.toml`，並由後續命令重複使用。
+
+```bash
+ferris-ctl login [--scope <scope>] [--no-browser]
+```
+
+| 標誌 | 預設 | 說明 |
+|------|---------|-------------|
+| `--scope` | `openid profile email` | OAuth 作用域（以空格分隔） |
+| `--no-browser` | `false` | 不要在瀏覽器中開啟驗證 URL |
+
+該命令讀取活動上下文，或者你透過 `--context` 選擇的上下文。它還支援 `--url`、`--client-id` 和 `--realm`，每個都單獨替換上下文中匹配的欄位，因此當你提供 `--url` 和 `--client-id` 時，它甚至可以在沒有上下文的情況下執行。身分域為 `--realm`，然後是上下文的身分域，最後是 `master`。`login` 從不讀取 `--client-secret` 標誌；如果上下文儲存了一個金鑰，CLI 會在輪詢權杖時傳送它。
+
+<span id="before-you-log-in" />
+
+## 在你登入之前
+
+客戶端必須允許裝置授權授予，否則伺服器會以 `unauthorized_client` 拒絕請求。FerrisKey 不提供這樣的客戶端，CLI 也無法建立：`ferris-ctl client create` 總是關閉授予，並且沒有對應的標誌。透過以下方式之一啟用它：
+
+- 在管理控制檯中，建立一個啟用了 **OAuth 2.0 裝置授權** 的客戶端，或者開啟已有客戶端，進入其 **設定** 標籤，並在 **功能配置** 下啟用它。
+- 在一個身分域 [描述檔案](/zh-TW/cli/import/config-file#clients) 中，為客戶端設定 `device_authorization_grant_enabled: true`，並使用已經登入的身分匯入它。
+
+[入門指南](/zh-TW/cli/getting-started#create-a-client-for-the-cli) 演示了控制檯操作步驟。
+
+<span id="the-flow" />
+
+## 流程
+
+::::step-group
+:::step{title="請求裝置碼"}
+CLI 向 FerrisKey 請求裝置碼，並接收一個驗證 URL 和使用者程式碼。
+:::
+
+:::step{title="在瀏覽器中批准"}
+CLI 會列印 URL 和使用者碼，然後當伺服器提供完整驗證 URL 時，會在瀏覽器中開啟它（使用 `--no-browser` 可以跳過此步驟並自行開啟 URL）。確認使用者碼並登入。
+:::
+
+:::step{title="輪詢權杖"}
+CLI 會按照伺服器提供的間隔輪詢 FerrisKey（如果伺服器未提供，則為 5 秒），直到你批准或程式碼過期。`authorization_pending` 回答表示繼續等待，`slow_down` 則將間隔增加 5 秒。網路錯誤或伺服器錯誤會在 1 秒後重試，間隔逐漸加倍，最多到 30 秒，直到程式碼過期。
+:::
+
+:::step{title="儲存會話"}
+權杖被寫入 `credentials.toml`（在 Unix 上為 `0600` 模式），CLI 會列印 `Logged in as <name> on realm <realm>.`。這個名稱來源於 ID 權杖（`preferred_username`，然後是 `email`，再是 `name`），如果沒有則使用客戶端 ID。其他命令會自動重用此會話。
+:::
+::::
+
+```bash title="Headless / SSH session"
+ferris-ctl login --no-browser
+```
+
+`credentials.toml` 保留一個會話，針對一個伺服器、身分域和客戶端。新的登入會替換它。後續命令僅在上下文指向相同的伺服器 URL、登入身分域和客戶端 ID 時使用該會話；參見 [Authentication](/zh-TW/cli/authentication#resolution-order)。
+
+如果你拒絕請求，程式碼過期，或者伺服器拒絕客戶端，該命令會以狀態 1 退出，並顯示指明原因的訊息。
+
+<Callout variant="info" title="取消">
+
+當 CLI 等待時按下 `Ctrl-C` 可以中止登入。該命令以狀態 130 退出並且不會寫入任何憑據。
+
+</Callout>
+
+`login` 列印 `-o` 輸出的純文字。
+
+[Authentication](/zh-TW/cli/authentication) 涵蓋其餘部分：憑據如何解析、何時改用客戶端憑據，以及檔案格式。

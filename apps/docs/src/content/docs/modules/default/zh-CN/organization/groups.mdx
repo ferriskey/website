@@ -1,0 +1,160 @@
+---
+title: "群组"
+description: "FerrisKey 组织中的层级组：嵌套成员资格、继承的角色、组属性和组 API。"
+icon: network
+order: 82
+---
+
+<span id="groups" />
+
+# 群组
+
+组在组织内部增加结构。它们形成一棵树，成员资格是递归的：一个组的成员实际上是其上级每个组的成员，并继承映射到每个组的角色。
+
+这就是为什么“工程部门的每个人都可以读取构建日志，而平台子团队也可以部署”可以表达，而无需逐个用户分配角色。
+
+<span id="the-group-tree" />
+
+## 组树
+
+一个组属于一个组织，并通过 `parent_group_id` 指向一个父级。`null` 或缺少父级意味着该组处于顶级。
+
+```text
+Acme Corp (organization)
+└── Engineering              roles: build:read
+    ├── Platform             roles: deploy
+    └── Frontend
+```
+
+添加到 Platform 的用户是 Platform 和 Engineering 的成员，并持有 `deploy` 和 `build:read`。添加到 Engineering 的用户仅持有 `build:read`。
+
+兄弟组之间名称唯一：同一父级下的两个组，或两个顶级组，不能共享相同名称。删除一个组会删除其子组及其成员、角色映射和属性。
+
+<span id="group-fields" />
+
+## 组字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | UUID v7 | 标识符 |
+| `organization_id` | UUID | 组所属的组织 |
+| `parent_group_id` | UUID 或 null | 父组。顶级组为 `null` |
+| `name` | 字符串 | 组名，必填，最多 255 个字符 |
+| `description` | 字符串 | 自由文本描述 |
+| `created_at` | 日期时间（UTC） | 创建时间戳 |
+| `updated_at` | 日期时间（UTC） | 最后修改时间戳 |
+
+更新一个组可以移动它：发送 `parent_group_id` 会将其重新置于该组下。新的父级必须属于同一个组织，并且不能是该组本身或其任何子孙（400）。如果省略 `parent_group_id`，或发送 `null`，将保持当前父级。该 API 无法将组移动回顶层。
+
+<span id="endpoints" />
+
+## 端点
+
+所有这些都限定在一个身份域和组织中：路径以 `/realms/{realm_name}/organizations/{organization_id}` 开头。
+
+<span id="groups-1" />
+
+### 群组
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups` | 列出组织的组 |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups` | 创建一个组。返回 `201` |
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | 读取一个组 |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | 更新或移动一个组 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}` | 删除一个组及其子组。返回 `204` |
+
+列表是一个扁平的分页页面，而不是树状结构。契约描述在 [API 列表](/zh-CN/discover/guides/api-listings) 中。每个条目包括该组自身的字段和一个 `child_count`，即直接子组的数量：
+
+```json title="GET /realms/acme/organizations/{organization_id}/groups?parent_group_id={engineering_id}"
+{
+  "data": [
+    {
+      "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f",
+      "organization_id": "01936b2e-1234-7000-abcd-000000000001",
+      "parent_group_id": "0199a4f2-0000-7b8a-9f00-1a2b3c4d5e00",
+      "name": "Platform",
+      "description": "Runs the deploy pipeline",
+      "created_at": "2026-07-10T09:00:00Z",
+      "updated_at": "2026-07-10T09:00:00Z",
+      "child_count": 0
+    }
+  ],
+  "metadata": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1,
+    "first_page": 1,
+    "last_page": 1,
+    "next_page": null,
+    "prev_page": null
+  }
+}
+```
+
+要遍历树，请使用`is_root=true`请求顶级，然后使用`parent_group_id`请求每个组的子级。其他筛选器为：
+
+| 参数 | 匹配 |
+|---|---|
+| `search` | 名称或描述的大小写不敏感子字符串 |
+| `name`, `description` | 该字段的大小写不敏感子字符串 |
+| `parent_group_id` | 该组的直接子项 |
+| `is_root` | `true` 保留顶级组，`false` 保留嵌套组。`is_root=true` 不能与 `parent_group_id` 组合使用 |
+| `ids` | 最多 100 个组 ID 的逗号分隔列表 |
+| `created_from`, `created_to` | RFC 3339 日期时间，包括和不包括 |
+
+`order_by` 接受 `name`、`created_at`（默认）和 `updated_at`。
+
+<span id="members" />
+
+### 成员
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members` | 列出组的成员，分页显示 |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members` | 将用户添加到组 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/members/{user_id}` | 将用户从组中移除 |
+
+添加成员需要 `{ "user_id": "…" }`，以会员身份回答 `201`，并拒绝来自其他身份域的用户或已在组中的用户。移除不在组中的用户会返回 404。
+
+成员列表已经丰富，因此客户端可以在不遍历用户目录的情况下渲染它。每个条目包含 `id`、`group_id`、`user_id`、`username`、`email`、`firstname`、`lastname`、`enabled` 和 `created_at`，以及用户加入的日期。它可以在 `search`（用户名或邮箱）、`username`、`email`、`enabled`、`created_from` 和 `created_to` 上进行筛选，并在 `username`、`email` 或 `created_at`（默认）上进行排序。
+
+<span id="roles" />
+
+### 角色
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles` | 列出映射到该组的角色 |
+| `POST` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles` | 将角色映射到该组 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/roles/{role_id}` | 取消映射角色 |
+
+映射采用 `{ "role_id": "…" }` 并返回 `204`。角色必须属于同一个身份域。列表未分页：它以普通数组返回完整的角色对象。群组的每个成员以及其下的每个子群组都继承此处映射的角色。
+
+<span id="attributes" />
+
+### 属性
+
+| 方法 | 端点 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes` | 列出群组的属性 |
+| `PUT` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes/{key}` | 新增或更新属性 |
+| `DELETE` | `/realms/{realm_name}/organizations/{organization_id}/groups/{group_id}/attributes/{key}` | 删除属性。返回 `204` |
+
+与 [组织属性](/zh-CN/modules/organization/attributes) 具有相同的键值形状和相同的新增或更新行为，但列表是属性的普通数组，而不是带有 `data` 键的对象。
+
+<span id="permissions" />
+
+## 权限
+
+组使用组织模块的权限。读取组、其成员、角色和属性需要 `view_organizations`、`manage_organizations` 或 `manage_realm`。创建、更新和删除组，以及更改其成员、角色和属性，需要 `manage_organizations` 或 `manage_realm`。`manage_users` 和 `view_users` 不足够。没有特定于组的权限。
+
+::::card-group{cols=2}
+:::card{label="成员" icon="lucide:users" href="/zh-CN/modules/organization/members"}
+直接的组织成员资格以及分配给成员的角色。
+:::
+:::card{label="角色与权限" icon="lucide:shield-check" href="/zh-CN/discover/core-concepts/roles"}
+角色和按位权限系统的工作原理。
+:::
+::::

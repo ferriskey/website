@@ -1,0 +1,125 @@
+---
+title: "概述"
+description: "自助账户界面：用户无需管理员即可更改自己的信息。"
+icon: user-cog
+order: 70
+---
+
+<span id="account" />
+
+# 账户
+
+FerrisKey 中的其他所有功能都是由管理员针对某人执行的。账户模块则相反：这是用户操作**自己**的界面，也是唯一一个调用者和目标在构造上是同一个人的模块。
+
+整个设计围绕这一区别展开。大多数端点位于 `/users/me` 下，从调用者自己的令牌中解析主体，且不接受用户 ID，因此没有可被篡改的 ID，也无需额外权限。用户修改自己的密码不需要 `manage_users`，持有 `manage_users` 在这里也不会获得额外权限。会话端点是唯一的例外，详见[下文](#sessions)。
+
+<span id="what-a-user-can-do" />
+
+## 用户可以做的操作
+
+| 区域 | 操作 |
+|---|---|
+| 个人资料 | 阅读并更新他们自己的姓名和电子邮件，设置他们的语言环境 |
+| 密码 | 更改它，根据域的[密码策略](/zh-CN/discover/core-concepts/password-policy) |
+| 身份认证器应用 | 注册一个TOTP身份认证器，确认它，移除它 |
+| 通行密钥 | 注册一个通行密钥，列出凭据，删除一个 |
+| 会话 | 列出他们的会话并撤销任何一个 |
+
+在控制台中，账户页面有三个标签页：个人信息、安全和会话。
+
+<img class="only-light" src="/dashboard/account_security-light.jpg" alt="FerrisKey账户安全标签页显示密码更改并带有实时策略反馈、身份认证器应用和通行密钥部分" />
+<img class="only-dark" src="/dashboard/account_security-dark.jpg" alt="FerrisKey账户安全标签页显示密码更改并带有实时策略反馈、身份认证器应用和通行密钥部分" />
+
+<span id="profile" />
+
+## 个人资料
+
+```
+GET /realms/{realm_name}/users/me
+PUT /realms/{realm_name}/users/me
+```
+
+更新的主体包含 `firstname`、`lastname`、`email` 和 `username`。用户可以更改的内容不是固定的：由域决定。`edit_username_enabled` 管理用户名，默认情况下关闭。当用户名关闭时发送更改用户名的请求会返回 403，并且控制台显示该字段被锁定。
+
+电子邮件是需要考虑的字段，因为它也是恢复地址。更改它会将 `email_verified` 重置为 `false`，无论其先前的值是什么。该调用不会发送验证信息，也不会添加 `verify_email` 所需的操作，因此如果需要，请在你的流程中自行构建该步骤。
+
+<span id="locale" />
+
+### 区域设置
+
+```
+PUT /realms/{realm_name}/users/@me/locale
+```
+
+正文是 `{ "locale": "zh-CN" }`。FerrisKey 检查标签是否格式正确，即两个字母的语言代码，可选两个字母的地区代码，否则返回 422 `malformed_locale`。它不会将标签与域的 `supported_locales` 进行比较。发送 `null` 会清除存储的值。
+
+FerrisKey 会存储该值，控制台会读取回它。控制台和默认登录页面会发送 `en` 和 `zh-CN`，用户的语言环境是控制台首先查询的，其次才是浏览器和域的 `default_locale`。FerrisKey 不会从中选择电子邮件的语言。[本地化](/zh-CN/discover/guides/localization) 提供完整的解析顺序和域默认值。
+
+<Callout variant="warning" title="这条路径写的是 @me，而不是 me">
+
+其他每个账户端点拼写为 `/users/me`。区域端点是 `/users/@me/locale`，`GET /users/@me/realms` 也是如此。这是当前 API 的不一致，而不是本页面的拼写错误。按文中所写编写代码。
+
+</Callout>
+
+<span id="sensitive-operations-need-an-elevation" />
+
+## 敏感操作需要权限提升。
+
+读取你的个人资料只需要一个有效的令牌。更改凭据需要证明正在操作的人仍然是账户持有人，而不是偶然找到解锁笔记本的人。
+
+```
+POST /realms/{realm_name}/users/me/reauthenticate
+```
+
+必须**准确提供一个** `password` 或 `otp_code`；其他任何情况都会返回 400。响应会包含 `elevation_id` 和 `expires_at`。权限提升持续**五分钟**，并绑定到调用会话，因此访问令牌必须携带会话。每个敏感操作随后使用该 `elevation_id`，并且在过期之前同一个 `elevation_id` 可用于所有敏感操作。密码更改会清除用户所有未使用的权限提升。
+
+```json title="Response"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "expires_at": "2026-09-24T18:42:11Z"
+}
+```
+
+错误的证明会返回 401，并计为一次失败的登录。它会增加计数器，当达到域的 `lockout_threshold` 次失败（默认是 10 次）时，会锁定账户 `lockout_duration_seconds`（默认 900 秒），并且被锁定的账户在这里也会被拒绝。通过外部目录登录的账户没有本地密码，因此密码证明会返回 409。
+
+<Callout variant="info" title="第二因素无法轮换其他因素">
+
+添加、更换或移除登录凭据都要求用密码 **证明权限提升**，而不是使用 OTP 代码。否则，被盗的第二因素可能将自己注册为唯一因素，从而锁住账户所有者。因素不得能够轮换它所属的集合，包括它自己。
+
+更改密码是例外。它接受任何有效的权限提升，因为请求体中也携带了当前密码，这相当于通过另一种方式进行的相同证明。
+
+</Callout>
+
+[安全](/zh-CN/modules/account/security)涵盖每个操作及调用它们的顺序。
+
+<span id="sessions" />
+
+## 会话
+
+```
+GET    /realms/{realm_name}/users/{user_id}/sessions
+DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}
+```
+
+这是两个携带用户ID的自助端点。调用者可以在自己的ID上使用它们而无需权限。在他人的ID上，列出需要`manage_users`、`manage_realm`或`view_users`，而撤销需要`manage_users`。
+
+列表是分页的（参见[分页列表](/zh-CN/discover/guides/api-listings)），并且包括已过期的会话。每个条目都有`id`、`created_at`、`expires_at`、`last_seen_at`、`ip_address`、`user_agent`和`persistent`，对于使用“记住我”开启的会话亦然。过滤器为`persistent`、`ip_address`和`user_agent`，加上最近两个的`search`以及`created_from`和`created_to`。`order_by`接受`created_at`（默认）、`last_seen_at`或`expires_at`。
+
+撤销会话会立即使其令牌失效，并在 [SeaWatch](/zh-CN/modules/seawatch/overview) 中写入一个 `session_revoked` 事件。控制台的会话选项卡就是基于这两个调用构建的。
+
+<span id="what-this-surface-deliberately-does-not-do" />
+
+## 此界面有意不执行的操作
+
+它不会为其他人重置凭据，这仍然是 `manage_users` 下的管理操作。它不会更改角色或组织，因此用户不能为自己授予任何权限。它不会删除账户，因为自助删除功能未开放。
+
+它也没有恢复码屏幕。客户端通过 `POST /login-actions/generate-recovery-codes` 使用 `reauthenticate` 的权限提升来生成 [恢复码](/zh-CN/modules/trident/recovery-codes)，但控制台或默认门户都不会调用它。
+
+::::card-group{cols=2}
+:::card{label="账户安全" icon="lucide:shield-check" href="/zh-CN/modules/account/security"}
+密码、身份认证器和密钥操作，逐端点说明。
+:::
+:::card{label="Trident" icon="lucide:shield" href="/zh-CN/modules/trident/overview"}
+多因素认证的另一面：登录挑战期间发生的情况。
+:::
+::::

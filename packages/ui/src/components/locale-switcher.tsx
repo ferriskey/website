@@ -19,7 +19,9 @@ const localeNames: Record<string, string> = {
   es: 'Espanol',
   pt: 'Portugues',
   ja: 'Japanese',
-  zh: 'Chinese',
+  zh: '中文',
+  'zh-CN': '简体中文',
+  'zh-TW': '繁體中文',
   ko: 'Korean',
   ru: 'Russian',
   it: 'Italiano',
@@ -31,7 +33,7 @@ function setLocaleCookie(locale: string) {
 
   // Set cookie without domain for public suffixes (e.g. pages.dev, github.io)
   // and with root domain for custom domains (e.g. .explainer.dev)
-  const isPublicSuffix = parts.length <= 2 || ['pages.dev', 'github.io', 'vercel.app', 'netlify.app', 'workers.dev'].some(
+  const isPublicSuffix = parts.length <= 1 || /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || ['pages.dev', 'github.io', 'vercel.app', 'netlify.app', 'workers.dev'].some(
     (s) => hostname.endsWith(s)
   )
 

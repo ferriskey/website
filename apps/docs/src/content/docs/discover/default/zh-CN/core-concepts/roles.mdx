@@ -1,0 +1,189 @@
+---
+title: "角色与权限"
+description: "FerrisKey 中的按位角色系统：权限集合、位掩码操作和角色映射。"
+icon: shield-check
+order: 15
+---
+
+<span id="roles--permissions" />
+
+# 角色与权限
+
+FerrisKey 中的权限是 64 位整数中的位。一个角色是它们的命名集合，而授权检查是一次位与操作。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+每个权限映射到一个独特的二的幂：
+
+```
+CreateClient        = 0b0000...0001  (bit 0)
+ManageAuthorization = 0b0000...0010  (bit 1)
+ManageClients       = 0b0000...0100  (bit 2)
+...
+```
+
+一个角色将其权限存储为单个 `u64` 位掩码，即所有包含权限位的按位或。检查某个权限是一次 AND 操作：
+
+```rust title="Permission check"
+fn has_permission(user_permissions: u64, required: u64) -> bool {
+    user_permissions & required == required
+}
+```
+
+:::callout{variant="info" title="一个操作可以接受多个权限，任何一个都可以授权。"}
+大多数操作受一组权限而非单个权限保护，并且拥有该组中的**任何**成员就足够了。例如，读取联盟提供者可以接受 `manage_realm` 或 `view_realm`。因此，`manage_*` 权限通常意味着匹配的 `view_*`，并且你不需要同时授予两者。
+:::
+
+<span id="permissions-reference" />
+
+## 权限参考
+
+控制台将30个权限分为11个分类，这也是理解它们最方便的方式：你很少只授予一个权限，而是授予一个分类的读取权限或一个分类的写入权限。
+
+<img class="only-light" src="/dashboard/role_permissions-light.jpg" alt="FerrisKey角色权限编辑器显示权限分类及其启用数量" />
+<img class="only-dark" src="/dashboard/role_permissions-dark.jpg" alt="FerrisKey角色权限编辑器显示权限分类及其启用数量" />
+
+| 分类 | 权限 |
+|---|---|
+| 用户管理 | 3 |
+| 客户端管理 | 4 |
+| 角色与授权 | 5 |
+| 身份域管理 | 3 |
+| 身份提供者 | 2 |
+| 事件与审计 | 2 |
+| 群组 | 1 |
+| 客户端作用域 | 3 |
+| Webhook | 3 |
+| 邮件模板 | 2 |
+| 组织 | 2 |
+
+编辑角色的权限集只需一次调用：
+
+```
+PATCH /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+它会替换整个权限集，而不是合并，因此请发送你希望角色最终拥有的完整权限列表。
+
+
+API 和 CLI 都使用它们的 snake_case 名称来接收权限，所以是 `manage_realm`，而不是 `ManageRealm` 也不是 `realm:manage`。未识别的名称处理方式取决于谁保存了角色。持有 `manage_realm` 的调用者会被静默移除，这在角色看起来没有授予任何权限时值得记住。任何其他调用者将被拒绝，并返回 403（`cannot grant a permission you do not hold`），因为与任何权限都不匹配的名称也是调用者无法持有的权限。
+
+<span id="manage" />
+
+### 管理
+
+| 权限 | 说明 |
+|---|---|
+| `create_client` | 创建新的 OAuth2 客户端 |
+| `manage_authorization` | 编写身份域的授权规则（架构、策略、模板）并切换身份域的授权开关 |
+| `manage_clients` | 更新和删除客户端 |
+| `manage_events` | 管理审计事件配置 |
+| `manage_identity_providers` | 配置外部身份提供者 |
+| `manage_realm` | 更新身份域设置 |
+| `manage_users` | 创建、更新和删除用户 |
+| `manage_roles` | 创建、更新和删除角色 |
+| `manage_webhooks` | 配置 webhook 订阅 |
+| `manage_client_scopes` | 管理客户端作用域和协议映射器 |
+| `manage_email_templates` | 创建、更新和删除电子邮件模板 |
+| `manage_organizations` | 创建、更新和删除组织、其组及其成员 |
+
+<span id="query" />
+
+### 查询
+
+| 权限 | 说明 |
+|---|---|
+| `query_clients` | 列出和搜索客户端 |
+| `query_groups` | 列出和搜索组 |
+| `query_realms` | 列出和搜索身份域 |
+| `query_users` | 列出和搜索用户 |
+| `query_webhooks` | 列出和搜索 webhook |
+| `query_client_scopes` | 列出和搜索客户端作用域 |
+
+<span id="view" />
+
+### 查看
+
+| 权限 | 说明 |
+|---|---|
+| `view_authorization` | 读取那些规则、验证和模拟策略，并查看哪些策略决定了评估 |
+| `view_clients` | 查看客户端详细信息 |
+| `view_events` | 查看审计事件 |
+| `view_identity_providers` | 查看身份提供者详细信息 |
+| `view_realm` | 查看身份域详细信息 |
+| `view_users` | 查看用户详细信息 |
+| `view_roles` | 查看角色详情 |
+| `view_webhooks` | 查看 webhook 详情 |
+| `view_client_scopes` | 查看客户端作用域详情 |
+| `view_email_templates` | 查看邮件模板 |
+| `view_organizations` | 查看组织、其组及其成员 |
+
+<span id="evaluate" />
+
+### 评估
+
+| 权限 | 说明 |
+|---|---|
+| `evaluate_authorization` | 像作为应用程序强制执行它们一样向身份域请求访问决策 |
+
+`evaluate_authorization` 是第30个权限，第29位。它本身不赋予对规则的任何权利，并且只对服务账户有效：评估端点会对其他所有调用者返回403，包括持有 `manage_realm` 的用户。将其授予一个角色，然后将该角色赋予执行你策略的客户端的服务账户。[Authz 模块](/zh-CN/modules/authz/overview#permissions) 解释了其余部分。
+
+<span id="actions-and-how-a-check-is-resolved" />
+
+## 操作，以及检查如何解决
+
+权限是角色存储的内容。它们不是代码为操作命名的方式。
+
+每个受授权保护的操作都有一个稳定的操作ID，形式为 `resource_type:verb`，例如 `client:create`、`user_role:assign` 或 `security_event:read`。共有 110 个，其中 15 个属于 Authz 模块本身（`authorization:evaluate` 以及 `authorization_policy:*`、`authorization_schema:*`、`authorization_state:*` 和 `authorization_template:*` ID）。这些名称是稳定的：一个授权引擎会将一个操作解析为授予该操作的权限集合，并且映射保存在一个决策表中，而不是分散在各个调用点。
+
+在设计角色时，有两件重要的事情要注意。你授予的权限和代码检查的权限是不同的层次：你分配了 `manage_users`，代码却询问 `user:update` 是否允许，而引擎会在两者之间进行桥接。有些检查会在身份匹配时短路。一小部分操作允许主体在*自身就是*目标时进行操作，无论其权限如何，这就是用户可以在不持有 `view_users` 的情况下读取自己的资料。自助服务通过[其自己的端点](/zh-CN/modules/account/security)而不是管理员端点进行。
+
+:::callout{variant="info" title="不是评判你的应用程序的规则"}
+该目录为内部目录。FerrisKey 在进程内解析它，以保护其自身的管理 API，评估端点不使用这些 ID。[Authz 模块](/zh-CN/modules/authz/overview) 回答关于你自己应用程序的 [AuthZEN](/zh-CN/learn/authzen/overview) 请求，使用你的身份域编写的 Cedar 策略。它的操作来自身份域的模式，例如 `document:read`。
+:::
+
+<span id="role-mappings" />
+
+## 角色映射
+
+角色通过角色映射附加到用户，包括服务账号用户。用户的实际权限是分配给他们的每个角色位掩码的按位或结果。
+
+以一个拥有两个角色的用户为例：
+
+- 查看者，持有 `view_users | view_clients` = `0b...10100`
+- 用户管理员，持有 `manage_users | query_users` = `0b...01010`
+
+实际掩码为 `0b...11110`：他们可以查看和管理用户，查看客户端，并查询用户。
+
+<span id="managing-roles" />
+
+## 管理角色
+
+```
+GET    /realms/{realm_name}/roles
+POST   /realms/{realm_name}/roles
+GET    /realms/{realm_name}/roles/{role_id}
+PUT    /realms/{realm_name}/roles/{role_id}
+DELETE /realms/{realm_name}/roles/{role_id}
+PATCH  /realms/{realm_name}/roles/{role_id}/permissions
+```
+
+客户端角色是在其客户端下创建的：`POST /realms/{realm_name}/clients/{client_id}/roles`。
+
+:::callout{variant="warning" title="角色的作用作用域是固定的，删除不会具有追溯效果。"}
+角色在创建时附加到身份域或客户端上，**不支持在作用作用域之间移动**，因此请重新创建。
+
+删除角色会永久移除所有用户分配，但**已发放的令牌在过期前仍然有效**。两者之间的时间窗口是访问令牌的有效期，因此在删除角色时也应撤销会话，因为该角色本不应被授予。
+:::
+
+**所需权限：** `view_roles`、`manage_roles` 或 `manage_users` 具有读取权限（`manage_users` 在列表中，因为分配角色需要查看它）。`manage_roles` 具有写入权限。`manage_realm` 授予全部权限。
+
+<span id="realm-and-client-roles" />
+
+## 身份域和客户端角色
+
+身份域角色是在身份域上定义的，并适用于其所有客户端。客户端角色仅限于一个客户端，并且只在该客户端的上下文中有意义。两者分配给用户的方式相同，并且角色ID在这两种作用域内都是唯一的。
+
+当用户进行身份认证时，他们的角色将被解析，并通过协议映射器写入访问令牌作为声明，因此资源服务器可以在不回调到 FerrisKey 的情况下授权请求。

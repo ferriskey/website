@@ -1,0 +1,121 @@
+---
+title: "授权生态系统"
+description: "OPA、Cerbos、Cedar、OpenFGA 的巡礼，以及 AuthZEN 如何连接它们。"
+icon: network
+order: 2
+---
+
+<span id="the-authorization-ecosystem" />
+
+# 授权生态系统
+
+细粒度授权有多个策略引擎。它们在规则编写方式、擅长的领域以及集成方式上有所不同。AuthZEN 是新兴的线路协议，让你可以通过一个 API 形状与它们中的任何一个进行通信。
+
+这里是整体情况概览。标签可以灵活对待；引擎之间不断互相借鉴。
+
+<span id="opa-open-policy-agent" />
+
+## OPA（Open Policy Agent）
+
+应用最广泛的通用策略引擎。开源。CNCF 毕业项目。
+
+- **策略语言:** Rego，一种受Datalog影响的语言。功能强大，有时简洁。
+- **优势:** 可在任何地方嵌入。用于Kubernetes准入控制、API网关、微服务策略、基础设施即代码策略。生态系统庞大。
+- **最适合:** 需要在基础设施和应用程序中使用统一策略引擎的团队。非常适合平台/DevOps用例。
+- **注意:** Rego有学习曲线。在高QPS的应用程序级决策中进行性能调优可能需要一些工作。
+
+## Cerbos
+
+开源。专门为应用程序级授权设计。
+
+- **策略语言:** YAML / 可读性强的规则。以资源为中心。
+- **优势:** 易于阅读和审查。为应用程序开发者设计，而非平台工程师。无状态引擎；策略是文件。
+- **最佳适用对象：** 想要清晰、可审查、版本可控的策略，同时不依赖复杂DSL的应用团队。
+- **注意事项：** 比OPA用途更专一（没有Admission-controller功能）。这也是其特点所在。
+
+## AWS Cedar
+
+开源。由AWS构建，用于像Verified Permissions和Verified Access这样的服务。
+
+- **策略语言：** Cedar，一种专门构建的、强类型、可形式化分析的语言。
+- **优势：** 在RBAC+ABAC方面的人机工程非常优秀。形式化验证器可以证明策略属性（例如“没有策略会允许非管理员组的任何人进行删除操作”）。
+- **最佳适用对象：** 想要AWS原生授权的团队，或者重视形式化分析保证的团队。
+- **注意事项：** 生态系统比OPA小。AWS之外的工具仍在发展中。
+
+<span id="openfga--zanzibar-style" />
+
+## OpenFGA / 桑给巴尔风格
+
+开源。灵感来自谷歌桑给巴尔论文。
+
+- **模型：** 基于关系的访问控制（ReBAC）。授权是一个图查询：“是否有从该用户到该资源的关系链赋予此操作？”_
+
+
+- **优势：** 在类似 Google 文档的分享、层级组织、深度嵌套资源方面表现出色。亚毫秒级决策规模化。
+- **最佳用途：** 拥有丰富共享、群继承或组织树权限的产品。
+- **注意：**建模需要思考。当权限主要基于属性时，建模并不是合适的工具。
+
+<span id="spicedb-authzed" />
+
+## SpiceDB（认证）
+
+又是一款桑给巴尔风格的引擎。和OpenFGA系列一样，型号和操作员的人体工学略有不同。使用场景的黄金点相同。
+
+<span id="how-authzen-ties-them-together" />
+
+## AuthZEN 如何将它们联系起来
+
+没有 AuthZEN，每个引擎都有自己的 SDK 和请求格式。您的应用代码会嵌入引擎选择。
+
+使用 AuthZEN，您的应用只需使用一种请求格式：
+
+```
+POST /access/v1/evaluation
+{ subject, action, resource, context }
+```
+
+每个引擎前的一个小型适配器会将 AuthZEN 请求转换为引擎的本地调用。从应用的角度来看，所有引擎看起来都是相同的。
+
+这让您可以：
+
+- 在路由器后堆叠引擎（用于共享的 ReBAC 引擎、用于合规的 ABAC 引擎、对应用的单一端点）。
+- 随着需求变化，从一个引擎迁移到另一个引擎。
+- 一次构建工具（策略调试器、审计浏览器），可对任何引擎运行。
+
+<span id="picking-an-engine-a-quick-triage" />
+
+## 选择引擎：快速分类
+
+- 大多数权限是角色 + 属性检查？Cerbos 或 Cedar。
+- 大量共享 / 分层资源 / 嵌套组？OpenFGA 或 SpiceDB。
+- 一个引擎处理从 K8s 审核到应用授权的所有事情？OPA。
+- 需要对策略进行形式验证？Cedar。
+- 你使用 AWS 并想要托管服务？Verified Permissions（Cedar）。
+
+在同一个产品中使用不止一个引擎是可以的。AuthZEN 让这变得不那么痛苦。
+
+<span id="a-mental-model" />
+
+## 一个思维模型
+
+把策略引擎想象成权限的数据库引擎。它们在查询语言和优化目标上有所不同。AuthZEN 是授权的 SQL 标准：不是引擎本身，而是与它们中的任何一个进行查询的共享方式。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 的首要任务是身份（谁、拥有何种作用域、拥有何种声明）。它的令牌和声明可以提供给你运行的任何引擎，例如 OPA、Cerbos 或 OpenFGA，并且声明越干净，下游与 AuthZEN 兼容的引擎的表现越好。
+
+FerrisKey 还提供了自己的引擎。每个身份域都可以成为运行 Cedar 的 AuthZEN 策略决策点，并在请求到达时从身份域中读取主体的角色、组和组织。请求的形式是标准形式，因此使用该形式的应用程序不会被其背后的引擎绑定。
+
+::::card-group{cols=2}
+:::card{label="授权模块" icon="lucide:scale" href="/zh-CN/modules/authz/overview"}
+FerrisKey 自己的 AuthZEN 端点，由 Cedar 提供支持。
+:::
+:::card{label="AuthZEN 概述" icon="lucide:shield-check" href="/zh-CN/learn/authzen/overview"}
+标准本身以及它所解决的问题。
+:::
+:::card{label="JWT 声明" icon="lucide:list-checks" href="/zh-CN/learn/jwt/claims"}
+FerrisKey 可以放入令牌中供策略引擎读取的内容。
+:::
+::::

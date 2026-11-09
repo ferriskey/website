@@ -1,0 +1,194 @@
+---
+title: "查詢事件"
+description: "透過一個分頁端點讀取 SeaWatch 事件：引數、排序、錯誤、審計問題以及向 SIEM 提供資料。"
+icon: search
+order: 22
+---
+
+<span id="querying-events" />
+
+# 查詢事件
+
+SeaWatch 事件儲存在 PostgreSQL 中，並透過一個端點讀取。它是隻讀的：沒有用於寫入事件的端點，也沒有用於匯出事件的端點。要將事件移動到其他地方，請透過列表分頁。
+
+控制檯的 Sea Watch 頁面列出相同的事件，最新的在最前。事件、結果、執行者和目標每列標題都有一個篩選器，表格上方有一個搜尋框用於匹配 IP 地址。伺服器將篩選器和排序應用於每條記錄的事件，而不僅僅是螢幕上的頁面。
+
+<img class="only-light" src="/dashboard/seawatch_events-light.jpg" alt="FerrisKey Sea Watch 事件流包含事件、結果、執行者、目標、IP 地址和時間列，每列都可篩選，帶有搜尋框和分頁功能。" />
+<img class="only-dark" src="/dashboard/seawatch_events-dark.jpg" alt="FerrisKey Sea Watch 事件流包含事件、結果、執行者、目標、IP 地址和時間列，每列都可篩選，帶有搜尋框和分頁功能。" />
+
+<span id="the-endpoint" />
+
+## 端點
+
+```
+GET /realms/{realm_name}/seawatch/v1/security-events
+```
+
+讀取事件需要 `view_events`、`manage_events` 或 `manage_realm`。
+
+:::callout{variant="warning"}
+這裡的路徑按伺服器暴露的方式書寫，沒有根路徑，這是預設設定。設定 `SERVER_ROOT_PATH`（Helm Chart設定 `/api`）後，下面的每個路徑都會加上該字首。
+:::
+
+<span id="parameters" />
+
+### 引數
+
+列表遵循 [分頁列表](/zh-TW/discover/guides/api-listings) 中描述的共享協議：`page`、`limit`、`order_by`、`order`、過濾器，以及 `{data, metadata}` 響應。
+
+| 引數 | 型別 | 說明 |
+|---|---|---|
+| `page` | 整數，1 或更大 | 頁碼。預設為 1 |
+| `limit` | 整數，1 到 100 | 每頁大小。預設為 20 |
+| `order_by` | `event_type`, `status`, `timestamp` 或 `created_at` | 排序列。預設為 `created_at` |
+| `order` | `asc`或`desc` | 排序方向。預設為 `desc` |
+| `event_types` | 逗號分隔列表 | 保留任何這些型別的事件。未知值或 `unknown` 會返回 400。 |
+| `status` | `success`或`failure` | 完全匹配 |
+| `actor_id` | UUID | 由該賬戶建立的事件 |
+| `client_id` | UUID | 目標是該 UUID 的事件。儘管名稱如此，它匹配 `target_id`，因此它可以找到關於使用者、客戶端或會話的事件。 |
+| `target_type` | 字串 | 目標型別的精確匹配，例如 `user` 或 `client` |
+| `ip_address` | 字串 | 地址中的不區分大小寫匹配。沒有地址的事件永遠不會匹配 |
+| `search` | 字串 | 與 `ip_address` 相同的匹配 |
+| `from_timestamp` | RFC 3339 日期-時間 | 在 `timestamp` 上或之後的事件 |
+| `to_timestamp` | RFC 3339 日期-時間 | 在 `timestamp` 上或之前的事件 |
+
+篩選器以 AND 結合，傳送空值的篩選器將被忽略。`timestamp` 是事件建立的時間。`created_at`，可用於排序但不在有效載荷中，是事件儲存的時間，並且遵循雜湊鏈的順序。
+
+任何其他引數都會被拒絕。這包括 `offset`，該端點沒有此引數：請使用 `page`。錯誤會標明該引數：
+
+```json title="400 Bad Request"
+{
+  "code": "E_BAD_REQUEST",
+  "status": 400,
+  "reason": "invalid_query",
+  "message": "Invalid query parameter `offset`: unknown field `offset`, expected one of `search`, `actor_id`, `client_id`, `event_types`, `status`, `target_type`, `from_timestamp`, `to_timestamp`, `ip_address`"
+}
+```
+
+<span id="response" />
+
+### 響應
+
+```json title="GET /realms/my-app/seawatch/v1/security-events?order_by=created_at&order=asc&limit=2"
+{
+  "data": [
+    {
+      "id": "01a18e8b-8e28-7591-bfbe-a32e4b4ef27e",
+      "realm_id": "01a18e87-67a8-7801-8d2e-ab97acf9fc35",
+      "actor_id": "01a18e87-67a8-76d4-8ab8-07d5830d8a99",
+      "actor_type": "user",
+      "event_type": "login_success",
+      "status": "success",
+      "target_type": "session",
+      "target_id": "ad9654e4-8c48-43fa-890c-c63e5f693c68",
+      "resource": null,
+      "timestamp": "2026-10-30T20:41:13.554970Z",
+      "trace_id": null,
+      "ip_address": null,
+      "user_agent": null,
+      "details": null,
+      "event_hash": [84, 221, 63, 112, 62, 114, 217, 99, 133, 197, 0, 41, 226, 93, 27, 138, 176, 31, 204, 103, 112, 198, 19, 47, 221, 194, 118, 210, 28, 196, 200, 153],
+      "prev_hash": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    {
+      "id": "01a18e8b-8e28-7778-8787-5406fa24b771",
+      "realm_id": "01a18e87-67a8-7801-8d2e-ab97acf9fc35",
+      "actor_id": "01a18e87-67a8-76d4-8ab8-07d5830d8a99",
+      "actor_type": null,
+      "event_type": "session_created",
+      "status": "success",
+      "target_type": "session",
+      "target_id": "ad9654e4-8c48-43fa-890c-c63e5f693c68",
+      "resource": null,
+      "timestamp": "2026-10-30T20:41:13.554970Z",
+      "trace_id": null,
+      "ip_address": null,
+      "user_agent": null,
+      "details": null,
+      "event_hash": [211, 90, 105, 14, 3, 172, 156, 246, 84, 169, 33, 223, 87, 39, 38, 70, 238, 16, 16, 49, 255, 79, 78, 163, 33, 105, 15, 239, 195, 205, 175, 242],
+      "prev_hash": [84, 221, 63, 112, 62, 114, 217, 99, 133, 197, 0, 41, 226, 93, 27, 138, 176, 31, 204, 103, 112, 198, 19, 47, 221, 194, 118, 210, 28, 196, 200, 153]
+    }
+  ],
+  "metadata": {
+    "page": 1,
+    "limit": 2,
+    "total": 58,
+    "total_pages": 29,
+    "first_page": 1,
+    "last_page": 29,
+    "next_page": 2,
+    "prev_page": null
+  }
+}
+```
+
+第二個事件的 `prev_hash` 是第一個事件的 `event_hash`：這是鏈條，如 [篡改證據](/zh-TW/modules/seawatch/overview) 所述。
+
+<span id="examples" />
+
+### 示例
+
+視窗內的登入失敗，按最新到最舊順序：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "event_types=login_failure" \
+  --data-urlencode "from_timestamp=2026-10-01T00:00:00Z" \
+  --data-urlencode "to_timestamp=2026-10-31T23:59:59Z" \
+  --data-urlencode "limit=100" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+一個賬戶的所有操作，按最舊到最新順序:
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "actor_id=USER_UUID" \
+  --data-urlencode "order_by=timestamp" \
+  --data-urlencode "order=asc" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+同時進行多種活動型別：
+
+```bash
+curl -G "http://localhost:3333/realms/my-app/seawatch/v1/security-events" \
+  --data-urlencode "event_types=client_secret_viewed,role_permission_updated,role_assigned" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+<span id="questions-the-filters-answer" />
+
+## 過濾器回答的問題
+
+| 問題 | 引數 |
+|---|---|
+| 是誰更改了這個使用者的角色？ | `event_types=role_assigned,role_unassigned`和`client_id=USER_UUID`。每個結果的`actor_id`是管理員，`resource`是角色名 |
+| 誰看穿了這個客戶端的金鑰？ | `event_types=client_secret_viewed` 和 `client_id=CLIENT_UUID` |
+| 這個客戶端什麼時候在維護室？ | `event_types=client_maintenance_enabled,client_maintenance_disabled` 和 `client_id=CLIENT_UUID` |
+| 這位管理員上個月做了什麼？ | `actor_id=ADMIN_UUID`、`from_timestamp`和`to_timestamp` |
+| 本季度建立或刪除了哪些賬戶？ | `event_types=user_created,user_deleted`、`from_timestamp`和`to_timestamp` |
+| 這個使用者開啟了哪些會話？ | `event_types=session_created` 和 `actor_id=USER_UUID` |
+| 哪些webhook投遞被放棄了？ | `event_types=webhook_delivery_exhausted` |
+
+`client_id` 是客戶端的 UUID，而不是其 `client_id` 字串。批次使用者刪除沒有目標，因此它不出現在使用者的 `client_id` 下。
+
+<span id="feeding-a-siem" />
+
+## 給SIEM供電
+
+SeaWatch 不會推送事件。[Webhooks](/zh-TW/modules/webhooks/triggers) 有它們自己的觸發器，登入、會話和金鑰讀取不在其範圍內。要將事件轉發到 Splunk、Elastic、Datadog 或任何其他收集器，請輪詢列表：
+
+1. 請求 `order_by=created_at`、`order=asc` 和 `limit=100`，並將 `from_timestamp` 設定為你儲存的最新 `timestamp`，然後按照 `next_page` 直到其為 null。
+2. 在 `id` 上去重。`from_timestamp` 的邊界是包含的，因此邊界事件會返回。
+3. 將時間視窗重疊幾分鐘。`timestamp` 在事件建立時設定，`created_at` 在儲存時設定，因此一個事件可能在儲存稍晚的事件之後才儲存，而該事件攜帶更晚的 `timestamp`。
+
+`trace_id` 欄位為空，因此無法將事件關聯到追蹤。要將登入繫結到其 [Compass](/zh-TW/modules/compass/querying) 流程，請匹配使用者和時間：對於互動式登入，流程的 `user_id` 等於事件的 `actor_id`，並且事件的 `timestamp` 位於流程的 `started_at` 和 `completed_at` 之間。
+
+<span id="retention" />
+
+## 保留
+
+FerrisKey 從不刪除 SeaWatch 事件。該表會隨著部署生命週期增長，其大小需要您自行規劃。
+
+不要為了節省空間而刪除舊行。每個事件都與前一個事件鏈式連線，因此剩餘的最舊事件將不再從零雜湊開始，間隙會被視為篡改。透過列表將事件複製到長期儲存，並保留原始事件。

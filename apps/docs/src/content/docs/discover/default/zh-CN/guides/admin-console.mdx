@@ -1,0 +1,137 @@
+---
+title: "管理员控制台"
+description: "FerrisKey 网络控制台的两个面板，每个部分和视图包含的内容，以及如何在它们之间切换。"
+icon: layout-dashboard
+order: 26
+---
+
+<span id="the-admin-console" />
+
+# 管理员控制台
+
+FerrisKey 的网络控制台在同一个身份域上有两个面板。管理员面板是完整的资源和设置集，使用的是 API 的术语。控制台面板围绕身份域中发生的事情以及你提供给客户的内容进行组织，并且它使用“应用程序”和“身份”，而管理员面板使用“客户端”和“用户”。
+
+两个面板都没有自己的权限。两者都使用登录用户的令牌调用相同的 API，因此你在一个面板上无法使用的屏幕，在另一个面板上也会因为同样的原因被拒绝。
+
+<span id="switching-panels" />
+
+## 切换面板
+
+在右上角打开头像菜单。在面板模式下，选择管理员或控制台。切换时，如果有对应页面，会保持在相应页面：
+
+| 在管理员面板 | 在控制台面板 |
+|---|---|
+| 概述 | 活动，实时 |
+| 用户 | 用户管理，身份 |
+| 组织 | 用户管理，组织 |
+| 角色 | 用户管理，角色 |
+| 客户端 | 应用 |
+| 海洋监视与指南针 | 活动，日志与事件 |
+| 身份提供者 | 认证，身份提供者 |
+| 身份域设置 | 认证，登录方式 |
+| 电子邮件 | 品牌，电子邮件模板 |
+| 门户 | 品牌，主题 |
+
+没有对应页面的页面会打开另一个面板的起始页：管理员面板为Overview Window，控制台面板为Live。控制台面板位于`/realms/{realm_name}/console`，管理员面板位于`/realms/{realm_name}/overview`。
+
+两个面板共用同一个顶部栏：服务器选择器、语言菜单（参见[本地化](/zh-CN/discover/guides/localization)）、主题切换的光暗和系统，以及带有账户页面和登出的头像菜单。
+
+<span id="the-admin-panel" />
+
+## 管理小组
+
+侧边栏将一个身份域的资源分为三个部分。底部的箭头或键盘快捷键⌘B可以将其折叠，同时FerrisKey的版本也在那里展示。
+
+| 章节 | 参赛作品 |
+|---|---|
+| 核心 | 概述，[客户端](/zh-CN/discover/core-concepts/clients)、[用户](/zh-CN/discover/core-concepts/users)、[角色](/zh-CN/discover/core-concepts/roles)、[客户端作用域](/zh-CN/discover/core-concepts/client-scopes)、[组织](/zh-CN/modules/organization/overview) |
+| 配置 | [身份域设置](/zh-CN/discover/core-concepts/realms)、[门户](/zh-CN/modules/portal/overview)、[电子邮件](/zh-CN/discover/guides/email)、[Webhook](/zh-CN/modules/webhooks/overview)、[身份提供者](/zh-CN/modules/abyss/providers)、[用户联合](/zh-CN/modules/abyss/user-federation)、身份认证 |
+| 安全 | [海上观察](/zh-CN/modules/seawatch/overview)、[指南针](/zh-CN/modules/compass/overview) |
+
+概览页面显示身份域的用户、客户端、角色和跟踪的身份认证流程的统计，提示禁用的客户端、未验证的电子邮件和失败的流程，最近登录的Chart，身份域提供的登录功能以及最后的身份认证流程。
+
+身份域设置将其选项分为六个标签页：常规、登录、令牌、MCP、密码策略和维护。身份认证入口是灰色的。其工具提示显示尚未实现，控制台面板是登录设置所在的位置。
+
+<span id="the-console-panel" />
+
+## 控制台面板
+
+控制台面板在顶部有五个部分。每个部分都会打开一个带有其视图的侧边栏，每个视图都有一行描述。
+
+| 章节 | 视图 |
+|---|---|
+| 活动 | 实时、日志与事件、会话、消息传递 |
+| 用户管理 | 身份、组织、角色 |
+| 应用 | 所有应用 |
+| 身份认证 | 登录方法、身份提供者、密码策略 |
+| 品牌 | 电子邮件模板、主题、布局 |
+
+<span id="activity" />
+
+### 活动
+
+活动报告显示了身份域在过去7天记录的内容，实时活动除外，实时活动有其自己的时间范围。
+
+<img class="only-light" src="/dashboard/console_activity-light.jpg" alt="FerrisKey控制台面板的活动（实时）：过去7天的注册、登录、登录失败和账号峰值计数，支持7天、30天和90天的时间范围切换，日常Chart以及最新的认证尝试记录" />
+<img class="only-dark" src="/dashboard/console_activity-dark.jpg" alt="FerrisKey控制台面板的活动（实时）：过去7天的注册、登录、登录失败和账号峰值计数，支持7天、30天和90天的时间范围切换，日常Chart以及最新的认证尝试记录" />
+
+实时统计[Compass](/zh-CN/modules/compass/overview)跟踪的身份认证流程中的注册、登录和失败登录，并显示一天内登录的不同账户的最高数量。一个开关可以将范围设置为7天、30天或90天。计数器下方显示每天登录和失败的Chart，每天注册的Chart，以及页面加载时追踪的最近十个流程。页面不会自动刷新。Compass 追踪默认开启（`compass_enabled`）。关闭后将不会记录任何内容，页面会提示这一点。
+
+日志和事件列出了该身份域的 [SeaWatch](/zh-CN/modules/seawatch/overview) 安全事件，按最新到最旧排列，筛选和排序由服务器完成。在数据源上方，图块显示过去 7 天的事件数量、失败次数、成功率和不同账户数。需要事件自身的数据（例如不同账户数）最多读取最近 100 个事件，并且当达到该上限时会有提示。
+
+会话是 `session_created` 和 `session_revoked` 事件的日志，记录了当时的设备和来源，并提供已开启会话、已撤销会话、不同账户数和不同 IP 地址的图块。它不是当前已登录设备的列表。API 以每个账户为单位列出和结束会话；请参阅 [Users](/zh-CN/discover/core-concepts/users#sessions)。
+
+消息传递列出了 `email_sent` 和 `email_not_sent` 事件：身份域尝试发送的事务性电子邮件，无论是否发送成功，以及邮件服务器给出的失败原因。它还列出了身份域的 webhook 端点及每个最后触发的时间，并在身份域未配置 SMTP 时发出警告。参见 [电子邮件和模板](/zh-CN/discover/guides/email)。
+
+<span id="user-management" />
+
+### 用户管理
+
+身份是身份域的客户账户：非服务账户的用户。服务账户属于应用程序。列表包含总数、已验证邮箱、待处理操作和禁用账户的块，一个警报提示有人在下次登录时有待处理操作，一个搜索框以及按创建日期、角色、活跃状态和邮箱验证状态筛选。身份打开时有五个选项卡：概览、凭据、角色映射、组织和属性，与管理面板中的用户相同。参见 [用户](/zh-CN/discover/core-concepts/users)。
+
+组织包含“设置”、“属性”和“成员”。角色包含“设置”、“权限”和“身份”，即持有该角色的账户。
+
+<span id="applications" />
+
+### 应用
+
+应用程序是客户端，由其功能展示。创建时需要选择类型，类型决定登录流程以及是否生成密钥。之后无法更改。
+
+| 类型 | 登录流程 |
+|---|---|
+| 移动端或桌面端 | 授权码 + PKCE |
+| 单页应用 | 授权码 + PKCE |
+| 服务器渲染的网页应用 | 授权码 |
+| 机器对机器 | 客户端凭据 |
+| 设备或命令行接口 | 设备授权 |
+
+该列表显示名称、客户端ID、类型、状态和创建日期，并可按创建日期、启用状态和类型进行过滤。应用程序在六个选项卡中打开：快速开始，其中包含您的OIDC库所需的端点和用于流程的代码片段；设置，其中包含回调URL、Web来源、登录方法和会话时长；凭据；API访问；SAML；以及维护。请参见 [Clients](/zh-CN/discover/core-concepts/clients)。
+
+<span id="authentication" />
+
+### 身份认证
+
+登录方法在一个屏幕上收集身份域的登录设置：
+
+| 组 | 它设置的内容 |
+|---|---|
+| 标识符 | 用户用于命名其账户的内容：用户名、电子邮件或两者，以及先尝试哪个 |
+| 无密码方法 | 凭据密钥，以及有效的魔法链接（以分钟计） |
+| 多因素认证 | 是否要求每个人进行第二因素验证 |
+| 账户访问 | 自助注册、电子邮件验证、密码找回和保持登录复选框 |
+| 登录保护 | 锁定前的失败尝试次数及持续时间。参见 [锁定](/zh-CN/discover/core-concepts/users#lockout) |
+
+这是控制台中唯一可以编辑二次验证要求和锁定设置的界面。管理员面板将这些留给 API 处理。当身份域没有 SMTP 配置时，会出现警告，因为魔法链接、电子邮件验证和密码找回都会发送消息。
+
+身份提供者与管理员面板中的页面相同。密码策略编辑身份域的 [密码策略](/zh-CN/discover/core-concepts/password-policy) 并预览用户所见：注册和重置页面在字段旁列出五条规则，其余在表单提交时检查。
+
+<span id="branding" />
+
+### 品牌
+
+品牌展示客户所看到的内容：带有模板和SMTP选项卡的电子邮件页面，门户主题和门户布局。它们与管理员面板中的电子邮件和门户页面相同。
+
+<img class="only-light" src="/dashboard/console_branding-light.jpg" alt="FerrisKey控制台面板中的品牌展示，电子邮件模板：模板和SMTP选项卡，提示有三种电子邮件类型未分配模板，以及每种电子邮件类型的模板选择器。" />
+<img class="only-dark" src="/dashboard/console_branding-dark.jpg" alt="FerrisKey控制台面板中的品牌展示，电子邮件模板：模板和SMTP选项卡，提示有三种电子邮件类型未分配模板，以及每种电子邮件类型的模板选择器。" />
+
+参见 [电子邮件与模板](/zh-CN/discover/guides/email)，[门户](/zh-CN/modules/portal/overview) 和 [导出与导入](/zh-CN/discover/guides/portability)。

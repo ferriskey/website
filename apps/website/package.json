@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "astro dev --port 4323",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test:i18n": "node --test tests/i18n.test.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.2.0",

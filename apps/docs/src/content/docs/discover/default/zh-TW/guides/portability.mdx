@@ -1,0 +1,173 @@
+---
+title: "匯出與匯入"
+description: "在不同身分域和部署之間移動主題、佈局、郵件模板和密碼雜湊。"
+icon: arrow-left-right
+order: 22
+---
+
+<span id="export--import" />
+
+# 匯出與匯入
+
+FerrisKey 中有四個可移植的東西：門戶主題、門戶佈局、郵件模板和來自其他身分提供商的密碼雜湊。其他所有內容都是按身分域配置並保持在那裡。
+
+這四者解決了不同的問題，它們之間的不對稱是刻意為之。
+
+| 資源 | 出口 | 匯入 | 原因 |
+|---|---|---|---|
+| 傳送門主題 | 是 | 是 | 建立一個品牌一次，發到每個身分域 |
+| 門戶佈局 | 是 | 是 | 頁面結構也是一樣 |
+| 電子郵件模板 | 是 | 是 | 一樣，把 MJML 交給設計師 |
+| 密碼雜湊 | 不 | 是 | 將使用者從另一個 IAM 遷移出來。沒有匯出，這是故意的 |
+
+<span id="portal-themes" />
+
+## 門戶主題
+
+```
+GET  /realms/{realm_name}/portal/themes/{theme_id}/export
+POST /realms/{realm_name}/portal/themes/import
+```
+
+匯出是一個 JSON 包，包含主題的設計權杖、它的 13 個頁面樹以及框定它的佈局。佈局以值的形式隨檔案傳輸。這使檔案成為自包含的：將其匯入到另一個環境或另一個部署中也會重建佈局，並將其繫結到新主題，而不是懸掛一個在那裡不存在的佈局 ID 引用。
+
+<img class="only-light" src="/dashboard/portal_themes-light.jpg" alt="FerrisKey 門戶主題選項卡及匯入操作" />
+<img class="only-dark" src="/dashboard/portal_themes-dark.jpg" alt="FerrisKey 門戶主題選項卡及匯入操作" />
+
+<Callout variant="info" title="匯入的主題未啟用">
+
+匯入會建立主題；它不會啟用主題。啟用是一個單獨的呼叫，並且需要每個頁面都有效。請參見 [Portal](/zh-TW/modules/portal/overview#activation-is-gated-on-validity)。這個順序允許你在生產環境中匯入並在任何人看到之前進行預覽。
+
+</Callout>
+
+<span id="portal-layouts" />
+
+## 門戶佈局
+
+```
+GET  /realms/{realm_name}/portal-layouts/{layout_id}/export
+POST /realms/{realm_name}/portal-layouts/import
+```
+
+<img class="only-light" src="/dashboard/portal_layouts-light.jpg" alt="FerrisKey 門戶佈局選項卡，帶有匯入操作和佈局計數器" />
+<img class="only-dark" src="/dashboard/portal_layouts-dark.jpg" alt="FerrisKey 門戶佈局選項卡，帶有匯入操作和佈局計數器" />
+
+佈局以其樹結構匯出。匯入時，樹在儲存之前會被驗證，這是有趣的區別：普通的建立端點由控制檯自帶的生成器提供輸入，該生成器總是生成有效的樹，因此它會信任輸入。匯入端點無法做出這個假設，因此需要進行檢查。
+
+如果你從指令碼生成佈局，匯入端點會告訴你樹結構是否錯誤，並附帶 `422`。建立端點會接受它，而你會在門戶渲染時才發現問題。
+
+<span id="email-templates" />
+
+## 電子郵件模板
+
+```
+GET  /realms/{realm_name}/email-templates/{template_id}/export?format=json
+GET  /realms/{realm_name}/email-templates/{template_id}/export?format=mjml
+POST /realms/{realm_name}/email-templates/import
+```
+
+<img class="only-light" src="/dashboard/email_templates-light.jpg" alt="FerrisKey 郵件模板頁面顯示型別賦值和匯入操作" />
+<img class="only-dark" src="/dashboard/email_templates-dark.jpg" alt="FerrisKey 郵件模板頁面顯示型別賦值和匯入操作" />
+
+出口需要一個`format`：
+
+| 格式 | 迴歸 | 當 |
+|---|---|---|
+| `json`（預設） | 建築信封 | 你是在不同身分域之間移動模板，並且希望它在控制檯中保持可編輯性 |
+| `mjml` | 渲染後的MJML標記 | 你是在把它交給設計師，或者保持版本控制 |
+
+匯入可以接受任一形狀。MJML 會被解析回構建結構，這樣匯入的模板就能保持可編輯性，而不是變成不透明的模糊塊。主體只攜帶`structure`、`tree`或`mjml`中的一個。
+
+<Callout variant="warning" title="MJML往返者失去了MJ正體以外的一切">
+
+構建器只能表示 `<mj-body>` 內的內容。匯入時，任何外部內容都會被丟棄：`<mj-head>`，以及其中的自定義字型、`<mj-style>`、斷點宣告和以這種方式設定的預覽文字。
+
+因此，從 `json` 到 `json` 的往返是無損的，而 `mjml` 往返則不是。如果設計師編輯 MJML 並在 head 中新增任何內容，匯入時會靜默丟棄該部分。匯出為 `json` 可用於移動模板，而 `mjml` 則視為單向出口。
+
+</Callout>
+
+模板的型別在建立時固定，並決定它可以使用哪些變數。匯入時會從請求體中的 `email_type` 獲取，這是必需的，包括原始 MJML。匯入的內容會經過與其他模板相同的伺服器端清理，因此不安全的標記會在匯入時被移除。有關每種型別包含的變數以及清理過程移除的內容，請參見 [電子郵件和模板](/zh-TW/discover/guides/email)。
+
+<span id="password-hashes" />
+
+## 密碼雜湊
+
+```
+POST /realms/{realm_name}/users/{user_id}/credentials/import
+```
+
+這是遷移端點：它將另一個身分提供者生成的雜湊儲存為使用者的密碼憑據，因此在遷移到 FerrisKey 時，使用者可以保留現有密碼。
+
+```json title="Request body"
+{
+  "algorithm": "bcrypt",
+  "secret_data": "$2b$12$...",
+  "hash_iterations": 12,
+  "salt": null,
+  "temporary": false
+}
+```
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `algorithm` | 是 | `bcrypt`, `argon2id`, `argon2i` 或 `argon2d` |
+| `secret_data` | 是 | 雜湊本身 |
+| `hash_iterations` | 是 | 源系統的計算成本因子。它必須與雜湊中記載的成本匹配 |
+| `salt` | 否 | 當源系統將其與雜湊分開儲存時 |
+| `temporary` | 否 | `true` 會要求使用者在下次登入時設定新密碼。預設值為 `false` |
+
+bcrypt 雜湊以 `$2a$`、`$2b$` 或 `$2y$` 開頭，成本在 4 到 14 之間。argon2 雜湊是一個 PHC 字串，其演算法與 `algorithm` 欄位匹配，且引數限制為記憶體 262144 KiB 內、16 次迭代和並行度 8。對於這兩種雜湊，`hash_iterations` 必須等於雜湊中的成本。
+
+違反以下規則的雜湊將被 `422` 拒絕：條目以欄位 `secret_data` 命名並攜帶程式碼 `invalid_password_hash`。已擁有密碼憑據的使用者將得到 `409`；如果要替換憑據，請先刪除現有憑據。
+
+<span id="the-upgrade-happens-at-first-sign-in" />
+
+### 升級將在首次登入時進行
+
+匯入的雜湊會在使用者首次成功登入時重新編碼為argon2id，這是明文唯一可再次進行雜湊的時候。在此之前，賬戶會使用原來的雜湊進行身分認證。相同的升級適用於成本與伺服器配置成本不同的argon2雜湊。如果失敗，登入仍然會成功，FerrisKey會在下次嘗試時再次嘗試。
+
+這有兩個值得提前計劃的後果：
+
+- 只要一些已遷移的使用者尚未登入，您的身分域就會同時存在多種演算法。這是預期的，而不是缺陷。
+- 升級並不是一個事件。[SeaWatch](/zh-TW/modules/seawatch/event-types)中的`password_imported`事件只會被匯入呼叫本身寫一次，執行該呼叫的管理員是參與者。它標記了匯入，因此統計這些事件可以告訴你載入了多少雜湊，而不是遷移進展到哪一步。
+
+要檢視遷移進度，請閱讀每個使用者的憑據：密碼條目顯示儲存雜湊的 `algorithm`、第一次登入前的 `bcrypt`，以及登入後的 `argon2id`。
+
+<Callout variant="danger" title="沒有匯出對應，這是重點。">
+
+FerrisKey 不會向你提供其密碼雜湊。匯出憑據材料的端點就是在外洩這些資訊，而沒有任何合法遷移需要以這種方式進行。如果你要從 FerrisKey 遷移，建議兩個系統同時執行，並讓使用者重新認證。
+
+</Callout>
+
+<span id="the-local-policy-still-applies-afterwards" />
+
+### 之後本地策略仍然適用。
+
+匯入的密碼不會根據域的[密碼策略](/zh-TW/discover/core-concepts/password-policy)進行檢查，因為明文從未被檢視過。該策略將在使用者下次更改密碼時生效。要讓整個遷移的人群選擇新密碼，請在匯入後將每個密碼重置為臨時密碼，或者在匯入時將 `temporary` 設定為 `true`。
+
+<span id="what-is-not-portable" />
+
+## 不可遷移的內容
+
+域、客戶端、使用者、角色、權限作用域和組織沒有匯出/匯入端點。移動這些物件需要使用 [ferris-ctl importer](/zh-TW/cli/import/overview)，它會讀取描述檔案、現有的 Keycloak 或現有的 Zitadel，並透過普通 API 建立物件。
+
+<span id="permissions" />
+
+## 權限
+
+| 資源 | 出口 | 匯入 |
+|---|---|---|
+| 門戶主題，門戶佈局 | `manage_realm` | `manage_realm` |
+| 電子郵件模板 | `view_email_templates`或`manage_email_templates` | `manage_email_templates` |
+| 密碼雜湊 | 無 | `manage_users` |
+
+`manage_realm` 授予它們全部權限。
+
+::::card-group{cols=2}
+:::card{label="門戶" icon="lucide:palette" href="/zh-TW/modules/portal/overview"}
+在移動之前，主題和佈局包含的內容。
+:::
+:::card{label="CLI 匯入" icon="lucide:download" href="/zh-TW/cli/import/overview"}
+從 Keycloak 或 Zitadel 匯入整個身分域。
+:::
+::::

@@ -1,0 +1,135 @@
+---
+title: "触发事件"
+description: "FerrisKey 中 webhook 触发点的参考：你可以订阅的 38 个名字和服务器创建的 33 个。"
+icon: zap
+order: 61
+---
+
+<span id="trigger-events" />
+
+# 触发事件
+
+webhook 订阅它关心的触发条件。共有 38 个，按资源分类。FerrisKey 0.10.0 提出了其中 33 个。其余 5 个是有效名称，webhook 可以订阅它们，但服务器中尚未发布它们。
+
+<Callout variant="warning" title="五个扳机从未被抬起">
+
+`user.role.unassigned`、`user.credentials.deleted`、`realm.created`、`client.role.created`和`client.role.updated`接受订阅后保持沉默。从用户中移除角色会提升`user.updated`，角色作为`data`。创建客户端角色则提升`role.created`。新身份域还没有webhook，因为webhook属于某个身份域，`realm.created`没有人可以告诉。下面的描述标记了五个角色中的每一个。
+
+</Callout>
+
+每个触发器放入 `data` 的内容列在 [有效负载格式](/zh-CN/modules/webhooks/payload#what-data-holds) 中。
+
+<span id="user" />
+
+## 用户
+
+| 触发器 | 说明 |
+|---|---|
+| `user.created` | 新用户账户被创建，由管理员或自助注册创建 |
+| `user.updated` | 用户的个人资料被修改。当从用户移除角色时，也会触发，以该角色作为 `data` |
+| `user.deleted` | 用户账户被删除 |
+| `user.bulk_deleted` | 多个用户在一次批处理中被删除 |
+| `user.email_verified` | 用户确认了他们的电子邮件地址。 |
+| `user.credentials.deleted` | 用户的凭据被移除。在 0.10.0 版本中不会触发 |
+| `user.role.assigned` | 一个角色被分配给用户。 |
+| `user.role.unassigned` | 用户的一个角色被移除。在 0.10.0 版本中不会触发 |
+
+<span id="authentication" />
+
+## 身份认证
+
+| 触发器 | 说明 |
+|---|---|
+| `auth.reset_password` | 密码重置已完成 |
+| `auth.device_flow.initiated` | 设备授权流程已启动 |
+| `auth.device_flow.denied` | 用户拒绝设备授权 |
+| `auth.device_flow.expired` | 设备码在任何人批准之前过期 |
+
+<span id="client" />
+
+## 客户端
+
+| 触发器 | 说明 |
+|---|---|
+| `client.created` | 新 OAuth2 客户端已注册 |
+| `client.updated` | 客户端配置被修改 |
+| `client.deleted` | 移除了一个客户端 |
+| `client.role.created` | 创建了一个客户端范围的角色。在 0.10.0 中未被启用：`role.created` 触发 |
+| `client.role.updated` | 修改了一个客户端范围的角色。0.10.0 中未提出 |
+| `client.maintenance.enabled` | 客户端开启了维护模式 |
+| `client.maintenance.disabled` | 维护模式已关闭 |
+| `client.saml_config.updated` | 客户端的SAML配置发生了变化 |
+| `client.saml_attribute_mapper.created` | 新增了一个SAML属性映射器 |
+| `client.saml_attribute_mapper.deleted` | 移除了SAML属性映射器 |
+
+<span id="redirect-uris-and-web-origins" />
+
+## 重定向URI和网页起源
+
+| 触发器 | 说明 |
+|---|---|
+| `redirect_uri.created` | 客户端中添加了重定向URI |
+| `redirect_uri.updated` | 修改了重定向URI |
+| `redirect_uri.deleted` | 一个重定向URI被移除 |
+| `web_origin.created` | 客户端中添加了一个网页起源 |
+| `web_origin.deleted` | 网络起源被移除 |
+
+<span id="roles" />
+
+## 角色
+
+| 触发器 | 说明 |
+|---|---|
+| `role.created` | 新创建了一个角色，包括一个客户端范围的职位 |
+| `role.updated` | 角色被修改 |
+| `role.deleted` | 一个角色被删除了。控制台选择器不提供它，因此请通过 API 订阅 |
+| `role.permission.updated` | 一个角色的权限已更改。控制台选择器也不提供它 |
+
+<span id="realms" />
+
+## 身份域
+
+| 触发器 | 说明 |
+|---|---|
+| `realm.created` | 创建了一个新的身份域。在 0.10.0 中没有触发 |
+| `realm.updated` | 一个身份域被修改了 |
+| `realm.deleted` | 一个身份域被删除了 |
+| `realm.settings.updated` | 身份域设置已更改 |
+
+<span id="webhooks" />
+
+## Webhook
+
+| 触发器 | 说明 |
+|---|---|
+| `webhook.created` | 注册了一个新的 Webhook |
+| `webhook.updated` | Webhook 被修改 |
+| `webhook.deleted` | Webhook 被移除 |
+
+<Callout variant="info" title="是的，关于 Webhook 的 Webhook">
+
+允许订阅 Webhook 生命周期事件，并且这是从外部审计您的 Webhook 配置更改的唯一方式。负载携带 Webhook，但不包括 `headers` 和 `secret`。
+
+</Callout>
+
+<span id="choosing-what-to-subscribe-to" />
+
+## 选择要订阅的内容
+
+<span id="start-narrow" />
+
+### 从小范围开始
+
+订阅你需要的内容，而不要多订阅。每个订阅在每个匹配的事件上都会发出一次网络调用。`user.created`、`user.deleted` 和 `client.deleted` 是一个合理的起始组合。
+
+<span id="pair-it-with-seawatch" />
+
+### 将其与 SeaWatch 配合使用
+
+触发器和 [SeaWatch 事件类型](/zh-CN/modules/seawatch/event-types) 存在重叠但不匹配。SeaWatch 记录安全审计事件，包括登录失败。Webhooks 将资源生命周期事件向外推送。有些问题需要两者结合：`user.role.assigned` 提供角色但不提供用户，而 SeaWatch 中匹配的 `role_assigned` 事件提供用户名称。
+
+<span id="ordering" />
+
+### 排序
+
+事件按照域内发生的顺序触发，但投递是异步的。慢速端点可能在确认较早事件之前就收到较晚的事件，因此编写处理程序时要确保幂等。

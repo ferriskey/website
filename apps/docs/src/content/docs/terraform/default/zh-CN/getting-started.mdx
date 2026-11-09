@@ -1,0 +1,186 @@
+---
+title: "入门"
+description: "使用 Terraform 启动一个新的 FerrisKey 实例：创建一个带有管理员密码的服务账户，然后用它管理其他所有内容。"
+icon: rocket
+order: 2
+---
+
+<span id="getting-started" />
+
+# 入门
+
+一个新的 FerrisKey 实例只有一个管理员用户，没有其他内容。Terraform 日常应使用的凭据（带有服务账户的机密客户端）尚不存在。因此，推荐的设置分两个阶段运行，每个阶段有自己的状态：
+
+```text
+FerrisKey deployed (admin user from ADMIN_USERNAME / ADMIN_PASSWORD)
+   └─> phase 1   auth: password grant, admin user
+          └─> creates the terraform-runner client and gives its service account a role
+                 └─> phase 2   auth: client credentials, terraform-runner
+                        └─> creates realms, clients, users, roles, ...
+```
+
+将两个阶段保持在**独立的状态**中，分别存放在不同的目录或后端。如果它们共享一个状态，配置中的 `terraform destroy` 可能会删除运行销毁操作的客户端。
+
+<span id="prerequisites" />
+
+## 先决条件
+
+- Terraform 1.0 或更高版本
+- 一个正在运行的 FerrisKey 实例。要在本地启动一个实例，请按照 [部署入门指南](/zh-CN/discover/getting-started) 操作
+- `master` 域的管理员用户名和密码
+- `master` 中允许使用密码授予的公共客户端，例如 `admin-cli`。要创建一个公共客户端，打开 **Clients**，选择 **New client**，将 **Client authentication** 设置为 **Public**，并在 **Capability config** 下启用 **Direct access grants**
+
+密码授予已被 [弃用](/zh-CN/discover/core-concepts/authentication#password-resource-owner)。阶段 1 仅使用一次它，以创建一个不需要该授予的客户端。阶段 1 结束后，你可以再次关闭 **Direct access grants**。
+
+<span id="phase-1-the-service-account" />
+
+## 阶段 1：服务账户
+
+::::step-group
+:::step{title="编写引导配置"}
+```hcl title="01-bootstrap/main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url       = "https://auth.example.com"
+  realm     = "master"
+  client_id = "admin-cli"
+  username  = "admin"
+  # password comes from FERRISKEY_PASSWORD
+}
+
+resource "ferriskey_client" "terraform_runner" {
+  realm                        = "master"
+  client_id                    = "terraform-runner"
+  name                         = "Terraform Runner"
+  client_type                  = "confidential"
+  service_account_enabled      = true
+  direct_access_grants_enabled = false
+}
+
+data "ferriskey_role" "realm_admin" {
+  realm = "master"
+  name  = "master-realm"
+}
+
+resource "ferriskey_user_role" "runner_realm_admin" {
+  realm   = "master"
+  user_id = ferriskey_client.terraform_runner.service_account_user_id
+  role_id = data.ferriskey_role.realm_admin.id
+}
+
+output "runner_client_id" {
+  value = ferriskey_client.terraform_runner.client_id
+}
+
+output "runner_client_secret" {
+  value     = ferriskey_client.terraform_runner.secret
+  sensitive = true
+}
+```
+
+`service_account_user_id` 是客户端服务账户背后的用户。分配给该用户的角色决定了客户端在使用 `client_credentials` 认证后可以执行的操作。`master-realm` 角色包含 `manage_realm`，这会授予全部权限。若需授予较少权限，请创建一个仅包含配置所需 [权限](/zh-CN/discover/core-concepts/roles#permissions-reference) 的角色，并分配该角色。
+:::
+
+:::step{title="应用它"}
+```bash
+cd 01-bootstrap
+export FERRISKEY_PASSWORD='<admin password>'
+terraform init
+terraform apply
+```
+:::
+
+:::step{title="存储密钥"}
+```bash
+terraform output -raw runner_client_secret
+```
+
+密钥也位于此阶段的状态中，明文显示，就像 Terraform 读取的每个值一样。将状态存储在加密后端，并将密钥复制到您的密钥管理器或用于第二阶段的 CI 变量中。
+:::
+::::
+
+<span id="phase-2-everything-else" />
+
+## 阶段 2：其他所有内容
+
+::::step-group
+:::step{title="编写配置"}
+```hcl title="02-resources/main.tf"
+terraform {
+  required_providers {
+    ferriskey = {
+      source = "ferriskey/ferriskey"
+    }
+  }
+}
+
+provider "ferriskey" {
+  url       = "https://auth.example.com"
+  realm     = "master"
+  client_id = "terraform-runner"
+  # client_secret comes from FERRISKEY_CLIENT_SECRET
+}
+
+resource "ferriskey_realm" "acme" {
+  name = "acme"
+}
+
+resource "ferriskey_realm_settings" "acme" {
+  realm                     = ferriskey_realm.acme.name
+  access_token_lifetime     = 900
+  user_registration_enabled = true
+  passkey_enabled           = true
+}
+
+resource "ferriskey_client" "web" {
+  realm         = ferriskey_realm.acme.name
+  client_id     = "acme-web"
+  name          = "Acme Web App"
+  client_type   = "confidential"
+  redirect_uris = ["https://app.acme.example/callback"]
+}
+```
+
+提供程序块中的 `realm` 是 Terraform 登录的身份域，这里是 `master`。它并不限制资源所在的位置：每个资源都会命名自己的身份域。
+:::
+
+:::step{title="应用它"}
+```bash
+cd 02-resources
+export FERRISKEY_CLIENT_SECRET='<runner secret>'
+terraform init
+terraform apply
+```
+:::
+::::
+
+Phase 2 可以使用 `terraform_remote_state` 数据源读取 Phase 1 的输出，而无需手动复制密钥。Phase 2 仅读取该状态，从不写入，因此两个生命周期保持分离：
+
+```hcl
+data "terraform_remote_state" "bootstrap" {
+  backend = "local"
+  config = {
+    path = "${path.module}/../01-bootstrap/terraform.tfstate"
+  }
+}
+
+provider "ferriskey" {
+  url           = "https://auth.example.com"
+  realm         = "master"
+  client_id     = data.terraform_remote_state.bootstrap.outputs.runner_client_id
+  client_secret = data.terraform_remote_state.bootstrap.outputs.runner_client_secret
+}
+```
+
+<span id="taking-over-an-existing-instance" />
+
+## 接管现有实例
+
+对于手动配置的实例，编写与现有资源匹配的资源，然后在第一次 `apply` 之前[导入](/zh-CN/terraform/resources)它们。未导入的资源将从头创建，在现有资源旁边或与其冲突。导入后的 `terraform plan` 显示您的文件与服务器之间的差异。

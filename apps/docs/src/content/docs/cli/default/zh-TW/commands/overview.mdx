@@ -1,0 +1,89 @@
+---
+title: "概述"
+description: "ferris-ctl 每個命令的索引：每個命令的用途，以及其參考頁面的位置。"
+icon: square-terminal
+permalink: /zh-TW/cli/commands
+order: 0
+---
+
+<span id="commands" />
+
+# 命令
+
+`ferris-ctl` 有七個頂級命令。所有命令都接受 [全域性標誌](/zh-TW/cli/overview#global-flags)。呼叫 FerrisKey API 的命令（`realm`、`client`、`user`）首先會確定連線位置、你的身分以及要操作的身分域，[認證](/zh-TW/cli/authentication) 解釋了相關方法。`context` 和 `source` 僅讀取和寫入你的本地配置檔案，而 `logout` 僅刪除已儲存的會話。
+
+<span id="connect-and-authenticate" />
+
+## 連線並認證
+
+::::card-group{cols=3}
+:::card{label="上下文" icon="lucide:server" href="/zh-TW/cli/commands/context"}
+命名的連線配置檔案，儲存伺服器 URL、客戶端和預設身分域。切換環境而無需重新輸入標誌。
+:::
+:::card{label="登入" icon="lucide:log-in" href="/zh-TW/cli/commands/login"}
+使用 OAuth 2.0 裝置授權登入，併為後續每條命令保持會話。
+:::
+:::card{label="登出" icon="lucide:log-out" href="/zh-TW/cli/commands/logout"}
+透過刪除憑據檔案來清除儲存的會話。
+:::
+::::
+
+<span id="administer-a-realm" />
+
+## 管理身分域
+
+::::card-group{cols=3}
+:::card{label="身分域" icon="lucide:layers" href="/zh-TW/cli/commands/realm"}
+建立、檢查和刪除身分域，管理其角色，並從外部來源匯入身分域。
+:::
+:::card{label="客戶端" icon="lucide:box" href="/zh-TW/cli/commands/client"}
+在一個身分域內建立、檢查和刪除 OAuth2 客戶端，並讀取機密客戶端的金鑰。
+:::
+:::card{label="使用者" icon="lucide:users" href="/zh-TW/cli/commands/user"}
+建立、檢查和刪除使用者，設定其密碼並分配角色。
+:::
+::::
+
+<span id="import" />
+
+## 匯入
+
+::::card-group{cols=2}
+:::card{label="來源" icon="lucide:database" href="/zh-TW/cli/commands/source"}
+儲存可重複使用的匯入來源，以便在每次匯入時不重複憑據和 URL。
+:::
+:::card{label="匯入身分域" icon="lucide:import" href="/zh-TW/cli/import/overview"}
+匯入指南：來自描述檔案、實時 Keycloak、實時 Zitadel 或 Supabase 專案。
+:::
+::::
+
+<span id="at-a-glance" />
+
+## 一目瞭然
+
+| 命令 | 目的 |
+|---------|---------|
+| [`context`](/zh-TW/cli/commands/context) | 管理連線上下文 |
+| [`realm`](/zh-TW/cli/commands/realm) | 管理身分域、其角色和身分域匯入 |
+| [`client`](/zh-TW/cli/commands/client) | 管理 OAuth2 客戶端 |
+| [`user`](/zh-TW/cli/commands/user) | 管理使用者、其密碼及其角色分配 |
+| [`source`](/zh-TW/cli/commands/source) | 管理可重複使用的匯入來源 |
+| [`login`](/zh-TW/cli/commands/login) | 透過 OAuth 2.0 裝置授權授予登入 |
+| [`logout`](/zh-TW/cli/commands/logout) | 移除已儲存的登入會話 |
+
+每個命令都有自己的幫助資訊，包括子命令：
+
+```bash
+ferris-ctl <command> --help
+ferris-ctl <command> <subcommand> --help
+```
+
+<span id="output-and-exit-codes" />
+
+## 輸出和退出程式碼
+
+`-o table|json|yaml` 用於選擇輸出格式。`login`、`logout` 和 `client secret` 忽略輸出格式，總是列印純文字。使用 `-o json` 或 `-o yaml` 時，列表是陣列，而 `realm import` 總是返回陣列，即使只有一個身分域，因此指令碼可以依賴其結構。
+
+錯誤會作為 `error: <message>` 輸出到標準錯誤。任何失敗的退出程式碼為 1，按下 `Ctrl-C` 在 `login` 期間退出程式碼為 130，引數無法解析時退出程式碼為 2。
+
+刪除某些內容的命令（`realm delete`、`realm role delete`、`client delete`、`user delete`）會在標準錯誤上請求確認，並接受 `y` 或 `yes`。在沒有終端的 shell 中，除非傳遞 `--force`（`-f`），否則它們拒絕執行。

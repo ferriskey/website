@@ -1,0 +1,211 @@
+---
+title: "概述"
+description: "Authz 使身分域成為策略決策點：你為自己的應用程式編寫 Cedar 策略，FerrisKey 回答 AuthZEN 存取請求。"
+icon: scale
+order: 110
+---
+
+<span id="authz-access-decisions-for-your-applications" />
+
+# Authz：為您的應用程式做出存取決策
+
+Authz 允許一個身分域回答“這個主體可以對這個資源執行這個操作嗎？”的問題，用於您構建的應用程式。您可以在 Cedar 模式中描述應用程式的型別和操作，並針對其編寫策略。每個執行存取控制的應用程式，稱為策略執行點（PEP），都會透過 [AuthZEN](/zh-TW/learn/authzen/overview) 1.0 評估 API 向 FerrisKey 發起請求。FerrisKey 是策略決策點（PDP）：它評估身分域的規則，並返回 `true` 或 `false`。
+
+<span id="not-the-same-as-role-permissions" />
+
+## 不同於角色權限
+
+FerrisKey 已經在允許某人呼叫其管理 API 之前檢查權限，即 [角色](/zh-TW/discover/core-concepts/roles) 所擁有的特權。Authz 是一個不同的系統。它根據您的身分域編寫和擁有的規則，決定您自己的應用程式物件（例如文件、發票或 MCP 工具）。
+
+兩者在兩個地方相遇。策略可以測試 FerrisKey 為使用者持有的角色、組和組織，而一些權限控制誰可以編輯規則以及誰可以請求決策。
+
+<span id="how-a-decision-is-made" />
+
+## 決策是如何做出的
+
+1. 作為服務賬戶認證的 PEP，會釋出一個主體、一個動作、一個資源和一個可選的上下文。
+2. 對於 `FerrisKey::User` 或 `FerrisKey::Client` 主體，FerrisKey 從資料庫中讀取主體的角色、組、組織和屬性。任何其他主體則由請求本身描述。
+3. FerrisKey 根據身分域的模式檢查請求，然後 Cedar 評估該身分域啟用的策略。只有當有 `permit` 策略匹配且沒有 `forbid` 策略匹配時，請求才被允許。
+4. 響應包含 `"decision": true` 或 `"decision": false`。
+
+任何規則不允許的都是拒絕，因此沒有策略允許的身分域什麼也不允許。
+
+<span id="the-gates" />
+
+## 大門
+
+在PEP做出決定之前，必須滿足三個條件。
+
+| 門 | 設定 | 當它關閉時 |
+|---|---|---|
+| 例項為模組服務 | `AUTHZ_ENABLED=true`（預設 `false`） | 模組的每條路由都返回404，就像不存在一樣 |
+| 身分域已啟用該模組 | 帶有`{"enabled": true}`的`PUT /realms/{realm_name}/authz/state` | 評估返回404，原因是`authorization_not_enabled`。管理路由繼續工作，因此您可以先準備規則 |
+| 呼叫者可以詢問 | 持有`evaluate_authorization`的服務賬戶 | 403，或當沒有有效權杖時為401 |
+
+`AUTHZ_ENABLED` 安裝整個模組，而不僅僅是評估端點：`/realms/{realm_name}/authz` 下的管理路由、`/realms/{realm_name}/authzen` 下的評估路由，以及 `/.well-known/authzen-configuration` 下的後設資料文件。該變數與其他變數一起在 [配置](/zh-TW/discover/guides/configuration) 中描述。
+
+<span id="permissions" />
+
+## 權限
+
+四個權限決定誰可以做什麼。所有權限都透過 [角色](/zh-TW/discover/core-concepts/roles#permissions-reference) 授予。
+
+| 權限 | 它允許的操作 |
+|---|---|
+| `evaluate_authorization` | 呼叫兩個評估端點。僅接受服務賬戶 |
+| `view_authorization` | 讀取模式、策略、模板和狀態，驗證和模擬策略，並在評估響應中檢視哪些策略被決定 (`context.reason_admin`) |
+| `manage_authorization` | `view_authorization` 允許的所有操作，加上寫入模式、策略、模板和狀態 |
+| `manage_realm` | 與 `manage_authorization` 相同。對於評估，它也滿足權限檢查，但僅適用於服務賬戶 |
+
+:::callout{variant="warning" title="人類管理員無法進行評估"}
+評估端點會拒絕任何非服務賬戶的呼叫者，無論其擁有何種權限。使用 `manage_realm` 的管理員用自己的權杖呼叫它們會收到 403。給 PEP 自己的機密客戶端，併為管理路由使用管理員。
+:::
+
+<span id="quick-start" />
+
+## 快速開始
+
+示例使用角色保護 `document:read` 操作。它使用名為 `acme` 的身分域。步驟 2 至 4 需要持有 `manage_authorization` 或 `manage_realm` 的管理員權杖。步驟 6 使用步驟 5 中構建的 PEP 的權杖。每次呼叫都攜帶 `Authorization: Bearer <token>`。
+
+::::step-group
+:::step{title="為例項啟用該模組"}
+設定 `AUTHZ_ENABLED=true` 並重新啟動 API。在此之前，下列任何路由都不存在。
+:::
+
+:::step{title="描述您的應用"}
+上傳 Cedar 模式。如果沒有 `namespace`，它將儲存在 `App` 下。
+
+```http
+PUT /realms/acme/authz/schema
+```
+
+```json title="Request body"
+{
+  "source": "namespace App {\n  entity Document = {\n    classification: String,\n  };\n\n  action \"document:read\" appliesTo {\n    principal: [FerrisKey::User],\n    resource: [Document],\n  };\n}"
+}
+```
+
+相同的模式，未轉義：
+
+```text
+namespace App {
+  entity Document = {
+    classification: String,
+  };
+
+  action "document:read" appliesTo {
+    principal: [FerrisKey::User],
+    resource: [Document],
+  };
+}
+```
+:::
+
+:::step{title="編寫策略"}
+該策略允許擁有某個角色的使用者讀取文件。角色由其 UUID 命名，因此請將下方的 UUID 替換為您身分域中某個角色的 ID（`GET /realms/acme/roles` 列出了它們），並將該角色分配給您將用於測試的使用者。
+
+```http
+POST /realms/acme/authz/policies
+```
+
+```json title="Request body"
+{
+  "name": "editors-can-read",
+  "body": {
+    "type": "static",
+    "source": "permit (\n  principal in FerrisKey::Role::\"01a0d3dd-a750-7817-aa2b-7e8b98f68e66\",\n  action == App::Action::\"document:read\",\n  resource is App::Document\n);"
+  }
+}
+```
+
+回答是帶有已儲存策略的 201。一個不符合模式驗證的策略將被拒絕，返回 422。
+:::
+
+:::step{title="開啟身分域"}
+```http
+PUT /realms/acme/authz/state
+```
+
+```json title="Request body"
+{ "enabled": true }
+```
+
+```json title="Response"
+{ "enabled": true, "version": 2 }
+```
+
+`version` 記錄對模式、策略和模板的寫入次數。開啟身分域不會改變它。
+:::
+
+:::step{title="建立 PEP"}
+使用 `service_account_enabled` 建立一個機密客戶端（參見 [服務賬戶](/zh-TW/discover/core-concepts/clients#service-accounts)）。然後建立一個帶有該權限的角色，並將其分配給該客戶端的服務賬戶使用者。
+
+```text
+POST /realms/acme/roles
+GET  /realms/acme/users?service_account=true
+POST /realms/acme/users/{user_id}/roles/{role_id}
+```
+
+```json title="Body of the role"
+{ "name": "pdp-caller", "permissions": ["evaluate_authorization"] }
+```
+
+列表中使用者的 `client_id` 欄位是其客戶端的 UUID。最後，透過 [客戶端憑據授權](/zh-TW/discover/core-concepts/authentication#client-credentials) 為客戶端請求一個權杖。
+:::
+
+:::step{title="請求一個決策"}
+使用 PEP 的權杖，詢問使用者是否可以讀取某個文件。使用者透過其 UUID 被識別。
+
+```http
+POST /realms/acme/authzen/access/v1/evaluation
+```
+
+```json title="Request body"
+{
+  "subject": { "type": "FerrisKey::User", "id": "0199a4f2-3c1e-7b8a-9f00-1a2b3c4d5e6f" },
+  "action": { "name": "document:read" },
+  "resource": {
+    "type": "App::Document",
+    "id": "42",
+    "properties": { "classification": "public" }
+  }
+}
+```
+
+```json title="Response"
+{ "decision": true }
+```
+
+如果使用者沒有持有該角色，同樣的呼叫會返回 `{ "decision": false }` 並帶有 200 狀態碼。拒絕並不是錯誤。如果 PEP 也持有 `view_authorization`，響應會新增作出決定的策略：
+
+```json title="Response with view_authorization"
+{
+  "decision": true,
+  "context": { "reason_admin": { "policies": ["editors-can-read"] } }
+}
+```
+:::
+::::
+
+使用者的角色在每次請求時都會從資料庫中讀取，所以更改它們將在下一次決策時生效。只有編譯後的規則會被快取，並且沒有副本提供比當前晚一秒以上的規則。
+
+控制檯沒有用於 Authz 的介面。上面每一步都透過 API 進行。
+
+<span id="in-this-module" />
+
+## 在這個模組中
+
+::::card-group{cols=2}
+:::card{label="模式、策略和模板" icon="lucide:file-code-2" href="/zh-TW/modules/authz/policies"}
+編寫規則：Cedar 模式、靜態和關聯策略、驗證、模擬以及限制。
+:::
+:::card{label="評估" icon="lucide:list-checks" href="/zh-TW/modules/authz/evaluation"}
+AuthZEN 端點：主體、批處理、失敗行為以及代理和 MCP 型別。
+:::
+:::card{label="AuthZEN" icon="lucide:shield-check" href="/zh-TW/learn/authzen/overview"}
+評估 API 背後的標準，以及它解決的問題。
+:::
+:::card{label="角色和權限" icon="lucide:shield" href="/zh-TW/discover/core-concepts/roles"}
+控制誰可以編輯規則以及誰可以請求決策的權限。
+:::
+::::

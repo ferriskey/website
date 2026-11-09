@@ -1,0 +1,122 @@
+---
+title: "API錯誤"
+description: "FerrisKey API的三種錯誤形態、其中的穩定原因程式碼，以及在客戶端程式碼中匹配的內容。"
+icon: circle-alert
+order: 28
+---
+
+<span id="api-errors" />
+
+# API錯誤
+
+API 會以三種形式回答失敗請求。你得到哪種形式取決於端點和失敗型別，每個都攜帶機器可讀程式碼，旨在匹配。人類可讀文字則不然。
+
+| 形狀 | 其中 | 機器可讀欄位 |
+|---|---|---|
+| 標準 | 大多數端點 | `reason` |
+| 驗證 | 請求體或未透過驗證的值，狀態`422` | `errors[].code` |
+| 奧奧斯 | 權杖端點、裝置流以及授權請求的某些失敗 | `error` |
+
+<span id="the-standard-shape" />
+
+## 標準形狀
+
+```json title="GET /realms/master/users/00000000-0000-0000-0000-000000000000"
+{
+  "code": "E_NOT_FOUND",
+  "status": 404,
+  "reason": "not_found",
+  "message": "Resource not found"
+}
+```
+
+| 欄位 | 含義 |
+|---|---|
+| `code` | 每個狀態一個數值：`E_BAD_REQUEST`、`E_UNAUTHORIZED`、`E_FORBIDDEN`、`E_NOT_FOUND`、`E_CONFLICT`、`E_INTERNAL_SERVER_ERROR`或`E_SERVICE_UNAVAILABLE` |
+| `status` | HTTP 狀態，在正文中重複出現 |
+| `reason` | 針對特定失敗的穩定蛇形命名（snake_case）程式碼。當錯誤沒有更具體的程式碼時，它會重複類：`bad_request`、`unauthorized`、`forbidden`、`not_found`、`conflict`、`internal_server_error` 或 `service_unavailable` |
+| `message` | 開發者的英文文字 |
+
+你可能遇到的一些原因：
+
+| 狀態 | `reason` | 當 |
+|---|---|---|
+| 400 | `invalid_query` | 列表引數未知或超出範圍。請參見 [分頁列表](/zh-TW/discover/guides/api-listings) |
+| 400 | `unexpected_payload` | 請求體不是有效的 JSON，或與端點期望的結構不匹配 |
+| 400 | `email_already_exists` | 該身分域的另一使用者已經使用了該郵箱地址 |
+| 401 | `token_not_found` | 請求沒有攜帶 Bearer 權杖 |
+| 401 | `invalid_credentials` | 使用者名稱或密碼錯誤 |
+| 401 | `account_locked` | 失敗嘗試次數過多。請參見 [使用者](/zh-TW/discover/core-concepts/users#lockout) |
+| 403 | `forbidden` | 呼叫者缺少操作所需的權限 |
+| 403 | `user_disabled` | 賬戶被禁用 |
+| 403 | `elevation_required` | 敏感的賬戶操作需要重新進行身分認證。請參閱 [賬戶安全](/zh-TW/modules/account/security) |
+| 404 | `not_found` | 資源不存在，或它屬於另一個域 |
+| 409 | `user_id_already_exists` | 使用已被佔用的 `id` 建立使用者 |
+| 409 | `password_credential_already_exists` | 為已設定密碼的使用者匯入密碼雜湊 |
+| 409 | `last_sign_in_means` | 移除憑據會導致賬戶無法登入 |
+| 500 | `internal_server_error` | 伺服器發生錯誤。`message` 以 `Internal Server Error:` 開頭，可能包含內部細節，因此不要向終端使用者顯示 |
+| 503 | `client_under_maintenance` | 客戶端正在維護狀態，拒絕登入 |
+
+列表很長，因為每個域錯誤都有其自身原因。這些是示例，而不是完整集合。
+
+<span id="validation-errors" />
+
+## 驗證錯誤
+
+一個未透過驗證的請求體、一個違反身分域策略的密碼、伺服器無法接受的雜湊以及格式不正確的區域設定都會返回 `422` 和一個列表。該列表為每個問題都有一條記錄，因此表單可以一次性顯示所有問題。
+
+```json title="POST /realms/{realm_name}/users with an empty username"
+{
+  "errors": [
+    { "field": "username", "code": "length", "message": "username is required" }
+  ]
+}
+```
+
+| 欄位 | 含義 |
+|---|---|
+| `field` | 未透過驗證的欄位名稱 |
+| `code` | 失敗的規則。對於逐欄位檢查的請求體，這是規則，如 `length`、`email` 或 `range`。對於密碼，它是 `too_short`、`missing_uppercase`、`missing_lowercase`、`missing_number`、`missing_special`、`insufficient_entropy` 和 `common_password` 之一。其他驗證使用它們自己的程式碼，例如 `invalid_password_hash` 或 `malformed_locale`。 |
+| `message` | 開發者的英文文字 |
+
+此形式在請求體中既沒有 `reason` 也沒有 `status`。從響應中讀取狀態。
+
+<span id="oauth-errors" />
+
+## OAuth 錯誤
+
+權杖端點、裝置流以及一些授權請求的失敗，例如缺少 PKCE 挑戰，按照 RFC 6749 定義的格式響應，以便任何 OAuth 庫都可以讀取它們。
+
+```json title="POST /realms/master/protocol/openid-connect/token"
+{
+  "error": "invalid_client",
+  "error_description": "Client authentication failed."
+}
+```
+
+| `error` | 狀態 | 含義 |
+|---|---|---|
+| `invalid_request` | 400 | 缺少必需的引數，或者請求格式錯誤 |
+| `invalid_grant` | 400 | 程式碼、重新整理權杖、憑據或會話無效。以及當賬戶仍需完成登入步驟時，`password` 授權的響應 |
+| `unauthorized_client` | 400 | 客戶端不能使用此授權型別 |
+| `unsupported_grant_type` | 400 | `grant_type` 不是 FerrisKey 所知的型別 |
+| `invalid_scope` | 400 | 請求的作用域不被允許 |
+| `invalid_client` | 401 | 客戶端認證失敗。響應中帶有 `WWW-Authenticate: Basic` |
+| `temporarily_unavailable` | 429 或 503 | 來自同一地址的客戶端認證失敗次數過多（429，`Retry-After: 60`），或伺服器已滿載（503，`Retry-After: 1`） |
+
+裝置流程會新增RFC 8628中的程式碼：`authorization_pending`、`slow_down`、`expired_token`和`access_denied`，均帶有狀態`400`。
+
+<span id="what-to-match-on" />
+
+## 匹配的物件
+
+在故障類別的狀態上分支，然後在具體故障類別的程式碼上分支。不要分支於`message`：這是英文散文，其措辭不包含合同內容，有些訊息的細節會隨著請求而變化。
+
+其中一行讀取了三種形狀中的任意一個程式碼：
+
+```ts
+const body = await response.json()
+const code = body.reason ?? body.error ?? body.errors?.[0]?.code
+```
+
+控制檯也同樣如此。它從`reason`、OAuth 響應的 `error` 或每個驗證錯誤條目中的 `code` 中選擇文字，且僅在沒有程式碼文字時才回退到`message`。參見 [Localization](/zh-TW/discover/guides/localization)。

@@ -1,0 +1,109 @@
+---
+title: "什麼是 JWT？"
+description: "一種緊湊的、已簽名的權杖格式，用於攜帶關於身分的可驗證宣告。"
+icon: file-code-2
+order: 1
+---
+
+<span id="what-is-a-jwt" />
+
+# 什麼是 JWT？
+
+JSON Web 權杖（JWT，通常讀作“jot”）是一種緊湊且 URL 安全的方式，用於在雙方之間傳遞已簽名的宣告。如果您擁有簽發者的公鑰，就可以自行驗證 JWT，無需網路呼叫。
+
+JWT不是一種協議。它們是一種格式。OAuth2和OIDC恰好使用它們，但它們在許多其他地方也會出現。
+
+<span id="what-signed-means-here" />
+
+## 這裡的“簽名”是什麼意思
+
+簽發者對權杖進行簽名。任何擁有簽發者公鑰的人都可以驗證簽名。如果驗證透過，你可以知道兩件事：
+
+1. 宣告是由持有私鑰的人（即簽發者）生成的。
+2. 權杖自生成以來沒有被篡改。
+
+這足以在權杖有效期間相信宣告的表面值。
+
+<span id="a-jwt-in-the-wild" />
+
+## 實際中的JWT
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OD
+kwIiwibmFtZSI6IkFsaWNlIiwiaWF0IjoxNzM2Mzc2NDAwfQ.SfXPyZbR2X4
+...
+```
+
+由三部分Base64URL編碼後用點連線：
+
+```
+header.payload.signature
+```
+
+前兩部分是JSON。簽名是二進位制的，用Base64URL編碼。
+
+<span id="why-jwts-are-everywhere" />
+
+## 為什麼JWT無處不在
+
+兩個特性起了決定性作用。JWT 是自包含的：接收方需要的所有資訊都在權杖中。而且它們無需資料庫查詢便可驗證，因為單靠加密就能證明信任。RFC 7519 確定了格式，現在幾乎每種語言都有對應的庫。
+
+對於高流量的 API，無狀態性是關鍵特性。每秒一百萬個請求都可以在本地進行認證，無需共享會話儲存來限制任何人。
+
+<span id="what-jwts-are-not" />
+
+## JWT 不是什麼
+
+- 預設不加密。JWT 的負載只是 Base64URL 編碼。任何人都可以解碼並讀取它。除非你也使用 JWE（加密 JWT），否則不要在 JWT 中放置金鑰資訊。
+- 不是會話 Cookie。JWT 不能被“銷燬”。它在 `exp` 之前都是有效的。根據你的需求，將其視為特性（無狀態）或缺點（無法立即撤銷）。
+- 不是權限系統。JWT 攜帶宣告。這些宣告的意義由資源伺服器決定。授權決策仍然屬於您的應用程式程式碼。
+
+<span id="jwt-vs-opaque-tokens" />
+
+## JWT 與不透明權杖
+
+簡短對比：
+
+| | JWT | 不透明權杖 |
+| --- | --- | --- |
+| 格式 | Base64URL 編碼的 JSON | 隨機字串 |
+| 驗證方式 | 本地驗證簽名 | 呼叫 introspection 端點 |
+| 在過期前可撤銷？ | 不可以（沒有額外機制） | 是 |
+| 攜帶宣告 | 是的，任何人都可以讀取 | 不可以，僅伺服器端可讀 |
+| 每次驗證的網路呼叫 | 0 | 1 |
+
+大多數 OIDC 提供商，包括 FerrisKey，預設都會頒發 JWT。
+
+<span id="a-mental-model" />
+
+## 一個思維模型
+
+JWT 是貼在宣告上的防篡改標籤。你可以透過這個標籤讀取宣告（沒有加密）。你不能撕下並重新貼上它（簽名會失效）。而且標籤上印有過期日期。
+
+<span id="where-to-read-next" />
+
+## 接下來閱讀的內容
+
+::::card-group{cols=2}
+:::card{label="結構解析" icon="lucide:scan-text" href="/zh-TW/learn/jwt/anatomy"}
+頭部、負載、簽名，欄位逐項解析。
+:::
+:::card{label="宣告" icon="lucide:list-checks" href="/zh-TW/learn/jwt/claims"}
+標準宣告與自定義宣告，以及如何使用它們。
+:::
+::::
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 將 JWT 作為存取權杖和身分權杖釋出。每個身分域的簽名金鑰都在該身分域發現文件中列出的 JWKS 端點公開。
+
+::::card-group{cols=2}
+:::card{label="存取權杖" icon="lucide:key" href="/zh-TW/learn/oauth2/tokens"}
+JWT 最常見的作用。
+:::
+:::card{label="保護模組" icon="lucide:lock" href="/zh-TW/modules/aegis/overview"}
+決定 FerrisKey 簽發的 JWT 中出現哪些宣告。
+:::
+::::

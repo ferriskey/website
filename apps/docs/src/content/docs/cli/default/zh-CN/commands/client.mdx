@@ -1,0 +1,118 @@
+---
+title: "客户端"
+description: "在一个身份域内创建、检查和删除 OAuth2 客户端，并读取机密客户端的密钥。"
+icon: box
+order: 3
+---
+
+# `client`
+
+在一个身份域中管理 OAuth2 客户端。
+
+```bash
+ferris-ctl client <subcommand>
+```
+
+每个子命令都接受 `--realm <name>` 来选择命令作用的域；否则使用上下文的域。CLI 始终登录到上下文的域，因此即使你传递 `--realm`，上下文也必须有一个域。见 [认证](/zh-CN/cli/authentication#contexts)。
+
+<Callout variant="warning" title="已知限制：仅读取客户端的第一页">
+
+服务器默认每页返回 20 个客户端（最多 100 个），而 `ferris-ctl` 只读取第一页。在具有超过 20 个客户端的域中，`client list` 显示的是子集。`client get`、`client delete` 和 `client secret` 在同一页中通过精确的 `client_id` 匹配查找客户端，因此对于不在页面中的客户端，它们返回 `client '<id>' not found`。API 通过其 `page` 和 `limit` 参数访问其余的客户端，管理控制台也是如此。
+
+</Callout>
+
+## `client list`
+
+列出一个身份域中的客户端。
+
+```bash
+ferris-ctl client list [--realm <realm>]
+```
+
+表格列: CLIENT_ID, ID, NAME。
+
+## `client get`
+
+显示客户端的详细信息。
+
+```bash
+ferris-ctl client get <client_id> [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客户端标识符 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+
+返回 id、client_id、name、realm、enabled、protocol、public_client、service_accounts_enabled 和 direct_access_grants_enabled。secret 不包含在内：请使用 [`client secret`](#client-secret)。
+
+## `client create`
+
+创建客户端。
+
+```bash
+ferris-ctl client create <name> [flags]
+```
+
+| 参数 | 默认 | 说明 |
+|----------|---------|-------------|
+| `<name>` |  | 客户端名称（必填） |
+| `--client-id` | `<name>` | 客户端标识符 |
+| `--realm` | 上下文身份域 | 身份域 |
+| `--type` | `public` | 客户端类型：`public`、`confidential` 或 `system` |
+| `--enabled` | 关闭 | 创建启用的客户端。没有该标志时，它会被创建为禁用状态，而禁用的客户端无法认证任何人 |
+| `--protocol` | `openid-connect` | 客户端使用的协议 |
+| `--direct-access-grants` | 关闭 | 启用直接访问授权 |
+
+客户端类型控制一些默认设置：
+
+| 类型 | `public_client` | 服务账户 |
+|------|-----------------|-----------------|
+| `public` | `true` | 禁用 |
+| `confidential` | `false` | 启用 |
+| `system` | `false` | 启用 |
+
+```bash title="Create an enabled confidential client"
+ferris-ctl client create backend \
+  --type confidential \
+  --enabled \
+  --direct-access-grants
+```
+
+该命令打印创建的客户端。除此之外不设置其他内容：不设置重定向 URI，不设置 Web 来源，并且 OAuth 2.0 设备授权 grant 始终关闭。在管理员控制台中设置这些，或在 [描述文件](/zh-CN/cli/import/config-file#clients) 中描述客户端并导入。
+
+## `client secret`
+
+打印一个保密客户端的密钥。
+
+```bash
+ferris-ctl client secret <client_id> [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客户端标识符 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+
+密钥会单独输出到标准输出，每行只有密钥本身，没有其他内容，因此你可以捕捉它：
+
+```bash
+ferris-ctl client secret backend > backend.secret
+SECRET="$(ferris-ctl client secret backend)"
+```
+
+`-o` 在这里没有效果。只有机密客户端才有密钥。读取它需要的不仅是读取客户端：已登录的身份需要 `manage_clients`（或 `manage_realm`），并且每次调用都会在服务器上记录一个 `client_secret_viewed` 安全事件。
+
+## `client delete`
+
+删除客户端。会提示确认，显示客户端名称及其 ID，除非传递了 `--force`。
+
+```bash
+ferris-ctl client delete <client_id> [--realm <realm>] [--force]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<client_id>` | 是 | 客户端标识符 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+| `--force` / `-f` | 否 | 跳过确认提示（在非交互式 shell 中必需） |

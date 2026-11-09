@@ -1,0 +1,105 @@
+---
+title: "TOTP"
+description: "FerrisKey 中基於時間的一次性密碼：註冊、登入挑戰、鎖定及金鑰儲存。"
+icon: clock
+order: 11
+---
+
+<span id="totp-time-based-one-time-password" />
+
+# TOTP（基於時間的一次性密碼）
+
+TOTP 是 FerrisKey 在密碼之後的第二個身分認證因素。使用者的身分認證器應用與 FerrisKey 共享一個金鑰，並每 30 秒從該金鑰生成相同的六位數程式碼，如 [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238) 中所述。任何相容的應用都可以使用：Google Authenticator、Authy、1Password、Bitwarden。
+
+<span id="parameters" />
+
+## 引數
+
+引數是固定的。FerrisKey 提供的 `otpauth://` URI 總是包含它們。
+
+| 引數 | 值 |
+|---|---|
+| `algorithm` | SHA-1 |
+| `digits` | 6 |
+| `period` | 30 秒 |
+| 金鑰 | 20 個隨機位元組，經過 base32 編碼 |
+| `issuer` | `<base URL>/realms/<realm_name>`，所屬域的簽發者 URL |
+| 標籤 | 使用者的電子郵件地址 |
+
+身分認證器應用顯示的簽發者名稱沒有每個域的單獨設定。
+
+<span id="enrolment" />
+
+## 註冊
+
+使用者以兩種方式之一獲取驗證器，兩者最終都會生成相同的憑據。在登入時，`configure_otp` 所需操作將他們引導完成以下步驟。從賬戶頁面，他們按照 [賬戶安全](/zh-TW/modules/account/security#authenticator-app-totp) 中描述的自助流程操作，該流程需要先進行新密碼驗證。
+
+<span id="enrolment-at-sign-in" />
+
+### 登入時註冊
+
+::::step-group
+:::step{title="開始註冊"}
+門戶使用步驟權杖呼叫 `GET /login-actions/setup-otp`。FerrisKey 生成金鑰並在伺服器上保留 5 分鐘。響應包含 `secret`、`otpauth_url` 和 `issuer`。
+:::
+
+:::step{title="顯示二維碼"}
+客戶端將 `otpauth_url` 渲染為二維碼。URI 具有以下形狀，標籤和簽發者 URL 已進行 URL 編碼：
+
+```text
+otpauth://totp/alice%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=https%3A%2F%2Fiam.example.com%2Frealms%2Facme&algorithm=SHA1&digits=6&period=30
+```
+:::
+
+:::step{title="用程式碼進行確認"}
+使用者掃描二維碼並輸入應用顯示的六位數程式碼。客戶端將 `POST /login-actions/verify-otp` 與 `code` 以及裝置的 `label` 一起傳送。請求不會重複金鑰：FerrisKey 讀取它儲存的那個，因此客戶端不能自行選擇。
+
+儲存的註冊碼為一次性使用。無論程式碼是否正確，該呼叫都會消耗它，因此錯誤的程式碼意味著必須從第一步重新開始。除非 `configure_otp` 確實用於此登入，否則 FerrisKey 還會以 403 拒絕呼叫。
+:::
+
+:::step{title="證書已儲存"}
+在程式碼有效時，FerrisKey 儲存證書（型別 `otp`），替換使用者已有的任何驗證器，移除 `configure_otp` 所需的操作，並允許登入繼續。
+:::
+::::
+
+<span id="verification-at-sign-in" />
+
+## 登入驗證
+
+輸入密碼後，擁有驗證器的使用者會看到這個：
+
+1. `POST /login-actions/authenticate` 使用 `status: "RequiresOtpChallenge"` 和使用者的 `email` 回答，並設定步驟權杖 cookie。
+2. 客戶端收集六位數程式碼。
+3. 客戶端傳送帶有 `{ "code": "123456" }` 的 `POST /login-actions/challenge-otp`。程式碼必須正好為六個字元。
+4. FerrisKey 接受當前 30 秒視窗及前後視窗的程式碼，因此時鐘偏差一個步驟的裝置仍然可以透過。
+5. 成功時，響應會攜帶帶有授權程式碼的 `url`，或仍待處理的 `required_actions`。
+
+<Callout variant="warning" title="時間同步">
+
+TOTP 依賴於 FerrisKey 和認證器應用程式對時間的共識。如果伺服器時鐘偏移超過一個步驟，有效程式碼將失效。保持伺服器時鐘與 NTP 同步。
+
+</Callout>
+
+<span id="lockout" />
+
+### 鎖定
+
+錯誤程式碼會被視為一次登入失敗。它會計入與錯誤密碼相同的計數器：一旦計數器達到域的 `lockout_threshold`（預設 10 次），賬戶將被鎖定 `lockout_duration_seconds` 時間（預設 900 秒）。被鎖定的賬戶在挑戰和其他所有登入中都會被拒絕。正確的程式碼會重置計數器。
+
+<span id="where-the-secret-is-stored" />
+
+## 金鑰儲存位置
+
+金鑰儲存在憑據的 `secret_data` 列中。FerrisKey 僅在 `SECRETS_ENCRYPTION_KEYS` 設定時使用 AES-256-GCM 對其進行封裝。沒有該變數時，base32 金鑰以明文儲存，尚未生成首個程式碼的金鑰也是如此。請參閱 [靜態金鑰](/zh-TW/discover/guides/secrets-at-rest) 瞭解金鑰格式和輪換。
+
+<span id="making-totp-mandatory" />
+
+## 強制使用 TOTP
+
+在身分域或角色上設定 `require_mfa`。任何覆蓋到的沒有身分認證器的使用者將在下次登入時獲取 `configure_otp`，並且在清除此項之前無法完成登入。你也可以從控制檯或使用者 API 將 `configure_otp` 新增到單個使用者的必做操作中。
+
+<span id="losing-the-authenticator" />
+
+## 丟失身分認證器
+
+仍然持有恢復碼的使用者可以[用它回答挑戰](/zh-TW/modules/trident/recovery-codes)。否則，管理員需要從控制檯的使用者頁面刪除一次性密碼憑據，然後使用者重新註冊新的身分認證器。

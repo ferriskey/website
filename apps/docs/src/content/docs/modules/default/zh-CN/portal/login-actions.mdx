@@ -1,0 +1,168 @@
+---
+title: "登录操作"
+description: "门户自身调用的端点：如果你用自己的 UI 替换它，这是你需要的。"
+icon: terminal
+order: 91
+---
+
+<span id="login-actions" />
+
+# 登录操作
+
+本文档中的其他所有内容都是应用程序集成的表面：OIDC 端点、管理员 API。本页面属于另一类。`login-actions` 是 **门户本身** 调用的系列：登录页面背后的 20 个端点、多因素认证挑战、密码重置和密钥提示。
+
+当你连接应用程序时，不会触碰它们。你会在 **用自己的 UI 替换门户** 并需要驱动相同流程时触碰它们。
+
+<Callout variant="warning" title="这是内部契约，而不是稳定的公共 API。">
+
+这些端点存在是为了服务 FerrisKey 自己的门户，并随门户一起变化。如果主题化门户能满足你的需求，请使用 [主题和布局](/zh-CN/modules/portal/overview)。你可以免费获得这些流程，并且它们在升级后仍能正常工作。仅当主题化无法真正表达你的需求时，才使用这个系列。
+
+</Callout>
+
+以下路径相对于 `/realms/{realm_name}`。
+
+<span id="cookies-and-credentials" />
+
+## Cookies 和凭据
+
+登录由一个认证会话跟踪，浏览器在 `FERRISKEY_SESSION` Cookie 中携带该会话，该 Cookie 由授权请求创建。下面的大多数调用都会读取它，如果没有该 Cookie，`authenticate` 会返回 401 `Missing session cookie`。
+
+`authenticate` 还会在一个 HttpOnly Cookie 中设置 **步骤令牌**，`FERRISKEY_LOGIN_ACTION`，其作用域为 `/realms/{realm_name}/login-actions`。它是一个短期有效的 JWT，绑定到认证会话，并且在域的 `temporary_token_lifetime` 生命周期内有效（默认 300 秒）。如果步骤令牌的会话与 `FERRISKEY_SESSION` Cookie 不一致，将被拒绝并返回 401。
+
+| 凭据 | 端点 |
+|---|---|
+| 无令牌 | `authenticate`, `verify-email`, `send-magic-link`, `verify-magic-link`, `forgot-password`, `verify-reset-token`, `reset-password`, `passkey-request-options`, `passkey-authenticate` |
+| 步骤令牌 Cookie | `setup-otp`, `verify-otp`, `challenge-otp`, `update-password`, `burn-recovery-code`, `webauthn-public-key-create-options`, `webauthn-public-key-create` |
+| Bearer 访问令牌 | `generate-recovery-codes`, `webauthn-public-key-request-options`, `webauthn-public-key-authenticate`, `resend-verification-email` |
+
+当拥有身份认证器的用户尚未回答挑战时，步骤令牌仅打开 `challenge-otp` 和 `burn-recovery-code`。每个其他步骤令牌调用都会返回 403。
+
+<span id="password-sign-in" />
+
+## 密码登录
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/authenticate` | 在身份域中验证用户 |
+| `POST` | `/login-actions/update-password` | 为 `update_password` 所需的操作设置新密码 |
+
+`authenticate` 是入口点。其主体接受 `username`、`password` 和 `remember_me`，并且查询接受 `client_id`。响应 `status` 为以下之一：
+
+| 状态 | 含义 |
+|---|---|
+| `Success` | 登录完成。`url` 带有授权码 |
+| `RequiresActions` | `required_actions` 列出待处理项。步骤令牌已设置 |
+| `RequiresOtpChallenge` | 用户拥有身份认证器。`email` 是用户的地址。步骤令牌已设置 |
+
+当需要第二个因素或执行必要操作时，`authenticate` 不会返回授权代码。它设置的步骤令牌只授权下一步操作，别无其他。
+
+<span id="mfa-challenge" />
+
+## 多因素认证挑战
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `GET` | `/login-actions/setup-otp` | 开始身份认证器注册：返回 `secret`、`otpauth_url` 和 `issuer`，用于生成二维码 |
+| `POST` | `/login-actions/verify-otp` | 使用 `code` 和 `label` 确认注册 |
+| `POST` | `/login-actions/challenge-otp` | 使用 `code` 回答一次性密码挑战，正好六个字符 |
+| `POST` | `/login-actions/burn-recovery-code` | 改为使用恢复代码回答一次性密码挑战 |
+| `POST` | `/login-actions/generate-recovery-codes` | 用新的一组恢复代码替换用户的恢复代码 |
+
+`generate-recovery-codes` 不是登录流程的一部分。它需要用户的 Bearer 访问令牌以及通过密码从 `POST /users/me/reauthenticate` 获取的 `elevation_id`，并且该调用仅在用户已登录时才有意义。没有任何方式会自动生成恢复代码，并且门户网站从未调用它。有关正文和格式，请参阅 [恢复代码](/zh-CN/modules/trident/recovery-codes)。
+
+<span id="passkeys-and-webauthn" />
+
+## 密码密钥和 WebAuthn
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/passkey-request-options` | 开始密码密钥登录。使用用户名时，挑战仅限于该用户的密码密钥；不使用用户名时，挑战是可发现的，浏览器会提出它所拥有的密码密钥。 |
+| `POST` | `/login-actions/passkey-authenticate` | 提交浏览器的断言。成功时返回 `login_url`，其中携带授权代码。 |
+| `POST` | `/login-actions/webauthn-public-key-create-options` | 完整 `PublicKeyCredentialCreationOptions`，挑战以 base64url 编码 |
+| `POST` | `/login-actions/webauthn-public-key-create` | 存储新的 WebAuthn 公钥。除非 `configure_passkey` 已针对此次登录到期，否则会返回 403。 |
+| `POST` | `/login-actions/webauthn-public-key-request-options` | 完整 `PublicKeyCredentialRequestOptions`，适用于持有 Bearer 令牌的用户 |
+| `POST` | `/login-actions/webauthn-public-key-authenticate` | 使用 `WebAuthnAssertionResponse` 进行身份认证，针对持有 Bearer 令牌的用户 |
+
+`passkey-request-options` 的可发现变体使无用户名登录成为可能：没有提交标识符，因此该页面无法用于探测哪些账户存在。
+
+经用户验证的通行密钥可回答 OTP 挑战，但所需操作仍会以 403 阻止它。门户网站使用 `passkey-*` 对进行登录，使用 `webauthn-public-key-create*` 对进行 `configure_passkey` 操作。它不调用最后两行。
+
+<span id="password-reset" />
+
+## 密码重置
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/forgot-password` | 如果地址存在，则发送重置电子邮件 |
+| `POST` | `/login-actions/verify-reset-token` | 检查令牌是否有效且未过期，**不消耗它** |
+| `POST` | `/login-actions/reset-password` | 从 `token_id`、`token` 和 `new_password` 设置新密码，并返回令牌 |
+
+<Callout variant="info" title="三个特意的细节">
+
+`forgot-password` 无论地址是否存在都会返回 **200**，而对于未知地址则不发送任何内容。这就是阻止端点成为账户枚举工具的原因。不要通过报告未知地址来“改进”你的用户界面。未启用 `forgot_password_enabled` 的身份域无论地址如何都会返回 403。
+
+`verify-reset-token` 的存在是为了让重置页面在了解令牌有效的情况下呈现其表单，而无需消耗它。加载时检查，提交时消耗。
+
+重置令牌的有效期为 30 分钟，用户最多可以同时持有三个有效令牌。第四次请求将在其中一个令牌过期之前被静默忽略。
+
+</Callout>
+
+只有当身份域配置了 SMTP 且存在 `reset_password_template_id` 时，重置邮件才会发送。
+
+`reset-password` 应用身份域的密码策略，更改密码，撤销用户之前的令牌并返回新的令牌响应。当重置是在授权流程中启动时，它还会返回 `login_url`，该令牌携带授权码并完成该流程。只有在浏览器仍持有请求重置的登录的 `FERRISKEY_SESSION` cookie 时，才会存在 `login_url`。在另一个浏览器中完成重置会设置密码，但不会返回 `login_url`，因此原始客户端永远不会收到代码。当用户仍需执行步骤（例如验证器代码）时，该字段也不会出现。
+
+<span id="email-verification" />
+
+## 电子邮件验证
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/verify-email` | 使用邮件中的令牌验证地址 |
+| `POST` | `/login-actions/resend-verification-email` | 重新发送链接。需要 Bearer 令牌 |
+
+<span id="magic-links" />
+
+## 免密登录链接
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `POST` | `/login-actions/send-magic-link` | 发送一次性登录链接邮件。调用携带 `FERRISKEY_SESSION` cookie |
+| `GET` | `/login-actions/verify-magic-link` | 消耗令牌后返回重定向URL，并返回授权码，`url` |
+
+链接绑定到请求该链接的浏览器。`verify-magic-link`回答401 `invalid_magic_link`当`FERRISKEY_SESSION` cookie与发送时存储的会话不同时。有关失败模式，请参见[Magic Links](/zh-CN/modules/trident/magic-links)。
+
+<span id="device-flow" />
+
+## 设备流程
+
+[设备码授予](/zh-CN/discover/core-concepts/authentication#device-code)需要在令牌端点之外还有三个端点，它们是*用户*访问的页面，而非设备：
+
+| 方法 | 路径 | 它的功能 |
+|---|---|---|
+| `GET` | `/device` | `verification_uri`本身。重定向到网页应用，传递代码时预填`?user_code=` |
+| `GET` | `/device/preview` | 客户端和待处理设备会话的作用域，这样页面才能显示正在批准的内容（RFC 8628 §5.3） |
+| `POST` | `/device/verify` | 用户认证后，可以批准或拒绝 |
+
+`preview`和`verify`都需要`FERRISKEY_SSO` cookie，即浏览器的单点登录会话所依赖的。当缺少该cookie时，`verify`回答`401`带有指向验证页面的`redirect_uri`提示，这样自定义页面可以引导用户登录并返回，而不是死胡同。
+
+`preview`还拒绝属于另一个身份域的代码，这阻止了一个身份域的用户批准在另一个身份域发布的设备码。
+
+<span id="what-you-still-get-for-free" />
+
+## 你仍然免费获得的
+
+替换门户并不意味着要重新实现整个IAM。这些内容无论界面如何命名，都会继续运行：
+
+- [认证链](/zh-CN/discover/core-concepts/authentication#authentication-chain)：锁定、所需操作、身份域策略。
+- [指南针](/zh-CN/modules/compass/overview)流程录制，一步步，包括你的UI推动的步骤。
+- [SeaWatch](/zh-CN/modules/seawatch/overview) 审计事件和 [webhooks](/zh-CN/modules/webhooks/overview)。
+- [密码策略](/zh-CN/discover/core-concepts/password-policy)，包括其公共端点，以便您的表单在用户输入时可以评估规则。
+
+::::card-group{cols=2}
+:::card{label="门户主题" icon="lucide:palette" href="/zh-CN/modules/portal/overview"}
+更改登录页面外观的支持方式。
+:::
+:::card{label="Trident" icon="lucide:shield-check" href="/zh-CN/modules/trident/overview"}
+在您自己操作之前，每个 MFA 挑战的含义。
+:::
+::::

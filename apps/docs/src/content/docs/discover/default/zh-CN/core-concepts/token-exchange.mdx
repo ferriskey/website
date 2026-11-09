@@ -1,0 +1,235 @@
+---
+title: "令牌交换"
+description: "将访问令牌换成更窄的，换成其他服务，或代表他人使用（RFC 8693）。"
+icon: arrow-left-right
+order: 20
+---
+
+<span id="token-exchange" />
+
+# 令牌交换
+
+令牌交换允许客户端用它已持有的访问令牌交换一个新的令牌。FerrisKey 实现了 [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) 三个任务：
+
+| 工作 | 客户端的要求 | 示例 |
+|---|---|---|
+| **降级 | 同样的道理，只是作用域更少 | 网关将一个仅限 `profile` 的令牌传递给一个不太受信任的组件 |
+| **受众** | 为另一个服务准备的令牌 | 订单 API 以登录用户的身份调用计费 API |
+| **委托** | 一个说明谁替用户操作的令牌 | 支持人员在客户的账户上工作，令牌同时标明双方 |
+
+发出的令牌是普通访问令牌。资源服务器像验证其他令牌一样验证它。
+
+:::callout{variant="info" title="0.8.0 中没有"}
+令牌交换随 FerrisKey 0.8.0 之后的版本发布
+:::
+
+<span id="before-you-start" />
+
+## 在开始之前
+
+1. 请求客户端是**保密**的。公共客户端总是被拒绝，因为它们无法保留证明请求者身份的密钥。而且必须由管理员启用并注册：通过动态注册创建或通过元数据文档解析的客户端，会被`unauthorized_client`拒绝。
+2. 在该客户端上开启**令牌交换**：在设置里的开关，或者通过API `token_exchange_enabled: true`。默认是关闭的。
+3. 要针对其他服务，为该受众添加[委托政策](#delegation-policies)。没有受众的缩减范围不需要策略。
+
+<span id="the-request" />
+
+## 请求
+
+`POST /realms/{realm}/protocol/openid-connect/token`，表单编码。客户端通过HTTP BASIC（`client_secret_basic`）或正文中的`client_id`+`client_secret`（`client_secret_post`）进行认证。
+
+| 参数 | 必填 | 值 |
+|---|---|---|
+| `grant_type` | 是 | `urn:ietf:params:oauth:grant-type:token-exchange` |
+| `subject_token` | 是 | 交换的访问令牌 |
+| `subject_token_type` | 是 | `urn:ietf:params:oauth:token-type:access_token` |
+| `requested_token_type` | 否 | 只有`urn:ietf:params:oauth:token-type:access_token`，默认 |
+| `scope` | 否 | 以空格分隔的主体令牌作用域的子集 |
+| `audience` | 否 | 同一身份域客户端的 `client_id` |
+| `actor_token` | 否 | 代表用户操作方的访问令牌，见 [delegation](#delegation-the-act-claim) |
+| `actor_token_type` | 带有 `actor_token` | `urn:ietf:params:oauth:token-type:access_token` |
+| `resource` | 否 | 尚不支持，回答 `invalid_target` |
+
+缩小令牌的作用域，无受众，无策略：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d scope=profile
+```
+
+获取另一个服务令牌，该服务需要 `orders-api` 的 [policy](#delegation-policies)：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'gateway:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
+```
+
+请求客户端必须是主体令牌的一方：其 `azp`、列在其 `aud` 中，或是列在其 `aud` 中的资源的所有者（见 [resource owners](/zh-CN/discover/core-concepts/mcp#resource-owners)）。客户端不能交换它截获的令牌。
+
+<span id="the-response" />
+
+## 响应
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "orders:read"
+}
+```
+
+- 当 `scope` 等于主体令牌的作用域时省略。
+- 没有刷新令牌和ID令牌。新令牌过期后，再次兑换。
+- 没有饼干，回复也转`Cache-Control: no-store`。
+
+<span id="what-the-issued-token-contains" />
+
+## 发行令牌包含的内容
+
+| 声明 | 它的来源 |
+|---|---|
+| `iss`, `sub`, `sid` | 主题标记。它们永远不会改变 |
+| `azp` | 请求客户端，现在持有令牌 |
+| `aud` | 设置时为`audience`参数，否则主语标记的`aud` |
+| `scope` | 缩小作用域，参见[作用域规则](#scope-rules) |
+| `exp` | 客户端的访问令牌寿命，上限为该令牌的 `exp` |
+| 映射的声明 | 由消耗令牌的客户端的[协议映射器](/zh-CN/modules/aegis/protocol-mappers)重新计算 |
+| `act` | 设在委托交换中，见[下文](#delegation-the-act-claim) |
+
+映射的声明不会从主体令牌中复制。FerrisKey 会再次运行协议映射器，如果设置了 `audience` 客户端，则运行它的映射器，否则运行请求客户端的映射器，并且只针对新令牌携带的作用域。请求 `scope=profile` 后，即使主体令牌有 `email`，该声明也会消失。
+
+因为新令牌保留了主体的 `sid`，它与用户会话的生命周期一致。注销用户或撤销会话后，交换的令牌在检查时也会失效。
+
+<span id="scope-rules" />
+
+## 作用域规则
+
+- 请求的 `scope` 必须是主体令牌作用域的子集，否则返回 `invalid_scope`。
+- 如果有策略，在该列表设置时，它还必须符合策略的 `allowed_scopes`。
+- 如果未请求 `scope`，令牌将获得双方允许的内容：主体的作用域，与 `allowed_scopes` 的交集。
+- `offline_access` 从不被授予，因为交换不会发放刷新令牌。
+
+<span id="delegation-policies" />
+
+## 委托策略
+
+策略允许一个客户端针对一个受众。没有匹配的策略时，使用 `audience` 的交换将回答 `invalid_target`。
+
+| 字段 | 含义 |
+|---|---|
+| `target_audience` | 客户端发放的令牌对应的 `client_id` |
+| `allowed_scopes` | 作用域上限。`null` 表示没有额外上限。空数组会被拒绝，包含空格的条目也会被拒绝。 |
+| `allow_impersonation` | 客户端可以在没有执行者的情况下进行交换，作为用户操作。 |
+| `allow_delegation` | 客户端可以与 `actor_token` 进行交换，令牌将指定执行者。 |
+
+这两个开关是独立的。只允许委托的策略会拒绝普通交换，反之亦然。
+
+可以从客户端页面的 **令牌交换** 选项卡或通过管理 API 管理策略：
+
+<img class="only-light" src="/dashboard/client_token_exchange-light.jpg" alt="FerrisKey 客户端页面在令牌交换标签页，列出每个策略及其目标受众、允许作用域以及模拟和委派指标" />
+<img class="only-dark" src="/dashboard/client_token_exchange-dark.jpg" alt="FerrisKey 客户端页面在令牌交换标签页，列出每个策略及其目标受众、允许作用域以及模拟和委派指标" />
+
+| 方法 | 路径 | 权限 |
+|---|---|---|
+| `GET` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `view_clients`, `manage_clients` 或 `manage_realm` |
+| `POST` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies` | `manage_clients`或`manage_realm` |
+| `DELETE` | `/realms/{realm}/clients/{client_uuid}/token-exchange-policies/{policy_id}` | `manage_clients`或`manage_realm` |
+
+```json
+{
+  "target_audience": "orders-api",
+  "allowed_scopes": ["orders:read"],
+  "allow_impersonation": true,
+  "allow_delegation": false
+}
+```
+
+客户端可以为每个受众持有一个策略：第二个负责回应`409`。删除策略将在下一次交换时生效。
+
+创建一个允许委托的策略，并使用管理员令牌。`$CLIENT_UUID` 是请求客户端的 ID，而不是其 `client_id`：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/clients/$CLIENT_UUID/token-exchange-policies \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "target_audience": "orders-api",
+    "allowed_scopes": ["orders:read"],
+    "allow_impersonation": false,
+    "allow_delegation": true
+  }'
+```
+
+<span id="delegation-the-act-claim" />
+
+## 授权：该法案的声明
+
+使用模拟时，发出的令牌看起来就像用户直接呼叫了受众。使用委托时，它也会显示谁行动了。客户端发送`actor_token`，已发出的令牌带有`act`声明（[RFC 8693 §4.1](https://datatracker.ietf.org/doc/html/rfc8693#section-4.1)）：
+
+```json
+{
+  "sub": "1b0e…",
+  "azp": "support-desk",
+  "aud": ["orders-api"],
+  "act": { "sub": "7c4f…", "client_id": "support-desk" }
+}
+```
+
+运行一个委托交易所。`$ACTOR_TOKEN` 是为用户行动方的访问令牌：
+
+```bash
+curl -X POST https://sso.example.com/realms/home/protocol/openid-connect/token \
+  -u 'support-desk:<client secret>' \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token="$CUSTOMER_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d actor_token="$ACTOR_TOKEN" \
+  -d actor_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=orders-api \
+  -d scope=orders:read
+```
+
+- 执行者令牌必须是该身份域的有效访问令牌，由请求客户端（`azp`）签发。客户端本身的 `client_credentials` 令牌可以使用，已经登录到该客户端的代理的令牌也可以使用。
+- 委派需要 `allow_delegation` 的策略。没有 `audience` 的 `actor_token` 会被拒绝，因为只有策略才能授予委派权限。
+- 当主体令牌已携带 `act` 时，新的执行者会将其封装：`act.act` 持有之前的令牌。链从当前执行者向下读取到第一个执行者。
+- 普通的委派令牌交换保持其 `act` 不变。交换永远不会删除之前的操作人信息。
+
+<span id="errors" />
+
+## 错误
+
+错误遵循 [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) 的格式：`{ "error": "...", "error_description": "..." }`。
+
+| `error` | 状态 | 原因 |
+|---|---|---|
+| `invalid_client` | 401 | 未知或公共客户端，或密钥错误。伴随 `WWW-Authenticate: Basic` |
+| `unauthorized_client` | 400 | 客户端的令牌交换已关闭，客户端不是相关令牌的一方，或策略不允许此类交换 |
+| `invalid_request` | 400 | 缺少主题或行为者令牌，格式错误，已过期，已吊销，为刷新令牌，来自另一个域，或属于另一个客户端的行为者令牌。也包括仅有 `actor_token` 而缺少 `actor_token_type`，反之亦然 |
+| `unsupported_token_type` | 400 | 除 `access_token` 之外的令牌类型 |
+| `invalid_scope` | 400 | 作用域超过主体令牌或策略上限 |
+| `invalid_target` | 400 | 未知或已禁用的受众，没有相关策略，或设置了 `resource` |
+
+<span id="discovery-and-observability" />
+
+## 发现和可观测性
+
+- [发现文档](/zh-CN/discover/core-concepts/authentication#openid-connect-discovery) 在 `grant_types_supported` 中列出了 `urn:ietf:params:oauth:grant-type:token-exchange`。
+- 每个经过身份认证客户端的交换都是具有 `subject_token_exchange` 步骤的 [Compass](/zh-CN/modules/compass/overview) 流程，以及具有客户端、主题、受众、策略和行为者命名的 [SeaWatch](/zh-CN/modules/seawatch/event-types) `token_exchanged` 事件。
+- 客户端认证失败的请求不会留下痕迹，因此一个未知的 `client_id` 无法填充这些表格。
+
+<span id="when-not-to-use-it" />
+
+## 何时不使用它
+
+- **一个服务以自身身份调用另一个服务**：使用[客户端凭据](/zh-CN/discover/core-concepts/authentication#client-credentials)。不涉及用户。
+- **一个后端将用户的令牌不变地传递给下一个环节**：转发令牌并在每个环节进行验证。当下一个环节应该获得较少信息，或应该知道谁在操作时，请进行交换。

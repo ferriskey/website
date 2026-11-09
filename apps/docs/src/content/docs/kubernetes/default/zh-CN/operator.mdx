@@ -1,0 +1,244 @@
+---
+title: "Operator"
+description: "使用 FerrisKey Operator 和 FerrisKeyCluster 资源以声明式方式管理 FerrisKey。"
+icon: bot
+order: 3
+---
+
+# Operator
+
+该 Operator 通过自定义资源管理 FerrisKey 实例。你在 `FerrisKeyCluster` 清单中描述一个集群，Operator 创建运行它的 Kubernetes 对象，并保持它们与清单一致。
+
+<span id="the-ferriskeycluster-resource" />
+
+## FerrisKeyCluster 资源
+
+CRD 是 `ferriskeyclusters.ferriskey.rs`，API 版本为 `ferriskey.rs/v1alpha1`，具有命名空间，短名称为 `fkcl`。`kubectl get fkcl` 打印版本、副本数量、就绪状态和当前阶段。
+
+```yaml title="ferriskey-cluster.yaml"
+apiVersion: ferriskey.rs/v1alpha1
+kind: FerrisKeyCluster
+metadata:
+  name: my-ferriskey
+  namespace: ferriskey
+spec:
+  name: my-ferriskey
+  replicas: 3
+  version: "0.10.0"
+  api:
+    apiUrl: "https://api.iam.yourorg.com"
+    webappUrl: "https://iam.yourorg.com"
+    allowedOrigins:
+      - "https://iam.yourorg.com"
+  database:
+    secretRef:
+      name: ferriskey-db-credentials
+```
+
+<span id="spec-reference" />
+
+## 规格参考
+
+除非描述另有说明，否则以下每个字段都是必填的。
+
+<span id="root" />
+
+### 根节点
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `name` | `string` | 模式要求，但不用于命名任何内容。生成的对象以 `metadata.name` 命名，因此两者应设置为相同的值。 |
+| `replicas` | `integer` | 副本数量。它为 API 和控制台部署确定规模。 |
+| `version` | `string` | `ferriskey-api` 和 `ferriskey-webapp` 的镜像标签。迁移 Job 使用相同标签运行 API 镜像。 |
+| `api` | `object` | API 配置 |
+| `database` | `object` | 数据库配置 |
+
+### `spec.api`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `apiUrl` | `string` | API 的公共 URL，当浏览器访问时。控制台接收它为 `API_URL`，它的源是控制台内容安全策略允许调用的唯一跨源地址 |
+| `webappUrl` | `string` | 控制台的公共 URL。API 接收它为 `WEBAPP_URL` |
+| `allowedOrigins` | `string[]` | 可选。允许在每个路由上使用的浏览器来源，作为 `ALLOWED_ORIGINS` 传递 |
+
+操作员使用 `SERVER_ROOT_PATH=/` 运行 API，因此它从主机的根目录提供服务，在上面示例中，控制台有自己的主机。每个客户端的 Web 来源仅覆盖域范围的路由。`/config`、健康检查以及 API 文档不包含域，因此从与 API 不同来源提供的控制台必须在 `allowedOrigins` 中保留其来源。
+
+### `spec.database`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `secretRef.name` | `string` | 保存数据库凭据的密钥，位于 FerrisKeyCluster 命名空间中 |
+| `secretRef.namespace` | `string` | 可选。接受但忽略：Pods 只能读取其自身命名空间中的 Secrets，操作器始终使用 FerrisKeyCluster 的命名空间 |
+| `databaseName` | `string` | 可选。接受但未使用。数据库名称来自 Secret 的 `dbname` 键 |
+| `sslMode` | `string` | 可选。接受但未使用。参见下方的 TLS 注释 |
+
+<span id="database-secret" />
+
+## 数据库 Secret
+
+由 `secretRef.name` 指定的 Secret 必须包含这些键。缺少任一键的 Pod 将无法启动。
+
+| 关键 | 用于 |
+|---|---|
+| `host` | API 上的 `DATABASE_HOST` |
+| `port` | API 上的 `DATABASE_PORT` |
+| `dbname` | API 上的 `DATABASE_NAME` |
+| `user` | API 上的 `DATABASE_USER` |
+| `password` | API 上的 `DATABASE_PASSWORD` |
+| `uri` | 迁移 Job 的 `DATABASE_URL`，一个完整的连接 URL，例如 `postgresql://user:password@host:5432/dbname` |
+
+`sslMode` 字段没有任何作用。要使迁移任务使用 TLS，请在 `uri` 末尾使用 `?sslmode=verify-full`（或其他模式）。API Pod 是不同的：操作员不会向它们添加超出固定列表的环境变量，因此它们以默认的 `prefer` 模式连接：当服务器提供 TLS 时使用 TLS，但不检查证书；当服务器不提供时使用明文。[生产指南](/zh-CN/kubernetes/production-guide#encrypt-the-database-connection) 解释了这些模式。
+
+<span id="status" />
+
+## 状态
+
+操作员在每次调和后都会写入 `status` 子资源：
+
+```yaml
+status:
+  ready: true
+  phase: Running
+  message: Cluster successfully deployed
+```
+
+| 字段 | 说明 |
+|---|---|
+| `ready` | 在操作员应用所有清单之后的 `true`。它不会等待 Pod，所以请使用 `kubectl get pods` 检查它们。 |
+| `phase` | 成功调和后为 `Running`，调和失败后为 `Error` |
+| `message` | `Cluster successfully deployed`，或 `Error deploying cluster:` 以及随后原因 |
+
+CRD 模式还定义了 `conditions` 和 `databaseStatus`，但操作器从未填充它们。失败后它每 20 秒重试一次。成功后它每 60 秒再次进行协调。
+
+<span id="deploying" />
+
+## 部署中
+
+::::step-group
+:::step{title="安装操作器"}
+该操作器作为独立的 Helm chart 提供，安装 CRD、操作器 Deployment 以及其所需的 RBAC：
+
+```bash
+helm install ferriskey-operator oci://ghcr.io/ferriskey/charts/ferriskey-operator \
+  --namespace ferriskey-system \
+  --create-namespace
+```
+:::
+
+:::step{title="创建数据库 Secret"}
+创建集群所在的命名空间，然后创建包含六个键的 Secret：
+
+```bash
+kubectl create namespace ferriskey
+
+kubectl create secret generic ferriskey-db-credentials \
+  --namespace ferriskey \
+  --from-literal=host=postgres.database.svc.cluster.local \
+  --from-literal=port=5432 \
+  --from-literal=dbname=ferriskey \
+  --from-literal=user=ferriskey \
+  --from-literal=password=your-db-password \
+  --from-literal=uri=postgresql://ferriskey:your-db-password@postgres.database.svc.cluster.local:5432/ferriskey
+```
+:::
+
+:::step{title="应用 FerrisKeyCluster 清单"}
+```bash
+kubectl apply -f ferriskey-cluster.yaml
+```
+:::
+
+:::step{title="检查状态"}
+```bash
+kubectl get fkcl -n ferriskey
+kubectl get pods -n ferriskey
+```
+:::
+::::
+
+<span id="what-the-operator-creates" />
+
+## 操作器创建的内容
+
+对于名为 `<name>` 的 FerrisKeyCluster，操作器会在其命名空间中应用这些对象：
+
+| 类型 | 名称 | 注意事项 |
+|---|---|---|
+| 密钥 | `ferriskey-admin-<name>` | 随机管理员密码 |
+| 工作 | `ferriskey-migrations-<name>` | 使用 `backoffLimit: 3` 和 `ttlSecondsAfterFinished: 300` 运行 `sqlx migrate run` |
+| 部署 | `ferriskey-api-<name>` | API，在 `ghcr.io/ferriskey/ferriskey-api:<version>` 上，端口 3333 |
+| 服务 | `ferriskey-api-<name>` | ClusterIP，在端口 3333 |
+| 部署 | `ferriskey-webapp-<name>` | 控制台，在 `ghcr.io/ferriskey/ferriskey-webapp:<version>` 上，端口 80，设置了 `API_URL` |
+| 服务 | `ferriskey-webapp-<name>` | ClusterIP，在端口 80 |
+
+操作员在每次协调时应用 Job。一旦 Kubernetes 删除已完成的 Job，下次遍历会再次创建它，因此每隔几分钟会出现一个新的迁移 pod。当模式是最新时，重新运行迁移不会改变任何内容。
+
+不会创建 Ingress 或 HTTPRoute。请自行将您的公共主机名路由到这两个服务。
+
+FerrisKeyCluster 拥有终结器 `ferriskey.rs/finalizer`。删除它会让操作员删除上述六个对象，因此删除完成需要操作员处于运行状态。数据库和凭据 Secret 不受影响。
+
+<span id="limits-of-the-operator-today" />
+
+## 当前操作员的限制
+
+操作员构建固定的 pod 规范，而 FerrisKeyCluster 没有字段可以更改它们：
+
+- API 使用 `ADMIN_USERNAME=admin`、`ADMIN_EMAIL=admin@gmail.com`、`ENV=production`、`LOG_FILTER=info`、`LOG_JSON=true`、`SERVER_PORT=3333` 和 `SERVER_ROOT_PATH=/` 运行，以及来自规范的 `WEBAPP_URL` 和 `ALLOWED_ORIGINS`。没有办法添加其他环境变量。这排除了 `SECRETS_ENCRYPTION_KEYS`，因此身份域签名密钥、TOTP 种子和 SMTP 密码会在数据库中以明文存储。这也排除了 SAML 所需的 `SERVER_PUBLIC_URL`、`SERVER_TRUST_FORWARDED_FOR` 以及池和 Argon2 设置。如果需要这些，请使用 [Helm chart](/zh-CN/kubernetes/helm-chart)。
+- 两个 Deployment 都没有设置存活或就绪探针、资源请求或限制，也没有安全上下文。
+- `replicas` 同样适用于 API 和控制台。
+- `ferriskey-admin-<name>` Secret 不会保存管理员密码。操作员在每次调和时会写入一个新的随机值，包括每 60 秒的重新排队。API 在其容器启动时读取 `ADMIN_PASSWORD`，并且只有在管理员账户尚未设置密码时才使用该值。因此，在第一次启动之后，Secret 不再保存管理员账户的密码，重启也不会更改该密码。
+
+<span id="operator-chart-values" />
+
+## Operator Chart值
+
+| 关键 | 默认 | 说明 |
+|---|---|---|
+| `crds.install` | `true` | 用Chart安装 CRD |
+| `crds.keep` | `true` | 使用 `helm.sh/resource-policy: keep` 注释 CRD |
+| `rbac.create` | `true` | 创建 RBAC 对象。需要 `operator.serviceAccount.create` |
+| `operator.watchNamespaces` | `[]` | 要监视的命名空间。为空则监视整个集群 |
+| `operator.replicas` | `1` | 运行单副本 |
+| `operator.image.repository` | `ghcr.io/ferriskey/ferriskey-operator` | Operator 镜像。标签默认为Chart的 `appVersion` |
+| `operator.resources` | 64Mi 内存请求，256Mi 内存限制 | Operator 容器资源 |
+
+<span id="watching-a-subset-of-namespaces" />
+
+## 观察部分命名空间
+
+默认情况下，操作员监控每个命名空间，Chart创建 ClusterRole 和 ClusterRoleBinding。ClusterRole 很窄。它可以获取、列出、监控、更新和修补`FerrisKeyCluster`资源及其状态和终结符，并创建、修补和删除服务、密钥、部署和作业。这些权限在每个命名空间中都存在，因此操作员可以在集群的任何位置写入密钥。
+
+为了限制，列出命名空间：
+
+```yaml title="values.yaml"
+operator:
+  watchNamespaces:
+    - team-a
+    - team-b
+```
+
+列表设置后，Chart会丢弃集群范围的命名对，在每个列出的命名空间中创建一个角色绑定和一个角色绑定。它还会在操作员部署上设置`WATCH_NAMESPACES`（逗号分隔）。操作员随后只监视这些命名空间，忽略在其他地方创建的FerrisKeyCluster。
+
+在安装 Helm chart 时，命名空间必须存在，每个名称都必须是有效的 DNS 标签：否则操作员将拒绝启动。渲染在空条目、重复条目，以及 `common.env` 或 `operator.env` 自行定义 `WATCH_NAMESPACES` 时会失败。
+
+<span id="crd-and-rbac-ownership" />
+
+## CRD 和 RBAC 所属
+
+默认情况下，chart 会安装 CRD 并用 `helm.sh/resource-policy: keep` 进行注释，因此 `helm uninstall` 会保持原状，不会干扰你的集群。它还会创建上面描述的 RBAC。
+
+如果任一在其他地方管理，例如通过 GitOps 或专用 CRD chart，请关闭 chart 的副本：
+
+```yaml title="values.yaml"
+crds:
+  install: false
+
+rbac:
+  create: false
+```
+
+使用 `rbac.create: false` 时，你必须自行授予操作员的服务账户相同的权限。
+
+:::callout{variant="warning"}
+在生产环境中将 `crds.keep` 保留为 `true`。删除 CRD 会同时删除集群中的所有 `FerrisKeyCluster`。
+:::

@@ -1,0 +1,211 @@
+---
+title: "配置提供程式"
+description: "在 FerrisKey 中設定 Google、GitHub、Discord 和自定義 OIDC 提供商，稍後可以編輯它們，並管理它們建立的連結。"
+icon: settings
+order: 41
+---
+
+<span id="configuring-providers" />
+
+# 配置提供程式
+
+本指南講解如何在 Abyss 中註冊身分提供商。每個提供商都需要在外部平臺上建立一個 OAuth2 或 OIDC 應用程式，然後在 FerrisKey 中建立一個匹配的提供商。兩者必須在一個值上達成一致：提供商回撥的重定向 URI。
+
+<span id="adding-a-provider-in-the-console" />
+
+## 在控制檯中新增提供商
+
+在控制檯中開啟 “身分提供商” 並選擇 “新增提供商”。控制檯會要求選擇協議（OIDC 或 OAuth2），然後選擇模板：Google、Discord、GitHub、Microsoft、Apple、Facebook、GitLab、X（Twitter）、LinkedIn 或自定義提供商。模板會填充端點和預設作用域，因此只需填寫您的應用程式憑據。自定義提供商則從空白開始。
+
+建立螢幕顯示要在提供者處宣告的重定向 URI。它是根據你選擇的別名生成的：
+
+```text
+https://your-ferriskey.com/realms/{realm}/broker/{alias}/endpoint
+```
+
+別名是該 URL 的一部分，這就是為什麼一旦提供者存在，它就固定不變。之後更改它會破壞在提供者處註冊的回撥。
+
+## Google
+
+::::step-group
+:::step{title="建立 Google OAuth2 應用"}
+在 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) 中，建立一個 OAuth 2.0 客戶端 ID，並設定：
+
+- 應用型別：Web 應用
+- 授權重定向 URI：`https://your-ferriskey.com/realms/{realm}/broker/google/endpoint`
+:::
+
+:::step{title="在 FerrisKey 中註冊它"}
+選擇 Google 模板並填寫兩個憑據。其餘部分已預填：
+
+| 欄位 | 值 |
+|---|---|
+| 別名 | `google` |
+| 顯示名稱 | Google |
+| 客戶端 ID | 來自 Google 控制檯 |
+| 客戶端金鑰 | 來自 Google 控制檯 |
+| 授權 URL | `https://accounts.google.com/o/oauth2/v2/auth` |
+| 權杖 URL | `https://oauth2.googleapis.com/token` |
+| 使用者資訊 URL | `https://www.googleapis.com/oauth2/v3/userinfo` |
+| 作用域 | `openid`, `email`, `profile` |
+:::
+::::
+
+## GitHub
+
+::::step-group
+:::step{title="建立 GitHub OAuth 應用"}
+進入GitHub，然後選擇設定、開發者設定、OAuth 應用和新 OAuth 應用，將授權回撥URL設定為`https://your-ferriskey.com/realms/{realm}/broker/github/endpoint`。
+:::
+
+:::step{title="在 FerrisKey 中註冊它"}
+選擇GitHub模板：
+
+| 欄位 | 值 |
+|---|---|
+| 別名 | `github` |
+| 顯示名稱 | GitHub |
+| 客戶端 ID | 來自GitHub |
+| 客戶端金鑰 | 來自GitHub |
+| 授權 URL | `https://github.com/login/oauth/authorize` |
+| 權杖 URL | `https://github.com/login/oauth/access_token` |
+| 使用者資訊 URL | `https://api.github.com/user` |
+| 作用域 | `read:user`, `user:email` |
+:::
+::::
+
+## Discord
+
+::::step-group
+:::step{title="建立一個Discord應用"}
+在[Discord開發者門戶](https://discord.com/developers/applications)中，建立一個應用程式並新增OAuth2重定向：`https://your-ferriskey.com/realms/{realm}/broker/discord/endpoint`。
+:::
+
+:::step{title="在 FerrisKey 中註冊它"}
+選擇Discord模板：
+
+| 欄位 | 值 |
+|---|---|
+| 別名 | `discord` |
+| 顯示名稱 | Discord |
+| 客戶端 ID | 來自Discord |
+| 客戶端金鑰 | 來自Discord |
+| 授權 URL | `https://discord.com/api/oauth2/authorize` |
+| 權杖 URL | `https://discord.com/api/oauth2/token` |
+| 使用者資訊 URL | `https://discord.com/api/users/@me` |
+| 作用域 | `identify`, `email` |
+:::
+::::
+
+<span id="custom-oidc-provider" />
+
+## 自定義OIDC提供者
+
+對於任何 OpenID Connect 提供商（Okta、Auth0、Azure AD、Keycloak），選擇自定義提供商，並從提供者的發現文件中閱讀端點，`https://provider.example/.well-known/openid-configuration`：
+
+| FerrisKey 設定 | 發現場 |
+|---|---|
+| 授權 URL | `authorization_endpoint` |
+| 權杖 URL | `token_endpoint` |
+| 使用者資訊 URL | `userinfo_endpoint` |
+| 作用域 | 通常`openid email profile` |
+| `jwks_url`（僅限API） | `jwks_uri` |
+| `issuer`（僅限API） | `issuer` |
+
+控制檯表單沒有 `jwks_url` 和 `issuer` 的欄位。當你希望 FerrisKey 驗證 ID 權杖而不是呼叫 userinfo 端點時，透過 API 在提供者的 `config` 中設定它們。它們只有同時生效。請參閱 [ID token 或 userinfo](/zh-TW/modules/abyss/overview#id-token-or-userinfo)。
+
+<Callout variant="warning" title="提供者端點必須是公開的">
+
+FerrisKey 從伺服器呼叫 token、userinfo 和 JWKS 端點。它拒絕任何解析到環回、私有或鏈路本地地址的端點，以及任何使用純 `http` 的端點。你內部網路上的身分提供者在未啟動帶有 `WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 的 API 之前會提示“無效的提供者 URL”。該設定用於本地開發：開啟後，除環回地址外，純 `http` 仍被拒絕，而鏈路本地地址無論如何都會被拒絕。
+
+</Callout>
+
+<span id="editing-a-provider" />
+
+## 編輯提供者
+
+在列表中選擇一個提供商以開啟其編輯螢幕。它顯示常規設定（別名、顯示名稱、啟用狀態）以及 OAuth 配置：客戶端 ID、客戶端金鑰、三個 URL、權限作用域和 PKCE 切換。
+
+<img class="only-light" src="/dashboard/idp_edit-light.jpg" alt="FerrisKey GitHub 身分提供商的編輯螢幕：授權、權杖和使用者資訊 URL，權限作用域欄位，PKCE 切換設定為啟用（S256），以及下面的後設資料和刪除部分" />
+<img class="only-dark" src="/dashboard/idp_edit-dark.jpg" alt="FerrisKey GitHub 身分提供商的編輯螢幕：授權、權杖和使用者資訊 URL，權限作用域欄位，PKCE 切換設定為啟用（S256），以及下面的後設資料和刪除部分" />
+
+將客戶端金鑰留空以保留已儲存的金鑰；您輸入的任何內容都會替換它。PKCE 切換控制 `use_pkce`：當它開啟時，FerrisKey 會在授權請求中傳送 `code_challenge`（S256），並在交換授權碼時傳送匹配的驗證器。僅對拒絕額外引數的提供商關閉它。
+
+透過 API 也可以進行相同的更改：
+
+```text
+PUT /realms/{realm_name}/identity-providers/{alias}
+```
+
+只有你傳送的欄位會改變。主體接受 `display_name`、`enabled`、`store_token`、`trust_email`、`link_only` 以及兩個流別名，再加上這些配置欄位，它們會合併到儲存的 `config` 中，並保持其其他鍵不變：
+
+| 欄位 | 行為 |
+|---|---|
+| `client_id`, `client_secret`, `authorization_url`, `token_url` | 傳送時會被替換。傳送空字串會被拒絕並返回 400，因為沒有它們提供者無法工作 |
+| `userinfo_url` | 傳送時會被替換。空字串會移除它 |
+| `scopes` | 傳送時會被替換，作為空格分隔的字串。空字串被接受且不傳送任何作用域 |
+| `use_pkce` | 傳送時會被替換 |
+
+你也可以傳送一個完整的 `config` 物件。它會替換已儲存的配置，並且同一請求中的任何上述欄位都會合併到其中。不要傳送你從 API 讀取的 `config`：它攜帶 `***` 作為金鑰，而 FerrisKey 會將那三個字元儲存為新的金鑰。要更改某個值，請單獨傳送該欄位。
+
+別名無法更改。響應會將更新後的提供者包裝在 `data` 中。
+
+<span id="disabling-and-rotating" />
+
+## 禁用和輪換
+
+將 `enabled` 設定為 `false` 可以將提供者從登入頁面移除而不刪除其配置。被禁用的提供者會拒絕使用 403 進行登入，指向它的連結仍然存在。透過它建立的賬戶沒有自己的密碼，因此這些使用者無法登入，除非你再次啟用該提供者或為他們提供其他方式。
+
+當您在提供商處更換客戶端金鑰時，請在 FerrisKey 中同時更新它。金鑰不匹配會導致透過該提供商的每次登入在權杖交換時失敗。
+
+<span id="api-reference" />
+
+## API參考
+
+```text
+GET    /realms/{realm_name}/identity-providers
+POST   /realms/{realm_name}/identity-providers
+GET    /realms/{realm_name}/identity-providers/{alias}
+PUT    /realms/{realm_name}/identity-providers/{alias}
+DELETE /realms/{realm_name}/identity-providers/{alias}
+```
+
+列表是分頁的，介面契約描述在[API 列表](/zh-TW/discover/guides/api-listings)中。除了 `search`，它匹配別名或顯示名稱外，還會過濾：
+
+| 引數 | 匹配 |
+|---|---|
+| `alias`, `display_name` | 不區分大小寫的子字串 |
+| `provider_id` | 精確值，例如 `oidc` 或 `google` |
+| `enabled` | `true`或`false` |
+| `health` | `healthy`, `degraded` 或 `error` |
+| `created_from`, `created_to` | RFC 3339 日期時間，包括和不包括 |
+
+`order_by` 接受 `alias`、`display_name`、`provider_id`、`enabled`、`created_at`（預設）和 `updated_at`。
+
+`health` 來源於儲存的配置，而不是呼叫提供者得來。當 `client_id`、`client_secret`、`authorization_url` 或 `token_url` 缺失時，提供者為 `error`；當僅缺失 `scopes` 時，為 `degraded`；否則為 `healthy`。控制檯顯示為 不完整、無作用域 和 完整。
+
+刪除提供者也會移除其連結。它們指向的賬戶仍然存在。
+
+兩個經紀端點就是流程本身。瀏覽器呼叫它們，而不是你：
+
+```text
+GET  /realms/{realm_name}/broker/{alias}/login
+GET  /realms/{realm_name}/broker/{alias}/endpoint
+```
+
+提供者端點的權限：`view_identity_providers` 或 `manage_identity_providers` 可讀取，`manage_identity_providers` 可建立、更新或刪除。`manage_realm` 兩者皆可。
+
+<span id="links-on-a-user" />
+
+### 使用者上的連結
+
+```text
+GET    /realms/{realm_name}/users/{user_id}/identity-provider-links
+DELETE /realms/{realm_name}/users/{user_id}/identity-provider-links/{link_id}
+```
+
+一個連結將一個外部身分繫結到一個本地賬戶。`data` 陣列中的每個條目都包含連結 `id`、提供者的 `identity_provider_id` 和 `identity_provider_alias`、`identity_provider_user_id`（提供者的主體）以及兩個時間戳。儲存的提供者權杖永遠不會返回。
+
+刪除連結會保留賬戶完整性，但會移除該登入方式。移除操作會在 [SeaWatch](/zh-TW/modules/seawatch/event-types) 中記錄為 `identity_provider_link_removed`。如果同一個人再次透過該提供者登入，該流程可以建立一個新的連結，但須遵循 [account resolution](/zh-TW/modules/abyss/federation-flow#account-resolution) 規則。
+
+這兩個端點需要與更新使用者相同的權限：`manage_users` 或 `manage_realm`。

@@ -1,0 +1,126 @@
+---
+title: "作用域與同意"
+description: "作用域是限制存取權杖功能的徽章。"
+icon: badge-check
+order: 4
+---
+
+<span id="scopes--consent" />
+
+# 作用域與同意
+
+作用域是附加到存取權杖上的標籤，表示“此權杖可以執行這些操作，不能執行其他操作。”資源伺服器在處理請求之前會檢視作用域。
+
+<span id="the-badge-analogy" />
+
+## 徽章類比
+
+想象一個會議。在門口，你會得到一個徽章。徽章上有貼紙：
+
+- `attendee`：進入主會場
+- `lunch`：在自助餐廳用餐
+- ~~`backstage`~~：未授予
+
+你將徽章遞給你遇到的人。後臺門口的保鏢會檢視正確的貼紙，並拒絕你進入。
+
+OAuth2 作用域的工作方式也是如此。存取權杖是徽章，每個作用域是貼紙，資源伺服器則是保鏢。
+
+```http
+GET /api/admin/users
+Authorization: Bearer ...
+
+→ 403 Forbidden (required scope: admin:users)
+```
+
+<span id="what-scopes-look-like" />
+
+## 望遠鏡長什麼樣
+
+示波器只是短字串。沒有通用的命名規範;選一個保持一致。常見形狀：
+
+- `read:orders`，`write:orders`（動詞：資源）
+- `orders.read`，`orders.write`（resource.verb）
+- `openid`、`profile`、`email`（OIDC標準瞄準鏡，稍後會詳細介紹）
+- `admin`（粗糙、類似角色的示波器）
+
+權限通常在授權URL中請求：
+
+```
+GET /authorize?
+  response_type=code&
+  client_id=my-frontend&
+  scope=openid profile read:orders&
+  ...
+```
+
+<span id="consent-asking-the-user" />
+
+## 同意：徵求使用者同意
+
+當客戶端請求影響使用者資料的作用域時，授權伺服器可以顯示同意介面：
+
+```
+my-frontend wants to:
+  ☑ Access your basic profile
+  ☑ Read your orders
+  ☐ Modify your billing details
+
+   [Deny]    [Allow]
+```
+
+同意賦予使用者最終決定權。這正是讓 OAuth2 感覺像委託協議，而非許可橡皮圖章的原因。
+
+並非所有作用域都需要同意。兩類：
+
+- **使用者可同意的作用域**：對終端使用者有意義。向他們展示。
+- **內部/技術作用域**：對使用者無意義（`internal_service_call`）。跳過同意；客戶端是受信任的。
+
+<span id="standard-oidc-scopes" />
+
+## 標準 OIDC 作用域
+
+OIDC 保留了一些眾所周知的作用域：
+
+| 作用域 | 含義 |
+| --- | --- |
+| `openid` | OIDC 的必需項。觸發 ID Token 的頒發。 |
+| `profile` | 新增標準的個人資料宣告（`name`, `family_name`, `picture`...） |
+| `email` | 新增 `email` 和 `email_verified` 宣告 |
+| `address` | 新增 `address` 宣告 |
+| `phone` | 新增 `phone_number` 宣告 |
+| `offline_access` | 請求重新整理權杖 |
+
+如果你在實際使用中只看到一個 OIDC 作用域，那通常是 `openid`。沒有它，就不在使用 OIDC。你只是進行普通的 OAuth2。
+
+<span id="scopes-vs-roles-vs-permissions" />
+
+## 作用域 vs 角色 vs 權限
+
+新手經常混淆三者。它們是不同的。
+
+- **作用域**: _此權杖被允許執行的操作._ 在授權時根據客戶端請求授予，可能需要使用者同意。
+- **角色**: _該使用者在組織中的身分._ 一個持久屬性（管理員、支援、檢視者）。角色通常作為宣告對映到權杖中。
+- **權限**: _一個細粒度的允許操作._ 從資源伺服器內的角色、作用域和策略中派生而來。
+
+對於超出作用域編碼能力的細粒度授權，請參見 [AuthZEN](/zh-TW/learn/authzen/overview)。
+
+<span id="client-scopes" />
+
+## 客戶端作用域
+
+一個常見模式是將預設作用域附加到客戶端，使它們始終出現在發給該客戶端的權杖中。FerrisKey 直接支援此功能：客戶端有 _預設_ 和 _可選_ 作用域。
+
+<span id="in-ferriskey" />
+
+## 在 FerrisKey 中
+
+FerrisKey 允許你為每個身分域定義作用域，將它們附加到客戶端（預設或可選），並精確控制它們新增到權杖中的宣告內容。
+
+::::card-group{cols=2}
+:::card{label="保護模組" icon="lucide:lock" href="/zh-TW/modules/aegis/overview"}
+FerrisKey 中的作用域和協議對映器。
+:::
+:::card{label="權杖" icon="lucide:key" href="/zh-TW/learn/oauth2/tokens"}
+作用域在存取權杖中的位置。
+:::
+::::

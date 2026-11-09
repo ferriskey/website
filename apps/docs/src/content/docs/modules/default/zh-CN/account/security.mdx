@@ -1,0 +1,174 @@
+---
+title: "安全"
+description: "自助密码、身份认证器和密钥操作，以及每项操作所需的权限提升。"
+icon: shield-check
+order: 71
+---
+
+<span id="account-security" />
+
+# 账户安全
+
+用户在自己账户上执行的凭据操作。每项操作都需要一个[提升](/zh-CN/modules/account/overview#sensitive-operations-need-an-elevation)：一个五分钟有效的证明，与调用会话绑定，从`POST /users/me/reauthenticate`获取。错误的证明会像错误密码一样计入账户锁定。
+
+在本页中，`{realm}`表示`/realms/{realm_name}`。
+
+<span id="changing-the-password" />
+
+## 更改密码
+
+```
+PUT {realm}/users/me/password
+```
+
+```json title="Request body"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "current_password": "...",
+  "new_password": "..."
+}
+```
+
+该调用需要一个`elevation_id`，就像其他敏感操作一样，但任何有效的提升都可以，包括使用TOTP代码证明的提升。请求体中的当前密码本身就是主要证明，因此额外要求已用密码证明的提升只会让用户输入两次密码。通过外部目录登录的账户没有本地密码，将返回409。
+
+新密码会根据域的[密码策略](/zh-CN/discover/core-concepts/password-policy)进行检查。控制台在你输入过程中会应用相同规则，检查 `GET {realm}/password-policy/public`，因此错误会在提交前显示，而不是提交后。
+
+<Callout variant="warning" title="其他会话已注销">
+
+成功更改密码会撤销账户的其他会话，并保留当前会话。这就是密码更改的预期行为：如果更改密码的原因是其他人知道了密码，保留他们的会话将使操作失效。如果你构建了自己的用户界面，请警告用户，因为他们的手机被静默注销会被误认为是程序错误。
+
+</Callout>
+
+<span id="listing-credentials" />
+
+## 列出凭据
+
+```
+GET {realm}/users/me/credentials
+```
+
+返回账户已绑定的凭据列表，供界面在提供添加或删除操作之前展示。每个条目包含 `id`、`credential_type`、`label` 和 `created_at`。类型包括 `password`、`otp`、表示通行密钥的 `webauthn-public-key-credential`，以及 `recovery-code`；每个尚未使用的[恢复码](/zh-CN/modules/trident/recovery-codes)各对应一个条目。接口绝不返回敏感凭据内容。通行密钥只返回元数据和 ID，该 ID 用于 `DELETE` 操作。
+
+<span id="authenticator-app-totp" />
+
+## 验证器应用（TOTP）
+
+注册需要两次调用，因为服务器在用户证明他们能够从中读取代码之前，不应信任用户已经成功存储了密钥信息。
+
+::::step-group
+:::step{title="开始注册"}
+```
+POST {realm}/users/me/mfa/otp
+```
+
+主体是 `{ "elevation_id": "..." }`，高权限操作必须进行密码验证。响应包含 `secret` 和 `otpauth_uri`，用于渲染成二维码。FerrisKey 在服务器上保存密钥 10 分钟，因此确认不会重复使用该密钥。参数固定为 SHA-1、六位数字和三十秒周期，如 [TOTP](/zh-CN/modules/trident/totp) 所述。
+:::
+
+:::step{title="用代码进行确认"}
+```
+PUT {realm}/users/me/mfa/otp
+```
+
+主体是 `{ "elevation_id": "...", "code": "123456", "label": "Alice's phone" }`，`label` 可选。高权限操作必须进行密码验证。在此调用成功之前，验证器不激活，账户的登录状态保持不变，因此放弃注册不会留下任何痕迹。
+
+待处理的密钥只能使用一次。无论代码是否正确，该调用都会消耗它，因此错误的代码会返回 401，用户必须重新开始。有效代码会替换账户中已存在的任何验证器。
+:::
+
+:::step{title="稍后删除"}
+```
+DELETE {realm}/users/me/mfa/otp
+```
+
+主体是 `{ "elevation_id": "..." }`。它需要经过密码验证的升级。一次性密码（OTP）代码不被接受作为移除 OTP 的证明。
+:::
+::::
+
+<span id="passkeys" />
+
+## 通行密钥
+
+密钥注册遵循 WebAuthn，因此也需要两次调用：浏览器需要服务器的挑战，服务器需要浏览器返回的认证信息。
+
+::::step-group
+:::step{title="请求注册选项"}
+```
+POST {realm}/users/me/passkeys/options
+```
+
+主体是 `{ "elevation_id": "..." }`，并且升级必须经过密码验证。返回 `PublicKeyCredentialCreationOptions` 以交给 `navigator.credentials.create()`，排除账户已经持有的密钥。挑战存储在服务器上，存活时间为 5 分钟，因此不能重放。
+:::
+
+:::step{title="将凭据发送回去"}
+```
+POST {realm}/users/me/passkeys
+```
+
+请求体是 `{ "elevation_id": "...", "credential": { ... } }`，其中 `credential` 是浏览器的响应。提升权限必须经过密码验证。服务器会使用存储的挑战，检查响应是否与之匹配以及是否符合依赖方 ID，然后将通行密钥附加到账户上。过期或缺失的挑战，或者不匹配的响应，将被拒绝。
+:::
+
+:::step{title="删除一个"}
+```
+DELETE {realm}/users/me/passkeys/{credential_id}
+```
+
+`credential_id` 来自凭据列表。请求体是 `{ "elevation_id": "..." }`，提升权限必须经过密码验证。属于他人或非通行密钥的凭据 ID，将返回 404。
+:::
+::::
+
+依赖方 ID 是 Web 应用 URL 的主机名，因此通过一个主机名注册的通行密钥无法通过另一个主机名使用。[WebAuthn](/zh-CN/modules/trident/webauthn#where-the-origin-comes-from) 解释了来源的来源。
+
+<Callout variant="info" title="注册时不会检查 passkey_enabled">
+
+`passkey_enabled` 决定登录页面是否显示通行密钥按钮。在设置关闭的身份域上注册通行密钥仍然有效，但登录页面不会提供使用该密钥的方式。
+
+</Callout>
+
+<span id="what-a-removal-is-refused-for" />
+
+## 被拒绝移除的原因
+
+当移除认证器或通行密钥会导致账户无法登录时（没有密码、没有其他通行密钥且没有联合身份），返回 409。移除认证器在域或用户的某个角色有 `require_mfa` 时也会返回 409，因为这会使其必须拥有的第二因素丢失。移除通行密钥从不会触发第二条规则，因为只有认证器才能满足该规则。
+
+<span id="endpoint-summary" />
+
+## 端点摘要
+
+| 方法 | 路径 | 需要提升权限 |
+|---|---|---|
+| `GET` | `{realm}/users/me` | 无 |
+| `PUT` | `{realm}/users/me` | 无 |
+| `PUT` | `{realm}/users/@me/locale` | 无 |
+| `POST` | `{realm}/users/me/reauthenticate` | 无，它会产生提升权限 |
+| `PUT` | `{realm}/users/me/password` | 任何有效的提升权限，加上正文中的当前密码 |
+| `GET` | `{realm}/users/me/credentials` | 无 |
+| `POST` | `{realm}/users/me/mfa/otp` | 密码验证 |
+| `PUT` | `{realm}/users/me/mfa/otp` | 密码验证 |
+| `DELETE` | `{realm}/users/me/mfa/otp` | 密码验证 |
+| `POST` | `{realm}/users/me/passkeys/options` | 密码验证 |
+| `POST` | `{realm}/users/me/passkeys` | 密码验证 |
+| `DELETE` | `{realm}/users/me/passkeys/{credential_id}` | 密码验证 |
+| `GET` | `{realm}/users/{user_id}/sessions` | 无，适用于调用者自己的ID |
+| `DELETE` | `{realm}/users/{user_id}/sessions/{session_id}` | 无，适用于调用者自己的ID |
+
+`/users/me`调用不受权限控制。令牌用于识别主体，而主体就是目标。这两个会话调用在调用者使用自己ID时无需权限，而调用他人ID则需要`manage_users`，如[Account](/zh-CN/modules/account/overview#sessions)所述。
+
+<span id="what-gets-recorded" />
+
+## 什么被记录
+
+<Callout variant="warning" title="凭据操作不会记录在审计日志中">
+
+自助凭据操作不会记录[SeaWatch](/zh-CN/modules/seawatch/overview)安全事件。用户自行更改密码、注册验证器或删除密钥时，不会在域的审计日志中留下记录，也不会触发[webhook](/zh-CN/modules/webhooks/overview)
+
+管理操作的等效行为如下：管理员重置密码会触发 `password_reset`，而删除用户的凭据会触发 `user.credentials.deleted` webhook。如果今天你需要在审计日志中进行自助凭据更改，请在你自己的端进行捕获。在自助服务方面，撤销会话是例外：它会记录一个 `session_revoked` 事件。
+
+</Callout>
+
+::::card-group{cols=2}
+:::card{label="密码策略" icon="lucide:key-round" href="/zh-CN/discover/core-concepts/password-policy"}
+检查新密码的规则，以及公开端点。
+:::
+:::card{label="WebAuthn" icon="lucide:fingerprint" href="/zh-CN/modules/trident/webauthn"}
+登录时使用密钥，而不是注册时。
+:::
+::::

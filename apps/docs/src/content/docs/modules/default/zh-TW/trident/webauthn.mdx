@@ -1,0 +1,112 @@
+---
+title: "WebAuthn"
+description: "FerrisKey 中的 FIDO2 金鑰：註冊、金鑰登入，以及金鑰如何與 TOTP 挑戰和必做操作互動。"
+icon: fingerprint
+order: 12
+---
+
+<span id="webauthn-fido2-passkeys" />
+
+# WebAuthn（FIDO2 金鑰）
+
+WebAuthn 允許使用者使用硬體安全金鑰、平臺生物識別（Touch ID、Face ID、Windows Hello）或已同步的密碼金鑰（iCloud 鑰匙串、Google 密碼管理器）登入。私鑰永遠不會離開使用者的裝置。FerrisKey 僅儲存公鑰。
+
+<span id="how-it-works" />
+
+## 工作原理
+
+WebAuthn 使用公鑰密碼學。在註冊期間，使用者的裝置會建立一對金鑰並將公鑰傳送到 FerrisKey。在登入時，裝置使用私鑰對挑戰進行簽名，FerrisKey 根據儲存的公鑰驗證簽名。沒有可供釣魚或從伺服器洩露的共享金鑰，並且生物識別或 PIN 驗證發生在裝置上。
+
+FerrisKey 要求進行該檢查。未經認證器標記為使用者驗證的斷言會被拒絕並返回 401，因此僅需觸碰、不需要 PIN 或生物識別的安全金鑰無法為任何人登入。
+
+<Callout variant="info" title="通行金鑰是一種登入方式，而不是第二因素">
+
+通行金鑰可以獨立登入使用者。FerrisKey在密碼之後不會要求提供通行金鑰：它唯一發出的第二因素挑戰是TOTP挑戰。擁有通行金鑰但沒有身分認證器的使用者，在密碼正確後不會面臨進一步挑戰。
+
+</Callout>
+
+<span id="where-the-origin-comes-from" />
+
+## 來源來自哪裡
+
+WebAuthn 來源是網頁應用的 URL（`WEBAPP_URL`，或者當 `WEBAPP_URL_FROM_REQUEST` 啟用時為請求的主機），而依賴方 ID 是該 URL 的主機名。在 `login.example.com` 註冊的通行金鑰在 `auth.example.com` 上不可用。在使用者開始註冊之前選擇主機名。[配置](/zh-TW/discover/guides/configuration) 列出了這兩個變數。
+
+<span id="registering-a-passkey" />
+
+## 註冊通行金鑰
+
+使用者可以透過兩種方式之一獲取通行金鑰。在賬戶頁面，他們可以使用[賬戶安全](/zh-TW/modules/account/security#passkeys)中的自助流程，這需要進行新密碼驗證。在登入時，`configure_passkey`的必需操作會引導他們完成以下步驟。
+
+當管理員更新使用者的必需操作時，對於完全沒有憑據的使用者，FerrisKey 會拒絕 `configure_passkey`，因此通行金鑰會被新增到現有的登入方式之上。
+
+::::step-group
+:::step{title="請求建立選項"}
+門戶使用步驟權杖呼叫 `POST /login-actions/webauthn-public-key-create-options`。FerrisKey 構建註冊挑戰，排除使用者已持有的通行金鑰，並將挑戰儲存在認證會話中。
+:::
+
+:::step{title="瀏覽器提示使用者"}
+瀏覽器的 `navigator.credentials.create()` 請求進行 Touch ID 掃描、Face ID 或者按下硬體按鍵。認證器返回公鑰、憑據 ID 和認證資料。
+:::
+
+:::step{title="將憑據傳送回去"}
+門戶呼叫 `POST /login-actions/webauthn-public-key-create`。除非 `configure_passkey` 尚未用於此登入，否則 FerrisKey 會以 403 拒絕請求。它會將響應與儲存的挑戰進行檢查，該挑戰有效期為 5 分鐘，然後將公鑰儲存為 `webauthn-public-key-credential` 型別的憑據，並移除所需操作。
+:::
+::::
+
+<span id="signing-in-with-a-passkey" />
+
+## 使用密碼鍵登入
+
+在身分域中開啟 `passkey_enabled`（控制檯中的 **身分認證** > **登入方法**），登入頁面會顯示一個密碼鍵按鈕。此設定僅控制該按鈕：密碼鍵端點不會檢查該設定。
+
+::::step-group
+:::step{title="請求請求選項"}
+該門戶呼叫 `POST /login-actions/passkey-request-options`。體內有 `username` 時，挑戰限定在該使用者的通行金鑰上，沒有通行金鑰的使用者會收到 401。沒有通行金鑰時，挑戰是可發現的，瀏覽器會提議它所持有的通行金鑰，因此頁面不能被用來探測哪些賬戶存在。
+:::
+
+:::step{title="使用者進行身分認證"}
+瀏覽器呼叫 `navigator.credentials.get()`。認證器會提示進行生物識別或 PIN 驗證並簽署挑戰。
+:::
+
+:::step{title="簽名已驗證"}
+門戶使用斷言呼叫 `POST /login-actions/passkey-authenticate`。FerrisKey 驗證簽名，檢查憑據屬於斷言使用者控制代碼指定的使用者，並要求使用者驗證。成功後，響應攜帶 `login_url`，其中包含授權程式碼，同時設定 SSO 會話 Cookie。
+:::
+::::
+
+<span id="required-actions-still-apply" />
+
+### 仍需執行必要的操作
+
+使用者驗證的通行金鑰會響應 TOTP 挑戰，因此同時擁有通行金鑰和身分認證器的使用者不會被要求輸入程式碼。它不會跳過必需的操作：如果 `update_password`、`verify_email` 或 `configure_otp` 到期，`passkey-authenticate` 會返回 403，登入無法完成。客戶端的維護和同意規則同樣適用。
+
+<span id="supported-authenticators" />
+
+## 支援的身分認證器
+
+| 型別 | 示例 | 跨裝置 |
+|---|---|---|
+| 平臺 | Touch ID、Face ID、Windows Hello、Android 生物識別 | 不 |
+| 漫遊 | YubiKey、SoloKeys、Titan 安全金鑰 | 是 |
+| 同步通行金鑰 | iCloud 鑰匙串、谷歌密碼管理器 | 是 |
+
+<span id="patterns" />
+
+## 模式
+
+<span id="passkey-first-sign-in" />
+
+### 以金鑰為優先的登入
+
+將通行金鑰與授權碼流程結合。使用者點選通行金鑰按鈕，透過他們的裝置進行身分認證，並帶著程式碼被重定向回來，無需輸入密碼。密碼仍然可以與通行金鑰一起使用，因此這只是移除了輸入步驟，而不是密碼本身。
+
+<span id="passkeys-next-to-totp" />
+
+### 通行金鑰與 TOTP 並存
+
+向裝置支援通行金鑰的使用者提供這種選項。不支援的使用者繼續使用他們的密碼，並在需要時使用身分認證器。兩條路徑最終都指向相同的權杖端點。
+
+<Callout variant="info" title="多個通行金鑰">
+
+使用者可以註冊多個通行金鑰，例如筆記本上的 Touch ID 和作為備用的 YubiKey。每個通行金鑰單獨儲存，任意一個都可以用於使用者登入。如果移除某個通行金鑰會導致賬戶無法登入，則會被拒絕。
+
+</Callout>

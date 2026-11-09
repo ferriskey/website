@@ -1,0 +1,158 @@
+---
+title: "后通道注销"
+description: "FerrisKey中的OIDC后台通道注销：客户端如何注册终结点、注销令牌包含的内容、何时发送以及传递行为如何。"
+icon: log-out
+order: 21
+---
+
+<span id="back-channel-logout" />
+
+# 后通道注销
+
+后台注销允许 FerrisKey 告诉应用程序的服务器用户的会话已经结束，因此应用程序可以在不等待浏览器返回的情况下结束自己的会话。
+
+如果没有它，应用程序只有在用户点击自己的注销按钮时才能知道注销。管理员撤销会话、重置密码或禁用账户都会使应用程序保持登录状态，直到其本地会话超时。使用它时，FerrisKey 会将签名的注销令牌直接发送到应用程序，服务器到服务器，无论是什么结束了会话。
+
+<span id="registering-an-endpoint" />
+
+## 注册一个端点
+
+打开客户端，然后进入**设置**，然后是**注销**部分。
+
+| 控制台标签 | API 字段 | 含义 |
+|---|---|---|
+| 后端注销 URL | `backchannel_logout_uri` | FerrisKey POST 注销令牌的地址。留空表示选择不使用 |
+| 需要会话 ID（sid） | `backchannel_logout_session_required` | 记录该应用程序需要`sid`声明。默认值为`true`。 |
+
+<img class="only-light" src="/dashboard/client_settings_logout-light.jpg" alt="FerrisKey 客户端设置标签显示注销部分，包含注销后重定向 URI 和后端注销 URL 字段" />
+<img class="only-dark" src="/dashboard/client_settings_logout-dark.jpg" alt="FerrisKey 客户端设置标签显示注销部分，包含注销后重定向 URI 和后端注销 URL 字段" />
+
+通过API，将两个字段都发送到`PATCH /realms/{realm_name}/clients/{client_id}`。不发送`backchannel_logout_uri`将保留当前值，发送`null`将清除它。
+
+```json title="PATCH /realms/home/clients/{client_id}"
+{
+  "backchannel_logout_uri": "https://app.example.com/backchannel-logout"
+}
+```
+
+保存时会检查URL的格式：它需要一个主机，没有嵌入的凭据，并且使用`https`方案（仅限回环主机接受`http`）。如果值不正确，将在`backchannel_logout_uri`字段上返回`422`。地址是否实际可达将在发送时根据主机解析的地址决定。
+
+会话ID始终是令牌的一部分。`backchannel_logout_session_required` 被记录存储，并不会改变 FerrisKey 发送的内容。
+
+Discovery 宣传这一功能：`/realms/{realm_name}/.well-known/openid-configuration` 携带 `backchannel_logout_supported` 和 `backchannel_logout_session_supported`，两者都是 `true`。
+
+<span id="when-a-logout-token-is-sent" />
+
+## 当发送注销令牌时
+
+FerrisKey 在用户会话被删除时会发送通知，但会话自然过期时除外。这包括：
+
+- 注销端点，`GET` 或 `POST /realms/{realm_name}/protocol/openid-connect/logout`；
+- 会话被 `DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}` 撤销；
+- 用户被禁用或删除，包括批量删除；
+- 密码重置，由管理员执行或通过重置链接，完成必需操作的密码更新，以及在账户页面进行的密码更改，这会使用户的其他会话退出。
+
+接收者是参与会话的客户端：每个启用的客户端，其 `backchannel_logout_uri` 已被授予携带该会话 `sid` 的访问令牌。未在会话中收到令牌的客户端不会被联系，也不会联系没有端点的客户端。`client_credentials` 令牌没有会话，因此不会触发任何操作。
+
+如果客户端在同一会话中从两个不同的签发者 URL 收到令牌，它会为每个签发者各收到一个注销令牌。
+
+<span id="what-ferriskey-sends" />
+
+## FerrisKey 发送的内容
+
+一个 `POST`，包含 `Content-Type: application/x-www-form-urlencoded` 以及一个字段 `logout_token`：
+
+```http
+POST /backchannel-logout HTTP/1.1
+Host: app.example.com
+Content-Type: application/x-www-form-urlencoded
+
+logout_token=eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...
+```
+
+该令牌是使用身份域密钥签署的 JWT，该密钥用于签署所有其他令牌，因此应用程序使用相同的 JWKS（发现文档中的 `jwks_uri`）进行验证。头部包含密钥 ID 和一个独特的类型：
+
+```json
+{ "alg": "RS256", "kid": "5c1e0b7a-...", "typ": "logout+jwt" }
+```
+
+```json
+{
+  "iss": "https://sso.example.com/realms/home",
+  "sub": "8d1f3c52-0a4e-4d1c-9a57-2f0a1c9e7b11",
+  "aud": "orders-web",
+  "iat": 1790000000,
+  "exp": 1790000120,
+  "jti": "0192f7c4-5e1a-7b3e-9d0c-3a6f1b2c4d5e",
+  "sid": "b2a4c6e8-1f3d-4a5b-8c7e-9d0f1a2b3c4d",
+  "events": {
+    "http://schemas.openid.net/event/backchannel-logout": {}
+  }
+}
+```
+
+| 声明 | 值 |
+|---|---|
+| `iss` | 客户端在该会话中收到的令牌的签发者，因此它与应用程序已看到的 `iss` 匹配 |
+| `sub` | 用户的 ID |
+| `aud` | 客户端的 `client_id`，作为单个字符串 |
+| `iat`, `exp` | 发行时间，以及 120 秒后 |
+| `jti` | 每个令牌的新标识符 |
+| `sid` | 会话 ID。该值与该会话生成的访问令牌和 ID 令牌中的 `sid` 声明相同 |
+| `events` | 后通道注销事件成员 |
+
+永远不存在 `nonce`。
+
+<span id="what-the-application-must-check" />
+
+## 应用程序必须检查的内容
+
+OpenID Connect 后通道注销 1.0 要求接收方在执行操作前验证令牌。实际上：
+
+1. 使用 JWKS 中的密钥验证签名，由 `kid` 选择，并检查 `typ` 头是否为 `logout+jwt`。
+2. 检查 `iss` 是否为身份域的签发者，`aud` 是否包含你的 `client_id`，以及 `iat` 和 `exp` 是否将令牌置于当前时间。
+3. 检查 `events` 是否包含 `http://schemas.openid.net/event/backchannel-logout` 成员，`sub` 或 `sid` 是否存在，并且 `nonce` 不存在。
+4. 拒绝你已经见过的 `jti`。
+
+然后结束与该 `sid` 相关的每个本地会话，并用 `2xx` 回答。FerrisKey 将任何 `2xx` 视为已交付。当令牌无效时回答 `400`：这是规范要求的状态，FerrisKey 不会重试。
+
+<span id="delivery" />
+
+## 投递
+
+发送是异步的。注销时从不等待应用程序，也不会因为应用程序运行缓慢或宕机而失败。
+
+| 行为 | 值 |
+|---|---|
+| 尝试 | 3 次，每次前等待 0、2 和 10 秒 |
+| 已重试 | 连接、DNS 和超时失败，以及 `5xx` 回答 |
+| 不重试 | 任何其他状态，包括 `4xx`，以及被拒绝的地址或不可用的 URL |
+| 重定向 | 从未跟随过。`3xx` 计为拒绝 |
+| 超时 | 连接 5 秒，每个请求 10 秒 |
+| 队列 | 内存中保持 1024 个已结束的会话，每次交付 16 个 |
+
+投递尽力而为。一个在三次尝试后仍不可达的客户端将错过通知，而当服务器重启时通知被排入队列的客户端也将错过。当队列满时，新的会话将被丢弃，日志中会有警告，但用户的注销仍然成功。保持应用程序自身的会话生命周期有限，以作为后备措施。
+
+FerrisKey 会一次性解析主机并将连接固定到它可能到达的地址，使用与保护 [webhook 传送](/zh-CN/modules/webhooks/deliveries) 相同的防护措施。需要一个 `https` 端点。回环地址、私有地址和其他非公开地址会被拒绝，而链路本地地址（包括云元数据地址）无论设置如何都会被拒绝。`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 允许回环地址和私有地址用于本地开发，并且只允许普通 `http` 通过回环地址。它与 webhook 使用的开关相同，在生产环境中应保持关闭。请参见 [配置](/zh-CN/discover/guides/configuration)。
+
+失败信息会写入服务器日志，而不会写入 [SeaWatch](/zh-CN/modules/seawatch/overview)。需要关注的消息有：
+
+| 日志消息 | 含义 |
+|---|---|
+| `Logout token not delivered, retrying` | 可重试的失败，以及尝试次数 |
+| `Logout token refused` | 端点返回了一个不重试的状态，或者地址被拒绝 |
+| `Gave up delivering a logout token` | 三次尝试都失败了 |
+| `Back-channel logout queue full, dropping a session` | 队列已满 |
+| `Could not sign a logout token` | 身份域密钥无法签署令牌 |
+
+::::card-group{cols=3}
+:::card{label="客户端" icon="lucide:app-window" href="/zh-CN/discover/core-concepts/clients"}
+注销后重定向的 URI 以及客户端的其他设置。
+:::
+:::card{label="令牌" icon="lucide:ticket" href="/zh-CN/discover/core-concepts/tokens"}
+`sid` 声明将一个令牌绑定到一个会话。
+:::
+:::card{label="Webhook 投递" icon="lucide:webhook" href="/zh-CN/modules/webhooks/deliveries"}
+注销令牌与 webhook 共享的地址保护。
+:::
+::::

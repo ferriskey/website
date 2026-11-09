@@ -1,0 +1,84 @@
+---
+title: "來自 Zitadel"
+description: "透過 Zitadel 例項的管理 API 實時匯入組織和專案。"
+icon: server
+order: 4
+---
+
+<span id="import-from-zitadel" />
+
+# 從 Zitadel 匯入
+
+`--from zitadel` 透過其管理 API（v1）從正在執行的 Zitadel 例項讀取，並在 FerrisKey 中重新建立它。單個 Zitadel 組織對映到一個 FerrisKey 域。
+
+```bash
+ferris-ctl realm import --from zitadel \
+  --source-url https://zitadel.example.com \
+  --source-token "$ZITADEL_PAT" \
+  --source-org 123456789 \
+  --target-realm acme
+```
+
+<span id="required-flags" />
+
+## 必需的標誌
+
+| 標誌 | 說明 |
+|------|-------------|
+| `--source-url` | Zitadel 例項的基本 URL |
+| `--source-token` | 用作承載權杖的個人存取權杖 (PAT) |
+
+<span id="selecting-organizations" />
+
+## 選擇組織
+
+| 標誌 | 行為 |
+|------|----------|
+| `--source-org <id>` | 匯入單個組織。作為 `x-zitadel-orgid` 頭部傳送。 |
+| _(省略)_ | 匯入所有組織，每個作為一個獨立的身分域。需要例項級（IAM）權限來列出組織。 |
+
+```bash title="Using a stored source"
+ferris-ctl source add zitadel-prod --kind zitadel \
+  --url https://zitadel.example.com --token "$ZITADEL_PAT"
+
+ferris-ctl realm import --source-ref zitadel-prod --source-org 123456789
+```
+
+如果權杖無法列出組織，則匯入會停止，並提示你使用 `--source-org` 固定一個組織，或為權杖授予 IAM 管理員角色。
+
+<span id="realm-names" />
+
+## 身分域名稱
+
+使用 `--source-org` 時，身分域由 `--target-realm` 命名，否則用 `--source-realm`，否則用 `zitadel`。
+
+沒有它時，每個組織都會成為一個以其命名的身分域：名稱會被轉換為小寫，所有非字母和數字的字元序列會變成單個 `-`，並且會去掉開頭和結尾的連字元。名稱處理後為空則變為 `org`。在這種模式下不使用 `--source-realm`，`--target-realm` 僅在恰好返回一個組織時適用。對於多個組織，CLI 會保留組織名稱並在標準錯誤輸出上列印說明。
+
+<span id="how-resources-map" />
+
+## 資源對映方式
+
+| Zitadel | Ferriskey |
+|---------|-----------|
+| 組織 | 身分域 |
+| 專案角色 | 身分域角色，以角色鍵命名，顯示名稱作為描述且無權限 |
+| 專案的應用 | 機密客戶端。其客戶端 ID 為 OIDC 客戶端 ID，或在沒有時為應用程式 ID。重定向 URI 來自 OIDC 配置 |
+| 人類使用者 | 身分域使用者，具有使用者名稱、電子郵件、名、姓及郵件驗證標誌 |
+| 機器（服務）使用者 | 具有服務賬戶的機密客戶端，以使用者名稱命名 |
+
+專案本身不會被對映。匯入器存取每個專案僅為了讀取其角色和應用程式。無論在 Zitadel 中應用程式型別如何，每個應用程式都會成為機密客戶端。
+
+:::callout{variant="warning"}
+密碼和金鑰不會從 Zitadel 中讀取，因此使用者到達時沒有憑據，機器使用者到達時沒有金鑰。機密客戶端從 FerrisKey 獲取一個新的金鑰，如 [匯入報告](/zh-TW/cli/import/overview#the-import-report) 中所列。
+:::
+
+<span id="what-is-not-imported" />
+
+## 未匯入的內容
+
+- 身分域設定。匯入器不設定任何內容，因此新身分域保持 FerrisKey 預設值。
+- 角色分配。Zitadel 的使用者授權未被讀取，因此匯入後沒有使用者持有角色。
+- 角色權限。角色建立時沒有權限。
+- 每個客戶端的詳細資訊，例如登出後重定向的 URI、Web 來源、PKCE 和權杖有效期。
+
+每種資源型別都是透過一次搜尋請求讀取的，並且沒有分頁引數，所以非常大的例項只會返回 Zitadel 對預設請求返回的內容。請在應用之前使用 `--dry-run -o yaml` 進行預覽，並將計數與您的例項進行比較。

@@ -1,0 +1,156 @@
+---
+title: "客户端"
+description: "FerrisKey 中的 OAuth2/OIDC 客户端：客户端类型、认证方法、重定向 URI、功能开关和令牌设置。"
+icon: app-window
+order: 11
+---
+
+<span id="clients" />
+
+# 客户端
+
+客户端代表通过 FerrisKey 进行身份认证的应用程序。每个 OAuth2 和 OIDC 流程都从一个客户端开始：它说明哪个应用程序正在请求访问，并确定适用的认证方法和令牌设置。
+
+<span id="client-types" />
+
+## 客户端类型
+
+有三种：
+
+| 类型 | 密钥 | 使用场景 |
+|---|---|---|
+| 机密 | 是 | 能够保密的服务器端应用程序 |
+| 公用 | 不 | 单页应用、移动应用、命令行工具 |
+| 系统 | 无 | 内部 FerrisKey 客户端，自动创建且不由用户管理 |
+
+:::callout{variant="info" title="选择客户端类型"}
+当您的应用程序有后端可以安全保存密钥时，选择“密钥”。当运行在浏览器或设备上的任何应用中，密钥最终会落在用户手中时，选择“公开”。
+:::
+
+客户端还会记录其来源：`registration_source`：`admin` 表示通过控制台或管理 API 创建的客户端，`dynamic` 表示匿名注册的客户端，以及 `metadata_document` 表示通过客户端 ID 元数据文档解析的客户端。后两种始终需要用户同意，并且永远无法访问管理 API。参见 [MCP](/zh-CN/discover/core-concepts/mcp)。
+
+<span id="capability-config" />
+
+## 功能配置下开启它
+
+客户端可能采取的流程在其设置界面上进行设置，其中两个选项是永久性的。
+
+<img class="only-light" src="/dashboard/client_settings-light.jpg" alt="FerrisKey 客户端设置显示一般字段以及具有公开/保密和授权开关的功能配置" />
+<img class="only-dark" src="/dashboard/client_settings-dark.jpg" alt="FerrisKey 客户端设置显示一般字段以及具有公开/保密和授权开关的功能配置" />
+
+**客户端认证在创建时设置且不可更改。** 客户端之后不能在密钥和公开之间切换。当后端可以在服务器端保存密钥时选择密钥；对于 SPA、移动应用和 CLI，因为密钥最终会落入用户手中，所以选择公开。协议（OpenID Connect 或 SAML 2.0）是另一个永久选择。
+
+授权切换不是永久的，每一个都会增加攻击面：
+
+| 切换 | 开启时间 |
+|---|---|
+| 直接访问授权 | 对任何新的内容都不要开启。这是[已弃用的密码授权](/zh-CN/discover/core-concepts/authentication#password-resource-owner) |
+| 启用 OAuth 2.0 设备授权 | 客户端无浏览器：CLI、物联网设备、电视应用 |
+| OAuth 2.0 令牌交换 | 客户端是一个后端服务，它将用户的访问令牌换取针对另一个服务的令牌。参见[token exchange](/zh-CN/discover/core-concepts/token-exchange) |
+
+**需要 PKCE** 是相反方向：保持开启。通过控制台或 API 创建的客户端需要 PKCE，除非请求另有说明，否则没有 S256 代码挑战的授权请求会被拒绝。S256 是发现唯一宣传的方法。
+
+禁用的客户端保留其全部配置并拒绝所有请求，这也是它与[维护模式](/zh-CN/modules/maintenance/overview)的不同之处，后者仍然允许白名单通过。
+
+<span id="client-properties" />
+
+## 客户端属性
+
+| 属性 | 说明 |
+|---|---|
+| `client_id` | OAuth2 流程中使用的公共标识符 |
+| `secret` | 客户端密钥（仅限机密客户端） |
+| `protocol` | 协议类型，`openid-connect` 或 `saml`。创建时固定 |
+| `enabled` | 客户端是否可以启动身份认证 |
+| `redirect_uris` | 身份认证后允许的重定向 URI |
+| `direct_access_grants_enabled` | 允许已弃用的密码授权类型 |
+| `oauth_device_code_grant_enabled` | 允许设备码授权，用于 CLI 和其他无浏览器客户端 |
+| `require_pkce` | 授权码流程中要求 S256 代码挑战。在新客户端上，`true` 为默认值 |
+| `public_client` | 公共客户端：没有密钥，因此 PKCE 提供保护 |
+| `service_account_enabled` | 启用客户端凭据授权 |
+| `token_exchange_enabled` | 允许 RFC 8693 令牌交换授权。默认 `false` |
+| `backchannel_logout_uri` | 当该客户端参与的会话结束时，FerrisKey 会 POST 一个注销令牌。默认未设置，表示选择退出。参见 [后端注销](/zh-CN/discover/core-concepts/backchannel-logout) |
+| `backchannel_logout_session_required` | 记录客户端在其注销令牌中需要 `sid` 声明。默认 `true`，并且 FerrisKey 总是发送 `sid` |
+| `consent_required` | 当客户端请求可选作用域时，征求用户同意。默认 `false` |
+| `registration_source` | `admin`, `dynamic` 或 `metadata_document` |
+
+`consent_required` 不在控制台中：通过 API、`POST /realms/{realm_name}/clients` 或 `PATCH /realms/{realm_name}/clients/{client_id}` 的正文设置它。自行注册的客户端无论此标志如何都需要同意。参见 [同意](/zh-CN/discover/core-concepts/consent)。
+
+<span id="authenticating-at-the-token-endpoint" />
+
+## 在令牌端点进行身份认证
+
+机密客户端通过 `client_secret_basic`（HTTP Basic 头）或 `client_secret_post`（以表单主体的 `client_id` 和 `client_secret`）来证明其身份。公共客户端仅发送其 `client_id`，该项在发现中列为 `none`。这三项组成了完整列表：`private_key_jwt` 和其他基于断言的方法不被支持。
+
+Basic 头的用户名和密码会进行表单解码，正如 RFC 6749 §2.3.1 所要求的。如果一个密钥包含 `+` 或 `%`，则在进行 base64 编码前必须进行百分号编码，否则 FerrisKey 读取的密钥将与您想发送的密钥不同。
+
+`client_credentials` 授权需要一个具有 `service_account_enabled` 的机密客户端，并且它返回一个没有刷新令牌的访问令牌。[令牌端点](/zh-CN/discover/core-concepts/authentication#the-token-endpoint) 一节列出了适用的错误和速率限制。
+
+<span id="redirect-uris" />
+
+## 重定向 URI
+
+FerrisKey 将授权请求的 `redirect_uri` 与客户端启用的重定向 URI 进行比较。条目是一个字面地址，必须逐字符匹配。写为 `^...$` 并在两端加锚点的条目，被视为正则表达式，必须匹配整个值。一个也匹配空字符串的表达式永远不会匹配任何内容。
+
+优先使用字面地址。松散的模式可能会让授权码发送到您不打算的地址。注销后的重定向 URI 会进行精确比较，模式形式不适用于它们。
+
+`PUT .../redirects/{uri_id}` 仅切换 `enabled`。要更改地址，请创建新条目并删除旧条目。
+
+<span id="token-lifetime-overrides" />
+
+## 令牌有效期覆盖
+
+客户端从其所属身份域继承令牌有效期。当一个应用程序需要不同的窗口时，可以针对每个客户端进行覆盖：
+
+| 覆盖 | 说明 |
+|---|---|
+| `access_token_lifetime` | 访问令牌的 TTL（秒） |
+| `refresh_token_lifetime` | 刷新令牌的 TTL（秒） |
+| `id_token_lifetime` | ID 令牌的 TTL（秒） |
+| `temporary_token_lifetime` | 临时令牌的 TTL（秒） |
+
+客户端上设置的值优先于身份域默认值。保持为 `null`，则应用身份域默认值。刷新令牌的有效期还决定了用户通过此客户端登录时 SSO 会话的持续时间。
+
+<span id="direct-access-grants" />
+
+## 直接访问授权
+
+启用此功能后，客户端可以使用资源所有者密码凭据授权，直接向令牌端点发送用户名和密码。这对于可信的第一方应用程序和测试非常方便。不要为第三方客户端启用它。该授权拒绝任何仍欠多因素身份认证（MFA）或必需操作的账户，因此不能替代浏览器登录。
+
+<span id="sub-resources" />
+
+## 子资源
+
+客户端不是单个对象：它的几个属性是具有自己端点的集合。
+
+| 集合 | 端点 | 它控制的内容 |
+|---|---|---|
+| 重定向 URI | `GET POST` `…/{client_id}/redirects`, `PUT DELETE` `…/redirects/{uri_id}` | FerrisKey 登录后可能将浏览器发送回的地方 |
+| 注销后的重定向 | `GET POST` `…/{client_id}/post-logout-redirects`, `PUT DELETE` `…/post-logout-redirects/{uri_id}` | 注销后可能发送浏览器的地方 |
+| Web 来源 | `GET POST` `…/{client_id}/web-origins`, `DELETE` `…/web-origins/{web_origin_id}` | 允许调用身份域范围路由的浏览器来源 |
+| 客户端角色 | `GET POST` `…/{client_id}/roles` | 此客户端范围的角色 |
+| 客户端密钥 | `GET` `…/{client_id}/client-secret` | 读取它会在审计日志中引发 `client_secret_viewed` |
+| 作用域分配 | `PUT DELETE` `…/default-client-scopes/{scope_id}` 和 `…/optional-client-scopes/{scope_id}` | 参见 [客户端作用域](/zh-CN/discover/core-concepts/client-scopes) |
+| 令牌交换策略 | `GET POST` `…/{client_id}/token-exchange-policies`, `DELETE` `…/token-exchange-policies/{policy_id}` | 该客户端可为哪些其他客户端获取令牌。参见[token exchange](/zh-CN/discover/core-concepts/token-exchange) |
+
+:::callout{variant="info" title="Web 来源仅限于每个身份域范围的路由"}
+客户端的 Web 来源覆盖身份域范围的路由。它们不包括 `/config`、健康探测或 API 文档，这些不带身份域，因此需要服务器范围的 `ALLOWED_ORIGINS`。从与 API 不同的源提供的控制台需要两者。
+:::
+
+<span id="previewing-the-token-a-client-would-get" />
+
+### 预览客户端将获得的令牌
+
+```
+POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes
+```
+
+接受一个 `user_id` 和一个可选的 `scope`，并返回该客户端的作用域为该用户生成的声明，而无需登录或签署的令牌。这是检查 [protocol mapper](/zh-CN/modules/aegis/protocol-mappers) 在将应用程序连接到它之前的最快方式。
+
+<span id="service-accounts" />
+
+## 服务账户
+
+具有 `service_account_enabled` 的客户端可以通过客户端凭据授权进行身份认证，无需涉及用户。FerrisKey 为其创建一个关联的服务账户用户，该用户像任何其他用户一样获取角色和权限。
+
+这是机器对机器调用的常用模式。

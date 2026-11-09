@@ -1,0 +1,125 @@
+---
+title: "概述"
+description: "從描述檔案、實時 Keycloak、實時 Zitadel 或 Supabase 專案中將身分域匯入 FerrisKey。"
+icon: import
+order: 1
+---
+
+<span id="import" />
+
+# 匯入
+
+`ferris-ctl realm import` 可將一個身分域（其設定、角色、客戶端和使用者）從四種來源引入 FerrisKey：
+
+::::card-group{cols=3}
+:::card{label="配置檔案" icon="lucide:file-text" href="/zh-TW/cli/import/config-file"}
+FerrisKey 本地的 YAML 或 TOML 描述。不需要外部系統。
+:::
+:::card{label="Keycloak" icon="lucide:server" href="/zh-TW/cli/import/keycloak"}
+從 Keycloak 管理員 REST API 實時讀取身分域。
+:::
+:::card{label="Zitadel" icon="lucide:server" href="/zh-TW/cli/import/zitadel"}
+從 Zitadel 例項實時讀取組織和專案。
+:::
+:::card{label="Supabase" icon="lucide:database" href="/zh-TW/cli/import/supabase"}
+從 Supabase 專案實時讀取使用者。僅使用者，可選擇攜帶密碼和 ID。
+:::
+::::
+
+<span id="how-it-works" />
+
+## 工作原理
+
+每個來源都會被解析為一個**藍圖**（身分域的標準化描述），然後應用到 FerrisKey。API 沒有批次匯入端點，因此 CLI 會作為普通建立呼叫重新執行藍圖，並以你的上下文身分進行簽名。
+
+```text
+source (file | keycloak | zitadel | supabase) → blueprint → apply to FerrisKey
+```
+
+應用順序為：身分域、身分域設定、身分域角色、客戶端（包括重定向 URI、登出後重定向 URI、網頁來源、每個客戶端設定和客戶端角色），然後是使用者（包括他們的密碼和角色分配）。
+
+```bash title="Basic shape"
+ferris-ctl realm import --from <config|keycloak|zitadel|supabase> [source flags] [--target-realm <name>]
+```
+
+完整的標誌列表請參閱 [`realm import`](/zh-TW/cli/commands/realm#realm-import) 參考文件。
+
+<span id="preview-with---dry-run" />
+
+## 使用 `--dry-run` 進行預覽
+
+新增 `--dry-run` 以解析源並列印計劃的身分域，而無需向 FerrisKey 寫入任何內容。它不需要上下文和登入，但會讀取源。將其與 `-o yaml` 結合以檢查藍圖：
+
+```bash
+ferris-ctl realm import --from config --file realm.yaml --dry-run -o yaml
+```
+
+表格形式僅列印計數。`json` 和 `yaml` 形式以陣列形式列印整個藍圖，密碼雜湊被 `<redacted>` 替換。
+
+<span id="the-import-report" />
+
+## 匯入報告
+
+實際匯入以報告結束。表格形式每個計數器列印一行，`-o json` 或 `-o yaml` 列印一個陣列，每個身分域一個報告，使用以下鍵。
+
+| JSON 鍵 | 計數 |
+|----------|--------|
+| `realm_created` | `true` 在匯入建立身分域時 |
+| `settings_applied` | `true` 在傳送身分域設定時 |
+| `roles_created` | 建立身分域角色 |
+| `clients_created` | 建立客戶端 |
+| `redirects_created` | 新增重定向 URI |
+| `post_logout_redirects_created` | 新增登出後重定向 URI |
+| `web_origins_created` | 新增 Web 來源 |
+| `client_settings_applied` | 傳送了 PKCE 或權杖生命週期的客戶端 |
+| `client_roles_created` | 建立客戶端角色 |
+| `users_created` | 建立使用者 |
+| `role_assignments` | 將角色分配給使用者 |
+| `passwords_imported` | 儲存密碼雜湊 |
+| `passwords_failed` | 伺服器拒絕的雜湊，或因伺服器沒有匯入端點而跳過的雜湊 |
+| `already_present` | 跳過的專案，因為它們已存在：身分域、角色、客戶端、重定向 URI、Web 來源、使用者、角色分配或使用者密碼 |
+
+每個報告還包含 `realm`（身分域的名稱）和 `dry_run`，對於實際匯入來說，它始終是 `false`。這兩個 `passwords_*` 計數器在 0.3.0 版本中不存在。僅在有內容時才會出現另外兩個鍵：`client_secrets` 和 `warnings`。每個警告都是一個句子，說明跳過或無法讀取的內容，例如 `user 'alice' already exists, reusing it` 或 `role 'ops' not found, cannot assign it to user 'bob'`。
+
+<Callout variant="danger" title="報告列印客戶端金鑰">
+
+對於匯入中的每個機密客戶端，包括已經存在的客戶端，報告會在表格中列出`client_id`及其對應的FerrisKey金鑰（以明文形式）、`json`和`yaml`的輸出。匯入建立的客戶端會從FerrisKey獲取新的金鑰；它在Keycloak或Zitadel中已有的金鑰不會被讀取或繼承，因此使用該金鑰的應用程式需要使用新的金鑰。請不要將輸出放入共享的CI日誌中。
+
+</Callout>
+
+<span id="idempotency" />
+
+## 冪等性
+
+當你重新執行匯入時，匯入會收斂；它不會同步。在建立任何內容之前，匯入程式會讀取realm中已存在的內容，並跳過已有的內容，每次跳過都會在`already_present`中計數並新增警告。
+
+- 現有實體按原樣重複使用，絕不會更新。角色保持其權限，客戶端保持其標誌，使用者保持其電子郵件。僅新增缺失的內容：重定向 URI、Web 來源、客戶端角色、角色分配。
+- 身分域設定以及客戶端的 PKCE 和權杖有效期是例外。無論身分域或客戶端是否存在，它們都會在每次執行時傳送，並覆蓋當前值。
+- 源中已存在密碼的使用者不會應用新密碼：伺服器會返回衝突，匯入器會保留現有密碼，並顯示警告說明情況。
+- 當建立或更新某項內容的呼叫失敗且返回的不是“已存在”時，匯入會立即停止，顯示 `error: ...` 並帶有退出狀態 1。沒有回滾也沒有報告；在錯誤之前建立的內容會保留。修復原因後再次執行。讀取失敗和密碼匯入失敗僅會增加警告。
+- 寫為 `client_id:role` 的使用者角色必須存在，或者在源中，或者已在該客戶端上存在，否則匯入會以列出該使用者的錯誤停止。未知的身分域角色僅會增加警告，並且該分配會被跳過。
+
+身分域角色和客戶端的存在性檢查會讀取列表的第一頁（20 個條目）。在一個已經擁有超過 20 個角色或客戶端的身分域中，可能會遺漏已存在的角色，然後匯入器會嘗試再次建立它。
+
+當一個源生成多個身分域（沒有 `--source-org` 的 Zitadel）時，如果匯入失敗，會丟棄已匯入身分域的報告。它們仍然在 FerrisKey 中。
+
+<span id="stored-sources" />
+
+## 儲存的源
+
+對於 Keycloak、Zitadel 和 Supabase，只需將連線儲存一次作為 [source](/zh-TW/cli/commands/source)，然後用 `--source-ref` 引用它，而不是每次都傳遞 URL 和憑據：
+
+```bash
+ferris-ctl source add kc-prod --kind keycloak --url https://kc.example.com \
+  --realm acme --client-id ferriskey-import --client-secret "$KC_SECRET"
+
+ferris-ctl realm import --source-ref kc-prod --target-realm acme
+```
+
+內聯 `--source-*` 標誌會覆蓋來自參考源的值。當您傳遞 `--source-ref` 時，型別來自儲存的源，`--from` 會被忽略。
+
+<Callout variant="info" title="命名 realm">
+
+建立的身分域的名稱取決於源和 `--target-realm`；該表在 [`realm import`](/zh-TW/cli/commands/realm#name-of-the-created-realm) 中。配置檔案或 Keycloak 身分域會保留自己的名稱，除非您覆蓋它。
+
+</Callout>

@@ -1,0 +1,164 @@
+---
+title: "用户"
+description: "创建、查看和删除用户，设置密码，并管理角色分配。"
+icon: users
+order: 4
+---
+
+# `user`
+
+管理一个身份域的用户、他们的密码以及分配给他们的角色。
+
+```bash
+ferris-ctl user <subcommand>
+```
+
+每个子命令都接受 `--realm <name>` 来选择命令作用的域；否则使用上下文的域。CLI 始终登录到上下文的域，因此即使你传递 `--realm`，上下文也必须有一个域。见 [认证](/zh-CN/cli/authentication#contexts)。
+
+<Callout variant="warning" title="已知限制：仅显示第一页，用户名未进行 URL 编码">
+
+服务器默认一次返回 20 个用户（最多 100 个），而 `ferris-ctl` 只读取第一页。因此，`user list` 最多显示 20 个用户。
+
+每个需要用户名的命令都会向服务器请求用户名中包含该文本的用户，然后在前 20 个结果中查找完全匹配的用户名。在一个包含超过 20 个该文本用户名的身份域中，目标用户名可能不在这一页上，命令就会返回 `user '<name>' not found`。用户名也会被放入查询字符串中而不进行百分号编码，因此包含 `+`、`&` 或 `#` 的名称将无法被找到。这也包括带有 `+` 标签的邮件风格用户名。
+
+`user assign-role` 和 `user remove-role` 在前 20 个身份域角色中按名称查找身份域角色，在身份域的前 20 个客户端中按 `client_id` 查找客户端。
+
+</Callout>
+
+## `user list`
+
+在一个身份域里列出用户。
+
+```bash
+ferris-ctl user list [--realm <realm>]
+```
+
+表格列：用户名、邮箱、ID、启用。
+
+## `user get`
+
+显示用户信息。
+
+```bash
+ferris-ctl user get <username> [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<username>` | 是 | 用户名 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+
+返回ID、用户名、名字、姓氏、邮箱和启用。
+
+## `user create`
+
+创建一个用户。
+
+```bash
+ferris-ctl user create <username> [flags]
+```
+
+| 参数 | 默认 | 说明 |
+|----------|---------|-------------|
+| `<username>` |  | 用户名（必填） |
+| `--realm` | 上下文身份域 | 身份域 |
+| `--email` |  | 用户邮箱 |
+| `--firstname` |  | 名字 |
+| `--lastname` |  | 姓氏 |
+
+```bash title="Example"
+ferris-ctl user create alice \
+  --email alice@example.com \
+  --firstname Alice \
+  --lastname Doe
+```
+
+该命令会打印创建的用户。
+
+<Callout variant="info" title="设置密码">
+
+`user create` 不会设置凭据。给新账户设置一个密码 [`user set-password`](#user-set-password) ，或者让用户通过恢复流程。
+
+</Callout>
+
+## `user set-password`
+
+设置用户的密码。
+
+```bash
+ferris-ctl user set-password <username> (--password <value> | --stdin) [--temporary] [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<username>` | 是 | 用户名 |
+| `--password` | 两个中的一个 | 新密码，内联输入 |
+| `--stdin` | 两个中的一个 | 从标准输入读取密码，去掉末尾换行符 |
+| `--temporary` | 否 | 强制用户在下次登录时更改此密码 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+
+必须仅提供 `--password` 或 `--stdin` 中的一个；同时提供两者或两者都不提供都是错误。
+
+```bash title="Prefer stdin"
+printf '%s' "$NEW_PASSWORD" | ferris-ctl user set-password alice --stdin --temporary
+```
+
+<Callout variant="warning" title="--password 会泄露到历史记录中">
+
+传递给 `--password` 的值会出现在你的 shell 历史记录和进程列表中，机器上的任何人都可以读取它。请在一次性环境之外使用 `--stdin`。
+
+</Callout>
+
+## `user assign-role`
+
+将一个身份域角色或一个客户端的角色分配给用户。
+
+```bash
+ferris-ctl user assign-role <username> <role> [--client <client_id>] [--realm <realm>]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<username>` | 是 | 用户名 |
+| `<role>` | 是 | 角色名称 |
+| `--client` | 否 | 在此客户端的角色中解析角色，而不是在身份域的角色中解析。 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+
+```bash
+ferris-ctl user assign-role alice user-admin
+ferris-ctl user assign-role alice service-reader --client backend
+```
+
+FerrisKey 仅允许你赠送自己拥有的权限。如果该角色包含已登录身份没有的权限，服务器会以 `cannot assign a role granting permissions you do not hold` 返回 403。拥有 `manage_realm` 的身份可免除此限制。
+
+## `user remove-role`
+
+`assign-role` 的相反操作，参数相同。
+
+```bash
+ferris-ctl user remove-role <username> <role> [--client <client_id>] [--realm <realm>]
+```
+
+## `user roles`
+
+列出分配给用户的角色。
+
+```bash
+ferris-ctl user roles <username> [--realm <realm>]
+```
+
+表格列：名称 (NAME), ID。列表包含用户拥有的每个角色，包括身份域角色和客户端角色，但输出不会区分它们。
+
+## `user delete`
+
+删除用户。除非传入 `--force`，否则会提示确认。
+
+```bash
+ferris-ctl user delete <username> [--realm <realm>] [--force]
+```
+
+| 参数 | 必填 | 说明 |
+|----------|----------|-------------|
+| `<username>` | 是 | 用户名 |
+| `--realm` | 否 | 身份域（默认为上下文身份域） |
+| `--force` / `-f` | 否 | 跳过确认提示（在非交互式 shell 中必需） |

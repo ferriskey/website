@@ -1,0 +1,197 @@
+---
+title: "使用者聯合"
+description: "將 LDAP 或 Active Directory 樹連線到域：連線、搜尋、同步和登入。"
+icon: folder-tree
+order: 43
+---
+
+<span id="user-federation" />
+
+# 使用者聯合
+
+聯合身分認證有兩種形式，Abyss 涵蓋了這兩種。
+
+身分代理將使用者傳送到其他提供商進行身分認證。FerrisKey 從不檢視憑據；它接收一個斷言併發出自己的授權碼。這就是[配置提供商](/zh-TW/modules/abyss/providers)的內容。
+
+使用者聯合是另一種形式：賬戶存在於你已經執行的目錄中，FerrisKey 讀取這些賬戶。同步會將賬戶匯入到身分域中，以便可以在本地附加角色、組和組織。在登入時，使用者在你的登入頁面輸入密碼，FerrisKey 會對目錄進行繫結以進行檢查。密碼從未儲存在 FerrisKey 中。
+
+當現有的 LDAP 或 Active Directory 樹是存在使用者的事實來源時，請使用使用者聯合；而當另一個系統是登入使用者的事實來源時，請使用身分代理。
+
+<span id="provider-types" />
+
+## 提供商型別
+
+| 型別 | 狀態 |
+|---|---|
+| LDAP 和活動目錄 | 支援。已測試連線、搜尋賬戶、匯入並在登入時檢查。API 呼叫型別 `Ldap` 和 `ActiveDirectory`，並將它們以相同方式處理 |
+| Kerberos | 僅儲存。伺服器保留提供程式記錄，但既不同步也不測試它 |
+
+以下所有內容描述的是 LDAP 提供程式。
+
+<span id="creating-a-provider" />
+
+## 建立提供程式
+
+在管理控制檯中開啟使用者聯合，並新增提供程式。表單分為目錄整合必須解決的四個方面：提供程式是誰、如何存取、如何查詢賬戶以及如何執行同步。
+
+<img class="only-light" src="/dashboard/ldap_provider-light.jpg" alt="FerrisKey 新 LDAP 提供程式表單顯示基礎設定和連線設定" />
+<img class="only-dark" src="/dashboard/ldap_provider-dark.jpg" alt="FerrisKey 新 LDAP 提供程式表單顯示基礎設定和連線設定" />
+
+<span id="basic-settings" />
+
+### 基礎設定
+
+| 欄位 | 說明 |
+|---|---|
+| 提供程式名稱 | 在控制檯中命名提供商。必須在身分域內唯一 |
+| 優先順序 | 控制檯提供主要、次要、開發和遺留，分別儲存為 0、10、20 和 30。伺服器保留該數字，並用它來排序提供商列表。登入時不參考它 |
+| 已啟用 | 被禁用的提供商會拒絕其管理的賬戶登入。控制檯會將其同步顯示為灰色，但如果請求，API 仍然會執行同步。已匯入的賬戶保持已關聯狀態 |
+
+禁用提供商會將目錄移出迴圈，同時鎖定其管理的賬戶：其管理的每個賬戶都無法登入，直到你再次啟用它。刪除提供商會切斷與其匯入賬戶的關聯。
+
+<span id="connection-settings" />
+
+### 連線設定
+
+| 欄位 | 說明 |
+|---|---|
+| 連線 URL | 目錄地址。如果沒有指定方案，當啟用 TLS 時假定為 `ldaps://`，否則為 `ldap://` |
+| 基礎 DN | 搜尋賬戶的根，例如 `dc=example,dc=com` |
+| 繫結 DN | 用於讀取目錄的服務賬戶。如果為空，目錄將以匿名方式讀取 |
+| 繫結憑據 | 服務賬戶的密碼。以傳送狀態儲存，且從不返回：讀取時顯示 `********` |
+| 使用 TLS | 加密與目錄的連線 |
+
+<Callout variant="warning" title="繫結憑據未加密">
+
+憑據儲存在提供商的 `config` 下的 `bind.bind_password_encrypted` 中。儘管名稱如此，它並沒有被加密。控制檯在傳送前會對該值進行 Base64 編碼，這只是編碼，而不是保護。伺服器在可能的情況下會將該值按 Base64 解碼，否則直接使用原值，因此透過 API 建立提供商時請傳送 Base64 形式。`SECRETS_ENCRYPTION_KEYS` 不涵蓋此列。將憑據視為明文金鑰，給服務賬號只讀權限，並參見 [靜態金鑰](/zh-TW/discover/guides/secrets-at-rest)。
+
+</Callout>
+
+<Callout variant="warning" title="匿名繫結通常不是你想要的">
+
+大多數目錄對匿名繫結返回的是有限檢視，或完全沒有返回。如果連線測試透過但同步沒有匯入任何賬號，缺少 Bind DN 是首先要檢查的。
+
+</Callout>
+
+測試連線會連線、繫結、讀取基礎 DN 並嘗試搜尋過濾器。它不會觸碰任何賬戶，因此在第一次同步前在生產環境中執行是安全的：
+
+```text
+POST /realms/{realm_name}/federation/providers/{id}/test-connection
+```
+
+答案包含 `success`、`message`，並且當連線足夠深入時，還會有 `details.latency_ms`。非 LDAP 或 Active Directory 的提供程式會返回 `success: false`，並附帶“連線測試不支援的提供程式型別”。
+
+<span id="user-search-settings" />
+
+### 使用者搜尋設定
+
+| 欄位 | 預設 | 說明 |
+|---|---|---|
+| 使用者搜尋過濾器 | `(objectClass=person)` | 應用於查詢的 LDAP 過濾器 |
+
+將其縮小到實際包含你人員的子樹或物件類。匹配服務或機器物件的過濾器會將它們匯入為使用者。
+
+過濾器可能包含 `{username}` 或 `{0}`。在登入時，FerrisKey 會將其替換為登入名，並在與 `*` 同步時進行替換。沒有佔位符的過濾器（如預設過濾器）在登入時會返回所有匹配的條目，而 FerrisKey 會選擇使用者名稱屬性等於登入名的條目。
+
+<span id="synchronisation" />
+
+## 同步
+
+<img class="only-light" src="/dashboard/ldap_sync-light.jpg" alt="FerrisKey LDAP 提供程式同步設定，顯示同步模式和間隔" />
+<img class="only-dark" src="/dashboard/ldap_sync-dark.jpg" alt="FerrisKey LDAP 提供程式同步設定，顯示同步模式和間隔" />
+
+該表單有三個同步設定：計劃同步、同步模式（匯入、強制或僅連結）和同步間隔。伺服器儲存並返回它們，但不執行操作：在 0.10.0 版本中，它不會按計劃執行任何同步，並且在執行開始時沒有任何程式讀取儲存的模式。
+
+執行僅在有人請求時發生，可從提供程式頁面或透過 API 發起，並且始終以匯入方式執行：
+
+```text
+POST /realms/{realm_name}/federation/providers/{id}/sync-users
+```
+
+<Callout variant="warning" title="僅強制和連結模式不會執行">
+
+在僅強制或連結模式下，沒有端點會啟動執行，因此從目錄中消失的賬戶不會被同步禁用。它無法使用其密碼登入，因為繫結失敗，但沒有任何操作會禁用賬戶或結束其會話。請自行禁用或刪除它。
+
+</Callout>
+
+匯入會讀取搜尋過濾器返回的每個條目，並將其與身分域進行對比：
+
+| 目錄條目 | 執行的操作 |
+|---|---|
+| 尚未匯入，並且沒有本地賬戶使用該使用者名稱 | 建立賬戶：使用對映屬性的使用者名稱、電子郵件、名和姓，啟用，電子郵件未驗證。它還記錄與目錄條目的連結以及一個標記憑據，該憑據告訴控制檯該賬戶透過目錄登入 |
+| 已匯入，但電子郵件或姓名不同 | 更新它們並設定賬戶為啟用 |
+| 已匯入，沒有差異 | 不執行任何操作 |
+| 尚未匯入，但本地賬戶有該使用者名稱 | 保持本地賬戶不變，並在 `failed` 中計入該條目。目錄不能宣告已經存在的賬戶 |
+
+響應報告執行情況：`total_processed`、`created`、`updated`、`disabled`、`failed`、`started_at` 和 `completed_at`。`disabled` 匯入時總是 0。提供者記錄不會儲存過去執行的結果：`last_sync_at` 和 `last_sync_status` 保持為空，因此如果需要歷史記錄，請保留響應。
+
+<span id="api-reference" />
+
+## API參考
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/federation/providers` | 列出域的提供者 |
+| `POST` | `/realms/{realm_name}/federation/providers` | 建立提供者 |
+| `GET` | `/realms/{realm_name}/federation/providers/{id}` | 讀取一個提供者 |
+| `PUT` | `/realms/{realm_name}/federation/providers/{id}` | 更新提供者 |
+| `DELETE` | `/realms/{realm_name}/federation/providers/{id}` | 刪除提供者 |
+| `POST` | `/realms/{realm_name}/federation/providers/{id}/test-connection` | 驗證地址並繫結 |
+| `POST` | `/realms/{realm_name}/federation/providers/{id}/sync-users` | 立即執行同步 |
+
+```json title="POST /realms/acme/federation/providers"
+{
+  "name": "Corporate directory",
+  "provider_type": "Ldap",
+  "enabled": true,
+  "priority": 0,
+  "sync_enabled": false,
+  "sync_mode": "Import",
+  "config": {
+    "connection": {
+      "server_url": "ldap.example.com",
+      "port": 636,
+      "use_tls": true,
+      "use_starttls": false,
+      "connection_timeout_seconds": 30
+    },
+    "bind": {
+      "bind_dn": "cn=ferriskey,ou=service,dc=example,dc=com",
+      "bind_password_encrypted": "<base64 of the bind password>"
+    },
+    "search": {
+      "base_dn": "dc=example,dc=com",
+      "user_search_filter": "(objectClass=person)"
+    },
+    "attributes": {
+      "username": "uid",
+      "email": "mail",
+      "first_name": "givenName",
+      "last_name": "sn"
+    }
+  }
+}
+```
+
+`sync_mode` 必須是 `Import`、`Force` 或 `LinkOnly`，任何其他值為 400，即使伺服器儲存了該模式但不執行操作。
+
+列表是分頁的，如 [API 列表](/zh-TW/discover/guides/api-listings) 中所述。它會基於 `search`、`name`、`provider_type`、`provider_family`（`ldap` 或 `kerberos`）、`enabled`、`sync_enabled`、`synced`、`sync_mode`、`created_from` 和 `created_to` 進行過濾，並基於 `name`、`priority`、`enabled`、`last_sync_at`、`created_at` 或 `updated_at` 進行排序。
+
+權限：`view_realm` 可讀取，`manage_realm` 可建立、更新、刪除、測試或同步。
+
+一個不攜帶 `config` 的 `PUT` 會保持儲存的配置，包括繫結憑據，不做任何更改。一個攜帶 `config` 的 `PUT` 會完全替換它，因此需要在同一請求中再次傳送憑據。這就是為什麼每當你更改連線時，控制檯都會要求你重新輸入憑據的原因。
+
+<span id="what-gets-recorded" />
+
+## 什麼被記錄
+
+同步不會被記錄在任何地方，除了它的響應。身分聯合服務不會寫入任何 [SeaWatch](/zh-TW/modules/seawatch/overview) 事件，也不會觸發任何 [webhook](/zh-TW/modules/webhooks/overview)，因此執行建立的賬戶不會觸發 `user_created` 或 `user.created`。如果匯入帶來了它不應該有的四千個賬戶，你將在執行的響應中發現這一點。
+
+::::card-group{cols=2}
+:::card{label="配置提供程式" icon="lucide:link" href="/zh-TW/modules/abyss/providers"}
+身分聯合的另一種形式：Google、GitHub 以及任何 OAuth2 或 OIDC 提供者。
+:::
+:::card{label="密碼策略" icon="lucide:key-round" href="/zh-TW/discover/core-concepts/password-policy"}
+本地策略仍然適用於 FerrisKey 自行儲存的密碼。
+:::
+::::

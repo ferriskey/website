@@ -1,0 +1,114 @@
+---
+title: "联合流程"
+description: "Abyss 代理流程如何工作：重定向、回调、令牌交换、配置文件查找和账户解析。"
+icon: git-branch
+order: 42
+---
+
+<span id="federation-flow" />
+
+# 联合流程
+
+当用户通过外部提供者登录时，FerrisKey 会针对该提供者运行 OAuth2 授权码流程，将结果转换为本地用户，并向您的应用提供普通的 FerrisKey 授权码。提供者的令牌永远不会离开 FerrisKey。
+
+<span id="step-by-step" />
+
+## 逐步流程
+
+::::step-group
+:::step{title="用户选择提供者"}
+登录页面列出身份域中启用的提供者。每个按钮都指向 `GET /realms/{realm}/broker/{alias}/login`，携带您的应用的 `client_id` 和 `redirect_uri` ，以及 `response_type`（默认 `code`），并可选择 `scope`、`state`、`nonce`、`session_id`、`code_challenge` 和 `code_challenge_method`。
+
+FerrisKey 检查客户端是否存在，`redirect_uri` 是否是其启用的重定向 URI 之一，以及提供者是否存在且已启用（禁用的提供者会返回 403）。如果客户端需要 PKCE，请求必须携带 S256 `code_challenge`。
+:::
+
+:::step{title="FerrisKey 重定向到提供者"}
+FerrisKey 会存储一个为期十分钟的代理会话，并以 302 响应提供者的 `authorization_url`。该 URL 包含：
+
+- 提供者的 `client_id`
+- `{base URL}/realms/{realm}/broker/{alias}/endpoint` 的 `redirect_uri`
+- `response_type=code`
+- 一个随机 `state`，用于标识代理会话
+- 当 `scopes` 不为空时的 `scope`
+- 当 `use_pkce` 开启时，带有 `code_challenge_method=S256` 的 `code_challenge`
+- 您应用发送的 `nonce`（如果有）
+:::
+
+:::step{title="用户在提供者处进行认证"}
+FerrisKey 不参与。用户使用提供者要求的任何方式登录，包括其自己的多因素提示。
+:::
+
+:::step{title="提供者回调"}
+提供者将浏览器重定向到 `GET /realms/{realm}/broker/{alias}/endpoint`，并携带 `code` 和 `state`。FerrisKey 在该身份域的代理会话中查找 `state`。未知或已过期的会话返回 400，而提供者的 `error` 参数则终止流程并返回 401，同时重复提供者的错误和描述。
+
+如果该身份域在 [Compass](/zh-CN/modules/compass/overview) 中记录流程，则该交换显示为名为 `broker_<alias>` 的流程，其中包含 `idp_redirect` 步骤和 `idp_callback` 步骤。这两步在回调到达时记录。
+:::
+
+:::step{title="FerrisKey 交换授权码"}
+FerrisKey 将 `grant_type=authorization_code`、`code`、回调 URL、`client_id` 和 `client_secret` 以表单字段的形式发布到提供者的 `token_url`。当启用 PKCE 时，它会添加 `code_verifier`。该调用有 5 秒的连接超时和 10 秒的总超时，并且不跟随重定向。
+:::
+
+:::step{title="FerrisKey 读取配置文件"}
+在同时配置了 `jwks_url` 和 `issuer` 并且响应中有 ID 令牌的情况下，FerrisKey 验证令牌并读取其中的声明。否则，它会使用提供者的访问令牌调用 `userinfo_url`。参见 [ID 令牌或用户信息](/zh-CN/modules/abyss/overview#id-token-or-userinfo)。
+:::
+
+:::step{title="FerrisKey 解析账户"}
+配置文件与本地用户匹配，或创建新用户。规则在下一节中。
+:::
+
+:::step{title="FerrisKey 颁发自己的授权码"}
+FerrisKey 创建一个授权码，或完成在登录页面上开始的登录会话。如果客户端需要用户同意，浏览器会先转到同意界面。否则，它会被重定向到你的 `redirect_uri`，并带上 `code` 和你原来的 `state`。然后你的应用程序像其他情况一样，在令牌端点交换该代码。
+:::
+::::
+
+<span id="account-resolution" />
+
+## 账户解析
+
+FerrisKey 按以下顺序尝试规则，并在第一个适用的规则处停止。
+
+| 情况 | 结果 |
+|---|---|
+| 该提供商存在链接以及提供商的 `sub` | 用户以已链接的账户登录。启用 `store_token` 时，存储的提供商令牌将被刷新 |
+| 无链接，本身份域的本地用户具有相同邮箱，`trust_email` 已启用，提供商报告 `email_verified: true`，并且本地用户的邮箱也已验证 | FerrisKey 创建指向该账户的链接，用户登录 |
+| 上面没有任何操作，并且 `link_only` 已开启 | 登录被拒绝，返回 403：“未找到可用于链接的现有账户” |
+| 上面没有任何操作，并且 `link_only` 已关闭 | FerrisKey 创建一个新账户并链接到它 |
+
+通过电子邮件进行链接需要满足所有三个条件，因为电子邮件地址只有在经过验证时才是身份的证明。如果缺少一个条件，FerrisKey 不会进行链接；它会继续处理最后两行。然后如果邮件匹配，账户创建会失败，因为在一个身份域中电子邮件是唯一的。用户看到的是错误，而不是别人的账户。
+
+新账户会先从`preferred_username`、邮箱、`{alias}_{sub}`获取用户名。如果该用户名已经在身份域内被占用，登录失败。账户已启用，没有密码，且`email_verified`只有在服务提供商允许且`trust_email`开启时才设置。
+
+解决后，禁用账户会被返回登录页面，并显示“用户账户已被禁用”的提示。
+
+<span id="links" />
+
+## 链接
+
+链路是`identity_provider_links`中的一行。它将一个本地用户绑定到一个提供者的身份，并记录该提供者的主体（`sub`）、提供者报告的用户名，以及当`store_token`开启时，记录该提供者的访问令牌。每个提供者最多拥有一个链接，而一个提供者的身份最多链接到一个用户。
+
+链接是通过流程创建的，从不通过 API 创建。管理员可以列出用户的链接并删除其中一个；账户会保留，只有通过这种方式链接才会消失。请参见 [用户的链接](/zh-CN/modules/abyss/providers#links-on-a-user)。
+
+中介账户没有凭据记录：用户能够登录是因为链接存在，而不是因为存储了密码或其他凭据。从目录导入的账户有所不同，因为 [用户联合](/zh-CN/modules/abyss/user-federation) 会为其添加标记凭据。
+
+<span id="when-it-fails" />
+
+## 当失败时
+
+| 原因 | 响应 |
+|---|---|
+| 提供者已禁用 | 403 “提供者已禁用” |
+| 未知或已过期的中介会话 | 400 |
+| 提供者返回了 `error` | 401，附带提供者的错误和描述 |
+| 令牌交换或用户信息调用失败 | 503 |
+| ID 令牌验证失败 | 400 “来自身份提供者的无效 ID 令牌” |
+| 提供者端点解析为私有地址、本地回环地址或链路本地地址，或者使用明文 `http` | 400 “无效的提供者 URL” |
+| `link_only` 且没有匹配的账户 | 403 “未找到可链接的现有账户” |
+| 账户被禁用 | 重定向到登录页面，并显示消息“用户账户已被禁用” |
+
+地址检查适用于 FerrisKey 从服务器调用的令牌、用户信息和 JWKS 端点。它与 Webhook 使用的保护机制相同，`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true` 在开发时会放宽此检查。
+
+<span id="directories" />
+
+## 目录
+
+目录不会使用此流程。LDAP 和 Active Directory 账户通过同步导入，并在登录时通过绑定进行检查：见 [用户联合](/zh-CN/modules/abyss/user-federation)

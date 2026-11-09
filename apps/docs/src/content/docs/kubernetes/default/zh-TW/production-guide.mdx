@@ -1,0 +1,281 @@
+---
+title: "生產指南"
+description: "在 Kubernetes 上執行 FerrisKey 的生產檢查清單：資料庫、TLS、擴充套件、監控和安全性。"
+icon: shield
+order: 4
+---
+
+<span id="production-guide" />
+
+# 生產指南
+
+在 FerrisKey 部署真正使用者之前需要更改的內容。示例使用 [Helm chart](/zh-TW/kubernetes/helm-chart)。[操作員](/zh-TW/kubernetes/operator) 設定了固定的 pod 規範，並且無法應用其中的大部分內容。
+
+<span id="database" />
+
+## 資料庫
+
+:::callout{variant="danger"}
+該Chart自帶 `postgresql.enabled: true`，因此首次安裝無需任何前置條件即可工作。嵌入的 PostgreSQL 是一個單一 StatefulSet，沒有複製和備份。請設定 `postgresql.enabled: false` 並指向真實的資料庫。
+:::
+
+- 使用託管服務（RDS、Cloud SQL、Azure Database for PostgreSQL）或有人實際運維的 PostgreSQL 叢集。
+- 加密連線並檢查伺服器證書，如下所述。
+- 給 FerrisKey 它自己的資料庫，而不是共享資料庫中的一個模式。
+- 設定帶有時間點恢復的自動備份，並至少恢復一次以證明其可用。
+- 計算連線數。每個副本最多開啟 `DATABASE_MAX_CONNECTIONS`（預設 20），外加兩個用於變更通知的池外連線。將 `replicas × (DATABASE_MAX_CONNECTIONS + 2)` 保持在伺服器的 `max_connections` 以下，為遷移作業留出一些空間。
+- 直接連線到 PostgreSQL，或透過會話模式的連線池。參見 [擴充套件與快取](#scaling-out-and-caches) 瞭解為什麼像 PgBouncer 這樣的事務模式連線池不適合。
+
+<span id="encrypt-the-database-connection" />
+
+### 加密資料庫連線
+
+Chart和 API 都沒有用於資料庫的 TLS 設定。連線是透過 sqlx 建立的，它讀取 libpq 環境變數 `PGSSLMODE` 和 `PGSSLROOTCERT`。透過Chart的 `env` 值設定它們。未設定時，`PGSSLMODE` 為 `prefer`。
+
+| `PGSSLMODE` | 行為 |
+|---|---|
+| `prefer`（預設） | 當伺服器提供 TLS 時使用 TLS，但不檢查證書，否則使用明文 |
+| `require` | 如果伺服器不提供 TLS 則失敗，但接受任何證書，因此加密但不驗證伺服器 |
+| `verify-ca` | 檢查證書鏈 |
+| `verify-full` | 檢查鏈並確保證書匹配 `database.host` |
+
+儘可能使用 `verify-full`。由公共 CA 簽發的證書無需進一步設定即可驗證。對於私有 CA，掛載其證書並將 `PGSSLROOTCERT` 指向該檔案。遷移作業會構建自己的 `DATABASE_URL`，並且不使用任何 `sslmode`，因此需要相同的變數。`common.env`、`common.volumes` 和 `common.volumeMounts` 可存取每個工作負載，從而保持程式碼片段簡潔：
+
+```yaml title="values.yaml"
+common:
+  env:
+    - name: PGSSLMODE
+      value: verify-full
+    - name: PGSSLROOTCERT
+      value: /etc/ferriskey/db-ca/ca.crt
+  volumes:
+    - name: db-ca
+      secret:
+        secretName: ferriskey-db-ca
+  volumeMounts:
+    - name: db-ca
+      mountPath: /etc/ferriskey/db-ca
+      readOnly: true
+```
+
+<span id="tls-and-exposure" />
+
+## TLS 和暴露
+
+讓Chart渲染路由。它會將 `/` 放在控制檯上，將 `api.server.rootPath` 放在 API 上，使用同一個主機名，這正是控制檯預設期望的。
+
+```yaml title="values.yaml"
+publicHost: iam.yourorg.com
+
+ingress:
+  enabled: true
+  class: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  tls:
+    - hosts:
+        - iam.yourorg.com
+      secretName: ferriskey-tls
+```
+
+在此佈局中，控制檯和 API 共享一個源，因此 `api.server.allowedOrigins` 可以保持為空。它適用於每條路由，包括那些不包含域的路由：`/config`、健康檢查以及 API 文件。每個客戶端的 web 源僅覆蓋作用域在特定域的路由，因此從不同於 API 的源提供的控制檯必須在此列出其源。
+
+除非另有說明，否則Chart會使用 `https` 構建控制檯 URL。如果您提供的是普通 HTTP，比如用於測試環境，請將 `api.webapp.protocol` 和 `webapp.api.protocol` 設定為 `http`。`webapp.api.url` 中的方案或主機錯誤會導致瀏覽器拒絕 API 請求，因為控制檯的內容安全策略只允許該源。[控制檯和 API URL](/zh-TW/kubernetes/helm-chart#the-console-and-the-api-url) 有詳細資訊。
+
+API 前面的代理必須保持 `Host` 不變，並設定 `X-Forwarded-Proto: https`：FerrisKey 從這兩個頭構建每個請求的 OIDC 簽發者。如果你使用 SAML，也需要設定 `SERVER_PUBLIC_URL`（參見 [配置指南](/zh-TW/discover/guides/configuration)）：實體 ID 被簽入每個斷言中，並且不能隨著請求到達的主機名而改變。
+
+如果你的叢集使用 Gateway API，將 `gatewayAPI.httpRoute` 的 Ingress 塊替換為你閘道器的父引用。無論如何，`publicHost` 都是必需的。
+
+<span id="admin-credentials" />
+
+## 管理員憑據
+
+Chart 在首次安裝時會將管理員密碼生成到一個 Secret 中。在生產環境中，請自行建立 Secret，使其值來自你儲存金鑰的地方，並將 chart 指向它：
+
+```yaml title="values.yaml"
+api:
+  admin:
+    username: admin
+    email: admin@yourorg.com
+    passwordSecret:
+      create: false
+      name: ferriskey-admin
+      key: password
+```
+
+隨機生成密碼，至少16個字元，並按你實際遵循的計劃輪換它。`ADMIN_PASSWORD` 僅用於初始化賬戶：一旦管理員設定了密碼，FerrisKey 會忽略該變數，所以請在控制檯中輪換密碼，而不是透過編輯 Secret 來輪換。
+
+<span id="scaling-out-and-caches" />
+
+## 擴充套件和快取
+
+API Pod 本身不儲存狀態，因此擴充套件只是副本數量的增加。它們確實在記憶體中快取讀操作，這決定了它們與資料庫之間可能存在的內容。
+
+| 快取了什麼 | 快取多久 | 其他副本如何追趕 |
+|---|---|---|
+| Realm、realm 設定、客戶端，以及服務賬戶的角色和組 | `CONFIG_CACHE_TTL_SECONDS`（預設 5 秒） | 一次寫操作會清除處理它的副本上的條目。其他副本在條目過期時讀取更改 |
+| 會話和存取權杖的撤銷狀態 | 相同的值，最多 30 秒 | PostgreSQL `LISTEN`/`NOTIFY` 在通道 `ferriskey_token_state` 上：在一個副本上的登出或撤銷會立即清空其他副本的快取 |
+| 客戶端註冊的 Web 來源（CORS） | 30 秒，固定 | 更改來源會重新整理處理它的副本。其他副本將在 30 秒內跟進 |
+
+因此，對身分域或客戶端的更改在最多快取延遲後才會在每個副本上可見，而不是立即可見。對服務賬戶的角色更改只有在相同的延遲後才會影響新的 `client_credentials` 權杖。
+
+每個副本每15秒傳送一次心跳，並且在45秒內未收到任何響應時會重新訂閱，從而可以發現連線中斷。當副本沒有有效訂閱時，它會跳過快取，從PostgreSQL讀取會話和撤銷資訊。
+
+`LISTEN` 需要一個能保持會話的連線，而事務模式的連線池器（如PgBouncer）無法傳遞通知。這樣，副本就永遠無法得知其他地方的撤銷操作：在一個副本上撤銷的權杖或結束的會話可能在其他副本上保持有效，直到它們的快取條目過期，並且監聽器每次放棄等待時都會記錄 `the token and session change listener heard nothing, reconnecting`。將 `DATABASE_HOST` 指向 PostgreSQL 本身，或指向會話模式的連線池器。如果必須使用事務池器，請設定 `CONFIG_CACHE_TTL_SECONDS=0`：這會關閉快取和監聽器，每個請求都直接從資料庫讀取。
+
+[配置指南](/zh-TW/discover/guides/configuration#caching) 列出了這些設定。
+
+<span id="resources" />
+
+### 資源
+
+資源是按照工作負載設定的；沒有全域性覆蓋。
+
+```yaml title="values.yaml"
+api:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+webapp:
+  replicas: 2
+```
+
+預設 API 限額是 512Mi。Argon2 與程序的其他部分共享該限額：`PASSWORD_HASH_MEMORY_BUDGET_MIB` 限制一次記憶體密碼雜湊可使用的記憶體，預設為 256 MiB，即預設限額的一半。如果提高預算，或者 `PASSWORD_HASH_MEMORY_KIB`，將 `api.resources.limits.memory` 至少增加相同的量，因為預算是在程序持有的所有其他資源之外使用的。參見 [密碼雜湊](/zh-TW/discover/guides/configuration#password-hashing)。
+
+該Chart不會建立 PodDisruptionBudget。請新增一個，以便節點清空時不會一次性刪除所有副本：
+
+```yaml title="pdb.yaml"
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ferriskey-api
+  namespace: ferriskey
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ferriskey-api
+      app.kubernetes.io/instance: ferriskey
+```
+
+`instance` 標籤是釋出名稱，或者當你設定它時是 `nameOverride`。
+
+<span id="health-probes" />
+
+## 健康探針
+
+```
+GET /health/live
+GET /health/ready
+```
+
+兩個探針都以兩秒超時時間對資料庫執行 `SELECT 1`，如果失敗則返回 `503`。就緒性也報告響應時間，響應時間超過一秒的資料庫在正文中會顯示為 `status: slow` 和 `is_healthy: false`，HTTP 狀態仍為 `200`。Chart預設連線兩者，位於 `/api/health/live` 和 `/api/health/ready`，因為它設定了 `rootPath: /api`。
+
+:::callout{variant="warning"}
+由於存活性依賴於資料庫，資料庫中斷也會導致其失敗。使用Chart預設值（`periodSeconds: 10`、`failureThreshold: 3`）時，kubelet 會在大約 30 秒中斷後重啟 API 容器。如果你希望在資料庫故障期間繼續保持 pods 執行，請將存活性探針替換為 TCP 檢查，並保持就緒性不變：
+
+```yaml title="values.yaml"
+api:
+  livenessProbe:
+    httpGet: null
+    tcpSocket:
+      port: http
+```
+:::
+
+:::callout{variant="info"}
+兩個探針都是實際路徑，但沒有 OpenAPI 註釋，因此它們不會出現在生成的規範或 API 文件 UI 中。它們是部署合同的一部分，而不是 API 合同的一部分，所以不要在 `/scalar` 中尋找它們。
+:::
+
+保持 readiness 指向 `/health/ready`，而不是 realm 路徑：基於 realm 的 URL 會使探針依賴於 realm 的存在，而如果有人重新命名了 realm 導致 readiness 探針失敗，將會使相關的 pods 也被關閉。
+
+<span id="monitoring" />
+
+## 監控
+
+API 在 `<rootPath>/metrics` 上提供 Prometheus 指標，`<rootPath>/metrics` 就是帶有 chart 的 `/api/metrics`。在安裝 Prometheus Operator 後，chart 可以為您建立 ServiceMonitor，路徑已設定好:
+
+```yaml title="values.yaml"
+api:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+```
+
+警報關於錯誤率、請求延遲和資料庫連線失敗。對於跟蹤，請啟用 OTLP 匯出器。API 在啟用可觀察性且沒有 `METRICS_ENDPOINT` 的情況下會拒絕啟動，並且Chart中沒有該項的值，因此請透過 `api.env` 傳遞：
+
+```yaml title="values.yaml"
+opentelemetry:
+  enabled: true
+  otlpEndpoint: http://tempo.observability.svc.cluster.local:4317
+
+api:
+  env:
+    - name: METRICS_ENDPOINT
+      value: http://otel-collector.observability.svc.cluster.local:4317
+```
+
+`opentelemetry.enabled` 在 API 上設定 `ACTIVE_OBSERVABILITY` 和 `OTLP_ENDPOINT`。
+
+<span id="security-hardening" />
+
+## 安全加固
+
+Chart已經以非 root 身分執行每個容器，使用只讀根檔案系統，所有權限被禁用，並使用 `RuntimeDefault` seccomp 配置檔案。其餘部分由你負責。
+
+<span id="restrict-what-the-ingress-exposes" />
+
+### 限制 Ingress 暴露的內容
+
+Chart的 Ingress 會將整個 `rootPath` 傳送到 API，並且其下的幾個路由不需要權杖：`/api/metrics`、`/api/config`（版本和環境）、以及 API 文件（`/api/scalar`、`/api/swagger-ui`、`/api/redoc`、`/api/rapidoc` 和 `/api/api-docs/openapi.json`）。除非您的 Ingress 或閘道器阻止它們，否則網際網路上的任何人都可以讀取它們。在公共路由上為這些路徑回答 `404` 或 `403`，或者僅在內部主機名上提供它們。
+
+kubelet 探測器和 ServiceMonitor 直接存取 pods，而不是透過 Ingress，因此在 Ingress 上阻止這些路徑不會影響它們。
+
+<span id="secrets-and-client-addresses" />
+
+### 金鑰和客戶端地址
+
+- 透過 Kubernetes Secret 設定 `SECRETS_ENCRYPTION_KEYS`，具體方法見 [Helm Chart 頁面](/zh-TW/kubernetes/helm-chart#environment-variables-the-chart-has-no-value-for)。如果未設定，身分域簽名金鑰、TOTP 種子和 SMTP 密碼將以明文儲存在資料庫中，API 每次啟動都會記錄警告。參見[靜態儲存加密](/zh-TW/discover/guides/secrets-at-rest)。
+- 只有在 API 僅允許代理存取時，才設定 `SERVER_TRUST_FORWARDED_FOR=true`。此開關預設關閉；在 Ingress 後方，關閉時所有呼叫者都共用代理地址：審計事件和 [Compass](/zh-TW/modules/compass/overview) 流程記錄的是代理地址，限速機制也會把所有使用者視為同一個呼叫者。FerrisKey 讀取 `X-Forwarded-For` 的第一個條目，因此代理必須替換該請求頭，而不能追加地址。如果開啟此開關但 API 仍可被直接存取，客戶端便能偽造任意地址。詳見[客戶端地址與限速](/zh-TW/discover/guides/configuration#client-addresses-and-throttles)。
+
+<span id="everything-else" />
+
+### 其他一切
+
+- 網路策略。API 需要 PostgreSQL，並且如果你使用 Abyss，還需要對外部身分提供者、你的 SMTP 中繼、你的 webhook 端點以及客戶端的後臺登出 URL 的出站存取權限。允許你的入口控制器進入，如果 Prometheus 抓取 pod，也允許它進入。
+- 外部金鑰管理。從 Vault、外部金鑰操作器或你的雲金鑰管理器提供 `database.passwordSecret` 和 `api.admin.passwordSecret`，而不是讓 chart 生成它們。
+- 在 CI 中對你實際部署的映象進行映象掃描。
+- 審計轉發。SeaWatch 會記錄事件，無論你是否轉發它們；[將它們傳送到你的 SIEM](/zh-TW/modules/seawatch/querying)。
+- 日誌格式。設定 `api.log.json: true`，以便結構化日誌在到達聚合器時保持完整。
+
+<span id="checklist" />
+
+## 清單
+
+| 專案 | 狀態 |
+|---|---|
+| `postgresql.enabled: false`，外部資料庫 | |
+| API 和遷移作業上的 `PGSSLMODE=verify-full` | |
+| 伺服器 `max_connections` 下的連線預算 | |
+| 透過會話模式池或直接存取 PostgreSQL | |
+| 配置了資料庫備份並測試了恢復 | |
+| TLS 已終止，HTTP 已重定向 | |
+| 代理設定 `Host` 和 `X-Forwarded-Proto` | |
+| 如果使用 SAML 則設定 `SERVER_PUBLIC_URL` | |
+| `/api/metrics`、`/api/config` 及 API 文件在公共路由上被封鎖 | |
+| `api.server.allowedOrigins` 為空，或僅列出由 API 分離提供的控制檯源 | |
+| 管理員密碼來自現有的 Secret | |
+| `SECRETS_ENCRYPTION_KEYS` 從 Secret 設定並已備份 | |
+| `SERVER_TRUST_FORWARDED_FOR=true` 位於您控制的代理後面 | |
+| 按工作負載設定資源請求和限制，記憶體限制高於 Argon2 預算 | |
+| PodDisruptionBudget 已應用 | |
+| ServiceMonitor 已啟用並已連線警報 | |
+| 網路策略已應用 | |
+| 金鑰來源於外部 | |
+| SeaWatch 事件已轉發 | |

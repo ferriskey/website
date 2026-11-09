@@ -1,0 +1,197 @@
+---
+title: "用户联合"
+description: "将 LDAP 或 Active Directory 树连接到域：连接、搜索、同步和登录。"
+icon: folder-tree
+order: 43
+---
+
+<span id="user-federation" />
+
+# 用户联合
+
+联合身份认证有两种形式，Abyss 涵盖了这两种。
+
+身份代理将用户发送到其他提供商进行身份认证。FerrisKey 从不查看凭据；它接收一个断言并发出自己的授权码。这就是[配置提供商](/zh-CN/modules/abyss/providers)的内容。
+
+用户联合是另一种形式：账户存在于你已经运行的目录中，FerrisKey 读取这些账户。同步会将账户导入到身份域中，以便可以在本地附加角色、组和组织。在登录时，用户在你的登录页面输入密码，FerrisKey 会对目录进行绑定以进行检查。密码从未存储在 FerrisKey 中。
+
+当现有的 LDAP 或 Active Directory 树是存在用户的事实来源时，请使用用户联合；而当另一个系统是登录用户的事实来源时，请使用身份代理。
+
+<span id="provider-types" />
+
+## 提供商类型
+
+| 类型 | 状态 |
+|---|---|
+| LDAP 和活动目录 | 支持。已测试连接、搜索账户、导入并在登录时检查。API 调用类型 `Ldap` 和 `ActiveDirectory`，并将它们以相同方式处理 |
+| Kerberos | 仅存储。服务器保留提供程序记录，但既不同步也不测试它 |
+
+以下所有内容描述的是 LDAP 提供程序。
+
+<span id="creating-a-provider" />
+
+## 创建提供程序
+
+在管理控制台中打开用户联合，并添加提供程序。表单分为目录集成必须解决的四个方面：提供程序是谁、如何访问、如何查找账户以及如何运行同步。
+
+<img class="only-light" src="/dashboard/ldap_provider-light.jpg" alt="FerrisKey 新 LDAP 提供程序表单显示基础设置和连接设置" />
+<img class="only-dark" src="/dashboard/ldap_provider-dark.jpg" alt="FerrisKey 新 LDAP 提供程序表单显示基础设置和连接设置" />
+
+<span id="basic-settings" />
+
+### 基础设置
+
+| 字段 | 说明 |
+|---|---|
+| 提供程序名称 | 在控制台中命名提供商。必须在身份域内唯一 |
+| 优先级 | 控制台提供主要、次要、开发和遗留，分别存储为 0、10、20 和 30。服务器保留该数字，并用它来排序提供商列表。登录时不参考它 |
+| 已启用 | 被禁用的提供商会拒绝其管理的账户登录。控制台会将其同步显示为灰色，但如果请求，API 仍然会执行同步。已导入的账户保持已关联状态 |
+
+禁用提供商会将目录移出循环，同时锁定其管理的账户：其管理的每个账户都无法登录，直到你再次启用它。删除提供商会切断与其导入账户的关联。
+
+<span id="connection-settings" />
+
+### 连接设置
+
+| 字段 | 说明 |
+|---|---|
+| 连接 URL | 目录地址。如果没有指定方案，当启用 TLS 时假定为 `ldaps://`，否则为 `ldap://` |
+| 基础 DN | 搜索账户的根，例如 `dc=example,dc=com` |
+| 绑定 DN | 用于读取目录的服务账户。如果为空，目录将以匿名方式读取 |
+| 绑定凭据 | 服务账户的密码。以发送状态存储，且从不返回：读取时显示 `********` |
+| 使用 TLS | 加密与目录的连接 |
+
+<Callout variant="warning" title="绑定凭据未加密">
+
+凭据存储在提供商的 `config` 下的 `bind.bind_password_encrypted` 中。尽管名称如此，它并没有被加密。控制台在发送前会对该值进行 Base64 编码，这只是编码，而不是保护。服务器在可能的情况下会将该值按 Base64 解码，否则直接使用原值，因此通过 API 创建提供商时请发送 Base64 形式。`SECRETS_ENCRYPTION_KEYS` 不涵盖此列。将凭据视为明文密钥，给服务账号只读权限，并参见 [静态密钥](/zh-CN/discover/guides/secrets-at-rest)。
+
+</Callout>
+
+<Callout variant="warning" title="匿名绑定通常不是你想要的">
+
+大多数目录对匿名绑定返回的是有限视图，或完全没有返回。如果连接测试通过但同步没有导入任何账号，缺少 Bind DN 是首先要检查的。
+
+</Callout>
+
+测试连接会连接、绑定、读取基础 DN 并尝试搜索过滤器。它不会触碰任何账户，因此在第一次同步前在生产环境中运行是安全的：
+
+```text
+POST /realms/{realm_name}/federation/providers/{id}/test-connection
+```
+
+答案包含 `success`、`message`，并且当连接足够深入时，还会有 `details.latency_ms`。非 LDAP 或 Active Directory 的提供程序会返回 `success: false`，并附带“连接测试不支持的提供程序类型”。
+
+<span id="user-search-settings" />
+
+### 用户搜索设置
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| 用户搜索过滤器 | `(objectClass=person)` | 应用于查找的 LDAP 过滤器 |
+
+将其缩小到实际包含你人员的子树或对象类。匹配服务或机器对象的过滤器会将它们导入为用户。
+
+过滤器可能包含 `{username}` 或 `{0}`。在登录时，FerrisKey 会将其替换为登录名，并在与 `*` 同步时进行替换。没有占位符的过滤器（如默认过滤器）在登录时会返回所有匹配的条目，而 FerrisKey 会选择用户名属性等于登录名的条目。
+
+<span id="synchronisation" />
+
+## 同步
+
+<img class="only-light" src="/dashboard/ldap_sync-light.jpg" alt="FerrisKey LDAP 提供程序同步设置，显示同步模式和间隔" />
+<img class="only-dark" src="/dashboard/ldap_sync-dark.jpg" alt="FerrisKey LDAP 提供程序同步设置，显示同步模式和间隔" />
+
+该表单有三个同步设置：计划同步、同步模式（导入、强制或仅链接）和同步间隔。服务器存储并返回它们，但不执行操作：在 0.10.0 版本中，它不会按计划运行任何同步，并且在运行开始时没有任何程序读取存储的模式。
+
+运行仅在有人请求时发生，可从提供程序页面或通过 API 发起，并且始终以导入方式运行：
+
+```text
+POST /realms/{realm_name}/federation/providers/{id}/sync-users
+```
+
+<Callout variant="warning" title="仅强制和链接模式不会运行">
+
+在仅强制或链接模式下，没有端点会启动运行，因此从目录中消失的账户不会被同步禁用。它无法使用其密码登录，因为绑定失败，但没有任何操作会禁用账户或结束其会话。请自行禁用或删除它。
+
+</Callout>
+
+导入会读取搜索过滤器返回的每个条目，并将其与身份域进行对比：
+
+| 目录条目 | 运行的操作 |
+|---|---|
+| 尚未导入，并且没有本地账户使用该用户名 | 创建账户：使用映射属性的用户名、电子邮件、名和姓，启用，电子邮件未验证。它还记录与目录条目的链接以及一个标记凭据，该凭据告诉控制台该账户通过目录登录 |
+| 已导入，但电子邮件或姓名不同 | 更新它们并设置账户为启用 |
+| 已导入，没有差异 | 不执行任何操作 |
+| 尚未导入，但本地账户有该用户名 | 保持本地账户不变，并在 `failed` 中计入该条目。目录不能声明已经存在的账户 |
+
+响应报告运行情况：`total_processed`、`created`、`updated`、`disabled`、`failed`、`started_at` 和 `completed_at`。`disabled` 导入时总是 0。提供者记录不会保存过去运行的结果：`last_sync_at` 和 `last_sync_status` 保持为空，因此如果需要历史记录，请保留响应。
+
+<span id="api-reference" />
+
+## API参考
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/realms/{realm_name}/federation/providers` | 列出域的提供者 |
+| `POST` | `/realms/{realm_name}/federation/providers` | 创建提供者 |
+| `GET` | `/realms/{realm_name}/federation/providers/{id}` | 读取一个提供者 |
+| `PUT` | `/realms/{realm_name}/federation/providers/{id}` | 更新提供者 |
+| `DELETE` | `/realms/{realm_name}/federation/providers/{id}` | 删除提供者 |
+| `POST` | `/realms/{realm_name}/federation/providers/{id}/test-connection` | 验证地址并绑定 |
+| `POST` | `/realms/{realm_name}/federation/providers/{id}/sync-users` | 立即运行同步 |
+
+```json title="POST /realms/acme/federation/providers"
+{
+  "name": "Corporate directory",
+  "provider_type": "Ldap",
+  "enabled": true,
+  "priority": 0,
+  "sync_enabled": false,
+  "sync_mode": "Import",
+  "config": {
+    "connection": {
+      "server_url": "ldap.example.com",
+      "port": 636,
+      "use_tls": true,
+      "use_starttls": false,
+      "connection_timeout_seconds": 30
+    },
+    "bind": {
+      "bind_dn": "cn=ferriskey,ou=service,dc=example,dc=com",
+      "bind_password_encrypted": "<base64 of the bind password>"
+    },
+    "search": {
+      "base_dn": "dc=example,dc=com",
+      "user_search_filter": "(objectClass=person)"
+    },
+    "attributes": {
+      "username": "uid",
+      "email": "mail",
+      "first_name": "givenName",
+      "last_name": "sn"
+    }
+  }
+}
+```
+
+`sync_mode` 必须是 `Import`、`Force` 或 `LinkOnly`，任何其他值为 400，即使服务器存储了该模式但不执行操作。
+
+列表是分页的，如 [API 列表](/zh-CN/discover/guides/api-listings) 中所述。它会基于 `search`、`name`、`provider_type`、`provider_family`（`ldap` 或 `kerberos`）、`enabled`、`sync_enabled`、`synced`、`sync_mode`、`created_from` 和 `created_to` 进行过滤，并基于 `name`、`priority`、`enabled`、`last_sync_at`、`created_at` 或 `updated_at` 进行排序。
+
+权限：`view_realm` 可读取，`manage_realm` 可创建、更新、删除、测试或同步。
+
+一个不携带 `config` 的 `PUT` 会保持存储的配置，包括绑定凭据，不做任何更改。一个携带 `config` 的 `PUT` 会完全替换它，因此需要在同一请求中再次发送凭据。这就是为什么每当你更改连接时，控制台都会要求你重新输入凭据的原因。
+
+<span id="what-gets-recorded" />
+
+## 什么被记录
+
+同步不会被记录在任何地方，除了它的响应。身份联合服务不会写入任何 [SeaWatch](/zh-CN/modules/seawatch/overview) 事件，也不会触发任何 [webhook](/zh-CN/modules/webhooks/overview)，因此运行创建的账户不会触发 `user_created` 或 `user.created`。如果导入带来了它不应该有的四千个账户，你将在运行的响应中发现这一点。
+
+::::card-group{cols=2}
+:::card{label="配置提供程序" icon="lucide:link" href="/zh-CN/modules/abyss/providers"}
+身份联合的另一种形式：Google、GitHub 以及任何 OAuth2 或 OIDC 提供者。
+:::
+:::card{label="密码策略" icon="lucide:key-round" href="/zh-CN/discover/core-concepts/password-policy"}
+本地策略仍然适用于 FerrisKey 自行存储的密码。
+:::
+::::

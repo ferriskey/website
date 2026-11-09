@@ -5,15 +5,7 @@ import { useTranslations } from '../i18n/utils'
 import { modules } from '../lib/modules'
 import { moduleSprites } from '../lib/module-sprites'
 import { PixelSprite } from './pixel/pixel-sprite'
-
-function getClientLocale(): string {
-  const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
-  const cookie = match?.[1]
-  if (cookie === 'en' || cookie === 'fr') return cookie
-  const browser = (navigator.language || '').split('-')[0]
-  if (browser === 'en' || browser === 'fr') return browser
-  return 'en'
-}
+import { getClientLocale, supportedLocales } from '../i18n/locale'
 
 type Appearance = 'light' | 'dark'
 
@@ -45,7 +37,7 @@ interface WebsiteNavbarProps {
 function ModulesMenu({ label, allLabel }: { label: string; allLabel: string }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
-  const timer = useRef<number>()
+  const timer = useRef<number | undefined>(undefined)
 
   const show = () => {
     window.clearTimeout(timer.current)
@@ -124,7 +116,9 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
   const { appearance, toggle } = useAppearance()
   const t = useTranslations(locale)
   const appLinks = getAppLinks('website', appUrlOverrides)
-  const docsHref = appUrlOverrides?.docs ?? '/'
+  const docsBase = (appLinks.find((app) => app.id === 'docs')?.href ?? '/').replace(/\/$/, '')
+  const docsLocale = locale === 'fr' ? 'en' : locale
+  const docsHref = `${docsBase}/${docsLocale}/discover/getting-started`
   const blogHref = appLinks.find((app) => app.id === 'blog')?.href
 
   useEffect(() => {
@@ -172,14 +166,13 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
             <Icon icon="lucide:github" className="size-4" aria-hidden="true" />
             GitHub
           </a>
-          <div className="hidden items-center border-l border-border px-2 sm:flex">
+          <div className="flex items-center border-l border-border px-2">
             <LocaleSwitcher
-              locales={['en', 'fr']}
+              locales={[...supportedLocales]}
               currentLocale={locale}
               onLocaleChange={(nextLocale) => {
                 setLocale(nextLocale)
                 window.dispatchEvent(new CustomEvent('ferriskey:locale-change', { detail: { locale: nextLocale } }))
-                window.setTimeout(() => window.location.reload(), 50)
               }}
             />
           </div>

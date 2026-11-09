@@ -1,0 +1,294 @@
+---
+title: "协议映射器"
+description: "FerrisKey 中的十一种协议映射器类型，以及每种类型读取的配置键。"
+icon: arrow-right-left
+order: 51
+---
+
+<span id="protocol-mappers" />
+
+# 协议映射器
+
+协议映射器是将用户、组、组织和客户端数据转换为 JWT 声明的规则。每个映射器属于一个客户端作用域，并在令牌生成期间运行。
+
+映射器由 `mapper_type` 字符串标识，并携带 JSON `config`。FerrisKey 保留了 Keycloak 的名称，因此为 Keycloak 编写的配置在此仍然可识别：键使用点分隔，值为字符串，包括布尔值。FerrisKey 运行以下十一种映射器类型。
+
+<Callout variant="warning" title="键使用点分隔，而非 snake_case">
+
+配置键是 `claim.name`、`access.token.claim` 和 `user.attribute`，而不是 `claim_name`、`add_to_access_token` 或 `attribute`。`config` 字段是自由格式的 JSON，因此 API 接受未知键而不会报错，映射器随后会忽略它。一个默默无闻不做任何操作，或者写入你没有命名的声明的映射器，几乎总是因为键拼写错误。
+
+`mapper_type` 也是同样的情况。API 存储任何非空字符串，在令牌处理时，FerrisKey 跳过它不运行的类型并记录警告。控制台的映射器目录列出了 `oidc-address-mapper`、`oidc-hardcoded-role-mapper` 和 `oidc-role-name-mapper`，其表单提供了 Keycloak 字段，如 `userinfo.token.claim`、`introspection.token.claim`、`multivalued`、`claim.value.type` 和 `included.custom.audience`。FerrisKey 不运行这些类型，也不读取这些键。
+
+</Callout>
+
+<span id="keys-every-mapper-reads" />
+
+## 每个映射器读取的键
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `claim.name` | 每个映射器 | 目标声明。点路径可以嵌套，因此 `realm_access.roles` 会生成 `{"realm_access": {"roles": [...]}}`，而不是包含点的平面键 |
+| `access.token.claim` | `true` | 将声明包含在访问令牌中。可以是布尔值，或者字符串 `true`。任何其他字符串都视为 `false` |
+| `id.token.claim` | `true` | 将声明包含在 ID 令牌中。值相同 |
+
+当键缺失时，这两个令牌标志默认 **true**，因此没有标志的映射器会写入两个令牌。客户端角色映射器、全名映射器和受众映射器会读取这两个标志，但不读取 `claim.name`。
+
+`token.claim.name` 被属性、属性、身份域角色和硬编码声明映射器接受为 `claim.name` 的遗留别名，因为早期控制台以这种方式存储映射器。组和组织映射器只读取 `claim.name`。在任何新内容中，优先使用 `claim.name`。
+
+声明名称是一个最多包含8个非空段、总长度不超过255个字符的点分路径。API 会拒绝更长的 `claim.name` 或 `token.claim.name`，并返回 422 `invalid_claim_name`。在令牌创建时，超出此格式的名称会被静默丢弃，仅在服务器日志中给出警告。
+
+<span id="mapper-types" />
+
+## 映射器类型
+
+### `oidc-usermodel-property-mapper`
+
+将内置用户字段映射到声明。
+
+| 配置键 | 说明 |
+|---|---|
+| `user.attribute` | 要读取的字段：`username`、`email`、`firstName`、`lastName` 或 `emailVerified`。拼写 `firstname`、`lastname` 和 `email_verified` 也被接受。 |
+| `claim.name` | 目标声明。默认值为 `user.attribute` 的值。 |
+| `jsonType.label` | 转换值：`String`（默认）、`Boolean` 或 `Integer`。`Long`、`int`、`long` 和 `boolean` 同样被接受。无法转换的值保持原样。 |
+
+```json title="Username into preferred_username"
+{
+  "user.attribute": "username",
+  "claim.name": "preferred_username",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+### `oidc-full-name-mapper`
+
+将用户的名字和姓氏修剪后以空格连接，写入 `name` 声明中。
+
+声明名称是固定的：该映射器不读取 `claim.name`。当两个名称都为空时，它不会输出任何内容。它的唯一键是两个令牌标志。
+
+```json title="Full name in the ID token only"
+{
+  "access.token.claim": "false",
+  "id.token.claim": "true"
+}
+```
+
+种子 `profile` 作用域包含 `given_name` 和 `family_name`，但不包含 `name`，因此如果客户端期望它，请将此映射器添加到作用域中。
+
+### `oidc-usermodel-attribute-mapper`
+
+将自定义用户属性映射到声明。用于业务数据：部门、计划层级、功能标志。
+
+| 配置键 | 说明 |
+|---|---|
+| `user.attribute` | 用户的属性键。当用户没有该属性时，映射器不会输出任何内容。 |
+| `claim.name` | 目标声明。默认值为 `user.attribute` 的值。 |
+
+值始终为字符串。该映射器不读取 `jsonType.label`，因此数值属性会以文本形式传递到令牌。
+
+```json title="A department attribute into a department claim"
+{
+  "user.attribute": "department",
+  "claim.name": "department",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+### `oidc-usermodel-realm-role-mapper`
+
+将用户的身份域角色名称写入令牌。包含用户从组继承的角色。
+
+| 配置键 | 说明 |
+|---|---|
+| `claim.name` | 目标声明。默认值为 `realm_access.roles` |
+
+```json title="Realm roles, default placement"
+{
+  "claim.name": "realm_access.roles",
+  "access.token.claim": "true",
+  "id.token.claim": "true"
+}
+```
+
+```json title="Resulting claim"
+{
+  "realm_access": {
+    "roles": ["admin", "user-manager", "viewer"]
+  }
+}
+```
+
+### `oidc-usermodel-client-role-mapper`
+
+在`resource_access.<client_id>.roles`下写入客户端范围的角色。位置固定：该映射器不取`claim.name`。
+
+| 配置键 | 说明 |
+|---|---|
+| `client.id` | 包含该客户端角色的`client_id`字符串。空置或缺失的，包含**所有**客户端的角色 |
+
+```json title="Resulting claim"
+{
+  "resource_access": {
+    "backend": { "roles": ["read", "write"] }
+  }
+}
+```
+
+### `oidc-group-membership-mapper`
+
+写入用户所属的组。
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `claim.name` | `groups` | 目标声明 |
+| `membership` | `effective` | `effective`包含所有组**加上其所有祖先**，因此`/novotel/EN/leaf`的成员会获得三条路径。`direct`只包含用户直接成员的组，这与Keycloak相匹配，令牌更小，且透露的组织结构更少 |
+| `full.path` | `true` | 发送完整路径（`/parent/child`）。为裸组名设为`false` |
+| `prefix.org` | `false` | 在组织别名（`/acme/finance`）前加上 |
+
+`prefix.org`存在是因为FerrisKey令牌可以同时承载多个组织的组，路径是相对于其组织的，所以两个组织的`/finance`会冲突。它只适用于完整路径。
+
+### `oidc-organization-membership-mapper`
+
+以别名键索引的 JSON 对象写入用户所属的组织。通过别名键表示消费者可以在不扫描数组的情况下查找某个组织。
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `claim.name` | `organizations` | 目标声明 |
+| `include.domain` | `false` | 添加每个组织的域名，`null`没有域名时 |
+| `include.attributes` | `false` | 添加每个组织的属性 |
+
+`id`、`name`和`alias`始终存在。域和属性是自愿加入的，因此令牌默认保持紧凑。没有组织的用户会获得一个空对象。
+
+### `oidc-organization-detail-mapper`
+
+详细介绍一个**单一**组织。
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `claim.name` | `organization` | 目标声明 |
+| `organization.alias` | 未设置 | 只有当用户属于该组织时才发出声明。省略后，使用用户成员列表中的第一个组织 |
+| `include.attributes` | `false` | 添加组织属性 |
+
+`id`、`name`、`alias`和`domain`始终存在`domain`，当组织没有组织时，这些都`null`。如果用户不属于任何匹配的组织，映射器则不输出任何信息。
+
+### `oidc-organization-role-mapper`
+
+编写用户在每个组织作用域内持有的角色，按组织别名进行键化。身份域角色归属于`roles`，客户端角色归属`clients.<client_id>.roles`。如果用户没有持有有作用域的角色，则被排除在外。
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `claim.name` | `organizations` | 目标声明 |
+
+组织范围的角色来自两个来源，在令牌组装时合并：直接分配给成员的角色，以及继承自该组织用户组的角色。
+
+<Callout variant="info" title="此映射器与成员映射器共享一个声明">
+
+两者默认使用 `organizations` 声明，并且当两者都启用时，它们的对象会深度合并：成员映射器提供 `id`、`name` 和 `alias`，而此映射器提供 `roles` 和 `clients`。请匹配成员映射器的 `id` 字段，而不是可以重命名的别名。
+
+</Callout>
+
+### `oidc-audience-mapper`
+
+向访问令牌的受众 (`aud`) 声明中添加一个条目。在令牌必须被多个资源服务器接受时使用。
+
+| 配置键 | 说明 |
+|---|---|
+| `included.client.audience` | 要添加的受众值。任何字符串都可以，不仅限于 `client_id`。如果为空或缺失，映射器将不产生任何内容 |
+
+```json title="Accept this token at another client"
+{
+  "included.client.audience": "another-client",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+访问令牌的 `aud` 开始为 `["<realm_name>-realm", "account"]`，映射器会在其后追加。带有 `resource` 参数的令牌请求会用该资源替换整个列表。ID 令牌的 `aud` 是客户端的 `client_id`，且没有映射器会更改它。
+
+### `oidc-hardcoded-claim-mapper`
+
+注入静态值。对于不来自用户数据的环境指示器或租户标识符非常有用。
+
+| 配置键 | 说明 |
+|---|---|
+| `claim.name` | 目标声明。没有目标声明，映射器不会输出任何内容。 |
+| `claim.value` | 要注入的静态值 |
+| `jsonType.label` | 转换值类型：`String`（默认）、`Boolean`、`Integer`、`Long` 或 `JSON`。小写的 `boolean`、`int` 和 `long` 也可使用。`JSON` 会将值解析为 JSON。无法解析的数字或 JSON 保持为字符串，布尔值只有当为精确字符串 `true` 时才为 `true` |
+
+```json title="An environment indicator, access token only"
+{
+  "claim.name": "environment",
+  "claim.value": "production",
+  "jsonType.label": "String",
+  "access.token.claim": "true",
+  "id.token.claim": "false"
+}
+```
+
+<span id="reserved-claim-names" />
+
+## 保留的声明名称
+
+每个映射器运行后会移除十个声明名称，因此映射器无法覆盖它们：
+
+```text
+sub  iat  jti  iss  typ  azp  aud  scope  exp  client_id
+```
+
+将目标指向其中一个，映射器似乎配置正确，但什么也没改变。`aud` 在列表中，这正是为什么添加受众需要 `oidc-audience-mapper`，它通过独立渠道贡献受众，而不是指向 `aud` 的硬编码映射器。
+
+<span id="execution-order" />
+
+## 执行顺序
+
+作用域内的映射器按创建顺序运行。默认作用域在请求命名的可选作用域之前运行。
+
+<Callout variant="warning" title="声明冲突">
+
+如果两个映射器写入相同的声明名称，后写入的会覆盖先写入的，除非两个值都是 JSON 对象：对象会按键逐一合并。这就是 `features.new_dashboard` 和 `features.beta_export` 如何最终合并到一个 `features` 对象中，以及两个组织映射器如何共享 `organizations` 声明的方式。请在各个作用域中有意地管理声明名称。
+
+</Callout>
+
+<span id="token-generation-pipeline" />
+
+## 令牌生成流程
+
+1. **解析作用域。**客户端的默认作用域，以及请求的 `scope` 参数中指定的任何可选作用域。
+2. **收集映射器。**所有处于活动作用域上的协议映射器。
+3. **执行映射器。**每个映射器针对已认证的用户和客户端上下文运行一次：一次用于访问令牌，一次用于 ID 令牌。仅当 `scope` 包含 `openid` 时，才会执行 ID 令牌流程。
+4. **按令牌类型筛选。** `access.token.claim` 和 `id.token.claim` 决定每个声明属于哪个令牌。
+5. **去除保留声明。** 上述十个名称将被移除。
+6. **构建并签名。** 将 Mapper 输出与标准声明合并，然后使用身份域的签名密钥对 JWT 进行签名。
+
+<span id="adding-a-mapper" />
+
+## 添加一个映射器
+
+::::step-group
+:::step{title="创建或选择一个作用域"}
+在管理控制台中打开 **客户端作用域**。创建一个作用域，或者选择应该承载该声明的作用域。
+:::
+
+:::step{title="添加协议映射器"}
+在作用域的 **协议映射器** 选项卡上，选择 **添加映射器**。可以从快速开始模板开始，或者选择一个 `mapper_type` 并填入上述文档中的配置键。
+:::
+
+:::step{title="将作用域分配给客户端"}
+在客户端的 **Client Scopes** 标签页中，将作用域添加为默认或可选。默认作用域适用于每个请求；可选作用域仅在请求按名称要求时适用。
+:::
+
+:::step{title="检查结果"}
+在客户端的 Client Scopes 标签页上使用 **Evaluate**，或调用 `POST /realms/{realm_name}/clients/{client_id}/evaluate-scopes` 并传入 `user_id` 和可选的 `scope`。它返回用户在无需完整登录情况下会收到的声明。如果缺少某个声明，请首先检查 `mapper_type` 和配置键。
+:::
+::::
+
+::::card-group{cols=2}
+:::card{label="自定义声明" icon="lucide:plus" href="/zh-CN/modules/aegis/custom-claims"}
+有效模式：网关角色、租户标识符、功能标记。
+:::
+:::card{label="客户端作用域" icon="lucide:list" href="/zh-CN/discover/core-concepts/client-scopes"}
+作用域如何解析，以及内置作用域携带的声明。
+:::
+::::

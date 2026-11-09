@@ -1,0 +1,125 @@
+---
+title: "概述"
+description: "自助賬戶介面：使用者無需管理員即可更改自己的資訊。"
+icon: user-cog
+order: 70
+---
+
+<span id="account" />
+
+# 賬戶
+
+FerrisKey 中的其他所有功能都是由管理員針對某人執行的。賬戶模組則相反：這是使用者操作**自己**的介面，也是唯一一個呼叫者和目標在構造上是同一個人的模組。
+
+整個設計圍繞這一區別展開。大多數端點位於 `/users/me` 下，從呼叫者自己的權杖中解析主體，且不接受使用者 ID，因此沒有可被篡改的 ID，也無需額外權限。使用者修改自己的密碼不需要 `manage_users`，持有 `manage_users` 在這裡也不會獲得額外權限。會話端點是唯一的例外，詳見[下文](#sessions)。
+
+<span id="what-a-user-can-do" />
+
+## 使用者可以做的操作
+
+| 區域 | 操作 |
+|---|---|
+| 個人資料 | 閱讀並更新他們自己的姓名和電子郵件，設定他們的語言環境 |
+| 密碼 | 更改它，根據域的[密碼策略](/zh-TW/discover/core-concepts/password-policy) |
+| 身分認證器應用 | 註冊一個TOTP身分認證器，確認它，移除它 |
+| 通行金鑰 | 註冊一個通行金鑰，列出憑據，刪除一個 |
+| 會話 | 列出他們的會話並撤銷任何一個 |
+
+在控制檯中，賬戶頁面有三個標籤頁：個人資訊、安全和會話。
+
+<img class="only-light" src="/dashboard/account_security-light.jpg" alt="FerrisKey賬戶安全標籤頁顯示密碼更改並帶有實時策略反饋、身分認證器應用和通行金鑰部分" />
+<img class="only-dark" src="/dashboard/account_security-dark.jpg" alt="FerrisKey賬戶安全標籤頁顯示密碼更改並帶有實時策略反饋、身分認證器應用和通行金鑰部分" />
+
+<span id="profile" />
+
+## 個人資料
+
+```
+GET /realms/{realm_name}/users/me
+PUT /realms/{realm_name}/users/me
+```
+
+更新的主體包含 `firstname`、`lastname`、`email` 和 `username`。使用者可以更改的內容不是固定的：由域決定。`edit_username_enabled` 管理使用者名稱，預設情況下關閉。當使用者名稱關閉時傳送更改使用者名稱的請求會返回 403，並且控制檯顯示該欄位被鎖定。
+
+電子郵件是需要考慮的欄位，因為它也是恢復地址。更改它會將 `email_verified` 重置為 `false`，無論其先前的值是什麼。該呼叫不會傳送驗證資訊，也不會新增 `verify_email` 所需的操作，因此如果需要，請在你的流程中自行構建該步驟。
+
+<span id="locale" />
+
+### 區域設定
+
+```
+PUT /realms/{realm_name}/users/@me/locale
+```
+
+正文是 `{ "locale": "zh-CN" }`。FerrisKey 檢查標籤是否格式正確，即兩個字母的語言程式碼，可選兩個字母的地區程式碼，否則返回 422 `malformed_locale`。它不會將標籤與域的 `supported_locales` 進行比較。傳送 `null` 會清除儲存的值。
+
+FerrisKey 會儲存該值，控制檯會讀取回它。控制檯和預設登入頁面會傳送 `en` 和 `zh-CN`，使用者的語言環境是控制檯首先查詢的，其次才是瀏覽器和域的 `default_locale`。FerrisKey 不會從中選擇電子郵件的語言。[本地化](/zh-TW/discover/guides/localization) 提供完整的解析順序和域預設值。
+
+<Callout variant="warning" title="這條路徑寫的是 @me，而不是 me">
+
+其他每個賬戶端點拼寫為 `/users/me`。區域端點是 `/users/@me/locale`，`GET /users/@me/realms` 也是如此。這是當前 API 的不一致，而不是本頁面的拼寫錯誤。按文中所寫編寫程式碼。
+
+</Callout>
+
+<span id="sensitive-operations-need-an-elevation" />
+
+## 敏感操作需要權限提升。
+
+讀取你的個人資料只需要一個有效的權杖。更改憑據需要證明正在操作的人仍然是賬戶持有人，而不是偶然找到解鎖筆記本的人。
+
+```
+POST /realms/{realm_name}/users/me/reauthenticate
+```
+
+必須**準確提供一個** `password` 或 `otp_code`；其他任何情況都會返回 400。響應會包含 `elevation_id` 和 `expires_at`。權限提升持續**五分鐘**，並繫結到呼叫會話，因此存取權杖必須攜帶會話。每個敏感操作隨後使用該 `elevation_id`，並且在過期之前同一個 `elevation_id` 可用於所有敏感操作。密碼更改會清除使用者所有未使用的權限提升。
+
+```json title="Response"
+{
+  "elevation_id": "01a0d3dd-a750-7f0f-91d9-cf05f19168c6",
+  "expires_at": "2026-09-24T18:42:11Z"
+}
+```
+
+錯誤的證明會返回 401，並計為一次失敗的登入。它會增加計數器，當達到域的 `lockout_threshold` 次失敗（預設是 10 次）時，會鎖定賬戶 `lockout_duration_seconds`（預設 900 秒），並且被鎖定的賬戶在這裡也會被拒絕。透過外部目錄登入的賬戶沒有本地密碼，因此密碼證明會返回 409。
+
+<Callout variant="info" title="第二因素無法輪換其他因素">
+
+新增、更換或移除登入憑據都要求用密碼 **證明權限提升**，而不是使用 OTP 程式碼。否則，被盜的第二因素可能將自己註冊為唯一因素，從而鎖住賬戶所有者。因素不得能夠輪換它所屬的集合，包括它自己。
+
+更改密碼是例外。它接受任何有效的權限提升，因為請求體中也攜帶了當前密碼，這相當於透過另一種方式進行的相同證明。
+
+</Callout>
+
+[安全](/zh-TW/modules/account/security)涵蓋每個操作及呼叫它們的順序。
+
+<span id="sessions" />
+
+## 會話
+
+```
+GET    /realms/{realm_name}/users/{user_id}/sessions
+DELETE /realms/{realm_name}/users/{user_id}/sessions/{session_id}
+```
+
+這是兩個攜帶使用者ID的自助端點。呼叫者可以在自己的ID上使用它們而無需權限。在他人的ID上，列出需要`manage_users`、`manage_realm`或`view_users`，而撤銷需要`manage_users`。
+
+列表是分頁的（參見[分頁列表](/zh-TW/discover/guides/api-listings)），並且包括已過期的會話。每個條目都有`id`、`created_at`、`expires_at`、`last_seen_at`、`ip_address`、`user_agent`和`persistent`，對於使用“記住我”開啟的會話亦然。過濾器為`persistent`、`ip_address`和`user_agent`，加上最近兩個的`search`以及`created_from`和`created_to`。`order_by`接受`created_at`（預設）、`last_seen_at`或`expires_at`。
+
+撤銷會話會立即使其權杖失效，並在 [SeaWatch](/zh-TW/modules/seawatch/overview) 中寫入一個 `session_revoked` 事件。控制檯的會話選項卡就是基於這兩個呼叫構建的。
+
+<span id="what-this-surface-deliberately-does-not-do" />
+
+## 此介面有意不執行的操作
+
+它不會為其他人重置憑據，這仍然是 `manage_users` 下的管理操作。它不會更改角色或組織，因此使用者不能為自己授予任何權限。它不會刪除賬戶，因為自助刪除功能未開放。
+
+它也沒有恢復碼螢幕。客戶端透過 `POST /login-actions/generate-recovery-codes` 使用 `reauthenticate` 的權限提升來生成 [恢復碼](/zh-TW/modules/trident/recovery-codes)，但控制檯或預設門戶都不會呼叫它。
+
+::::card-group{cols=2}
+:::card{label="賬戶安全" icon="lucide:shield-check" href="/zh-TW/modules/account/security"}
+密碼、身分認證器和金鑰操作，逐端點說明。
+:::
+:::card{label="Trident" icon="lucide:shield" href="/zh-TW/modules/trident/overview"}
+多因素認證的另一面：登入挑戰期間發生的情況。
+:::
+::::
