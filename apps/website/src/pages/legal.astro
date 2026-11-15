@@ -1,0 +1,105 @@
+---
+import Legal from '../layouts/legal.astro'
+import V from '../components/legal-value.astro'
+import { host, publisher } from '../lib/legal'
+---
+
+<Legal title={{ en: 'Legal notice', fr: 'Mentions légales' }} description="Legal notice of the FerrisKey website: publisher, publication director and hosting provider.">
+  <Fragment slot="fr">
+    <p>
+      Conformément à l'article 1-1 de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN), voici les
+      informations relatives à l'éditeur et à l'hébergeur des sites ferriskey.rs, docs.ferriskey.rs et blog.ferriskey.rs.
+    </p>
+
+    <h2>Éditeur du site</h2>
+    <p>
+      FerrisKey est un projet open source sans structure juridique. Le site est édité à titre non professionnel par
+      <V value={publisher.name} locale="fr" />, conformément à l'article 1-1, III de la LCEN. Ses coordonnées personnelles ont été
+      communiquées à l'hébergeur.
+    </p>
+    <dl>
+      <dt>Email</dt><dd><a href={`mailto:${publisher.email}`}>{publisher.email}</a></dd>
+    </dl>
+
+    <h2>Directeur de la publication</h2>
+    <p><V value={publisher.name} locale="fr" /></p>
+
+    <h2>Hébergement</h2>
+    <dl>
+      <dt>Hébergeur</dt><dd><V value={host.name} locale="fr" /></dd>
+      <dt>Adresse</dt><dd><V value={host.address} locale="fr" /></dd>
+      <dt>Téléphone</dt><dd><V value={host.phone} locale="fr" /></dd>
+    </dl>
+
+    <h2>Propriété intellectuelle</h2>
+    <p>
+      Le logiciel FerrisKey est distribué sous <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">licence Apache 2.0</a>.
+      Son code source est disponible sur <a href="https://github.com/ferriskey/ferriskey" target="_blank" rel="noopener noreferrer">GitHub</a>.
+    </p>
+    <p>
+      Sauf mention contraire, les textes, illustrations et éléments graphiques de ce site appartiennent à l'équipe FerrisKey. Les logos des sponsors
+      et partenaires restent la propriété de leurs titulaires respectifs. Les avatars des contributeurs appartiennent à leurs auteurs.
+    </p>
+
+    <h2>Liens externes</h2>
+    <p>
+      Ce site contient des liens vers des sites tiers (GitHub, réseaux sociaux, sites des partenaires). L'éditeur n'a aucun contrôle sur
+      leur contenu et décline toute responsabilité à leur égard.
+    </p>
+
+    <h2>Données personnelles</h2>
+    <p>Le traitement des données personnelles est décrit dans la <a href="/privacy">politique de confidentialité</a>.</p>
+
+    <h2>Droit applicable</h2>
+    <p>Les présentes mentions légales sont soumises au droit français.</p>
+  </Fragment>
+
+  <Fragment slot="en">
+    <p>
+      In accordance with article 1-1 of French law no. 2004-575 of 21 June 2004 on confidence in the digital economy (LCEN), here is the
+      information about the publisher and the hosting provider of ferriskey.rs, docs.ferriskey.rs and blog.ferriskey.rs.
+    </p>
+
+    <h2>Publisher</h2>
+    <p>
+      FerrisKey is an open-source project with no legal entity. The site is published on a non-professional basis by
+      <V value={publisher.name} locale="en" />, under article 1-1, III of the LCEN. Their personal details have been provided to the
+      hosting provider.
+    </p>
+    <dl>
+      <dt>Email</dt><dd><a href={`mailto:${publisher.email}`}>{publisher.email}</a></dd>
+    </dl>
+
+    <h2>Publication director</h2>
+    <p><V value={publisher.name} locale="en" /></p>
+
+    <h2>Hosting</h2>
+    <dl>
+      <dt>Hosting provider</dt><dd><V value={host.name} locale="en" /></dd>
+      <dt>Address</dt><dd><V value={host.address} locale="en" /></dd>
+      <dt>Phone</dt><dd><V value={host.phone} locale="en" /></dd>
+    </dl>
+
+    <h2>Intellectual property</h2>
+    <p>
+      The FerrisKey software is distributed under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">Apache 2.0 license</a>.
+      Its source code is available on <a href="https://github.com/ferriskey/ferriskey" target="_blank" rel="noopener noreferrer">GitHub</a>.
+    </p>
+    <p>
+      Unless stated otherwise, the texts, illustrations and graphic elements of this site belong to the FerrisKey team. Sponsor and partner logos
+      remain the property of their respective owners. Contributor avatars belong to their authors.
+    </p>
+
+    <h2>External links</h2>
+    <p>
+      This site links to third-party sites (GitHub, social networks, partner sites). The publisher has no control over their content and
+      accepts no responsibility for it.
+    </p>
+
+    <h2>Personal data</h2>
+    <p>How personal data is processed is described in the <a href="/privacy">privacy policy</a>.</p>
+
+    <h2>Governing law</h2>
+    <p>This legal notice is governed by French law.</p>
+  </Fragment>
+</Legal>

@@ -1,0 +1,187 @@
+---
+import Legal from '../layouts/legal.astro'
+import V from '../components/legal-value.astro'
+import { publisher, retention } from '../lib/legal'
+---
+
+<Legal title={{ en: 'Privacy policy', fr: 'Politique de confidentialité' }} description="How the FerrisKey website processes personal data, which cookies it uses and how to exercise your rights.">
+  <Fragment slot="fr">
+    <p>
+      Cette politique décrit les données personnelles traitées lors de la visite de ferriskey.rs, docs.ferriskey.rs et blog.ferriskey.rs,
+      conformément au Règlement général sur la protection des données (RGPD) et à la loi Informatique et Libertés.
+    </p>
+    <p>
+      Le site n'a pas de compte utilisateur, pas de formulaire, pas de mesure d'audience et pas de publicité. Les données traitées se
+      limitent à ce qui est décrit ci-dessous.
+    </p>
+
+    <h2>Responsable du traitement</h2>
+    <p>
+      <V value={publisher.name} locale="fr" />, éditeur du site à titre non professionnel. Contact :
+      <a href={`mailto:${publisher.email}`}>{publisher.email}</a>.
+    </p>
+
+    <h2>Données traitées</h2>
+
+    <h3>Journaux techniques du serveur</h3>
+    <ul>
+      <li><strong>Données :</strong> adresse IP, date et heure, page demandée, code de réponse, navigateur (user agent), page d'origine.</li>
+      <li><strong>Finalité :</strong> faire fonctionner le site, le sécuriser et diagnostiquer les incidents.</li>
+      <li><strong>Base légale :</strong> intérêt légitime de l'éditeur (article 6.1.f du RGPD).</li>
+      <li><strong>Durée de conservation :</strong> <V value={retention.serverLogs.fr} locale="fr" />.</li>
+    </ul>
+
+    <h3>Emails envoyés à l'adresse de contact</h3>
+    <ul>
+      <li><strong>Données :</strong> adresse email, nom, contenu du message et toute information que vous choisissez d'y mettre.</li>
+      <li><strong>Finalité :</strong> répondre à votre demande.</li>
+      <li><strong>Base légale :</strong> intérêt légitime de l'éditeur à répondre aux messages reçus (article 6.1.f du RGPD).</li>
+      <li><strong>Durée de conservation :</strong> <V value={retention.emails.fr} locale="fr" />.</li>
+    </ul>
+
+    <h3>Contributeurs affichés</h3>
+    <ul>
+      <li>
+        <strong>Données :</strong> identifiant GitHub, avatar, lien vers le profil et nombre de contributions, issus de l'API publique de
+        GitHub au moment de la génération du site.
+      </li>
+      <li><strong>Finalité :</strong> reconnaître publiquement les personnes qui contribuent au projet open source.</li>
+      <li><strong>Base légale :</strong> intérêt légitime de l'éditeur (article 6.1.f du RGPD).</li>
+      <li>
+        <strong>Durée de conservation :</strong> tant que la contribution existe dans le dépôt public. Vous pouvez demander à ne plus
+        apparaître en écrivant à l'adresse de contact.
+      </li>
+    </ul>
+
+    <h2>Cookies et stockage local</h2>
+    <p>Le site dépose seulement les deux éléments suivants. Ils gardent un choix que vous avez fait et ne servent pas à vous suivre :</p>
+    <ul>
+      <li><strong>Cookie <code>locale</code> :</strong> la langue choisie (français ou anglais). Durée : 12 mois.</li>
+      <li><strong>Stockage local <code>theme</code> :</strong> le thème choisi (clair, sombre ou système). Durée : jusqu'à ce que vous vidiez les données du navigateur.</li>
+    </ul>
+    <p>
+      Ces traceurs sont exemptés de consentement selon les lignes directrices de la CNIL. C'est pour cela que le site n'affiche pas de
+      bandeau cookies. Les boutons de partage du blog sont de simples liens : ils ne chargent aucun script des réseaux sociaux.
+    </p>
+
+    <h2>Services tiers</h2>
+    <p>
+      Les avatars des contributeurs sont chargés depuis <code>avatars.githubusercontent.com</code>, un service de GitHub, Inc. (États-Unis).
+      Quand votre navigateur affiche ces images, GitHub reçoit votre adresse IP et votre user agent. GitHub est certifié dans le cadre du
+      <a href="https://www.dataprivacyframework.gov/" target="_blank" rel="noopener noreferrer">Data Privacy Framework UE–États-Unis</a>, qui
+      encadre ce transfert. Voir la
+      <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">déclaration de confidentialité de GitHub</a>.
+    </p>
+    <p>Les polices et tous les autres fichiers du site sont servis depuis nos propres serveurs.</p>
+
+    <h2>Destinataires</h2>
+    <p>
+      Les données sont accessibles uniquement à l'équipe FerrisKey et à l'hébergeur du site, qui agit comme sous-traitant. Elles ne sont
+      jamais vendues ni utilisées à des fins publicitaires.
+    </p>
+
+    <h2>Vos droits</h2>
+    <p>
+      Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité sur vos données. Pour
+      les exercer, écrivez à <a href={`mailto:${publisher.email}`}>{publisher.email}</a>. Nous répondons dans un délai d'un mois.
+    </p>
+    <p>
+      Si vous estimez que vos droits ne sont pas respectés, vous pouvez adresser une réclamation à la CNIL :
+      <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener noreferrer">cnil.fr/fr/plaintes</a>, ou 3 place de Fontenoy,
+      TSA 80715, 75334 Paris Cedex 07.
+    </p>
+
+    <h2>Modifications</h2>
+    <p>Cette politique peut évoluer. La date de dernière mise à jour figure en haut de la page.</p>
+  </Fragment>
+
+  <Fragment slot="en">
+    <p>
+      This policy describes the personal data processed when you visit ferriskey.rs, docs.ferriskey.rs and blog.ferriskey.rs, in
+      accordance with the General Data Protection Regulation (GDPR) and the French Data Protection Act.
+    </p>
+    <p>
+      The site has no user accounts, no forms, no audience measurement and no advertising. The data processed is limited to what is
+      described below.
+    </p>
+
+    <h2>Data controller</h2>
+    <p>
+      <V value={publisher.name} locale="en" />, publisher of the site on a non-professional basis. Contact:
+      <a href={`mailto:${publisher.email}`}>{publisher.email}</a>.
+    </p>
+
+    <h2>Data processed</h2>
+
+    <h3>Server logs</h3>
+    <ul>
+      <li><strong>Data:</strong> IP address, date and time, requested page, response code, browser (user agent), referring page.</li>
+      <li><strong>Purpose:</strong> running the site, securing it and diagnosing incidents.</li>
+      <li><strong>Legal basis:</strong> legitimate interest of the publisher (GDPR article 6.1.f).</li>
+      <li><strong>Retention:</strong> <V value={retention.serverLogs.en} locale="en" />.</li>
+    </ul>
+
+    <h3>Emails sent to the contact address</h3>
+    <ul>
+      <li><strong>Data:</strong> email address, name, message content and any information you choose to include.</li>
+      <li><strong>Purpose:</strong> answering your request.</li>
+      <li><strong>Legal basis:</strong> legitimate interest of the publisher in answering the messages it receives (GDPR article 6.1.f).</li>
+      <li><strong>Retention:</strong> <V value={retention.emails.en} locale="en" />.</li>
+    </ul>
+
+    <h3>Displayed contributors</h3>
+    <ul>
+      <li>
+        <strong>Data:</strong> GitHub username, avatar, profile link and contribution count, taken from the public GitHub API when the site
+        is built.
+      </li>
+      <li><strong>Purpose:</strong> publicly acknowledging the people who contribute to the open-source project.</li>
+      <li><strong>Legal basis:</strong> legitimate interest of the publisher (GDPR article 6.1.f).</li>
+      <li>
+        <strong>Retention:</strong> as long as the contribution exists in the public repository. You can ask to be removed by writing to the
+        contact address.
+      </li>
+    </ul>
+
+    <h2>Cookies and local storage</h2>
+    <p>The site only stores the following two items. They keep a choice you made and are not used to track you:</p>
+    <ul>
+      <li><strong><code>locale</code> cookie:</strong> the chosen language (French or English). Lifetime: 12 months.</li>
+      <li><strong><code>theme</code> local storage:</strong> the chosen theme (light, dark or system). Lifetime: until you clear your browser data.</li>
+    </ul>
+    <p>
+      These items are exempt from consent under the CNIL guidelines, which is why the site shows no cookie banner. The blog's share buttons
+      are plain links: they load no social network script.
+    </p>
+
+    <h2>Third-party services</h2>
+    <p>
+      Contributor avatars are loaded from <code>avatars.githubusercontent.com</code>, a service of GitHub, Inc. (United States). When your
+      browser displays these images, GitHub receives your IP address and user agent. GitHub is certified under the
+      <a href="https://www.dataprivacyframework.gov/" target="_blank" rel="noopener noreferrer">EU–US Data Privacy Framework</a>, which covers
+      this transfer. See the
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub privacy statement</a>.
+    </p>
+    <p>Fonts and every other file of the site are served from our own servers.</p>
+
+    <h2>Recipients</h2>
+    <p>
+      The data is only accessible to the FerrisKey team and to the hosting provider, acting as a processor. It is never sold or used for
+      advertising.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      You have the right to access, rectify, erase, restrict, object to and port your data. To exercise these rights, write to
+      <a href={`mailto:${publisher.email}`}>{publisher.email}</a>. We answer within one month.
+    </p>
+    <p>
+      If you believe your rights are not respected, you can file a complaint with the CNIL, the French data protection authority:
+      <a href="https://www.cnil.fr/en/complaints" target="_blank" rel="noopener noreferrer">cnil.fr/en/complaints</a>, or 3 place de Fontenoy,
+      TSA 80715, 75334 Paris Cedex 07, France.
+    </p>
+
+    <h2>Changes</h2>
+    <p>This policy may change. The date of the last update is shown at the top of the page.</p>
+  </Fragment>
+</Legal>

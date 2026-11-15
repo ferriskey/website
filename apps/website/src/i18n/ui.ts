@@ -105,6 +105,8 @@ export const ui = {
     'footer.project': 'Project',
     'footer.contact': 'Contact us',
     'footer.tagline': 'Open-source identity and access management, written in Rust.',
+    'footer.legal': 'Legal notice',
+    'footer.privacy': 'Privacy policy',
 
     // Features
     'whyNow.label': 'Why now',
@@ -402,6 +404,8 @@ export const ui = {
     'footer.project': 'Projet',
     'footer.contact': 'Nous contacter',
     'footer.tagline': 'Gestion des identités et des accès open source, écrite en Rust.',
+    'footer.legal': 'Mentions légales',
+    'footer.privacy': 'Politique de confidentialité',
 
     // Features
     'whyNow.label': 'Pourquoi maintenant',

@@ -1,0 +1,116 @@
+---
+import Base from './base.astro'
+import { WebsiteNavbar } from '../components/website-navbar'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
+import { ui } from '../i18n/ui'
+import { lastUpdated } from '../lib/legal'
+
+interface Props {
+  title: { en: string; fr: string }
+  description: string
+}
+const { title, description } = Astro.props
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+
+const translations = ui.fr
+const updated = {
+  en: new Date(lastUpdated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+  fr: new Date(lastUpdated).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }),
+}
+---
+
+<Base title={`${title.en} | FerrisKey`} description={description}>
+  <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
+
+  <main class="flex-1">
+    <section class="border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border px-5 py-20 sm:px-10 sm:py-28">
+        <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">Legal</p>
+        <h1 class="mt-6 max-w-3xl text-balance text-[clamp(2.25rem,5vw,4rem)] font-medium leading-[1.03] tracking-[-0.04em]">
+          <span data-locale="en">{title.en}</span>
+          <span data-locale="fr" hidden>{title.fr}</span>
+        </h1>
+        <p class="mt-6 text-sm text-muted-foreground">
+          <span data-locale="en">Last updated: {updated.en}</span>
+          <span data-locale="fr" hidden>Dernière mise à jour : {updated.fr}</span>
+        </p>
+      </div>
+    </section>
+
+    <section class="border-b border-border">
+      <div class="legal-body mx-auto max-w-6xl border-x border-border px-5 py-16 sm:px-10">
+        <div data-locale="en" lang="en"><slot name="en" /></div>
+        <div data-locale="fr" lang="fr" hidden><slot name="fr" /></div>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
+</Base>
+
+<style is:global>
+  .legal-body > div { max-width: 46rem; }
+  .legal-body h2 {
+    margin-top: 3.5rem;
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .legal-body h2:first-child { margin-top: 0; }
+  .legal-body h3 {
+    margin-top: 2rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  .legal-body p,
+  .legal-body ul,
+  .legal-body dl { margin-top: 1rem; line-height: 1.75; color: var(--color-muted-foreground); }
+  .legal-body ul { list-style: square; padding-left: 1.25rem; }
+  .legal-body li + li { margin-top: 0.375rem; }
+  .legal-body dl { display: grid; grid-template-columns: minmax(9rem, max-content) 1fr; gap: 0.5rem 1.5rem; }
+  .legal-body dt { color: var(--color-foreground); font-weight: 500; }
+  .legal-body dd { margin: 0; overflow-wrap: anywhere; }
+  .legal-body strong { color: var(--color-foreground); font-weight: 600; }
+  .legal-body a { color: var(--color-primary); text-underline-offset: 4px; overflow-wrap: anywhere; }
+  .legal-body a:hover { text-decoration: underline; }
+  @media (max-width: 640px) {
+    .legal-body dl { grid-template-columns: 1fr; gap: 0.125rem; }
+    .legal-body dd + dt { margin-top: 0.75rem; }
+  }
+</style>
+
+<script is:inline define:vars={{ translations }}>
+  function detectLocale() {
+    const match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
+    const cookie = match ? match[1] : null
+    if (cookie === 'en' || cookie === 'fr') return cookie
+
+    const browser = (navigator.language || '').split('-')[0]
+    if (browser === 'en' || browser === 'fr') return browser
+    return 'en'
+  }
+
+  function applyTranslations() {
+    const locale = detectLocale()
+    document.documentElement.lang = locale
+
+    document.querySelectorAll('[data-locale]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-locale') !== locale
+    })
+
+    document.querySelectorAll('[data-t]').forEach(function (el) {
+      const key = el.getAttribute('data-t')
+      if (!el.dataset.tDefault) el.dataset.tDefault = el.textContent
+      el.textContent = locale === 'fr' && translations[key] ? translations[key] : el.dataset.tDefault
+    })
+  }
+
+  applyTranslations()
+  document.addEventListener('astro:after-swap', applyTranslations)
+  window.addEventListener('ferriskey:locale-change', applyTranslations)
+</script>

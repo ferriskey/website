@@ -7,6 +7,8 @@ export const footerCopy = {
     project: 'Project',
     contact: 'Contact us',
     tagline: 'Open-source identity and access management, written in Rust.',
+    legal: 'Legal notice',
+    privacy: 'Privacy policy',
   },
   fr: {
     product: 'Produit',
@@ -14,6 +16,8 @@ export const footerCopy = {
     project: 'Projet',
     contact: 'Nous contacter',
     tagline: 'Gestion des identités et des accès open source, écrite en Rust.',
+    legal: 'Mentions légales',
+    privacy: 'Politique de confidentialité',
   },
 } as const satisfies Record<FooterLocale, Record<string, string>>
 

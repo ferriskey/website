@@ -43,6 +43,11 @@ const columns = [
   },
 ]
 
+const legalLinks = [
+  { key: 'footer.legal', label: copy.legal, href: appHref(websiteUrl, '/legal') },
+  { key: 'footer.privacy', label: copy.privacy, href: appHref(websiteUrl, '/privacy') },
+]
+
 const year = new Date().getFullYear()
 ---
 
@@ -82,10 +87,15 @@ const year = new Date().getFullYear()
       ))}
     </nav>
 
-    <p class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-6 text-xs text-muted-foreground sm:px-10">
-      <span>© {year} FerrisKey · Apache 2.0</span>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-6 text-xs text-muted-foreground sm:px-10">
+      <p class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span>© {year} FerrisKey · Apache 2.0</span>
+        {legalLinks.map((l) => (
+          <a href={l.href} class="underline-offset-4 transition-colors hover:text-foreground hover:underline" data-t={l.key}>{l.label}</a>
+        ))}
+      </p>
       <span class="font-pixel uppercase">Fait en Rust</span>
-    </p>
+    </div>
 
     <!-- Le mot géant : rogné par le bas de la page, il se remplit au passage d'une clé. -->
     <div class="fw relative px-5 pt-24 sm:px-10" data-footer-wordmark>
