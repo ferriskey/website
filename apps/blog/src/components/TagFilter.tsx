@@ -84,7 +84,7 @@ export function TagFilter({ tags, totalCount, initialTags = [], locale = 'en' }:
         <div className="flex items-center gap-3 flex-wrap min-w-0">
           <span className="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground shrink-0">{t('index.filterLabel')}</span>
           <span className="font-pixel text-[10px] uppercase tracking-[0.08em] text-primary shrink-0">{totalCount} {t('index.articleCount')}</span>
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+          <div className="flex w-full flex-wrap items-center gap-2">
             {tags.map((tag) => {
               const active = selectedTags.includes(tag.name)
               return (
