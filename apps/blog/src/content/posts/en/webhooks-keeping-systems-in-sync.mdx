@@ -1,0 +1,179 @@
+---
+title: "A lost webhook is wrong data in production"
+description: "When identity lives in the IAM and the business application keeps its own copy, everything rests on a notification. What a webhook guarantees, what happens when the application is down, how FerrisKey's delivery queue works, and what it costs."
+short_description: "A webhook is not judged when everything works, but the day the business application is unreachable."
+date: 2026-11-15
+tags: [webhooks, architecture, integration, reliability, ferriskey, iam]
+status: published
+author: leadcode_dev
+---
+
+Alice changes her last name. An administrator fixes her profile in the IAM, the screen confirms the save, and everyone moves on. But the HR application keeps its own `employees` table, with its own `lastname`. If nobody tells it the identity changed, it will keep issuing documents under the wrong name, with no error and no alert, until someone notices.
+
+There is nothing exotic about this problem. As soon as an identity system lives next to an application that keeps a copy of some of its fields, you have two sources for the same piece of information, and only one of them is right. The question is not whether they will drift apart, but how you will find out, and for how long.
+
+## Three ways to keep two databases in agreement
+
+Querying the IAM every time you need a value removes the copy, and with it the problem, but it ties your application's availability to the IAM's and adds a network call to every read. Polling keeps the copy but ties the freshness of the data to the period of the job. And sharing the database is a contract nobody can change anymore.
+
+A webhook goes the other way: the IAM tells you, at the moment the thing happens. Your application keeps its local, fast copy, and never has to ask whether something changed.
+
+There is a catch, and everything below follows from it. A webhook is a promise: "I will tell you". A promise can be broken, because the network drops, because your application restarts, because a deployment ran three minutes too long. A webhook without a failure strategy does not replace polling, it makes it invisible, which is worse. The work of a good webhook system happens almost entirely on the failure path.
+
+## The simple case: a name changes
+
+In FerrisKey, a webhook belongs to a realm, points to an endpoint and subscribes to specific events. For our HR application:
+
+```json title="POST /realms/acme/webhooks"
+{
+  "name": "HR sync",
+  "description": "Keeps the employees table aligned with identities",
+  "endpoint": "https://hr.acme.example/webhooks/ferriskey",
+  "headers": { "X-Webhook-Source": "ferriskey" },
+  "subscribers": ["user.created", "user.updated", "user.deleted"]
+}
+```
+
+A webhook can subscribe to 38 events, grouped by resource (users, clients, roles, realm, authentication…). The documentation states that in 0.10.0 the server only emits 33 of them: the other five accept a subscription, then stay silent. Check the [list of events](https://docs.ferriskey.rs/en/modules/webhooks/triggers) before relying on one.
+
+When the administrator edits Alice's profile, FerrisKey sends a POST whose body looks like this:
+
+```json title="user.updated (excerpt)"
+{
+  "event": "user.updated",
+  "timestamp": "2026-03-17T14:30:00.123456+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": {
+    "id": "01914b3c-5678-7f5a-b456-000000000002",
+    "username": "alice",
+    "firstname": "Alice",
+    "lastname": "Martin",
+    "email": "alice@example.com",
+    "updated_at": "2026-03-17T14:30:00.101234Z"
+  }
+}
+```
+
+Two details of this format surprise people on first contact, and the documentation points them out. First, `resource_id` does not identify the user: for almost every event it is the realm id. The object concerned is read from `data.id`. Second, `data` changes shape depending on the event: the full user for `user.updated`, a bare id for `client.deleted`, `null` for `auth.reset_password`.
+
+:::callout{variant="warning"}
+`user.updated` is also emitted when a role is removed from a user. In that case `data` is the role, not the user. A handler that reads `data.firstname` without checking what it received will overwrite names with `undefined`. Test for the presence of `data.username` before treating the event as a profile change.
+:::
+
+On the application side, the handler fits in a few lines, provided you choose a write that survives bad days:
+
+```ts title="webhooks/ferriskey.ts"
+const { event, data } = JSON.parse(rawBody.toString('utf8'))
+
+if (event === 'user.updated' && data.username) {
+  await db.query(
+    `INSERT INTO employees (iam_user_id, firstname, lastname, iam_updated_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (iam_user_id) DO UPDATE
+        SET firstname = EXCLUDED.firstname,
+            lastname = EXCLUDED.lastname,
+            iam_updated_at = EXCLUDED.iam_updated_at
+      WHERE employees.iam_updated_at < EXCLUDED.iam_updated_at`,
+    [data.id, data.firstname, data.lastname, data.updated_at],
+  )
+}
+
+res.writeHead(204).end()
+```
+
+The `WHERE employees.iam_updated_at < EXCLUDED.iam_updated_at` clause does three things at once. Replaying the same event twice changes nothing. An old event that arrives after a newer one is ignored. And if Alice's creation was missed, the first update creates the row (if your table can exist with just the profile). You did not write any recovery logic, you made the write insensitive to ordering and duplicates. For the rest of this article, that is the most useful property your side of the contract can have.
+
+Before touching `data`, this handler should also verify the signature. FerrisKey signs every attempt with an HMAC-SHA256 computed over `{timestamp}.{raw body}`, using the webhook's secret, and sends the result in `x-ferriskey-signature` (the details and a complete example are in the [payload documentation](https://docs.ferriskey.rs/en/modules/webhooks/payload#verifying-the-signature)). The timestamp is part of the signed string: someone who captures a request cannot replay it later by simply changing the header. A static header, like the `Authorization` you can also configure, proves that the caller knows a token, not that the body was left untouched.
+
+## What FerrisKey checks before calling anything
+
+From the IAM's point of view, a webhook is an outbound request to an address chosen by a user. That is exactly the shape of an SSRF attack, and the documentation draws the consequences: FerrisKey refuses to save an endpoint that is not `https`, that carries credentials in the URL, or that is a loopback, private or link-local address. The hostname is checked again each time it is resolved, at delivery time. For local development, an environment variable (`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true`) lifts the restriction, and it must never be on in production.
+
+The rest of the delivery behavior is deliberately strict: FerrisKey waits 5 seconds to connect and 10 seconds in total, counts any `2xx` as a successful delivery, and does not follow redirects. A `301` from `http` to `https` is therefore recorded as a failure. That is not a defect, it is what makes the behavior predictable: the endpoint decides, through its status code, what happens to the delivery.
+
+## When the endpoint answers badly: automatic retries
+
+Not all errors are equal, and FerrisKey does not treat them the same way. A transport failure, a failed DNS resolution, a `5xx`, a `408` or a `429` are retried. An invalid configuration, a refused address, or any other HTTP status (a `400`, a `401`, a `404`) are not: the delivery goes straight to `failed`. A `503` during your deployment will be retried. A `401` because your endpoint rejected the signature will not, which is the behavior you want: retrying will not make a signature valid.
+
+Retries follow exponential backoff with jitter, governed by four values:
+
+| Setting | Default | Bounds |
+|---|---|---|
+| `max_attempts` | 5 | 1 to 20 |
+| `base_delay_ms` | 500 ms | 100 ms to 60 s |
+| `max_delay_ms` | 30 s | at least `base_delay_ms` |
+| `max_total_delay_ms` | 120 s | at least `max_delay_ms` |
+
+The wait before each retry is drawn at random between 0 and a ceiling that doubles with each attempt. With the defaults, the ceilings are 1, 2, 4 and then 8 seconds. The jitter is not decorative: if a hundred deliveries fail together because your application goes down, they must not all come back in the same millisecond when it recovers. The price is that a retry can arrive almost immediately.
+
+These values are set field by field, at three levels: the webhook itself, otherwise the realm, otherwise the system default. A webhook can raise only `max_attempts` and inherit the delays. Reading a webhook returns both `retry_policy` (what it overrides) and `effective_retry_policy` (what will actually be applied), and the second one is the one to look at when you wonder what the worker will do.
+
+## When the business application is down
+
+This is where the difference between a webhook system and a `fetch` in a `try/catch` shows. Imagine the HR application is unavailable for an hour, on a Tuesday morning, because of a migration that goes wrong. During that time, three profiles are edited in the IAM.
+
+What happens, with the default settings:
+
+1. The administrator's action succeeds. It does not wait for the endpoint and does not fail if it is unreachable, which the documentation states explicitly.
+2. FerrisKey recorded one delivery per subscribed webhook before trying to send anything. The first attempt fails, the retry is scheduled.
+3. Five attempts or 120 seconds later, whichever comes first, the delivery goes to `failed`.
+4. FerrisKey records a `webhook_delivery_exhausted` event in SeaWatch, with the delivery id, the last error code and the number of attempts.
+
+In other words, with the default configuration, the endpoint has about two minutes to come back. An hour of downtime is not recovered by retries. It is recovered by what comes after.
+
+You can lengthen the window, per webhook or per realm:
+
+```json title="PUT /realms/acme/webhooks/{webhook_id} (excerpt)"
+{
+  "retry_policy": {
+    "max_attempts": 20,
+    "max_delay_ms": 300000,
+    "max_total_delay_ms": 3600000
+  }
+}
+```
+
+But the limit of 20 attempts caps what automatic retrying can absorb. With a maximum delay of 5 minutes, the sum of the wait ceilings across those 19 retries comes to roughly an hour. Since each wait is drawn between 0 and its ceiling, the real window is, on average, closer to half of that. This is my own calculation from the documented rules, not a measurement, but the order of magnitude is enough: backoff is built to absorb a blip, not an outage.
+
+For an outage, there is manual replay. The `webhook_delivery_exhausted` event is the one to wire your alert to: it is the difference between "a delivery failed then recovered" and "this endpoint has been unreachable long enough that we gave up". Once the application is back:
+
+```text
+POST /realms/acme/webhooks/{webhook_id}/deliveries/{delivery_id}/retry
+```
+
+The response is a `202`. A delivery that is still `pending` or `delivering` answers `409`: wait for it to finish. Replay re-sends the stored payload, unchanged, signed again with a new timestamp. It is not a fresh snapshot of the resource: the event described the world as it was, and replaying it says the same thing again. If Alice changed her name a second time in the meantime, the old event will arrive after the new one, in the order you replay. That is exactly the case the `updated_at` clause in the handler above absorbs without asking anyone for anything.
+
+When something does not work, the order of reading is simple. Is the webhook subscribed to anything (the console flags webhooks subscribed to nothing as "without event")? Is there a delivery for that event at all, and if not, is the trigger name exact? What does `last_status_code` say, which points at your endpoint, or `last_error_code`, which points at the path to reach it? Once fixed, replay rather than waiting for the next event to find out whether it works.
+
+## The queue: what it gives you, what it costs
+
+The behavior above rests on a `webhook_deliveries` table in PostgreSQL, introduced by FerrisKey's persisted delivery work ([#1340](https://github.com/ferriskey/ferriskey/pull/1340)). What follows comes from reading the code, not the documentation, and the constants quoted may change.
+
+When an event occurs, FerrisKey finds the subscribed webhooks and writes one `pending` row per webhook, with the full payload as JSONB. The first attempt leaves almost immediately, from an in-memory channel of 1024 slots, with at most 16 concurrent sends. If that channel is full, the delivery simply waits for the worker's next pass. The worker wakes up every 5 seconds, claims up to 8 due deliveries with `FOR UPDATE SKIP LOCKED` (so several FerrisKey instances do not fight over the same row), and processes them. A claimed delivery holds a 10-minute lease: if the instance holding it dies, the lease expires and the row goes back in the queue. An hourly sweep deletes finished deliveries older than 30 days.
+
+What this gives you:
+
+- Decoupling. The administrator's action depends neither on the latency nor on the availability of your endpoint.
+- Surviving restarts. The state of a delivery is in the database, not in a process's memory.
+- Observability. Every attempt leaves a queryable trace (HTTP status, error code, attempt count, next pass), and the console lets you open the payload that was sent.
+- Replay. It is only possible because the payload was kept.
+
+What it costs, and this is the part to read before building on it:
+
+- At least once, not exactly once. A delivery can arrive twice: your endpoint processed the request but did not answer in time, a lease expired, you replayed by hand. The delivery id, sent in `x-ferriskey-delivery-id`, stays the same on every attempt and every replay. It is the natural deduplication key. `resource_id` and `timestamp` cannot play that role.
+- No guaranteed order. Jitter, concurrent sends and retries mean an old event can arrive after a newer one. Nothing I read promises an order, and what the system does is consistent with that absence of promise. The way to protect yourself is to write it into the data (an `updated_at` to compare), not to hope for it from the infrastructure.
+- Coarser retry latency than it looks. A retry scheduled "in one second" is picked up by a worker that passes every 5 seconds. The real delay is closer to the next pass.
+- A write that is not in the same transaction as the action. According to the code, recording the delivery is a separate step, after the user update. If that write fails, FerrisKey logs it (`failed to record a webhook delivery; the event is lost`) and the action itself has succeeded. The case is rare, but it exists, and it weighs on the next section.
+- Space in the database. One row per delivery per webhook, with the whole payload, for 30 days.
+
+## When a webhook is not the right tool
+
+I think a webhook, even a well-built one, is not enough for data whose accuracy is critical. The case of a delivery lost upstream, just described, is precisely the one no retry mechanism can repair: the event was never recorded, so it will never be replayed. What I recommend is a periodic, slow reconciliation job that compares your table with the IAM's API and fixes the gap. Webhooks provide freshness, reconciliation provides correctness. Each covers the other's weak point.
+
+And if you need strict ordering, exactly-once delivery, or a very high volume of events, that is a different problem: a message bus with per-key ordering guarantees answers it better than an HTTP POST, however good the retries are.
+
+## Going further
+
+The [FerrisKey webhooks documentation](https://docs.ferriskey.rs/en/modules/webhooks/overview) details the payload format, the error codes and the rotation of the signing secret. On that last point, a tip from the docs: rotation takes effect immediately, including for deliveries already in the queue. If your endpoint does not know the new secret yet, it will reject requests that FerrisKey will not retry. Rotate the secret when you already have somewhere to deploy it.
+
+The code is on [GitHub](https://github.com/ferriskey/ferriskey).

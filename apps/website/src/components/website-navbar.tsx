@@ -2,8 +2,8 @@ import { LocaleSwitcher, getAppLinks } from '@explainer/ui'
 import { Icon } from '@iconify/react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from '../i18n/utils'
-import { modules } from '../lib/modules'
 import { moduleSprites } from '../lib/module-sprites'
+import { modules } from '../lib/modules'
 import { PixelSprite } from './pixel/pixel-sprite'
 
 function getClientLocale(): string {
@@ -134,7 +134,6 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
   const links: Link[] = [
     { label: t('nav.roadmap'), href: 'https://github.com/orgs/ferriskey/projects/1', external: true },
     { label: t('nav.releaseNotes'), href: '/release-notes' },
-    { label: t('nav.getStarted'), href: docsHref },
     ...(blogHref ? [{ label: 'Blog', href: blogHref }] : []),
   ]
   const externalProps = (link: Link) => (link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})

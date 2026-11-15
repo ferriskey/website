@@ -22,7 +22,7 @@ const category = tags[0]
 
 <article class:list={['post-card group h-full', className]}>
   <a href={href} class="flex h-full flex-col transition-colors hover:bg-foreground/[0.03]">
-    <div class:list={['shrink-0 overflow-hidden border-b border-border bg-muted', featured ? 'aspect-[16/9]' : 'aspect-[16/10]']}>
+    <div class:list={['shrink-0 overflow-hidden border-b border-border bg-muted aspect-[1200/630]']}>
       {cover ? (
         <img src={cover} alt={title} class="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" loading="lazy" />
       ) : (

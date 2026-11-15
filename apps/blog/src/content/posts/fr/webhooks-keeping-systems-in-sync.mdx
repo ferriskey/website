@@ -1,0 +1,179 @@
+---
+title: "Un webhook perdu, c'est une donnée fausse en production"
+description: "Quand l'identité vit dans l'IAM et que l'application métier garde sa propre copie, tout repose sur une notification. Ce que garantit un webhook, ce qui se passe quand l'application est down, comment fonctionne la file d'attente de FerrisKey, et ce que cela coûte."
+short_description: "Un webhook ne se juge pas quand tout va bien, mais le jour où l'application métier est injoignable."
+date: 2026-11-15
+tags: [webhooks, architecture, integration, reliability, ferriskey, iam]
+status: published
+author: leadcode_dev
+---
+
+Alice change de nom de famille. Un administrateur corrige son profil dans l'IAM, l'écran confirme l'enregistrement, et tout le monde passe à autre chose. Mais l'application RH garde sa propre table `employees`, avec son propre `lastname`. Si personne ne lui dit que l'identité a changé, elle continuera d'éditer des documents au mauvais nom, sans erreur, sans alerte, jusqu'à ce que quelqu'un le remarque.
+
+Ce problème n'a rien d'exotique. Dès qu'un système de gestion des identités cohabite avec une application qui garde une copie de certains champs, vous avez deux sources pour la même information, et une seule des deux est la bonne. La question n'est pas de savoir si elles divergeront, mais comment vous le saurez, et combien de temps cela durera.
+
+## Trois façons de garder deux bases d'accord
+
+Interroger l'IAM à chaque besoin supprime la copie, donc le problème, mais couple la disponibilité de votre application à celle de l'IAM et ajoute un appel réseau à chaque lecture. Interroger périodiquement (le polling) garde la copie mais fixe la fraîcheur de la donnée à la période du job. Et partager la base est un contrat que plus personne ne peut faire évoluer.
+
+Le webhook prend le chemin inverse : c'est l'IAM qui prévient, au moment où la chose se produit. Votre application garde sa copie locale, rapide, et ne l'interroge jamais pour savoir si quelque chose a changé.
+
+Il y a une contrepartie, et tout ce qui suit en découle. Un webhook est une promesse : « je vous préviens ». Une promesse peut ne pas être tenue, parce que le réseau coupe, parce que votre application redémarre, parce qu'un déploiement a duré trois minutes de trop. Un webhook sans stratégie d'échec ne remplace pas le polling, il le rend invisible, ce qui est pire. Le travail d'un bon système de webhooks se joue donc presque entièrement sur le chemin d'échec.
+
+## Le cas simple : un nom qui change
+
+Dans FerrisKey, un webhook appartient à un realm, pointe vers un endpoint et s'abonne à des événements précis. Pour notre application RH :
+
+```json title="POST /realms/acme/webhooks"
+{
+  "name": "Synchronisation RH",
+  "description": "Garde la table employees alignée sur les identités",
+  "endpoint": "https://rh.acme.example/webhooks/ferriskey",
+  "headers": { "X-Webhook-Source": "ferriskey" },
+  "subscribers": ["user.created", "user.updated", "user.deleted"]
+}
+```
+
+Il existe 38 événements auxquels un webhook peut s'abonner, regroupés par ressource (utilisateurs, clients, rôles, realm, authentification…). La documentation précise qu'en 0.10.0 le serveur n'en émet que 33 : les cinq autres acceptent un abonnement, puis restent silencieux. Vérifiez donc la [liste des événements](https://docs.ferriskey.rs/en/modules/webhooks/triggers) avant de compter sur l'un d'eux.
+
+Quand l'administrateur modifie le profil d'Alice, FerrisKey envoie un POST dont le corps ressemble à ceci :
+
+```json title="user.updated (extrait)"
+{
+  "event": "user.updated",
+  "timestamp": "2026-03-17T14:30:00.123456+00:00",
+  "resource_id": "01914b3c-1234-7f5a-b456-000000000001",
+  "data": {
+    "id": "01914b3c-5678-7f5a-b456-000000000002",
+    "username": "alice",
+    "firstname": "Alice",
+    "lastname": "Martin",
+    "email": "alice@example.com",
+    "updated_at": "2026-03-17T14:30:00.101234Z"
+  }
+}
+```
+
+Deux détails de ce format surprennent au premier contact, et la documentation les signale. D'abord, `resource_id` n'identifie pas l'utilisateur : pour presque tous les événements, c'est l'identifiant du realm. L'objet concerné se lit dans `data.id`. Ensuite, `data` change de forme selon l'événement : l'utilisateur complet pour `user.updated`, un simple identifiant pour `client.deleted`, `null` pour `auth.reset_password`.
+
+:::callout{variant="warning"}
+`user.updated` est aussi émis quand un rôle est retiré à un utilisateur. Dans ce cas, `data` est le rôle, pas l'utilisateur. Un handler qui lit `data.firstname` sans vérifier ce qu'il reçoit écrasera des noms par `undefined`. Testez la présence de `data.username` avant de traiter un changement de profil.
+:::
+
+Côté application, le handler tient en quelques lignes, à condition de choisir une écriture qui supporte les mauvais jours :
+
+```ts title="webhooks/ferriskey.ts"
+const { event, data } = JSON.parse(rawBody.toString('utf8'))
+
+if (event === 'user.updated' && data.username) {
+  await db.query(
+    `INSERT INTO employees (iam_user_id, firstname, lastname, iam_updated_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (iam_user_id) DO UPDATE
+        SET firstname = EXCLUDED.firstname,
+            lastname = EXCLUDED.lastname,
+            iam_updated_at = EXCLUDED.iam_updated_at
+      WHERE employees.iam_updated_at < EXCLUDED.iam_updated_at`,
+    [data.id, data.firstname, data.lastname, data.updated_at],
+  )
+}
+
+res.writeHead(204).end()
+```
+
+La clause `WHERE employees.iam_updated_at < EXCLUDED.iam_updated_at` fait trois choses à la fois. Rejouer deux fois le même événement ne change rien. Un événement ancien qui arrive après un plus récent est ignoré. Et si la création d'Alice a été manquée, la première mise à jour crée la ligne (si votre table peut se contenter du profil pour exister). Vous n'avez pas écrit de logique de reprise, vous avez rendu l'écriture insensible à l'ordre et aux doublons. Pour la suite de l'article, c'est la propriété la plus utile que puisse avoir votre côté du contrat.
+
+Avant de toucher à `data`, ce handler devrait aussi vérifier la signature. FerrisKey signe chaque tentative avec un HMAC-SHA256 calculé sur `{timestamp}.{corps brut}`, avec le secret du webhook, et envoie le résultat dans `x-ferriskey-signature` (le détail et un exemple complet sont dans la [documentation du format](https://docs.ferriskey.rs/en/modules/webhooks/payload#verifying-the-signature)). Le timestamp fait partie de la chaîne signée : quelqu'un qui capture une requête ne peut pas la rejouer plus tard en changeant simplement l'en-tête. Un en-tête statique, comme le `Authorization` que l'on peut aussi configurer, prouve que l'appelant connaît un jeton, pas que le corps n'a pas été modifié.
+
+## Ce que FerrisKey vérifie avant d'appeler quoi que ce soit
+
+Un webhook est, du point de vue de l'IAM, une requête sortante vers une adresse choisie par un utilisateur. C'est exactement la forme d'une attaque SSRF, et la documentation en tire les conséquences : FerrisKey refuse d'enregistrer un endpoint qui n'est pas en `https`, qui contient des identifiants dans l'URL, ou qui est une adresse en boucle locale, privée ou link-local. Le nom d'hôte est revérifié à chaque résolution, au moment de la livraison. Pour le développement local, une variable d'environnement (`WEBHOOK_ALLOW_PRIVATE_ENDPOINTS=true`) lève la restriction, et elle ne doit jamais être active en production.
+
+Le reste du comportement de livraison est volontairement strict : FerrisKey attend 5 secondes pour se connecter et 10 secondes au total, considère tout `2xx` comme une livraison réussie, et ne suit pas les redirections. Un `301` de `http` vers `https` est donc enregistré comme un échec. Ce n'est pas un défaut, c'est ce qui rend le comportement prévisible : l'endpoint décide, par son code de statut, du sort de la livraison.
+
+## Quand l'endpoint répond mal : le retry automatique
+
+Toutes les erreurs ne se valent pas, et FerrisKey ne les traite pas de la même façon. Une panne de transport, une résolution DNS qui échoue, un `5xx`, un `408` ou un `429` sont réessayés. Une configuration invalide, une adresse refusée, ou n'importe quel autre statut HTTP (un `400`, un `401`, un `404`) ne le sont pas : la livraison passe directement en `failed`. Un `503` pendant votre déploiement sera retenté. Un `401` parce que votre endpoint a rejeté la signature ne le sera pas, ce qui est le comportement que l'on veut : réessayer ne rendra pas une signature valide.
+
+Les réessais suivent un backoff exponentiel avec jitter, gouverné par quatre valeurs :
+
+| Réglage | Valeur par défaut | Bornes |
+|---|---|---|
+| `max_attempts` | 5 | 1 à 20 |
+| `base_delay_ms` | 500 ms | 100 ms à 60 s |
+| `max_delay_ms` | 30 s | au moins `base_delay_ms` |
+| `max_total_delay_ms` | 120 s | au moins `max_delay_ms` |
+
+L'attente avant chaque réessai est tirée au hasard entre 0 et un plafond qui double à chaque tentative. Avec les valeurs par défaut, les plafonds sont de 1, 2, 4 puis 8 secondes. Le jitter n'est pas décoratif : si cent livraisons échouent ensemble parce que votre application tombe, elles ne doivent pas toutes revenir à la même milliseconde quand elle remonte. Son prix est qu'un réessai peut arriver presque immédiatement.
+
+Ces valeurs se règlent champ par champ, à trois niveaux : le webhook lui-même, sinon le realm, sinon la valeur système. Un webhook peut donc relever uniquement `max_attempts` et hériter des délais. Une lecture du webhook renvoie `retry_policy` (ce qu'il surcharge) et `effective_retry_policy` (ce qui sera réellement appliqué), et c'est le second qu'il faut regarder quand on se demande ce que fera le worker.
+
+## Quand l'application métier est down
+
+C'est ici que la différence entre un système de webhooks et un `fetch` dans un `try/catch` se voit. Imaginons que l'application RH soit indisponible pendant une heure, un mardi matin, pour une migration qui se passe mal. Pendant ce temps, trois profils sont modifiés dans l'IAM.
+
+Ce qui se passe, avec les réglages par défaut :
+
+1. L'action de l'administrateur réussit. Elle n'attend pas l'endpoint et n'échoue pas s'il est injoignable, c'est dit explicitement dans la documentation.
+2. FerrisKey a enregistré une livraison par webhook abonné avant de tenter l'envoi. La première tentative échoue, le réessai est planifié.
+3. Cinq tentatives ou 120 secondes plus tard, selon ce qui arrive en premier, la livraison passe en `failed`.
+4. FerrisKey enregistre un événement `webhook_delivery_exhausted` dans SeaWatch, avec l'identifiant de la livraison, le dernier code d'erreur et le nombre de tentatives.
+
+Autrement dit, avec la configuration par défaut, l'endpoint dispose d'environ deux minutes pour revenir. Une heure d'indisponibilité n'est pas rattrapée par les retries. Elle est rattrapée par ce qui vient après.
+
+On peut allonger la fenêtre, par webhook ou par realm :
+
+```json title="PUT /realms/acme/webhooks/{webhook_id} (extrait)"
+{
+  "retry_policy": {
+    "max_attempts": 20,
+    "max_delay_ms": 300000,
+    "max_total_delay_ms": 3600000
+  }
+}
+```
+
+Mais la limite à 20 tentatives plafonne ce que le réessai automatique peut absorber. Avec un délai maximal de 5 minutes, la somme des plafonds d'attente de ces 19 réessais est d'à peu près une heure. Comme chaque attente est tirée entre 0 et son plafond, la fenêtre réelle est, en moyenne, plutôt de l'ordre de la moitié. C'est mon calcul à partir des règles de la documentation, pas une mesure, mais l'ordre de grandeur suffit : le backoff est fait pour absorber une coupure, pas une panne.
+
+Pour une panne, il y a le rejeu manuel. L'événement `webhook_delivery_exhausted` est celui sur lequel brancher votre alerte : c'est la différence entre « une livraison a échoué puis s'est rétablie » et « cet endpoint est injoignable depuis assez longtemps pour que nous ayons renoncé ». Quand l'application est de retour :
+
+```text
+POST /realms/acme/webhooks/{webhook_id}/deliveries/{delivery_id}/retry
+```
+
+La réponse est un `202`. Une livraison encore `pending` ou `delivering` répond `409` : il faut attendre qu'elle ait fini. Le rejeu renvoie le payload stocké, inchangé, signé à nouveau avec un nouveau timestamp. Ce n'est pas un instantané frais de la ressource : l'événement décrit le monde tel qu'il était, et le rejouer redit la même chose. Si Alice a changé de nom une deuxième fois entre-temps, l'ancien événement arrivera après le nouveau, dans l'ordre où vous rejouez. C'est exactement le cas que la clause `updated_at` du handler plus haut absorbe sans rien demander à personne.
+
+Quand quelque chose ne marche pas, l'ordre de lecture est simple. Le webhook est-il abonné à quelque chose (la console signale « sans événement » les webhooks qui ne le sont à rien) ? Existe-t-il une livraison pour cet événement, et si non, le nom du déclencheur est-il exact ? Que dit `last_status_code`, qui pointe vers votre endpoint, ou `last_error_code`, qui pointe vers le chemin pour l'atteindre ? Une fois corrigé, rejouez plutôt que d'attendre le prochain événement pour savoir si ça marche.
+
+## La file d'attente : ce qu'elle apporte, ce qu'elle coûte
+
+Le comportement ci-dessus repose sur une table `webhook_deliveries` dans PostgreSQL, introduite par la fonctionnalité de livraison persistée de FerrisKey ([#1340](https://github.com/ferriskey/ferriskey/pull/1340)). Ce qui suit vient de la lecture du code et non de la documentation, et les constantes citées peuvent évoluer.
+
+Quand un événement survient, FerrisKey trouve les webhooks abonnés et écrit une ligne `pending` par webhook, avec le payload complet en JSONB. La première tentative part presque aussitôt, depuis un canal mémoire de 1024 places, avec au plus 16 envois simultanés. Si ce canal est plein, la livraison attend simplement le passage du worker. Ce worker, lui, se réveille toutes les 5 secondes, réclame jusqu'à 8 livraisons échues avec `FOR UPDATE SKIP LOCKED` (donc plusieurs instances de FerrisKey ne se disputent pas la même ligne), et les traite. Une livraison réclamée porte un bail de 10 minutes : si l'instance qui la détient meurt, le bail expire, et la ligne est remise dans la file. Un nettoyage horaire supprime les livraisons terminées de plus de 30 jours.
+
+Ce que cela apporte :
+
+- Le découplage. L'action de l'administrateur ne dépend ni de la latence ni de la disponibilité de votre endpoint.
+- La survie aux redémarrages. L'état d'une livraison est en base, pas dans la mémoire d'un processus.
+- L'observabilité. Chaque tentative laisse une trace consultable (statut HTTP, code d'erreur, nombre de tentatives, prochain passage), et la console permet d'ouvrir le payload envoyé.
+- Le rejeu. Il n'est possible que parce que le payload a été conservé.
+
+Ce que cela coûte, et c'est la partie à lire avant de bâtir dessus :
+
+- Au moins une fois, pas exactement une fois. Une livraison peut arriver en double : votre endpoint a traité la requête mais n'a pas répondu à temps, un bail a expiré, vous avez rejoué à la main. L'identifiant de la livraison, envoyé dans `x-ferriskey-delivery-id`, reste le même à chaque tentative et à chaque rejeu. C'est la clé de déduplication naturelle. `resource_id` et `timestamp` ne peuvent pas jouer ce rôle.
+- Pas d'ordre garanti. Jitter, envois concurrents et réessais font qu'un événement ancien peut arriver après un plus récent. Rien dans ce que j'ai lu ne promet un ordre, et ce que le système fait est cohérent avec cette absence de promesse. Le moyen de s'en protéger est de l'écrire dans la donnée (un `updated_at` à comparer), pas de l'espérer de l'infrastructure.
+- Une latence de réessai plus grossière qu'il n'y paraît. Un réessai planifié « dans une seconde » est repris par un worker qui passe toutes les 5 secondes. Le délai réel est donc plutôt celui du prochain passage.
+- Une écriture qui n'est pas dans la même transaction que l'action. D'après le code, l'enregistrement de la livraison est une étape séparée, après la mise à jour de l'utilisateur. Si cette écriture échoue, FerrisKey le journalise (`failed to record a webhook delivery; the event is lost`) et l'action, elle, a réussi. Le cas est rare, mais il existe, et il pèse sur la section suivante.
+- De la place en base. Une ligne par livraison et par webhook, avec le payload entier, pendant 30 jours.
+
+## Quand un webhook n'est pas le bon outil
+
+Je pense qu'un webhook, même bien fait, ne suffit pas pour une donnée dont l'exactitude est critique. Le cas d'une livraison perdue en amont, qui vient d'être décrit, est précisément celui qu'aucun mécanisme de retry ne peut réparer : l'événement n'a jamais été enregistré, donc il ne sera jamais rejoué. Ce que je recommande, c'est un job de réconciliation périodique, lent, qui compare votre table à l'API de l'IAM et corrige l'écart. Les webhooks assurent la fraîcheur, la réconciliation assure la correction. Chacun couvre le point faible de l'autre.
+
+Et si vous avez besoin d'un ordre strict, d'une livraison exactement une fois, ou d'un très gros volume d'événements, c'est un autre problème : un bus de messages avec des garanties d'ordre par clé répond mieux à cette question qu'un POST HTTP, quelle que soit la qualité des retries.
+
+## Pour aller plus loin
+
+La [documentation des webhooks de FerrisKey](https://docs.ferriskey.rs/en/modules/webhooks/overview) détaille le format des payloads, les codes d'erreur et la rotation du secret de signature. Sur ce dernier point, un conseil tiré de la doc : la rotation prend effet immédiatement, y compris pour les livraisons déjà en file. Si votre endpoint ne connaît pas encore le nouveau secret, il rejettera des requêtes que FerrisKey ne réessaiera pas. Faites tourner le secret quand vous avez déjà de quoi le déployer.
+
+Le code est sur [GitHub](https://github.com/ferriskey/ferriskey).
