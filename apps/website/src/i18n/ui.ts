@@ -2,9 +2,6 @@ export const defaultLang = 'en' as const
 
 export const ui = {
   en: {
-    // Footer
-    'footer.text': '© 2025 Ferriskey · Apache 2.0',
-
     // Nav
     'nav.features': 'Features',
     'nav.modules': 'Modules',
@@ -302,9 +299,6 @@ export const ui = {
     'cta.github': 'View on GitHub',
   },
   fr: {
-    // Footer
-    'footer.text': '© 2025 Ferriskey · Apache 2.0',
-
     // Nav
     'nav.features': 'Fonctionnalités',
     'nav.modules': 'Modules',

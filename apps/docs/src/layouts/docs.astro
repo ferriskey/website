@@ -6,6 +6,7 @@ import { Sidebar } from '../components/sidebar'
 import { TableOfContents, type TocHeading } from '../components/toc'
 import { fetchContributors, sortContributors } from '@explainer/ui'
 import { Pagination } from '../components/pagination'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 import type { NavItem, ProjectInfo, BreadcrumbItem } from '../lib/docs'
 
 interface Props {
@@ -163,6 +164,9 @@ const appUrlOverrides = {
       <div transition:animate="none">
         <TableOfContents headings={headings} contributors={contributors} client:load />
       </div>
+    </div>
+    <div class="border-t border-border">
+      <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} locale={currentLocale === 'fr' ? 'fr' : 'en'} containerClass="max-w-[90rem]" />
     </div>
   </body>
 </html>

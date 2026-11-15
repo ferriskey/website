@@ -1,29 +1,31 @@
 ---
-import { PixelSprite } from './pixel/pixel-sprite'
-import { crab, crabAsleep, key } from './pixel/sprites'
+import { PixelSprite } from '../pixel/pixel-sprite'
+import { crab, crabAsleep, key } from '../pixel/sprites'
+import { appHref, contactEmail, footerCopy, type FooterLocale } from '../lib/footer'
 
 interface Props {
-  docsHref?: string
-  websiteHref?: string
-  tagline?: string
-  copyright?: string
+  websiteUrl?: string
+  docsUrl?: string
+  blogUrl?: string
+  locale?: FooterLocale
+  containerClass?: string
 }
-const { docsHref = '/', websiteHref = '/', tagline = 'Open-source identity and access management, written in Rust.', copyright = '© 2025 Ferriskey · Apache 2.0' } = Astro.props
+const { websiteUrl, docsUrl, blogUrl, locale = 'en', containerClass = 'max-w-6xl' } = Astro.props
+const copy = footerCopy[locale] ?? footerCopy.en
 
 const columns = [
   {
     key: 'footer.product',
-    title: 'Product',
+    title: copy.product,
     links: [
-      { label: 'Documentation', href: docsHref },
-      { label: 'Website', href: websiteHref },
-      { label: 'Release notes', href: `${websiteHref}/release-notes` },
+      { label: 'Documentation', href: appHref(docsUrl, '/') },
+      { label: 'Release notes', href: appHref(websiteUrl, '/release-notes') },
       { label: 'Roadmap', href: 'https://github.com/orgs/ferriskey/projects/1' },
     ],
   },
   {
     key: 'footer.community',
-    title: 'Community',
+    title: copy.community,
     links: [
       { label: 'GitHub', href: 'https://github.com/ferriskey/ferriskey' },
       { label: 'Discussions', href: 'https://github.com/ferriskey/ferriskey/discussions' },
@@ -32,35 +34,37 @@ const columns = [
   },
   {
     key: 'footer.project',
-    title: 'Project',
+    title: copy.project,
     links: [
-      { label: 'Blog', href: '/' },
+      { label: 'Blog', href: appHref(blogUrl, '/') },
       { label: 'Governance', href: 'https://github.com/ferriskey/ferriskey/blob/main/GOVERNANCE.md' },
       { label: 'Security', href: 'https://github.com/ferriskey/ferriskey/blob/main/SECURITY.md' },
     ],
   },
 ]
+
+const year = new Date().getFullYear()
 ---
 
 <footer class="overflow-hidden">
-  <div class="mx-auto max-w-6xl border-x border-border">
+  <div class:list={['mx-auto border-x border-border', containerClass]}>
     <nav aria-label="Footer" class="grid border-b border-border md:grid-cols-[1.5fr_1fr_1fr_1fr]">
       <div class="flex flex-col justify-between gap-12 border-b border-border px-5 py-14 sm:px-10 md:border-b-0 md:border-r">
         <div>
-          <a href="/" class="flex items-center gap-3 text-lg font-semibold tracking-tight">
+          <a href={appHref(websiteUrl, '/')} class="flex items-center gap-3 text-lg font-semibold tracking-tight">
             <img src="/logo.svg" alt="" width="24" height="26" class="h-[26px] w-6" />
             FerrisKey
           </a>
-          <p class="mt-6 max-w-xs text-pretty text-xl font-medium leading-snug tracking-[-0.02em]">{tagline}</p>
+          <p class="mt-6 max-w-xs text-pretty text-xl font-medium leading-snug tracking-[-0.02em]" data-t="footer.tagline">{copy.tagline}</p>
         </div>
-        <a href="mailto:contact@ferriskey.io" class="inline-flex w-fit items-center gap-2 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
-          <span>Contact us</span>
+        <a href={`mailto:${contactEmail}`} class="inline-flex w-fit items-center gap-2 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+          <span data-t="footer.contact">{copy.contact}</span>
           <span aria-hidden="true">→</span>
         </a>
       </div>
       {columns.map((c) => (
         <div class="border-b border-border px-5 py-12 last:border-b-0 sm:px-10 md:border-b-0 md:border-r md:last:border-r-0">
-          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">{c.title}</p>
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary" data-t={c.key}>{c.title}</p>
           <ul class="mt-6 space-y-1">
             {c.links.map((l) => (
               <li>
@@ -79,7 +83,7 @@ const columns = [
     </nav>
 
     <p class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-6 text-xs text-muted-foreground sm:px-10">
-      <span>{copyright}</span>
+      <span>© {year} FerrisKey · Apache 2.0</span>
       <span class="font-pixel uppercase">Fait en Rust</span>
     </p>
 

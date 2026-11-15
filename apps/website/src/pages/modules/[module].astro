@@ -1,7 +1,7 @@
 ---
 import Base from '../../layouts/base.astro'
 import { WebsiteNavbar } from '../../components/website-navbar'
-import SiteFooter from '../../components/site-footer.astro'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 import ModuleVisual from '../../components/module-visual.astro'
 import { PixelSprite } from '../../components/pixel/pixel-sprite'
 import { modules, type FerrisModule } from '../../lib/modules'
@@ -147,7 +147,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
     </section>
   </main>
 
-  <SiteFooter />
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
 </Base>
 
 <style>

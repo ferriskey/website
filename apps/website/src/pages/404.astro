@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 
 const appUrlOverrides = {
   website: import.meta.env.PUBLIC_WEBSITE_URL,
@@ -26,9 +27,5 @@ const appUrlOverrides = {
     </a>
   </main>
 
-  <footer class="border-t">
-    <div class="mx-auto max-w-7xl px-6 py-8 text-sm text-muted-foreground text-center" data-t="footer.text">
-      © 2025 Ferriskey · Apache 2.0
-    </div>
-  </footer>
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
 </Base>
