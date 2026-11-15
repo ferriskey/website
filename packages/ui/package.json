@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
+    "./pixel/pixel-sprite": "./src/pixel/pixel-sprite.tsx",
+    "./pixel/sprites": "./src/pixel/sprites.ts",
     "./styles/globals.css": "./src/styles/globals.css"
   },
   "dependencies": {
