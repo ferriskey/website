@@ -21,7 +21,7 @@ const { hero, anchors, minute, moments, manages, options, ferriskey, code, faq, 
 const pad = (n: number) => String(n).padStart(2, '0')
 ---
 
-<Base title={why.meta.title} description={why.meta.description}>
+<Base title={why.meta.title} description={why.meta.description} thumbnail="/why/thumbnail.png">
   <script is:inline>
     ;(function () {
       function detectLocale() {
@@ -34,7 +34,12 @@ const pad = (n: number) => String(n).padStart(2, '0')
       }
       function apply() {
         if (!document.querySelector('[data-why]')) return
-        document.documentElement.lang = detectLocale()
+        var locale = detectLocale()
+        document.documentElement.lang = locale
+        var thumb = locale === 'fr' ? '/thumbnails/fr/why/thumbnail.png' : '/why/thumbnail.png'
+        document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(function (el) {
+          el.setAttribute('content', new URL(thumb, location.origin).toString())
+        })
       }
       apply()
       if (!window.__whyLocale) {
