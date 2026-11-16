@@ -1,7 +1,7 @@
 ---
 import Base from '../../layouts/base.astro'
 import { WebsiteNavbar } from '../../components/website-navbar'
-import SiteFooter from '../../components/site-footer.astro'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 import CtaSection from '../../components/cta-section.astro'
 import { PixelSprite } from '../../components/pixel/pixel-sprite'
 import { modules } from '../../lib/modules'
@@ -71,7 +71,7 @@ const short: Record<string, string> = {
     <CtaSection docsHref={docsHref} />
   </main>
 
-  <SiteFooter />
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
 </Base>
 
 <style>

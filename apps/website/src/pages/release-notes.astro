@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/base.astro'
 import { WebsiteNavbar } from '../components/website-navbar'
-import SiteFooter from '../components/site-footer.astro'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 import ReleaseSideScenes from '../components/release-side-scenes.astro'
 import { latestRelease, releaseNotes, releaseNoteTranslations } from '../lib/release-notes'
 import { ui } from '../i18n/ui'
@@ -13,7 +13,6 @@ const appUrlOverrides = {
 }
 
 const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
-const blogHref = appUrlOverrides.blog ?? '/'
 const translations = ui.fr
 
 const firstRelease = releaseNotes[releaseNotes.length - 1]
@@ -186,7 +185,7 @@ function formatDate(date: string, locale = 'en-US') {
     </section>
   </main>
 
-  <SiteFooter docsHref={docsHref} blogHref={blogHref} />
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
 </Base>
 
 <script is:inline define:vars={{ translations, releaseNoteTranslations }}>

@@ -6,7 +6,7 @@ import UseCasesSection from '../components/use-cases-section.astro'
 import CapabilitiesSection from '../components/capabilities-section.astro'
 import ProblemsSection from '../components/problems-section.astro'
 import CommunitySection from '../components/community-section.astro'
-import SiteFooter from '../components/site-footer.astro'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
 import UiShowcaseSection from '../components/ui-showcase-section.astro'
 import CoreTeamSection from '../components/core-team-section.astro'
 import SponsorsSection from '../components/sponsors-section.astro'
@@ -22,7 +22,6 @@ const appUrlOverrides = {
 }
 
 const docsHref = `${appUrlOverrides.docs ?? ''}/en/discover/getting-started`
-const blogHref = appUrlOverrides.blog ?? '/'
 const translations = ui.fr
 const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
 ---
@@ -41,7 +40,7 @@ const thumbnails = { en: '/thumbnail.png', fr: '/thumbnails/fr/thumbnail.png' }
   <FranceNuageSection />
   <LatestArticlesSection />
   <CtaSection docsHref={docsHref} />
-  <SiteFooter docsHref={docsHref} blogHref={blogHref} />
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
 </Base>
 
 <script is:inline define:vars={{ translations, thumbnails }}>

@@ -1,0 +1,9 @@
+---
+interface Props {
+  value: string | null
+  locale: 'en' | 'fr'
+}
+const { value, locale } = Astro.props
+---
+
+{value ?? <mark class="bg-primary/15 px-1 text-primary">{locale === 'fr' ? '[À compléter]' : '[To be completed]'}</mark>}

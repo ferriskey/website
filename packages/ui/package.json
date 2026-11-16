@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./components/*": "./src/components/*.tsx",
+    "./components/site-footer.astro": "./src/components/site-footer.astro",
     "./lib/*": "./src/lib/*.ts",
+    "./pixel/pixel-sprite": "./src/pixel/pixel-sprite.tsx",
+    "./pixel/sprites": "./src/pixel/sprites.ts",
     "./styles/globals.css": "./src/styles/globals.css"
   },
   "dependencies": {
