@@ -7,6 +7,7 @@ export const ui = {
     'nav.modules': 'Modules',
     'nav.allModules': 'All modules',
     'nav.releaseNotes': 'Release Notes',
+    'nav.why': 'Why an IAM',
     'nav.roadmap': 'Roadmap',
     'nav.getStarted': 'Get Started',
 
@@ -306,6 +307,7 @@ export const ui = {
     'nav.modules': 'Modules',
     'nav.allModules': 'Tous les modules',
     'nav.releaseNotes': 'Release notes',
+    'nav.why': 'Pourquoi un IAM',
     'nav.roadmap': 'Roadmap',
     'nav.getStarted': 'Démarrer',
 

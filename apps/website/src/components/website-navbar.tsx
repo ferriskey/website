@@ -132,6 +132,7 @@ export function WebsiteNavbar({ appUrlOverrides }: WebsiteNavbarProps) {
   }, [])
 
   const links: Link[] = [
+    { label: t('nav.why'), href: '/why' },
     { label: t('nav.roadmap'), href: 'https://github.com/orgs/ferriskey/projects/1', external: true },
     { label: t('nav.releaseNotes'), href: '/release-notes' },
     ...(blogHref ? [{ label: 'Blog', href: blogHref }] : []),
