@@ -1,0 +1,496 @@
+---
+import Base from '../layouts/base.astro'
+import { WebsiteNavbar } from '../components/website-navbar'
+import SiteFooter from '@explainer/ui/components/site-footer.astro'
+import { PixelSprite } from '../components/pixel/pixel-sprite'
+import { crab, key } from '../components/pixel/sprites'
+import T from '../components/why/t.astro'
+import { why, contactEmail } from '../lib/why'
+
+const appUrlOverrides = {
+  website: import.meta.env.PUBLIC_WEBSITE_URL,
+  docs: import.meta.env.PUBLIC_DOCS_URL,
+  blog: import.meta.env.PUBLIC_BLOG_URL,
+}
+const docs = appUrlOverrides.docs ?? ''
+const docsHref = `${docs}/en/discover/getting-started`
+const mailto = `mailto:${contactEmail}`
+const vars = { email: contactEmail }
+
+const { hero, anchors, minute, moments, manages, options, ferriskey, code, faq, help, cta } = why
+const pad = (n: number) => String(n).padStart(2, '0')
+---
+
+<Base title={why.meta.title} description={why.meta.description} thumbnail="/why/thumbnail.png">
+  <script is:inline>
+    ;(function () {
+      function detectLocale() {
+        var match = document.cookie.match(/(?:^|; )locale=([^;]*)/)
+        var cookie = match ? match[1] : null
+        if (cookie === 'en' || cookie === 'fr') return cookie
+        var browser = (navigator.language || '').split('-')[0]
+        if (browser === 'en' || browser === 'fr') return browser
+        return 'en'
+      }
+      function apply() {
+        if (!document.querySelector('[data-why]')) return
+        var locale = detectLocale()
+        document.documentElement.lang = locale
+        var thumb = locale === 'fr' ? '/thumbnails/fr/why/thumbnail.png' : '/why/thumbnail.png'
+        document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(function (el) {
+          el.setAttribute('content', new URL(thumb, location.origin).toString())
+        })
+      }
+      apply()
+      if (!window.__whyLocale) {
+        window.__whyLocale = true
+        document.addEventListener('astro:after-swap', apply)
+        window.addEventListener('ferriskey:locale-change', apply)
+      }
+    })()
+  </script>
+
+  <WebsiteNavbar appUrlOverrides={appUrlOverrides} client:load transition:persist />
+
+  <main data-why>
+    <!-- Hero -->
+    <section class="border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border px-5 py-20 sm:px-8 sm:py-32">
+        <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary"><T text={hero.label} /></p>
+        <h1 class="mt-6 max-w-4xl text-balance text-[clamp(2rem,4.6vw,3.75rem)] font-medium leading-[1.05] tracking-[-0.04em]">
+          <T text={hero.title} />
+        </h1>
+        <p class="mt-7 max-w-2xl text-pretty text-lg leading-8 text-muted-foreground"><T text={hero.description} /></p>
+        <nav class="mt-12 flex flex-wrap gap-2" aria-label="Sections">
+          {anchors.map((a) => (
+            <a
+              href={`#${a.id}`}
+              class="border border-border bg-card px-3 py-2 font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+            >
+              <T text={a.label} />
+            </a>
+          ))}
+        </nav>
+      </div>
+    </section>
+
+    <!-- 1. En une minute -->
+    <section id="minute" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto grid max-w-6xl border-x border-border lg:grid-cols-[2fr_3fr]">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24 lg:border-b-0 lg:border-r">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">01 · <T text={minute.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={minute.audience} /></p>
+          <h2 class="mt-6 text-balance text-[clamp(1.75rem,3.4vw,2.75rem)] font-medium leading-[1.08] tracking-[-0.03em]">
+            <T text={minute.title} />
+          </h2>
+        </div>
+        <div class="px-5 py-16 sm:px-8 sm:py-24">
+          {minute.paragraphs.map((p) => (
+            <p class="mb-6 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground"><T text={p} /></p>
+          ))}
+          <div class="mt-10 flex max-w-xl gap-4 border border-border bg-surface-tint p-6">
+            <span class="mt-2 size-2.5 shrink-0 bg-primary" aria-hidden="true"></span>
+            <p class="text-pretty text-base leading-7 [&_strong]:font-semibold [&_strong]:text-foreground"><T text={minute.punchline} /></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Les moments où ça casse -->
+    <section id="moments" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">02 · <T text={moments.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={moments.audience} /></p>
+          <h2 class="mt-6 max-w-3xl text-balance text-[clamp(1.75rem,3.8vw,3rem)] font-medium leading-[1.06] tracking-[-0.035em]">
+            <T text={moments.title} />
+          </h2>
+          <p class="mt-6 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground"><T text={moments.description} /></p>
+        </div>
+
+        <ol>
+          {moments.items.map((m, i) => (
+            <li class="grid border-b border-border last:border-b-0 lg:grid-cols-[1fr_2fr]">
+              <div class="border-b border-border px-5 py-10 sm:px-8 lg:border-b-0 lg:border-r lg:py-14">
+                <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">{pad(i + 1)}</p>
+                <h3 class="mt-4 text-balance text-2xl font-medium leading-tight tracking-[-0.02em]"><T text={m.title} /></h3>
+              </div>
+              <dl class="grid sm:grid-cols-3">
+                <div class="border-b border-border px-5 py-8 sm:border-b-0 sm:border-r sm:px-6 lg:py-14">
+                  <dt class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground"><T text={moments.seeLabel} /></dt>
+                  <dd class="mt-3 text-sm leading-6 text-muted-foreground"><T text={m.see} /></dd>
+                </div>
+                <div class="border-b border-border px-5 py-8 sm:border-b-0 sm:border-r sm:px-6 lg:py-14">
+                  <dt class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground"><T text={moments.costLabel} /></dt>
+                  <dd class="mt-3 text-sm leading-6 text-muted-foreground"><T text={m.cost} /></dd>
+                </div>
+                <div class="bg-surface-tint px-5 py-8 sm:px-6 lg:py-14">
+                  <dt class="flex items-center gap-2 font-pixel text-[10px] uppercase tracking-[0.08em] text-primary">
+                    <span class="size-2 bg-primary" aria-hidden="true"></span>
+                    <T text={moments.iamLabel} />
+                  </dt>
+                  <dd class="mt-3 text-sm leading-6 text-foreground"><T text={m.iam} /></dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <!-- 3. Ce que gère un IAM -->
+    <section id="manages" class="scroll-mt-16 border-b border-border" data-why-tabs>
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">03 · <T text={manages.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={manages.audience} /></p>
+          <h2 class="mt-6 max-w-3xl text-balance text-[clamp(1.75rem,3.8vw,3rem)] font-medium leading-[1.06] tracking-[-0.035em]">
+            <T text={manages.title} />
+          </h2>
+          <p class="mt-6 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground"><T text={manages.description} /></p>
+        </div>
+
+        <div class="grid grid-cols-3 border-b border-border sm:grid-cols-6" role="tablist">
+          {manages.topics.map((topic, i) => (
+            <button
+              type="button"
+              role="tab"
+              id={`why-tab-${topic.id}`}
+              aria-controls={`why-panel-${topic.id}`}
+              aria-selected={i === 0 ? 'true' : 'false'}
+              tabindex={i === 0 ? 0 : -1}
+              data-why-tab={topic.id}
+              class="cursor-pointer border-b border-r border-border px-2 py-5 text-center font-pixel text-[10px] uppercase tracking-[0.06em] text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground aria-selected:bg-surface-tint aria-selected:text-primary sm:border-b-0 sm:text-[11px] [&:nth-child(3n)]:border-r-0 sm:[&:nth-child(3n)]:border-r sm:last:border-r-0 [&:nth-child(n+4)]:border-b-0"
+            >
+              <T text={topic.tab} />
+            </button>
+          ))}
+        </div>
+
+        {manages.topics.map((topic, i) => (
+          <div
+            role="tabpanel"
+            id={`why-panel-${topic.id}`}
+            aria-labelledby={`why-tab-${topic.id}`}
+            data-why-panel={topic.id}
+            hidden={i !== 0}
+            class="px-5 py-14 sm:px-8 sm:py-20"
+          >
+            <h3 class="text-2xl font-medium tracking-[-0.02em] sm:text-3xl"><T text={topic.title} /></h3>
+            <p class="mt-4 max-w-2xl text-pretty text-lg leading-8 text-muted-foreground"><T text={topic.plain} /></p>
+
+            {'bullets' in topic && topic.bullets && (
+              <ul class="mt-12 grid gap-px border border-border bg-border sm:grid-cols-2">
+                {topic.bullets.map((b) => (
+                  <li class="flex gap-4 bg-background px-5 py-6 sm:px-6">
+                    <span class="mt-2 size-2 shrink-0 bg-primary" aria-hidden="true"></span>
+                    <p class="text-sm leading-6 text-muted-foreground">
+                      <strong class="font-semibold text-foreground"><T text={b.title} /></strong> <T text={b.text} />
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {'table' in topic && topic.table && (
+              <div class="mt-12 overflow-x-auto border border-border">
+                <table class="w-full min-w-[40rem] text-left text-sm">
+                  <thead class="bg-surface-tint">
+                    <tr>
+                      {topic.table.head.map((h) => (
+                        <th scope="col" class="border-b border-border px-5 py-4 font-pixel text-[10px] font-normal uppercase tracking-[0.08em] text-muted-foreground">
+                          <T text={h} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topic.table.rows.map((row) => (
+                      <tr class="border-b border-border last:border-b-0">
+                        <td class="px-5 py-4 font-medium text-foreground"><T text={row[0]} /></td>
+                        <td class="px-5 py-4 font-mono text-[13px] text-primary"><T text={row[1]} /></td>
+                        <td class="px-5 py-4 text-muted-foreground"><T text={row[2]} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {'note' in topic && topic.note && (
+              <div class="mt-8 flex max-w-3xl gap-4 border border-border bg-surface-tint p-6">
+                <span class="mt-2 size-2.5 shrink-0 bg-primary" aria-hidden="true"></span>
+                <p class="text-sm leading-6 text-muted-foreground [&_strong]:font-semibold [&_strong]:text-foreground"><T text={topic.note} /></p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- 4. Coder, acheter ou héberger -->
+    <section id="options" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">04 · <T text={options.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={options.audience} /></p>
+          <h2 class="mt-6 max-w-3xl text-balance text-[clamp(1.75rem,3.8vw,3rem)] font-medium leading-[1.06] tracking-[-0.035em]">
+            <T text={options.title} />
+          </h2>
+          <p class="mt-6 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground"><T text={options.description} /></p>
+        </div>
+
+        <div class="overflow-x-auto border-b border-border">
+          <table class="w-full min-w-[46rem] text-left text-sm">
+            <thead>
+              <tr>
+                {options.head.map((h, i) => (
+                  <th
+                    scope="col"
+                    class:list={[
+                      'border-b border-border px-5 py-5 align-bottom font-pixel text-[10px] font-normal uppercase tracking-[0.06em] sm:px-6',
+                      i === 3 ? 'bg-surface-tint text-primary' : 'text-muted-foreground',
+                      i > 0 && 'border-l',
+                    ]}
+                  >
+                    <T text={h} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {options.rows.map((row) => (
+                <tr class="border-b border-border last:border-b-0">
+                  <th scope="row" class="px-5 py-5 font-medium text-foreground sm:px-6"><T text={row.label} /></th>
+                  {row.cells.map((c, i) => (
+                    <td class:list={['border-l border-border px-5 py-5 leading-6 sm:px-6', i === 2 ? 'bg-surface-tint text-foreground' : 'text-muted-foreground']}>
+                      <T text={c} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="px-5 py-12 sm:px-8 sm:py-16">
+          <p class="max-w-3xl text-pretty text-base leading-7 text-muted-foreground [&_strong]:font-semibold [&_strong]:text-foreground"><T text={options.opinion} /></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Pourquoi FerrisKey -->
+    <section class="border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">05 · <T text={ferriskey.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={ferriskey.audience} /></p>
+          <h2 class="mt-6 max-w-3xl text-balance text-[clamp(1.75rem,3.8vw,3rem)] font-medium leading-[1.06] tracking-[-0.035em]">
+            <T text={ferriskey.title} />
+          </h2>
+          <p class="mt-6 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground"><T text={ferriskey.description} /></p>
+        </div>
+
+        <ul class="-mr-px grid sm:grid-cols-2 lg:grid-cols-3">
+          {ferriskey.bullets.map((b) => (
+            <li class="flex flex-col border-b border-r border-border px-5 py-10 sm:px-8 sm:py-12">
+              <span class="size-2.5 bg-primary" aria-hidden="true"></span>
+              <h3 class="mt-6 text-lg font-medium tracking-[-0.01em]"><T text={b.title} /></h3>
+              <p class="mt-3 text-sm leading-6 text-muted-foreground"><T text={b.text} /></p>
+              {'link' in b && b.link && (
+                <a href={`${docs}${b.link.path}`} class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-foreground hover:text-primary">
+                  <T text={b.link.label} /> <span aria-hidden="true">→</span>
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6. Côté code -->
+    <section id="code" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto grid max-w-6xl border-x border-border lg:grid-cols-2">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24 lg:border-b-0 lg:border-r">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">06 · <T text={code.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={code.audience} /></p>
+          <h2 class="mt-6 text-balance text-[clamp(1.75rem,3.4vw,2.75rem)] font-medium leading-[1.08] tracking-[-0.03em]">
+            <T text={code.title} />
+          </h2>
+          <p class="mt-6 text-[15px] leading-7 text-muted-foreground"><T text={code.description} /></p>
+          <ol class="mt-6 space-y-4">
+            {code.steps.map((s, i) => (
+              <li class="flex gap-4 text-[15px] leading-7">
+                <span class="font-pixel text-[11px] leading-7 text-primary">{pad(i + 1)}</span>
+                <span><T text={s} /></span>
+              </li>
+            ))}
+          </ol>
+
+          <div class="mt-12 flex flex-wrap items-center gap-2 font-pixel text-[10px] uppercase tracking-[0.06em]" aria-hidden="true">
+            {code.flow.map((node, i) => (
+              <>
+                <span class:list={['border px-3 py-2', i === 2 ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground']}>
+                  <T text={node} />
+                </span>
+                {i < code.flowSteps.length && (
+                  <span class="flex items-center gap-1 text-muted-foreground">
+                    <T text={code.flowSteps[i]} /> →
+                  </span>
+                )}
+              </>
+            ))}
+          </div>
+        </div>
+
+        <div class="flex flex-col px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[10px] uppercase tracking-[0.08em] text-muted-foreground"><T text={code.snippetLabel} /></p>
+          <pre class="mt-4 overflow-x-auto border border-border bg-rust-950 p-5 font-mono text-[12.5px] leading-6 text-[#f3eee9]"><code><span class="text-rust-300">import</span> {'{'} createRemoteJWKSet, jwtVerify {'}'} <span class="text-rust-300">from</span> <span class="text-[#b5d99c]">'jose'</span>
+
+<span class="text-rust-300">const</span> issuer = <span class="text-[#b5d99c]">'https://auth.example.com/realms/my-app'</span>
+
+<span class="text-[#8a817b]">// <T text={code.snippetComment} /></span>
+<span class="text-rust-300">const</span> {'{'} jwks_uri {'}'} = <span class="text-rust-300">await</span> fetch(<span class="text-[#b5d99c]">`${'{'}issuer{'}'}/.well-known/openid-configuration`</span>).then((r) =&gt; r.json())
+<span class="text-rust-300">const</span> jwks = createRemoteJWKSet(<span class="text-rust-300">new</span> URL(jwks_uri))
+
+<span class="text-rust-300">export async function</span> authenticate(token: <span class="text-rust-400">string</span>) {'{'}
+  <span class="text-rust-300">const</span> {'{'} payload {'}'} = <span class="text-rust-300">await</span> jwtVerify(token, jwks, {'{'} issuer {'}'})
+  <span class="text-rust-300">return</span> payload <span class="text-[#8a817b]">// sub, email, roles…</span>
+{'}'}</code></pre>
+          <p class="mt-6 text-sm leading-6 text-muted-foreground"><T text={code.after} /></p>
+          <a href={docsHref} class="mt-6 inline-flex w-fit items-center gap-2 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+            <T text={code.link} /> <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. FAQ -->
+    <section id="faq" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto grid max-w-6xl border-x border-border lg:grid-cols-[1fr_2fr]">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24 lg:border-b-0 lg:border-r">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">07 · <T text={faq.label} /></p>
+          <h2 class="mt-6 text-balance text-[clamp(1.75rem,3.4vw,2.75rem)] font-medium leading-[1.08] tracking-[-0.03em]">
+            <T text={faq.title} />
+          </h2>
+        </div>
+        <div>
+          {faq.items.map((item) => (
+            <details class="faq group border-b border-border last:border-b-0">
+              <summary class="flex cursor-pointer list-none items-start justify-between gap-6 px-5 py-6 text-base font-medium transition-colors hover:bg-foreground/[0.03] sm:px-8">
+                <span><T text={item.q} /></span>
+                <span class="font-pixel text-sm leading-6 text-primary transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+              </summary>
+              <p class="px-5 pb-8 text-[15px] leading-7 text-muted-foreground sm:px-8 [&_a]:font-semibold [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_code]:font-mono [&_code]:text-[13px] [&_code]:text-foreground">
+                <T text={item.a} vars={vars} />
+              </p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Comment on vous aide -->
+    <section id="help" class="scroll-mt-16 border-b border-border">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="border-b border-border px-5 py-16 sm:px-8 sm:py-24">
+          <p class="font-pixel text-[11px] uppercase tracking-[0.08em] text-primary">08 · <T text={help.label} /></p>
+          <p class="mt-3 text-sm text-muted-foreground"><T text={help.audience} /></p>
+          <h2 class="mt-6 max-w-3xl text-balance text-[clamp(1.75rem,3.8vw,3rem)] font-medium leading-[1.06] tracking-[-0.035em]">
+            <T text={help.title} />
+          </h2>
+          <p class="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground"><T text={help.description} /></p>
+        </div>
+        <ul class="-mr-px grid sm:grid-cols-2 lg:grid-cols-4">
+          {help.items.map((item, i) => (
+            <li class="border-b border-r border-border px-5 py-10 sm:px-8 sm:py-12">
+              <p class="font-pixel text-[11px] text-primary">{pad(i + 1)}</p>
+              <h3 class="mt-5 text-lg font-medium"><T text={item.title} /></h3>
+              <p class="mt-3 text-sm leading-6 text-muted-foreground"><T text={item.text} /></p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 9. CTA -->
+    <section class="relative overflow-hidden border-b border-border" aria-labelledby="why-cta-title">
+      <div class="mx-auto max-w-6xl border-x border-border">
+        <div class="surface-brand relative px-5 py-28 text-center text-white sm:px-8 sm:py-40">
+          <div class="bg-pixel-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+          <div class="relative flex flex-col items-center">
+            <div class="flex items-center gap-3" aria-hidden="true">
+              <PixelSprite sprite={crab} className="size-8" />
+              <PixelSprite sprite={key} className="h-5 w-10" />
+            </div>
+            <h2 id="why-cta-title" class="mt-8 max-w-3xl text-balance text-[clamp(2rem,5vw,4rem)] font-medium leading-[1.04] tracking-[-0.04em]">
+              <T text={cta.title} />
+            </h2>
+            <p class="mt-8 max-w-xl text-pretty text-lg leading-8 text-white/80"><T text={cta.description} /></p>
+            <div class="mt-12 flex flex-wrap justify-center gap-3">
+              <a href={docsHref} class="inline-flex items-center gap-2 bg-white px-6 py-3.5 text-sm font-semibold text-rust-900 transition-opacity hover:opacity-90">
+                <T text={cta.docs} /> <span aria-hidden="true">→</span>
+              </a>
+              <a href={mailto} class="inline-flex items-center gap-2 border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                <T text={cta.contact} />
+              </a>
+              <a href="https://github.com/ferriskey/ferriskey" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                <T text={cta.github} />
+              </a>
+            </div>
+            <p class="mt-8 font-mono text-sm text-white/70">{contactEmail}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter websiteUrl={appUrlOverrides.website} docsUrl={appUrlOverrides.docs} blogUrl={appUrlOverrides.blog} />
+</Base>
+
+<style is:global>
+  html:not([lang='fr']) [data-why] [data-l='fr'],
+  html[lang='fr'] [data-why] [data-l='en'] {
+    display: none;
+  }
+  [data-why] .faq summary::-webkit-details-marker {
+    display: none;
+  }
+</style>
+
+<script is:inline>
+  function initWhyTabs() {
+    var root = document.querySelector('[data-why-tabs]')
+    if (!root || root.dataset.ready) return
+    root.dataset.ready = '1'
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-why-tab]'))
+    var panels = root.querySelectorAll('[data-why-panel]')
+    function select(id, focus) {
+      tabs.forEach(function (t) {
+        var on = t.dataset.whyTab === id
+        t.setAttribute('aria-selected', on ? 'true' : 'false')
+        t.tabIndex = on ? 0 : -1
+        if (on && focus) t.focus()
+      })
+      panels.forEach(function (p) {
+        p.hidden = p.dataset.whyPanel !== id
+      })
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { select(t.dataset.whyTab, false) })
+      t.addEventListener('keydown', function (e) {
+        var next = null
+        if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length]
+        if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length]
+        if (e.key === 'Home') next = tabs[0]
+        if (e.key === 'End') next = tabs[tabs.length - 1]
+        if (next) {
+          e.preventDefault()
+          select(next.dataset.whyTab, true)
+        }
+      })
+    })
+  }
+  initWhyTabs()
+  document.addEventListener('astro:page-load', initWhyTabs)
+</script>

@@ -1,0 +1,15 @@
+---
+import type { Text } from '../../lib/why'
+
+// Rend les deux langues côte à côte. Le CSS de la page masque celle qui ne
+// correspond pas à <html lang>, ce qui permet du texte riche (gras, liens).
+interface Props {
+  text: Text
+  vars?: Record<string, string>
+}
+
+const { text, vars } = Astro.props
+const fill = (s: string) => (vars ? s.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '') : s)
+---
+
+<span data-l="en" set:html={fill(text.en)} /><span data-l="fr" lang="fr" set:html={fill(text.fr)} />

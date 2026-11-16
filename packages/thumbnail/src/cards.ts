@@ -55,6 +55,26 @@ export function siteCard(locale: 'en' | 'fr' = 'en'): PixelCardOptions {
   }
 }
 
+/** La carte de la page /why : la question à laquelle répond un IAM. */
+export function whyCard(locale: 'en' | 'fr' = 'en'): PixelCardOptions {
+  const fr = locale === 'fr'
+  return {
+    brand: 'FerrisKey',
+    eyebrow: fr ? 'POURQUOI UN IAM · SSO · MFA · AUDIT' : 'WHY AN IAM · SSO · MFA · AUDIT',
+    lines: fr ? ['Pourquoi un IAM ?', 'Qui es-tu, et qu’as-tu', 'le droit de faire ?'] : ['Why an IAM?', 'Who are you, and what', 'are you allowed to do?'],
+    titleSize: fr ? 48 : 50,
+    lede: fr ? 'Tous vos accès, au même endroit.' : 'Users, sign-in, MFA, passkeys, audit: in one place.',
+    site: SITE,
+    ...scene(),
+    products: [
+      block('Audit', seawatch, '#a83e08', '#ff8c42'),
+      block('Passkeys', aegis, '#c2410c', '#ffb547'),
+      block('MFA', trident, '#7a2d06', '#f2670f'),
+      block('SSO', key, '#f2670f', '#ffb547'),
+    ],
+  }
+}
+
 const TAG_SPRITES: Sprite[] = [key, compass, aegis]
 const TAG_BLOCKS: Array<[string, string]> = [
   ['#a83e08', '#ff8c42'],
